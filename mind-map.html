@@ -149,6 +149,27 @@
   /* mind-elixir surface follows the page palette */
   .map-container { background: var(--bg) !important; }
 
+  /* Root: serif display type, larger, pill-shaped, soft glow */
+  #map me-root me-tpc {
+    font-family: var(--display);
+    font-size: 21px !important;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    padding: 14px 26px !important;
+    box-shadow: 0 0 0 10px color-mix(in srgb, var(--teal-soft) 65%, transparent), var(--shadow);
+  }
+
+  /* Every topic invites clicking; hierarchy styles come from node.style */
+  #map me-tpc {
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+
+  #map me-tpc:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--ink) 18%, transparent);
+  }
+
   /* ===== Detail popup ===== */
   .detail-backdrop {
     position: fixed;
@@ -630,6 +651,64 @@
   const v = name => css.getPropertyValue(name).trim();
   const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 
+  // ===== Visual hierarchy: root → part → chapter/group → leaf keyword =====
+  // Depth decides size/weight; the part decides the hue. Part nodes are solid
+  // color blocks, group nodes soft-tinted, leaves small and quiet — so the eye
+  // lands on root and the three parts first.
+  const PART_COLORS = {
+    1: { accent: v("--teal"), soft: v("--teal-soft") },
+    2: { accent: v("--blue"), soft: v("--blue-soft") },
+    3: { accent: v("--amber"), soft: v("--amber-soft") }
+  };
+
+  function applyVisualHierarchy(rootNode) {
+    const surface = v("--surface");
+    const surfaceStrong = v("--surface-strong");
+    const ink = v("--ink");
+    const line = v("--line");
+    rootNode.children.forEach(partNode => {
+      const part = partNode.detail.part;
+      const colors = PART_COLORS[part];
+      partNode.branchColor = colors.accent;
+      partNode.style = {
+        fontSize: "16px",
+        fontWeight: "700",
+        color: surface,
+        background: colors.accent,
+        padding: "9px 16px",
+        borderRadius: "12px"
+      };
+      (function walk(children, depth) {
+        children.forEach(node => {
+          const hasKids = node.children && node.children.length;
+          if (depth === 1 && hasKids) {
+            node.style = {
+              fontSize: "13.5px",
+              fontWeight: "600",
+              color: colors.accent,
+              background: colors.soft,
+              padding: "6px 12px",
+              borderRadius: "10px"
+            };
+          } else {
+            node.style = {
+              fontSize: "12.5px",
+              fontWeight: "500",
+              color: ink,
+              background: surfaceStrong,
+              border: "1px solid " + line,
+              padding: "4px 10px",
+              borderRadius: "8px"
+            };
+          }
+          if (hasKids) walk(node.children, depth + 1);
+        });
+      })(partNode.children, 1);
+    });
+  }
+
+  applyVisualHierarchy(data.nodeData);
+
   const theme = {
     name: "SystemsSeries",
     type: isDark ? "dark" : "light",
@@ -642,14 +721,17 @@
       "--panel-color": v("--ink"),
       "--panel-bgcolor": v("--surface-strong"),
       "--panel-border-color": v("--line"),
+      "--root-color": v("--surface"),
+      "--root-bgcolor": v("--ink"),
+      "--root-border-color": v("--ink"),
       "--map-padding": "50px 80px",
-      "--root-radius": "26px",
-      "--main-radius": "14px",
+      "--root-radius": "999px",
+      "--main-radius": "12px",
       "--topic-padding": "4px 10px",
-      "--node-gap-x": "32px",
-      "--node-gap-y": "12px",
-      "--main-gap-x": "70px",
-      "--main-gap-y": "22px"
+      "--node-gap-x": "34px",
+      "--node-gap-y": "14px",
+      "--main-gap-x": "90px",
+      "--main-gap-y": "40px"
     }
   };
 
@@ -665,6 +747,7 @@
     theme
   });
   mind.init(data);
+  if (typeof mind.scaleFit === "function") mind.scaleFit();
 
   // ===== Detail popup =====
   const body = document.body;
