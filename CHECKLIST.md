@@ -31,6 +31,7 @@ Nguyên tắc trên hết của người dùng: **không bịa — không có th
 - [ ] **D2** · Mỗi `<section>` có **`id` riêng khớp anchor** trong `chapter-path`; **không sót `id` template** (pleasure / components / autotelic …).
 - [ ] **D3** · `chapter-nav` prev/next + footer cross-link theo roster; **chương cuối tự disable `nav-next`**; **chỉ ghi đúng 1 file**, không đụng cover/chương khác.
 - [ ] **D4** · Diagnostic auto-number bằng **CSS counter** — không đánh số tay.
+- [ ] **D5** · **Section-index rail** (thanh mục lục cuộn theo, ghim mép trái) có mặt: khối CSS `/* SECTION-RAIL:START */…END */` **và** IIFE dựng `.section-rail__list` chép **nguyên văn**; mỗi `<section>` giữ `id` riêng + heading có tiêu đề để rail không trỏ hụt.
 
 ### E. Cổng QA khách quan
 - [ ] **E1** · **Faithfulness self-audit** trước QA: quét mọi số/trích/ví dụ-gán-tác-giả → xác nhận có `[N]` resolve về ref-list; sửa/bỏ cái nào trượt.
