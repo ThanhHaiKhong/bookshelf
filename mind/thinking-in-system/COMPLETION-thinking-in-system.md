@@ -5,6 +5,7 @@
 **Audit:** 2026-09-23 · kiểm read-only bởi `book-fidelity-auditor`
 **Audit lượt 2:** 2026-09-23 · `book-fidelity-auditor` — phủ bộ link hiện tại
 **Phạm vi PASS:** **đã phủ** cả nội dung lẫn bộ link đang có trên trang
+**Audit lượt 3:** 2026-09-23 — phủ bộ nguồn Phần 1 sau khi bỏ 3 mục Wikipedia
 **QA helper:** `book-qa` (cổng dùng chung, trên `$PATH`)
 
 ## Verdict
@@ -142,3 +143,57 @@ và nói rõ chỗ bài luận 1997 khác — **không trộn hai bản**.
   đơn lẻ từ 1968**, không phải bản sao nguyên cuốn sách đang bán, và là đường dẫn
   phổ biến nhất để đọc bài này — rủi ro khác hẳn trường hợp PDF toàn văn đã bỏ.
   Giữ nguyên có chủ đích.
+
+## Lượt 3 (2026-09-23) — bỏ nguồn Wikipedia ở Phần 1
+
+Cả hai lượt trước đều xếp 3 mục Wikipedia của Phần 1 là điểm yếu nhất trang, không
+chặn PASS, "đáng xem lại đợt sau". Đợt sau là đây.
+
+Ba mục (*Stock and flow*, *Rule of 72*, *Causal loop diagram*) **bị bỏ hẳn**, không hạ
+xuống "đọc thêm" — chúng chỉ chống lưng cho điều **chính Meadows nói**, mà ref-1
+(Chương 1 "The Basics") đã bao phủ.
+
+| | trước | sau |
+|---|---|---|
+| ref-list | 7 | **4** (liền mạch) |
+| marker `[N]` | 94 | **86** |
+| phân bố | 1×35, 2×47, 3×1, 4×2, 5×3, 6×4, 7×2 | 1×**36**, 2×47, 3×1, 4×2 |
+
+**Giảm 8 marker nhưng không mất trích dẫn nào.** Trong 8/9 trường hợp, khối văn bản
+**đã sẵn có `[1]`** cho đúng claim đó, nên chuyển thẳng sẽ tạo `[1] … [1]` trùng; chúng
+được gộp. Chỉ 1 trường hợp là re-point thật (thẻ so sánh Stock↔Flow).
+
+Auditor **truy từng marker một**, không chỉ quét marker trùng liền nhau — vì thất bại
+đáng sợ ở đây là một specific **âm thầm mất nguồn** do phán đoán "khối này đã có marker
+rồi" bị sai, mà `book-qa` không bao giờ bắt được. Kết quả: cả 9 đều còn marker resolve.
+
+### ⚠️ Giới hạn kiểm chứng — hệ quả trực tiếp của việc đổi nguồn
+
+Auditor **không xác minh được việc gán chương** với văn bản gốc, và lý do đáng ghi lại:
+
+- `archive.org/details/thinkinginsystem0000mead` là **bản mượn có kiểm soát**
+  (`access-restricted-item: true`) — không đọc được nội dung, search-inside trả
+  "Item not available".
+- Cuốn này **không có `src/`** (khác `how-linux-works`, `linux-kernel-in-a-nutshell`,
+  `ai-engineering` — ba cuốn giữ text gốc trên đĩa nên auditor đối chiếu được từng chữ).
+- Phần 2 kiểm được tới tận số trang **chỉ vì** còn bản trích Southampton trong cache.
+  Chương 1–2 không có bản tương đương.
+
+Thứ auditor làm được là **nhất quán nội bộ**: mọi claim gắn ref-1 đều là định nghĩa
+chung và **không** nằm trong khối "con thú số N"; mọi claim gắn ref-2 đều nằm trong
+khối đó — khớp cấu trúc "Chương 1 dựng từ vựng, Chương 2 áp vào năm mô hình có tên".
+**Không** có trường hợp ngược chiều nào.
+
+**Đây là chống lưng, không phải xác minh tới trang.** Ref-2/3/4 của Phần 2 đã được kiểm
+tới tận số trang; ref-1/ref-4 của Phần 1 thì chưa.
+
+**Đánh đổi cần nói thẳng:** khi trang còn trỏ vào PDF toàn văn, auditor *đọc được* nguồn
+gốc. Đổi sang bản mượn có kiểm soát thì được tính bền và sạch pháp lý, nhưng **mất khả
+năng auditor tự đọc lại**. Nội dung vẫn đã được kiểm ở thời điểm viết — agent viết Phần 1
+có đọc bản PDF đầy đủ — nhưng *tái kiểm chứng* từ nay khó hơn.
+
+**Việc nên làm sau (không chặn):** kiếm một bản trích hợp pháp cho Chương 1–2 (mượn
+archive.org, hoặc trích đoạn do trường đại học host như Phần 2 đang có) để nâng phần
+gán chương lên mức xác minh tới trang.
+
+**Verdict lượt 3: ✅ PASS** — phủ bộ nguồn Phần 1 hiện tại, kèm caveat trên.
