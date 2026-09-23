@@ -50,6 +50,12 @@ Mỗi cuốn, **luôn phẳng**:
    trang kệ, ở gốc.
 5. **Slug thống nhất**: tên thư mục == hậu tố `COMPLETION-<slug>.md`.
 
+## Tiêu chí / Criteria
+
+Tiêu chí viết một trang nằm ở **[`CHECKLIST.md`](CHECKLIST.md)** — **một bản duy nhất
+cho cả kệ**, không chép vào từng thư mục sách (bản sao sẽ trôi lệch). Nó cũng ghi lại
+những bẫy đã mắc phải, để khỏi mắc lại.
+
 ## Quy trình mỗi cuốn / Per-book pipeline
 
 `book-chapter-author` (song song, một chương một file) → `book-cover-curator`
