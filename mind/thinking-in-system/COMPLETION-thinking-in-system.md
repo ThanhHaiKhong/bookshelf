@@ -3,11 +3,14 @@
 **Site:** `bookshelf/mind/thinking-in-system/`
 **Sách:** Donella H. Meadows, *Thinking in Systems: A Primer*, Chelsea Green Publishing, 2008
 **Audit:** 2026-09-23 · kiểm read-only bởi `book-fidelity-auditor`
-**Phạm vi PASS:** verdict được ra **trước** khi đổi đích link nguồn (xem *Nguồn* và *Ghi chú về trình tự*)
+**Audit lượt 2:** 2026-09-23 · `book-fidelity-auditor` — phủ bộ link hiện tại
+**Phạm vi PASS:** **đã phủ** cả nội dung lẫn bộ link đang có trên trang
 **QA helper:** `book-qa` (cổng dùng chung, trên `$PATH`)
 
 ## Verdict
 # ✅ PASS
+
+Hai lượt audit: lượt 1 phủ **nội dung**, lượt 2 phủ **bộ link hiện tại**.
 
 Đây là lần đầu cuốn này qua audit. Trước đó nó không có COMPLETION **vì chưa từng
 đạt** — cả 5 trang fail `book-qa`, và không một khẳng định nào có nguồn.
@@ -75,7 +78,19 @@ Phần **chưa** qua mắt auditor và do main session tự kiểm:
 - Toàn bộ link ngoài còn lại của cuốn → 200
 - `book-qa` 5/5 PASS; 155 marker / 18 ref, 0 mồ côi, 0 gãy — sau khi thay link
 
-Muốn PASS phủ luôn bộ link hiện tại thì cần một lượt audit nữa.
+**Lượt audit thứ hai đã chạy và khép khoảng trống này.** Nó ra **FAIL** trước —
+bắt được ref-2 ghi sai dải trang (xem *Đính chính* bên trên) — rồi ra **PASS** sau khi
+sửa. Nó tự kiểm lại: bản Internet Archive đúng sách đúng ấn bản (ISBN 9781603580557,
+qua metadata API), 403 của chelseagreen.com đúng là Cloudflare challenge (`curl` trực
+tiếp), diff giữa hai commit chỉ chạm dòng footer/ref-list — không rò sang prose,
+`<style>` hay `<script>`.
+
+**Hạn chế auditor tự nêu (ghi lại nguyên văn ý):** nó không có dữ liệu running head
+cho **tr. 92–94**. Dải 86–110 của ref-3 đứng được vì **cả hai đầu mút đều có bằng
+chứng độc lập** — tr.86 là trang phân cách Chương 4, tr.111 là trang phân cách
+Chương 5 — và toàn bộ 95–110 chạy liên tục dưới head CHAPTER FOUR. Đây không lặp lại
+lỗi cũ (lỗi cũ là đọc hai đầu của **một** file rồi suy ra khúc giữa **từ bên trong**
+chính nó); ở đây hai biên đến từ hai nguồn khác nhau.
 
 Nguồn bổ trợ: Hardin 1968 (*Science* 162, no. 3859: 1243–1248, qua math.uchicago.edu),
 Stanford Encyclopedia of Philosophy (bounded rationality), hai bài luận gốc trên
