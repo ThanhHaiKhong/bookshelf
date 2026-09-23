@@ -77,10 +77,24 @@ Phần **chưa** qua mắt auditor và do main session tự kiểm:
 
 Muốn PASS phủ luôn bộ link hiện tại thì cần một lượt audit nữa.
 
-Nguồn bổ trợ: Hardin 1968 (*Science*, qua math.uchicago.edu), Stanford Encyclopedia
-of Philosophy (bounded rationality), hai bài luận gốc trên donellameadows.org,
-trích đoạn chương do Đại học Southampton host (có ghi số trang), trang NXB Chicago
-cho Kuhn.
+Nguồn bổ trợ: Hardin 1968 (*Science* 162, no. 3859: 1243–1248, qua math.uchicago.edu),
+Stanford Encyclopedia of Philosophy (bounded rationality), hai bài luận gốc trên
+donellameadows.org, trang NXB Chicago cho Kuhn.
+
+Trích đoạn chương do Đại học Southampton host (Phần 2, ref-2/3/4) **cũng đã được
+thay** bằng cùng bộ link bền. Số trang giữ nguyên vì đã **tự kiểm chứng** bằng
+`pdftotext` trên chính ba file PDF đó trước khi bỏ link, đọc số trang in trên trang
+đầu/cuối:
+
+| Ref | Chương | Trang ghi | Kiểm chứng |
+|---|---|---|---|
+| 2 | 3 — Why Systems Work So Well | 75–90 | 17 trang PDF, trang cuối in số 91 → 75–91, trong đó tr. 91 là trang mở Chương 4 ⇒ **75–90 đúng** |
+| 3 | 4 — Why Systems Surprise Us | 95–110 | trang đầu in 95, trang cuối in 110 ⇒ **đúng** |
+| 4 | 5 — System Traps | 111–141 | 31 trang PDF, trang cuối in 141 ⇒ 141−31+1 = **111 đúng** |
+
+Đáng ghi nhận: tên file PDF của Southampton **không khớp** số trang in (ví dụ file
+`…-112-127.pdf` thực chất là tr. 95–110). Agent viết Phần 2 đã ghi đúng theo số
+trang in chứ không theo tên file — kiểm lại thấy chính xác cả ba.
 
 **Bot-blocked:** `chelseagreen.com` trả 403 kèm trang thử thách Cloudflare
 "Just a moment…" cho cả fetcher lẫn UA trình duyệt thật; tên miền phân giải bình
@@ -101,4 +115,7 @@ và nói rõ chỗ bài luận 1997 khác — **không trộn hai bản**.
 
 - Phần 1 có 3 nguồn Wikipedia chống lưng cho định nghĩa mà chính sách đã nói —
   nguồn yếu nhất trang; nguồn gốc sẽ mạnh hơn. Auditor xếp "đáng xem lại ở đợt sau".
-- Phần 2 vẫn dùng trích đoạn chương do Southampton host (có số trang xác thực).
+- Hardin 1968 vẫn trỏ tới bản PDF do math.uchicago.edu host. Đây là **một bài báo
+  đơn lẻ từ 1968**, không phải bản sao nguyên cuốn sách đang bán, và là đường dẫn
+  phổ biến nhất để đọc bài này — rủi ro khác hẳn trường hợp PDF toàn văn đã bỏ.
+  Giữ nguyên có chủ đích.
