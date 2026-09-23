@@ -82,24 +82,32 @@ Stanford Encyclopedia of Philosophy (bounded rationality), hai bài luận gốc
 donellameadows.org, trang NXB Chicago cho Kuhn.
 
 Trích đoạn chương do Đại học Southampton host (Phần 2, ref-2/3/4) **cũng đã được
-thay** bằng cùng bộ link bền. Số trang giữ nguyên vì đã **tự kiểm chứng** bằng
-`pdftotext` trên chính ba file PDF đó trước khi bỏ link, đọc số trang in trên trang
-đầu/cuối:
+thay** bằng cùng bộ link bền. Số trang giữ lại, và đã được **kiểm từng trang** bằng
+`pdftotext`, đọc số trang in cùng running head của mỗi trang PDF:
 
-| Ref | Chương | Trang ghi | Kiểm chứng |
+| Ref | Chương | Trang | Bằng chứng |
 |---|---|---|---|
-| 2 | 3 — Why Systems Work So Well | 75–90 | 17 trang PDF, trang cuối in số 91 → 75–91, trong đó tr. 91 là trang mở Chương 4 ⇒ **75–90 đúng** |
-| 3 | 4 — Why Systems Surprise Us | 95–110 | trang đầu in 95, trang cuối in 110 ⇒ **đúng** |
-| 4 | 5 — System Traps | 111–141 | 31 trang PDF, trang cuối in 141 ⇒ 141−31+1 = **111 đúng** |
+| 2 | 3 — Why Systems Work So Well | 75–85 | PDF p1 = trang phân cách "— THREE —" (tr.75); p2–p11 = tr. 76–85, running head CHAPTER THREE; **p12 = trang phân cách "— FOUR —" (tr.86)** |
+| 3 | 4 — Why Systems Surprise Us | 86–110 | bắt đầu ở trang phân cách tr.86; phần trích đã đọc là tr. 95–110, toàn bộ dưới head CHAPTER FOUR, kết ở tr.110 |
+| 4 | 5 — System Traps … and Opportunities | 111–141 | PDF p1 = phân cách "— FIVE —" (tr.111); p2–p31 = tr. 112–141, head CHAPTER FIVE |
 
-Đáng ghi nhận: tên file PDF của Southampton **không khớp** số trang in (ví dụ file
-`…-112-127.pdf` thực chất là tr. 95–110). Agent viết Phần 2 đã ghi đúng theo số
-trang in chứ không theo tên file — kiểm lại thấy chính xác cả ba.
+Tên file PDF của Southampton **không khớp** số trang in (file `…-112-127.pdf` thực
+chất là tr. 95–110), nên tên file không được dùng làm bằng chứng.
 
-**Bot-blocked:** `chelseagreen.com` trả 403 kèm trang thử thách Cloudflare
-"Just a moment…" cho cả fetcher lẫn UA trình duyệt thật; tên miền phân giải bình
-thường. Đã đánh dấu bằng `<em>` ngay trong ref-list theo quy ước của kệ — link bị
-chặn bot, **không phải** link chết.
+### Đính chính: ref-2 từng ghi sai, lượt audit thứ hai bắt được
+
+Bản COMPLETION trước ghi ref-2 là "tr. 75–90" và tuyên bố đã kiểm chứng. **Sai.**
+Phương pháp kiểm lúc đó chỉ đọc số trang ở trang PDF đầu và cuối rồi suy ra dải,
+không hề kiểm khúc giữa — nên bỏ sót ranh giới chương nằm ở p12. Thực tế Chương 3
+kết ở tr.85; tr. 86–90 thuộc Chương 4, bị quy nhầm cho Chương 3.
+
+`book-fidelity-auditor` ở lượt hai phát hiện bằng cách đọc running head **từng
+trang**, và ra verdict **FAIL** cho tới khi sửa. Đã sửa ref-2 → 75–85 và ref-3 →
+86–110 (trước ghi 95–110, vốn chỉ là phần trích đã đọc chứ không phải dải chương).
+
+Đây chính là lý do lượt audit thứ hai tồn tại: khi bỏ link trích đoạn đi, số trang
+không còn ai bấm vào kiểm được nữa — nó chỉ còn là lời khẳng định, nên phải có người
+thứ hai soi lại.
 
 ## Kiểm faithfulness (auditor, mẫu — không vét cạn)
 
