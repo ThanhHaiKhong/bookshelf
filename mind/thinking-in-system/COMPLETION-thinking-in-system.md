@@ -192,8 +192,18 @@ gốc. Đổi sang bản mượn có kiểm soát thì được tính bền và 
 năng auditor tự đọc lại**. Nội dung vẫn đã được kiểm ở thời điểm viết — agent viết Phần 1
 có đọc bản PDF đầy đủ — nhưng *tái kiểm chứng* từ nay khó hơn.
 
-**Việc nên làm sau (không chặn):** kiếm một bản trích hợp pháp cho Chương 1–2 (mượn
-archive.org, hoặc trích đoạn do trường đại học host như Phần 2 đang có) để nâng phần
-gán chương lên mức xác minh tới trang.
+**Việc nên làm sau (không chặn) — đã thử, chưa thông.** Mục tiêu: tìm một bản trích
+hợp pháp, **đọc được text**, của **bản 2008** Chương 1–2 để nâng phần gán chương lên
+mức xác minh tới trang. Ba hướng đã thử ngày 23-09-2026:
+
+| Hướng | Kết quả |
+|---|---|
+| Trích đoạn do ĐH Southampton host (nơi có Chương 3–5) | Đoán tên file cho Chương 1–2 → **404** toàn bộ; thư mục không cho liệt kê |
+| `donellameadows.org/wp-content/userfiles/bathtubs101.pdf` — trên chính site của Donella Meadows Project | **Không dùng được.** Là bản **DRAFT** (Dartmouth College), trong đó "The Basics" là **CHƯƠNG HAI** chứ không phải Chương Một như bản 2008. Chỉ 2813 từ: có stock/flow + bathtub, **không có** quy tắc 70, **không có** balancing/reinforcing feedback — 1/3 claim. Đưa vào sẽ tạo đúng kiểu nhầm lẫn phiên bản mà Phần 3 đã cẩn thận tránh với bài luận 1997 vs sách 2008 |
+| `iseesystems.com/store/books/thinking-in-systems/preview.pdf` | 10 trang, nguồn phân phối chính thức, nhưng là **PDF ảnh scan** — `pdftotext` rút ra **0 từ**, không đối chiếu được |
+
+→ Muốn đóng caveat này thì phải **thật sự mượn** bản archive.org (cần tài khoản), hoặc
+tìm được một bản trích có lớp text của **đúng ấn bản 2008**. Không phải việc tra cứu
+nhanh; ghi lại đây để người sau khỏi dò lại ba ngõ cụt trên.
 
 **Verdict lượt 3: ✅ PASS** — phủ bộ nguồn Phần 1 hiện tại, kèm caveat trên.
