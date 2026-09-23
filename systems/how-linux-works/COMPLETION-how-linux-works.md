@@ -1,9 +1,10 @@
 # COMPLETION — How Linux Works (bilingual VI/EN companion)
 
-**Site:** `/Users/thanhhaikhong/Documents/research/how-linux-works/`
+**Site:** `bookshelf/systems/how-linux-works/`
 **Book:** Brian Ward, *How Linux Works: What Every Superuser Should Know*, 3rd ed.,
 No Starch Press, 2021 (ISBN 978-1-7185-0040-2)
 **Audited:** 2026-09-22 · read-only verification by `book-fidelity-auditor`
+**Re-audited:** 2026-09-23 — after `mind-map.html` and the cover banner were added
 **QA helper:** `book-qa` (shared gate, on `$PATH`)
 
 ## Verdict
@@ -23,7 +24,7 @@ Qualified by five findings (below). None blocks.
 
 | | |
 |---|---|
-| Pages | `index.html` + 17 chapter pages |
+| Pages | `index.html` + 17 chapter pages + `mind-map.html` (19) |
 | Total size | ~3 MB |
 | Citations | 4,803 inline, resolving to 440 references |
 | Reading modes | Dễ hiểu · Chuẩn · Đầy đủ |
@@ -95,3 +96,42 @@ across both NAV fences per page. Chapter 1's `nav-prev` and chapter 17's
 (ch14 ×1, ch15 ×2) are all self-check questions inside `question-list`, which
 owe no citation. There is **no survivor of the wrong-book citation class** — all
 6 OpenLibrary IDs resolve to the correct titles and editions.
+
+## Bổ sung 2026-09-23 — bản đồ toàn cuốn
+
+`mind-map.html` (148 KB) và banner dẫn vào nó trên bìa. Audit lại: **✅ PASS**.
+
+| Trang | kind | book-qa | Link/anchor | Cites/refs | Ghi chú |
+|---|---|---|---|---|---|
+| `mind-map.html` | map | ✅ | 87/87 link nội bộ resolve (18 đích); 8/8 anchor cùng trang | 209 inline / 22 ref · 0 mồ côi · 0 gãy · 22/22 có link ngoài | 6/209 mẫu đối chiếu `src/chapters/*.txt`, verbatim và **đúng chương** |
+| `index.html` | cover | ✅ | banner resolve; NAV fence **không đổi** | không đổi | chỉ thêm, không sửa prose |
+| 17 trang chương | chapter | ✅ 17/17 | không đổi | không đổi | không đụng tới (git diff xác nhận) |
+
+**Cam kết "không fetch gì lúc chạy" — auditor kiểm trực tiếp, không tin lời trang
+tự khai.** Rà mọi đường: `<script src>`, `<link href="http`, `<img src="http`,
+`@import`, `url()` trỏ ra ngoài, iframe, `fetch(`/`XMLHttpRequest` trong script
+inline. **0 khớp** ở cả hai file. Mọi chuỗi `https://` còn lại đều là `<a href>`
+trong ref-list — điều hướng, không phải tải. Dòng `Runtime deps: none` vẫn đúng.
+
+**Chú thích chặn bot đã kiểm:** `nostarch.com` 403 (Cloudflare, DNS phân giải),
+`freedesktop.org` trả 418 cho UA mặc định của curl nhưng mở bình thường qua trình
+duyệt — cả hai là chặn bot, không phải link chết. Chú thích trên trang chính xác.
+
+**Công bố phần diễn giải:** footer nói rõ, cả hai thứ tiếng, rằng cách gom 17 chương
+thành năm mạch và sáu sợi chỉ là **cách sắp xếp của trang này**, không phải cấu trúc
+phần do Ward đặt. Đây là điều kiện bắt buộc — nếu không, một diễn giải sẽ bị đọc
+thành lời tác giả.
+
+**Chỗ nguồn mâu thuẫn được công bố, không tự ý chọn:** cgroups v1 vs v2 đi theo đúng
+câu "cả hai đang được dùng" của Ward ở phần thân, còn chi tiết kernel v2 tách riêng
+vào một `deep-only` trích `docs.kernel.org`.
+
+### Đính chính brief của tôi
+Tôi giao việc cho auditor kèm mô tả rằng bản đồ có anchor sâu `chapter-N.html#section`.
+**Sai** — bản đồ này dùng toàn tên file trần (0 fragment). Con số "42 anchor sâu" là
+của `linux-kernel-in-a-nutshell`, tôi lẫn sang. Auditor bắt được và ghi lại đúng.
+
+### Ghi chú kỹ thuật cho lần audit sau
+`chapter-1-the-big-picture.html` nếu đem so template với **chính nó** sẽ báo giả
+"title not replaced". Chạy với template là một chương anh em thì sạch. Đây là
+artifact của cách gọi, không phải lỗi trang.
