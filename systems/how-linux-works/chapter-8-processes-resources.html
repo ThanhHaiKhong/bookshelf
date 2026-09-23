@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 8 · Nhìn kỹ tiến trình và tài nguyên — How Linux Works</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 8 “A Closer Look at Processes and Resource Utilization” trong How Linux Works (Brian Ward, No Starch Press, 3rd ed., 2021): ps và top, lsof, strace và ltrace, luồng, thời gian CPU và nice, tải trung bình, lỗi trang, vmstat, iostat, iotop, pidstat và cgroups v2.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('hlw-reading-mode'),
+l=localStorage.getItem('hlw-lang'),
+t=localStorage.getItem('hlw-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"HOW LINUX WORKS / 08";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    How Linux Works
+    <span>Chương 8 · A Closer Look at Processes and Resource Utilization</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 8 · Nhìn kỹ tiến trình và tài nguyên</span>
+      <span class="en-only" lang="en">Chapter 8 · A Closer Look at Processes and Resource Utilization</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Ba loại tài nguyên, một trọng tài, và những công cụ cho bạn nhìn thấy cuộc phân chia</span>
+      <span class="easy-only">Máy chỉ có ba thứ để chia: CPU, bộ nhớ, và đĩa</span>
+      <span class="en-only" lang="en">Three kinds of resource, one arbiter, and the tools that let you watch the division</span>
+    </h1>
+
+    <p class="standard-copy">Ward mở chương này bằng một khung rất gọn: có <b>ba loại tài nguyên phần cứng cơ bản</b> — CPU, bộ nhớ, và <span lang="en">I/O</span>. Các tiến trình tranh giành chúng, và việc của nhân là phân bổ tài nguyên một cách công bằng.<span class="cite"><a href="#ref-1">1</a></span> Nhưng ông bổ sung ngay một vế thứ hai mà người mới hay bỏ qua: <b>bản thân nhân cũng là một tài nguyên</b> — một tài nguyên phần mềm mà tiến trình dùng để làm những việc như tạo tiến trình mới và liên lạc với tiến trình khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Trong máy tính chỉ có ba thứ đáng tranh nhau: bộ xử lý (CPU), bộ nhớ, và việc đọc ghi đĩa. Các chương trình giành nhau ba thứ đó, còn nhân là người chia sao cho công bằng. Và nhân cũng là một thứ để dùng: chương trình phải nhờ nhân thì mới tạo được chương trình con. <b>Nhớ nhé: CPU, bộ nhớ, đĩa — ba thứ, một trọng tài.</b></p>
+    <p class="en-only" lang="en">Ward opens the chapter with a compact frame: there are <b>three basic kinds of hardware resource</b> — CPU, memory, and I/O. Processes vie for them, and the kernel's job is to allocate resources fairly.<span class="cite"><a href="#ref-1">1</a></span> He immediately adds a second clause newcomers tend to skip: <b>the kernel itself is also a resource</b> — a software resource that processes use to perform tasks such as creating new processes and communicating with other processes.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Ngay đầu chương ông cũng đặt một cảnh báo về thái độ, và nó định hình cách nên đọc cả chương: phần lớn công cụ ở đây được coi là <b>công cụ theo dõi hiệu năng</b>, đặc biệt hữu ích khi hệ thống đang chậm như rùa và bạn đang cố tìm ra vì sao. Nhưng “đừng để hiệu năng làm bạn phân tâm” — cố tối ưu một hệ thống vốn đã chạy đúng là phí thời gian, vì thiết lập mặc định trên hầu hết hệ thống đã được chọn tốt, và bạn chỉ nên đổi chúng khi có nhu cầu rất bất thường.<span class="cite"><a href="#ref-1">1</a></span> Thay vào đó, hãy tập trung hiểu các công cụ thật sự <i>đo</i> cái gì — làm thế bạn sẽ có cái nhìn sâu vào cách nhân hoạt động và cách nó tương tác với tiến trình.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> các công cụ trong chương này không phải để “tăng tốc máy”, mà để <b>nhìn thấy nhân đang chia tài nguyên</b>. Mỗi công cụ mở một cửa sổ khác nhau — <code>ps</code>/<code>top</code> nhìn tiến trình, <code>lsof</code> nhìn tệp đang mở, <code>strace</code> nhìn lời gọi hệ thống, <code>vmstat</code>/<code>iostat</code>/<code>pidstat</code> nhìn dòng tài nguyên theo thời gian, và <span lang="en">cgroups</span> là nơi bạn <i>giới hạn</i> phần chia đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> mấy lệnh trong chương này giống như các ô cửa sổ khác nhau nhìn vào cùng một căn phòng. Cửa nào cho bạn thấy gì thì bạn nên biết. <b>Nhớ nhé: học để nhìn, chứ không phải để chỉnh.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> the tools here are not for "making the machine faster" but for <b>seeing the kernel divide resources</b>. Each opens a different window — <code>ps</code>/<code>top</code> onto processes, <code>lsof</code> onto open files, <code>strace</code> onto system calls, <code>vmstat</code>/<code>iostat</code>/<code>pidstat</code> onto resource flow over time, and <span lang="en">cgroups</span> is where you <i>limit</i> the share.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: nhân phân bổ ba loại tài nguyên — CPU, bộ nhớ, vào ra — cho các tiến trình đang tranh giành. Diagram: the kernel allocates three kinds of resource — CPU, memory, I/O — among competing processes.">
+    <div class="core">
+      <b>Kernel as arbiter</b>
+      <small class="standard-copy">Phân bổ tài nguyên công bằng — và bản thân cũng là tài nguyên</small>
+      <small class="easy-only">Người chia phần, cũng là người được nhờ</small>
+      <small class="en-only" lang="en">Allocates resources fairly — and is itself a resource</small>
+    </div>
+
+    <div class="node">
+      <b>CPU</b>
+      <small class="standard-copy">Thời gian người dùng, thời gian hệ thống, độ ưu tiên, tải trung bình</small>
+      <small class="easy-only">Lượt tính toán: ai được tính trước</small>
+      <small class="en-only" lang="en">User time, system time, priority, load average</small>
+    </div>
+
+    <div class="node">
+      <b>Memory</b>
+      <small class="standard-copy">Trang, bảng trang, cấp phát theo nhu cầu, lỗi trang nhỏ và lớn</small>
+      <small class="easy-only">Chỗ để bày việc: ai được bao nhiêu ô</small>
+      <small class="en-only" lang="en">Pages, page tables, demand paging, minor and major page faults</small>
+    </div>
+
+    <div class="node">
+      <b>I/O</b>
+      <small class="standard-copy">Đọc ghi đĩa, lớp lập lịch vào/ra, độ ưu tiên <span lang="en">be</span>/<span lang="en">rt</span>/<span lang="en">idle</span></small>
+      <small class="easy-only">Lượt đọc ghi đĩa: ai được đọc trước</small>
+      <small class="en-only" lang="en">Disk reads and writes, I/O scheduling classes be/rt/idle</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#theo-dau-tien-trinh">
+    <span>01</span>
+    <b class="standard-copy">Theo dấu tiến trình: ps, top, lsof</b>
+    <b class="easy-only">Xem cái gì đang chạy</b>
+    <b class="en-only" lang="en">Tracking processes: ps, top, lsof</b>
+  </a>
+  <a href="#truy-vet">
+    <span>02</span>
+    <b class="standard-copy">Truy vết lời gọi và luồng</b>
+    <b class="easy-only">Nhìn vào bên trong chương trình</b>
+    <b class="en-only" lang="en">Tracing calls, and threads</b>
+  </a>
+  <a href="#cpu-va-bo-nho">
+    <span>03</span>
+    <b class="standard-copy">Thời gian CPU, ưu tiên, bộ nhớ và lỗi trang</b>
+    <b class="easy-only">CPU và bộ nhớ được chia thế nào</b>
+    <b class="en-only" lang="en">CPU time, priority, memory and page faults</b>
+  </a>
+  <a href="#do-dac">
+    <span>04</span>
+    <b class="standard-copy">Bốn máy đo: vmstat, iostat, iotop, pidstat</b>
+    <b class="easy-only">Bốn cái đồng hồ đo</b>
+    <b class="en-only" lang="en">Four meters: vmstat, iostat, iotop, pidstat</b>
+  </a>
+  <a href="#cgroups">
+    <span>05</span>
+    <b class="standard-copy">Nhóm điều khiển (cgroups v2)</b>
+    <b class="easy-only">Đặt hạn mức cho một nhóm</b>
+    <b class="en-only" lang="en">Control groups (cgroups v2)</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>06</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="theo-dau-tien-trinh" aria-labelledby="theo-dau-tien-trinh-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="theo-dau-tien-trinh-title">
+      <span class="standard-copy">Theo dấu tiến trình: từ ảnh chụp tĩnh sang thước phim</span>
+      <span class="easy-only">Xem cái gì đang chạy trong máy</span>
+      <span class="en-only" lang="en">Tracking processes: from a still photo to a moving picture</span>
+    </h2>
+    <p class="standard-copy">Ward nhắc lại rằng <code>ps</code> — đã học ở Mục 2.16 — liệt kê các tiến trình hiện có cùng thống kê sử dụng của chúng, nhưng nó gần như không cho bạn biết tiến trình <i>thay đổi theo thời gian</i> ra sao; vì vậy nó không giúp bạn xác định ngay tiến trình nào đang ngốn quá nhiều thời gian CPU hay bộ nhớ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Chương trình <code>top</code> cung cấp một giao diện tương tác cho chính những thông tin <code>ps</code> hiển thị: nó cho thấy trạng thái hệ thống hiện thời, <b>cập nhật mỗi giây</b>, và — quan trọng nhất — xếp các tiến trình hoạt động mạnh nhất lên đầu màn hình (mặc định là những tiến trình đang chiếm nhiều thời gian CPU nhất).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    <p class="easy-only">Lệnh <code>ps</code> giống như chụp một tấm ảnh: bạn thấy lúc này có ai đang chạy. Nhưng ảnh không cho biết ai đang chạy <i>ngày càng nhanh</i> hay ai đang ngốn máy. Lệnh <code>top</code> thì giống một đoạn phim: nó tự cập nhật, và ai ngốn nhiều nhất thì bị đẩy lên đầu danh sách. <b>Nhớ nhé: ps là ảnh chụp, top là phim.</b></p>
+    <p class="en-only" lang="en">Ward recalls that <code>ps</code> — covered in Section 2.16 — lists current processes and their usage statistics, but does little to tell you how processes change <i>over time</i>; so it won't immediately help you determine which process is using too much CPU time or memory.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> The <code>top</code> program gives an interactive interface to the same information <code>ps</code> displays: it shows the current system status, <b>updates every second</b>, and — perhaps most importantly — lists the most active processes at the top of its display (by default, those currently taking up the most CPU time).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    <p class="deep-only">Điểm sư phạm ẩn ở đây là <b>chiều thời gian</b>. Gần như mọi công cụ còn lại trong chương chỉ là các cách khác nhau để thêm trục thời gian vào một phép đo: <code>top</code> làm mới tại chỗ, <code>vmstat 2</code> in một dòng mới mỗi hai giây, <code>pidstat -p 1329 1</code> in một dòng mỗi giây cho riêng một tiến trình, và <code>sar</code> thì ghi lại để bạn xem lại quá khứ.<span class="cite"><a href="#ref-1">1</a></span> Khi gặp một công cụ mới, câu hỏi đầu tiên nên là: nó làm mới tại chỗ, in nối tiếp, hay ghi ra lịch sử?</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>lsof</code> (viết tắt của <span lang="en">list open files</span>) liệt kê các tệp đang mở và các tiến trình đang dùng chúng. Vì Unix đặt rất nhiều trọng tâm lên tệp, <code>lsof</code> nằm trong số những công cụ hữu dụng nhất để tìm điểm trục trặc. Nhưng nó không dừng ở tệp thường — nó liệt kê được cả tài nguyên mạng, thư viện động, đường ống (<span lang="en">pipe</span>) và hơn thế.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> <code>lsof</code> trả lời câu hỏi “ai đang mở cái gì”. Trong Unix, gần như mọi thứ đều được coi là tệp — nên danh sách đó cũng cho bạn thấy cả kết nối mạng và đường ống nối giữa các chương trình. <b>Nhớ nhé: hỏng ở đâu thì thường có một tệp đang mở ở đó.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>lsof</code> (list open files) lists open files and the processes using them. Because Unix places a lot of emphasis on files, <code>lsof</code> is among the most useful tools for finding trouble spots. But it doesn't stop at regular files — it can list network resources, dynamic libraries, pipes, and more.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">ps&nbsp;&nbsp;&nbsp;&nbsp;→ ảnh chụp tiến trình<br>top&nbsp;&nbsp;&nbsp;→ ảnh chụp, làm mới 1 s<br>lsof&nbsp;&nbsp;→ tiến trình × tệp đang mở<br>strace → tiến trình × lời gọi hệ thống</p>
+      <p class="easy-only">ps&nbsp;&nbsp;&nbsp;→ ai đang chạy<br>top&nbsp;&nbsp;→ ai đang ngốn máy<br>lsof&nbsp;→ ai đang mở gì<br>strace → nó đang nhờ nhân làm gì</p>
+      <p class="en-only" lang="en">ps&nbsp;&nbsp;&nbsp;&nbsp;→ snapshot of processes<br>top&nbsp;&nbsp;&nbsp;→ snapshot, refreshed 1 s<br>lsof&nbsp;&nbsp;→ processes × open files<br>strace → process × system calls</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">top keystrokes</span>
+      <h3>
+        <span class="standard-copy">Phím tắt của top — đổi thứ tự sắp xếp, đổi bộ lọc</span>
+        <span class="easy-only">Mấy phím bấm trong top</span>
+        <span class="en-only" lang="en">top's keystrokes — change the sort order, change the filter</span>
+      </h3>
+      <p class="standard-copy">Bạn gửi lệnh cho <code>top</code> bằng phím bấm; những lệnh hay dùng nhất liên quan tới việc đổi thứ tự sắp xếp hoặc lọc danh sách tiến trình: <b>Spacebar</b> cập nhật màn hình ngay lập tức, <b>M</b> sắp theo bộ nhớ thường trú hiện thời, <b>T</b> sắp theo tổng thời gian CPU tích luỹ, <b>P</b> sắp theo CPU hiện thời (mặc định), <b>u</b> chỉ hiện tiến trình của một người dùng, <b>f</b> chọn các thống kê khác để hiển thị, và <b>?</b> hiện bản tóm tắt cách dùng cho mọi lệnh của <code>top</code>.<span class="cite"><a href="#ref-1">1</a></span> Ward ghi chú riêng một dòng: <b>các phím lệnh của <code>top</code> phân biệt chữ hoa chữ thường</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Trong <code>top</code>, bạn bấm phím để ra lệnh. Bấm <b>M</b> để xếp theo bộ nhớ, <b>P</b> để xếp theo CPU, <b>?</b> để xem bảng trợ giúp. Nhớ bấm đúng chữ hoa hay chữ thường, vì hai cái khác nhau. <b>Nhớ nhé: M cho bộ nhớ, P cho CPU, ? khi bí.</b></p>
+      <p class="en-only" lang="en">You send commands to <code>top</code> with keystrokes; the most frequently used ones deal with changing the sort order or filtering the list: <b>Spacebar</b> updates the display immediately, <b>M</b> sorts by current resident memory usage, <b>T</b> by total (cumulative) CPU usage, <b>P</b> by current CPU usage (the default), <b>u</b> displays only one user's processes, <b>f</b> selects different statistics to display, and <b>?</b> displays a usage summary for all <code>top</code> commands.<span class="cite"><a href="#ref-1">1</a></span> Ward notes separately that <b><code>top</code>'s keystroke commands are case-sensitive</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi máy chậm bất thường: mở <code>top</code>, bấm <b>P</b> nếu nghi CPU, bấm <b>M</b> nếu nghi bộ nhớ — thủ phạm thường nổi lên dòng đầu.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Lúc máy ì ạch mà bạn không biết vì ai.</span>
+        <span class="en-only" lang="en">When the machine is unusually slow: open <code>top</code>, press <b>P</b> if you suspect CPU, <b>M</b> if you suspect memory — the culprit usually rises to the first line.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>atop và htop</h4>
+          <p>Hai tiện ích tương tự, <code>atop</code> và <code>htop</code>, cung cấp một tập hợp khung nhìn và tính năng phong phú hơn. Ward lưu ý rằng phần lớn tính năng thêm của chúng thật ra là lặp lại chức năng có ở công cụ khác — ví dụ <code>htop</code> chia sẻ nhiều khả năng của <code>lsof</code> được mô tả ngay ở mục kế tiếp.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Theo dõi riêng vài tiến trình</h4>
+          <p>Để theo dõi một hoặc vài tiến trình cụ thể theo thời gian, dùng tuỳ chọn <code>-p</code> của <code>top</code> theo cú pháp <code>top -p pid1 [-p pid2 ...]</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">lsof output</span>
+      <h3>
+        <span class="standard-copy">Đọc kết xuất lsof — tám cột, hai loại nội dung trong cột FD</span>
+        <span class="easy-only">Bảng của lsof có tám cột</span>
+        <span class="en-only" lang="en">Reading lsof output — eight columns, two kinds of content in FD</span>
+      </h3>
+      <p class="standard-copy">Chạy <code>lsof</code> trần thường sinh ra một lượng kết xuất khổng lồ. Hàng tiêu đề liệt kê các cột: <b>COMMAND</b> (tên lệnh của tiến trình đang giữ bộ mô tả tệp), <b>PID</b>, <b>USER</b>, <b>FD</b>, <b>TYPE</b> (kiểu tệp: tệp thường, thư mục, <span lang="en">socket</span>…), <b>DEVICE</b> (số hiệu chính và phụ của thiết bị chứa tệp), <b>SIZE/OFF</b> (kích thước tệp), <b>NODE</b> (số <span lang="en">inode</span>), và <b>NAME</b> (tên tệp).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only">Bảng <code>lsof</code> có tám cột. Cột quan trọng nhất là: lệnh nào, của ai, và đang mở tệp nào. Bảng rất dài, đừng cố đọc hết. <b>Nhớ nhé: đọc ba cột COMMAND, PID, NAME là đủ dùng.</b></p>
+      <p class="en-only" lang="en">Running plain <code>lsof</code> usually produces a tremendous amount of output. The header row lists the fields: <b>COMMAND</b> (the command name of the process holding the file descriptor), <b>PID</b>, <b>USER</b>, <b>FD</b>, <b>TYPE</b> (regular file, directory, socket, and so on), <b>DEVICE</b> (major and minor number of the device holding the file), <b>SIZE/OFF</b> (the file's size), <b>NODE</b> (the inode number), and <b>NAME</b> (the filename).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Các dòng có <code>cwd</code> ở cột FD chỉ ra thư mục làm việc hiện thời của tiến trình; trong ví dụ của sách, dòng cuối cho thấy một tệp tạm mà tiến trình <code>vi</code> của người dùng (PID 1994) đang dùng.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn muốn biết một chương trình đang ngồi ở thư mục nào.</span>
+        <span class="en-only" lang="en">Lines with <code>cwd</code> in the FD field indicate processes' current working directories; in the book's example the last line shows a temporary file a user's <code>vi</code> process (PID 1994) is using.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cột FD chứa hai loại thứ</h4>
+          <p>Đây là chỗ hay gây bối rối. Trong phần lớn kết xuất, cột FD cho biết <i>mục đích</i> của tệp (<code>cwd</code>, <code>rtd</code>, <code>txt</code>, <code>mem</code>…). Nhưng cột FD cũng có thể liệt kê <b>bộ mô tả tệp</b> của tệp đang mở — một con số mà tiến trình dùng cùng với thư viện hệ thống và nhân để định danh và thao tác trên tệp; trong ví dụ của sách, dòng cuối cho thấy bộ mô tả tệp là <code>3</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Chạy với quyền nào</h4>
+          <p>Bạn chạy <code>lsof</code> được cả với tư cách root lẫn người dùng thường, nhưng sẽ nhận được nhiều thông tin hơn khi chạy với quyền root.<span class="cite"><a href="#ref-1">1</a></span> Trang <code>lsof(8)</code> chứa danh sách đầy đủ những gì bạn có thể thấy ở mỗi cột.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">using lsof</span>
+      <h3>
+        <span class="standard-copy">Dùng lsof — hai lối tiếp cận, và một cái bẫy về nhân</span>
+        <span class="easy-only">Dùng lsof cho gọn</span>
+        <span class="en-only" lang="en">Using lsof — two approaches, and one kernel trap</span>
+      </h3>
+      <p class="standard-copy">Ward nêu hai lối cơ bản: (1) liệt kê tất cả rồi đẩy qua một lệnh như <code>less</code> và tìm thứ bạn cần — cách này có thể mất một lúc vì lượng kết xuất quá lớn; hoặc (2) thu hẹp danh sách bằng tuỳ chọn dòng lệnh.<span class="cite"><a href="#ref-1">1</a></span> Hai ví dụ cụ thể: <code>lsof +D /usr</code> hiển thị các mục cho tệp đang mở trong <code>/usr</code> và mọi thư mục con; <code>lsof -p pid</code> liệt kê tệp đang mở của một mã tiến trình cụ thể. Để xem tóm tắt ngắn các tuỳ chọn, chạy <code>lsof -h</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only">Có hai cách dùng: xem hết rồi tìm, hoặc hỏi thẳng cái mình cần. Cách hai nhanh hơn nhiều: <code>lsof -p số_tiến_trình</code> để hỏi một chương trình, <code>lsof +D /usr</code> để hỏi một thư mục. <b>Nhớ nhé: hỏi hẹp thì trả lời nhanh.</b></p>
+      <p class="en-only" lang="en">Ward gives two basic approaches: (1) list everything and pipe the output to a command like <code>less</code>, then search — which can take a while given the volume; or (2) narrow the list with command-line options.<span class="cite"><a href="#ref-1">1</a></span> Two concrete examples: <code>lsof +D /usr</code> displays entries for open files in <code>/usr</code> and all its subdirectories; <code>lsof -p pid</code> lists the open files of one process ID. For a brief summary of the many options, run <code>lsof -h</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi không tháo được một phân vùng vì “thiết bị đang bận”: <code>lsof +D</code> trên điểm gắn kết cho bạn biết tiến trình nào còn đang giữ tệp ở đó.</span>
+        <span class="easy-only">Khi máy báo “đang bận” mà bạn không biết ai đang bận.</span>
+        <span class="en-only" lang="en">When a partition won't unmount because the "device is busy": <code>lsof +D</code> on the mount point shows which process still holds a file there.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cái bẫy sau khi cập nhật nhân</h4>
+          <p>Ward cảnh báo: <code>lsof</code> phụ thuộc rất nhiều vào thông tin của nhân. Nếu bạn cập nhật bản phân phối và nâng cấp cả nhân lẫn <code>lsof</code>, bản <code>lsof</code> mới có thể không chạy được cho tới khi bạn khởi động lại với nhân mới.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Phần mạng để dành cho Chương 10</h4>
+          <p>Phần lớn tuỳ chọn còn lại của <code>lsof</code> liên quan tới định dạng kết xuất; các tính năng mạng của nó được bàn riêng ở Chương 10 của sách.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Cả ba công cụ trên có một giới hạn chung: chúng <b>xem xét các tiến trình đang hoạt động</b>. Nếu bạn không hiểu vì sao một chương trình chết gần như ngay sau khi khởi động, <code>lsof</code> sẽ không giúp được — bạn thậm chí khó mà chạy kịp <code>lsof</code> song song với một lệnh đang hỏng.<span class="cite"><a href="#ref-1">1</a></span> Đó chính là chỗ <code>strace</code> và <code>ltrace</code> bước vào.</p>
+    <p class="easy-only">Ba lệnh vừa rồi chỉ xem được những gì <i>đang</i> chạy. Nếu chương trình vừa mở đã chết thì không kịp xem gì cả. Lúc đó phải dùng công cụ khác. <b>Nhớ nhé: chết quá nhanh thì phải quay phim từ đầu.</b></p>
+    <p class="en-only" lang="en">All three tools share one limit: they examine <b>active</b> processes. If you have no idea why a program dies almost immediately after starting, <code>lsof</code> won't help — you'd have a difficult time even running it concurrently with a failing command.<span class="cite"><a href="#ref-1">1</a></span> That is exactly where <code>strace</code> and <code>ltrace</code> come in.</p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="truy-vet" aria-labelledby="truy-vet-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="truy-vet-title">
+      <span class="standard-copy">Truy vết lời gọi, và chia tiến trình thành luồng</span>
+      <span class="easy-only">Nhìn vào bên trong một chương trình</span>
+      <span class="en-only" lang="en">Tracing calls, and splitting processes into threads</span>
+    </h2>
+    <p class="standard-copy"><code>strace</code> (<span lang="en">system call trace</span>) và <code>ltrace</code> (<span lang="en">library trace</span>) giúp bạn khám phá xem một chương trình <i>định làm</i> gì. Ward nói thẳng rằng hai công cụ này sinh ra lượng kết xuất lớn đến mức phi thường, nhưng một khi bạn biết cần tìm gì, bạn sẽ có nhiều thông tin hơn hẳn để lần ra vấn đề.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    <p class="easy-only">Hai lệnh <code>strace</code> và <code>ltrace</code> giống như đặt máy ghi âm bên trong chương trình: mọi lời nó nhờ người khác làm đều được ghi lại. Ghi ra rất nhiều, nên phải biết mình đang tìm gì. <b>Nhớ nhé: ghi âm thì dễ, nghe lại mới khó.</b></p>
+    <p class="en-only" lang="en"><code>strace</code> (system call trace) and <code>ltrace</code> (library trace) help you discover what a program <i>attempts</i> to do. Ward says plainly that these tools produce extraordinarily large amounts of output, but once you know what to look for you have far more information for tracking down problems.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    <p class="deep-only">Cần giữ đúng ranh giới giữa hai công cụ, vì chúng nhìn vào hai tầng khác nhau đã dựng ở Chương 1. <code>strace</code> in ra <b>mọi lời gọi hệ thống</b> mà tiến trình thực hiện — tức là các phép toán đặc quyền mà tiến trình không gian người dùng nhờ nhân làm hộ, chẳng hạn mở và đọc dữ liệu từ một tệp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> <code>ltrace</code> thì theo dõi <b>các lời gọi thư viện chia sẻ</b>: kết xuất trông tương tự, nhưng nó không theo dõi bất cứ thứ gì ở mức nhân.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> Nói cách khác, <code>strace</code> đứng ở đường ranh giới nhân/người dùng; <code>ltrace</code> đứng hoàn toàn bên trong không gian người dùng.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Một <b>luồng</b> (<span lang="en">thread</span>) rất giống một tiến trình: nó có một định danh riêng (<span lang="en">thread ID</span>, hay TID), và nhân lập lịch rồi chạy luồng y như chạy tiến trình. Khác biệt then chốt: các tiến trình riêng biệt thường <i>không</i> chia sẻ tài nguyên hệ thống như bộ nhớ và kết nối vào/ra với nhau, còn <b>mọi luồng bên trong một tiến trình đều chia sẻ tài nguyên hệ thống và một phần bộ nhớ của tiến trình đó</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Một tiến trình giống một căn phòng; luồng là những người cùng làm việc trong căn phòng đó. Hai căn phòng khác nhau thì đồ đạc riêng, nhưng người trong cùng phòng thì dùng chung bàn ghế. <b>Nhớ nhé: cùng phòng thì dùng chung đồ.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A <b>thread</b> is very similar to a process: it has an identifier (thread ID, or TID), and the kernel schedules and runs threads just like processes. The key difference: separate processes usually don't share system resources such as memory and I/O connections, whereas <b>all threads inside a single process share their system resources and some memory</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">strace → lời gọi hệ thống (nhân)<br>ltrace → lời gọi thư viện (người dùng)<br>tiến trình = 1..n luồng<br>TID(luồng chính) == PID</p>
+      <p class="easy-only">strace → nhờ nhân làm gì<br>ltrace → nhờ thư viện làm gì<br>một chương trình = nhiều luồng<br>luồng đầu tiên mang số của chương trình</p>
+      <p class="en-only" lang="en">strace → system calls (kernel)<br>ltrace → library calls (user space)<br>process = 1..n threads<br>TID(main thread) == PID</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">strace</span>
+      <h3>
+        <span class="standard-copy">strace — đọc một vệt truy vết từ đầu đến cuối</span>
+        <span class="easy-only">strace — xem chương trình nhờ nhân làm gì</span>
+        <span class="en-only" lang="en">strace — reading a trace from beginning to end</span>
+      </h3>
+      <p class="standard-copy">Ví dụ mở đầu của Ward là <code>strace cat /dev/null</code>.<span class="cite"><a href="#ref-1">1</a></span> Vì <code>strace</code> bắt đầu làm việc trên tiến trình mới — bản sao của tiến trình gốc — <b>ngay sau lời gọi <code>fork()</code></b>, nên những dòng đầu tiên phải cho thấy <code>execve()</code> đang hoạt động, theo sau là một lời gọi khởi tạo bộ nhớ, <code>brk()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> Phần tiếp theo chủ yếu là nạp thư viện chia sẻ và có thể bỏ qua. Ở gần cuối, lời gọi <code>openat()</code> — một biến thể nhỏ của <code>open()</code> — mở tệp, và kết quả <code>3</code> nghĩa là thành công (3 là bộ mô tả tệp mà nhân trả về sau khi mở tệp); rồi <code>read()</code> cũng trên bộ mô tả 3, không còn gì để đọc, nên chương trình đóng bộ mô tả và thoát bằng <code>exit_group()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Gõ <code>strace cat /dev/null</code> rồi xem: chương trình mở tệp, đọc, thấy rỗng, đóng lại, rồi thoát. Mỗi dòng là một lần nó nhờ nhân làm một việc. Nếu một dòng trả về số âm, tức là việc đó thất bại. <b>Nhớ nhé: số dương là xong, số âm là hỏng.</b></p>
+      <p class="en-only" lang="en">Ward's opening example is <code>strace cat /dev/null</code>.<span class="cite"><a href="#ref-1">1</a></span> Because <code>strace</code> begins working on the new process — the copy of the original — <b>just after the <code>fork()</code> call</b>, the first lines show <code>execve()</code> in action, followed by a memory initialization call, <code>brk()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> The next part is mostly shared-library loading and can be ignored. Near the end, <code>openat()</code> — a slight variant of <code>open()</code> — opens the file, and the result <code>3</code> means success (3 being the file descriptor the kernel returns); then <code>read()</code> on descriptor 3 has nothing more to read, so the program closes the descriptor and exits with <code>exit_group()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Tệp thiếu là vấn đề phổ biến nhất với chương trình Unix; khi nhật ký hệ thống không giúp được gì và bạn không còn chỗ nào để tra, <code>strace</code> rất hữu dụng để lần ra một tệp bị thiếu.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi chương trình báo lỗi mà không nói thiếu tệp nào.</span>
+        <span class="en-only" lang="en">Missing files are the most common problem with Unix programs; when the system log doesn't help and you have nowhere else to turn, <code>strace</code> is of great use for tracking one down.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Khi lệnh gặp lỗi</h4>
+          <p>Thử <code>strace cat not_a_file</code>: vì không mở được tệp, lời gọi trả về <code>-1</code> để báo lỗi, và <code>strace</code> in ra đúng mã lỗi (<code>ENOENT</code>) kèm một mô tả ngắn về lỗi đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Lưu kết xuất và bám theo tiến trình con</h4>
+          <p>Mặc định <code>strace</code> gửi kết xuất tới <span lang="en">standard error</span>; dùng <code>-o save_file</code> để lưu vào tệp. Với một <span lang="en">daemon</span> tự tách khỏi terminal, <code>strace -o crummyd_strace -ff crummyd</code> ghi hành động của mọi tiến trình con mà nó sinh ra vào <code>crummyd_strace.pid</code>, trong đó <code>pid</code> là mã tiến trình của tiến trình con.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">ltrace</span>
+      <h3>
+        <span class="standard-copy">ltrace — cùng hình thức, khác tầng</span>
+        <span class="easy-only">ltrace — nhìn lời gọi thư viện</span>
+        <span class="en-only" lang="en">ltrace — same form, different layer</span>
+      </h3>
+      <p class="standard-copy"><code>ltrace</code> theo dõi các lời gọi thư viện chia sẻ. Kết xuất giống <code>strace</code> — đó là lý do nó được nhắc ở đây — nhưng nó không theo dõi bất cứ thứ gì ở mức nhân. Ward cảnh báo rằng <b>số lời gọi thư viện chia sẻ nhiều hơn hẳn số lời gọi hệ thống</b>: bạn chắc chắn sẽ phải lọc kết xuất, và bản thân <code>ltrace</code> có nhiều tuỳ chọn sẵn có để hỗ trợ việc đó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <p class="easy-only"><code>ltrace</code> giống <code>strace</code>, nhưng nghe ở một tầng khác — tầng thư viện, không phải tầng nhân. Nó ghi ra nhiều hơn rất nhiều, nên phải lọc. <b>Nhớ nhé: cùng kiểu ghi âm, khác cái micro.</b></p>
+      <p class="en-only" lang="en"><code>ltrace</code> tracks shared library calls. The output is similar to <code>strace</code>'s — which is why it's mentioned here — but it doesn't track anything at the kernel level. Ward warns that <b>there are many more shared library calls than system calls</b>: you'll definitely need to filter the output, and <code>ltrace</code> has many built-in options to assist.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi lỗi nằm ở tầng thư viện chứ không ở tầng nhân — ví dụ một hàm phân tích cấu hình trả về giá trị lạ trước khi bất kỳ lời gọi hệ thống nào xảy ra.</span>
+        <span class="easy-only">Khi lỗi xảy ra trước cả lúc chương trình chạm vào đĩa.</span>
+        <span class="en-only" lang="en">When the fault lies in the library layer rather than the kernel — say a config-parsing function returning something odd before any system call happens.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Giới hạn: nhị phân liên kết tĩnh</h4>
+          <p>Ward ghi chú rõ: <b><code>ltrace</code> không hoạt động trên các nhị phân liên kết tĩnh</b> — hợp lý, vì khi đó không còn lời gọi thư viện chia sẻ nào để chặn. Phần bàn sâu hơn về thư viện chia sẻ nằm ở Mục 15.1.3 của sách.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao hai công cụ chứ không một</h4>
+          <p>Vì một lời gọi thư viện <i>có thể</i> dẫn tới một lời gọi hệ thống, nhưng phần lớn thì không. Khi vệt <code>strace</code> im lặng ở đúng chỗ chương trình hỏng, lỗi hầu như chắc chắn nằm trong không gian người dùng — và đó là lúc chuyển sang <code>ltrace</code>.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">threads</span>
+      <h3>
+        <span class="standard-copy">Luồng — vì sao chúng tồn tại, và giá phải trả khi đo đạc</span>
+        <span class="easy-only">Luồng — nhiều tay cùng làm trong một phòng</span>
+        <span class="en-only" lang="en">Threads — why they exist, and what they cost when measuring</span>
+      </h3>
+      <p class="standard-copy">Mọi tiến trình đều bắt đầu ở trạng thái <b>đơn luồng</b>; luồng khởi đầu đó thường được gọi là <b>luồng chính</b> (<span lang="en">main thread</span>). Luồng chính có thể khởi tạo luồng mới, biến tiến trình thành <b>đa luồng</b> — tương tự cách một tiến trình gọi <code>fork()</code> để tạo tiến trình mới.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Lợi thế chính của tiến trình đa luồng: khi có nhiều việc phải làm, các luồng có thể chạy đồng thời trên nhiều bộ xử lý, có tiềm năng rút ngắn thời gian tính toán. Bạn cũng đạt được tính toán đồng thời bằng nhiều tiến trình, nhưng <b>luồng khởi động nhanh hơn tiến trình</b>, và việc các luồng liên lạc với nhau qua bộ nhớ dùng chung thường dễ hoặc hiệu quả hơn so với việc các tiến trình liên lạc qua một kênh như kết nối mạng hay đường ống.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Chương trình nào cũng bắt đầu với một luồng — một “người làm”. Người đó có thể gọi thêm người vào cùng phòng. Nhiều người thì làm nhanh hơn, và họ nói chuyện với nhau dễ hơn vì ngồi chung bàn. <b>Nhớ nhé: gọi thêm người cùng phòng nhanh hơn mở phòng mới.</b></p>
+      <p class="en-only" lang="en">All processes start out <b>single-threaded</b>; that starting thread is usually called the <b>main thread</b>. The main thread may start new threads, making the process <b>multithreaded</b> — similar to the way a process can call <code>fork()</code> to start a new process.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> The primary advantage: when a process has a lot to do, threads can run simultaneously on multiple processors, potentially speeding up computation. You can also get simultaneous computation with multiple processes, but <b>threads start faster than processes</b>, and it's often easier or more efficient for threads to intercommunicate through shared memory than for processes to communicate over a channel such as a network connection or a pipe.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Một số chương trình dùng luồng để vượt qua khó khăn khi quản lý nhiều tài nguyên vào/ra: theo lối truyền thống, tiến trình đôi khi dùng <code>fork()</code> để tạo tiến trình con xử lý một luồng dữ liệu vào hoặc ra mới; luồng cho cơ chế tương tự mà không phải trả chi phí khởi động một tiến trình mới.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Trong các máy chủ phải tiếp nhiều khách cùng lúc.</span>
+        <span class="en-only" lang="en">Some programs use threads to overcome problems managing multiple I/O resources: traditionally a process would use <code>fork()</code> to start a subprocess for a new input or output stream; threads offer a similar mechanism without the overhead of starting a new process.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Xem luồng bằng ps m</h4>
+          <p>Mặc định <code>ps</code> và <code>top</code> chỉ hiện tiến trình; thêm tuỳ chọn <code>m</code> để <code>ps</code> hiện thông tin luồng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Trong Listing 8-1 của sách, mỗi dòng có số ở cột PID là một tiến trình, còn các dòng có dấu gạch ở cột PID là các luồng thuộc tiến trình đó; hai tiến trình <code>bash</code> mỗi cái chỉ có một luồng, còn tiến trình 12534 (<code>Xorg</code>) là đa luồng với bốn luồng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>TID và luồng chính</h4>
+          <p>Muốn thấy TID, dùng định dạng kết xuất tuỳ biến: <code>ps m -o pid,tid,command</code>. Trong ví dụ của sách, TID của các tiến trình đơn luồng trùng khít với PID — đó chính là luồng chính; với tiến trình đa luồng 12534, luồng 12534 cũng là luồng chính.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Giá phải trả khi đo đạc</h4>
+          <p>Luồng làm rối việc theo dõi tài nguyên, vì các luồng riêng lẻ trong một tiến trình đa luồng có thể tiêu thụ tài nguyên đồng thời. Ví dụ, <code>top</code> mặc định không hiện luồng — bạn phải bấm <b>H</b> để bật. Với phần lớn công cụ theo dõi tài nguyên trong chương, bạn phải làm thêm một thao tác nữa mới bật được chế độ hiển thị luồng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Ward đặt một lời khuyên rất thực tế ngay sau phần luồng: <b>thông thường bạn sẽ không thao tác trên từng luồng riêng lẻ như thao tác với tiến trình</b> — bạn cần biết rất nhiều về cách một chương trình đa luồng được viết mới có thể tác động lên một luồng, và ngay cả khi biết thì làm thế cũng có thể không phải ý hay.<span class="cite"><a href="#ref-1">1</a></span> Luồng ở đây quan trọng không phải vì bạn sẽ chỉnh chúng, mà vì chúng làm <i>lệch</i> các con số bạn sắp đọc.</p>
+    <p class="easy-only">Bạn gần như không bao giờ cần ra lệnh cho từng luồng. Biết chúng tồn tại là đủ — để không ngạc nhiên khi thấy một chương trình dùng 400% CPU. <b>Nhớ nhé: biết luồng để đọc số cho đúng, không phải để chỉnh.</b></p>
+    <p class="en-only" lang="en">Ward adds a very practical note right after the threads section: <b>normally you won't interact with individual threads as you would processes</b> — you need to know a lot about how a multithreaded program was written to act on one thread, and even then it might not be a good idea.<span class="cite"><a href="#ref-1">1</a></span> Threads matter here not because you will tune them, but because they <i>skew</i> the numbers you are about to read.</p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="cpu-va-bo-nho" aria-labelledby="cpu-va-bo-nho-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="cpu-va-bo-nho-title">
+      <span class="standard-copy">Thời gian CPU, độ ưu tiên, tải trung bình, và trang nhớ</span>
+      <span class="easy-only">CPU và bộ nhớ được chia thế nào</span>
+      <span class="en-only" lang="en">CPU time, priority, load average, and memory pages</span>
+    </h2>
+    <p class="standard-copy">Ward dẫn vào phần theo dõi tài nguyên bằng một lời nhắc về thái độ lặp lại lần thứ hai: hầu hết hệ thống Linux chạy tốt với thiết lập mặc định của bản phân phối, và bạn có thể tốn nhiều ngày tinh chỉnh hiệu năng mà không thu được kết quả có ý nghĩa — đặc biệt nếu bạn chưa biết mình đang tìm gì. Vì vậy, thay vì nghĩ về hiệu năng khi thử các công cụ này, <b>hãy nghĩ về việc nhìn thấy nhân đang hành động trong lúc nó chia tài nguyên cho các tiến trình</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Máy Linux mặc định đã chạy khá tốt rồi. Bạn học mấy lệnh này không phải để chỉnh máy, mà để <i>nhìn thấy</i> máy đang chia phần cho ai. <b>Nhớ nhé: nhìn trước đã, đừng vội vặn.</b></p>
+    <p class="en-only" lang="en">Ward introduces resource monitoring with an attitude reminder repeated a second time: most Linux systems perform well under a distribution's default settings, and you can spend days tuning without meaningful results, especially if you don't know what to look for. So rather than thinking about performance as you experiment, <b>think about seeing the kernel in action as it divides resources among processes</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only"><b>Về ba con số của <code>time</code>.</b> Chỗ này có một nhập nhằng mà sách nêu thẳng: hầu hết shell đều có một lệnh <code>time</code> dựng sẵn <i>không</i> cung cấp thống kê phong phú, trong khi còn có một tiện ích hệ thống ở <code>/usr/bin/time</code>. Bạn nhiều khả năng sẽ gặp bản dựng sẵn của <code>bash</code> trước.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> Sự khác biệt này quay lại ngay ở phần lỗi trang: để thấy số lỗi trang, bạn <b>phải</b> dùng bản hệ thống <code>/usr/bin/time</code> chứ không dùng bản dựng sẵn.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Ba loại thời gian.</b> <b>Thời gian người dùng</b> (<code>user</code>) là số giây CPU dành để chạy mã của chính chương trình. <b>Thời gian hệ thống</b> (<code>sys</code>) là lượng thời gian nhân bỏ ra để làm việc <i>cho</i> tiến trình — ví dụ đọc tệp và thư mục. <b>Thời gian thực</b> (<code>real</code>, còn gọi là thời gian trôi qua) là tổng thời gian chạy tiến trình từ đầu đến cuối, <i>bao gồm cả</i> thời gian CPU làm việc khác.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> <code>user</code> là thời gian chương trình tự làm. <code>sys</code> là thời gian nó nhờ nhân làm hộ. <code>real</code> là thời gian bạn thật sự ngồi chờ, kể cả lúc máy đi làm chuyện khác. <b>Nhớ nhé: chờ lâu chưa chắc vì máy bận — có khi nó đang đợi.</b></p>
+      <p class="en-only" lang="en"><b>Three kinds of time.</b> <b>User time</b> (<code>user</code>) is the number of seconds the CPU spent running the program's own code. <b>System time</b> (<code>sys</code>) is how much time the kernel spends doing the process's work — for example reading files and directories. <b>Real time</b> (<code>real</code>, also called elapsed time) is the total time to run the process from start to finish, <i>including</i> the time the CPU spent on other tasks.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">real − (user + sys) ≈ thời gian chờ<br>ưu tiên lập lịch ∈ [−20, 20]<br>nice mặc định = 0<br>kích thước trang thường = 4096 B</p>
+      <p class="easy-only">chờ = tổng − (tự làm + nhờ làm)<br>ưu tiên: −20 là gấp nhất<br>nice mặc định = 0<br>một trang nhớ = 4096 byte</p>
+      <p class="en-only" lang="en">real − (user + sys) ≈ time spent waiting<br>schedule priority ∈ [−20, 20]<br>default nice = 0<br>typical page size = 4096 B</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">nice value</span>
+      <h3>
+        <span class="standard-copy">Độ ưu tiên và giá trị nice — một gợi ý, không phải một mệnh lệnh</span>
+        <span class="easy-only">nice — xin nhường lượt cho người khác</span>
+        <span class="en-only" lang="en">Priority and the nice value — a hint, not an order</span>
+      </h3>
+      <p class="standard-copy">Nhân chạy mỗi tiến trình theo <b>độ ưu tiên lập lịch</b> của nó — một con số <b>giữa −20 và 20, với −20 là ưu tiên cao nhất</b>. Ward chêm luôn một câu trong ngoặc: “Vâng, chuyện này dễ gây nhầm lẫn.”<span class="cite"><a href="#ref-1">1</a></span> Lệnh <code>ps -l</code> liệt kê độ ưu tiên hiện thời của một tiến trình, nhưng dễ thấy hơn là qua <code>top</code>: cột <b>PR</b> liệt kê độ ưu tiên lập lịch hiện thời của nhân, và <b>số càng cao thì nhân càng ít có khả năng lập lịch cho tiến trình đó nếu tiến trình khác cần CPU</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only">Mỗi chương trình có một con số ưu tiên. Số càng nhỏ thì càng được chạy trước. Bạn có thể tự xin xuống hạng để nhường người khác. <b>Nhớ nhé: số nhỏ là được ưu tiên, số lớn là chịu nhường.</b></p>
+      <p class="en-only" lang="en">The kernel runs each process according to its <b>scheduling priority</b>, a number <b>between −20 and 20, with −20 being the foremost priority</b>. Ward adds in parentheses: "Yes, this can be confusing."<span class="cite"><a href="#ref-1">1</a></span> <code>ps -l</code> lists a process's current priority, but it's easier to see in <code>top</code>: the <b>PR</b> column lists the kernel's current schedule priority, and <b>the higher the number, the less likely the kernel is to schedule the process if others need CPU time</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bạn chạy một phép tính lớn ở nền mà không muốn nó làm ì phiên làm việc tương tác: đổi giá trị nice thành 20 bằng <code>renice 20 pid</code> để tiến trình đó lùi xuống hàng sau và chỉ chạy khi các việc khác đã rảnh.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span>
+        <span class="easy-only">Khi bạn chạy một việc nặng mà vẫn muốn máy mượt.</span>
+        <span class="en-only" lang="en">When you run a big background computation and don't want it to bog down your interactive session: set the nice value to 20 with <code>renice 20 pid</code> so the process takes a back seat and runs only when other tasks have nothing to do.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Nice chỉ là một gợi ý</h4>
+          <p>Cột <b>NI</b> bên cạnh cột ưu tiên là <b>giá trị nice</b>, và nó <i>đưa một gợi ý cho bộ lập lịch của nhân</i> — đây mới là thứ bạn quan tâm khi muốn tác động tới quyết định của nhân. Nhân cộng giá trị nice vào độ ưu tiên hiện thời để xác định lượt kế tiếp cho tiến trình. Đặt nice cao hơn nghĩa là bạn đang “tử tế” hơn với các tiến trình khác, vì nhân sẽ ưu tiên chúng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span> Riêng độ ưu tiên lập lịch <b>không</b> quyết định trọn vẹn việc nhân cấp CPU cho tiến trình, và nhân cũng có thể tự đổi độ ưu tiên trong lúc chương trình chạy, tuỳ theo lượng thời gian CPU mà tiến trình tiêu thụ.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Về khoảng giá trị: −20 tới 20 hay −20 tới 19?</h4>
+          <p>Sách viết độ ưu tiên lập lịch là “một con số giữa −20 và 20”.<span class="cite"><a href="#ref-1">1</a></span> Giao diện nhân thì chặt hơn một chút: <code>getpriority(2)</code> nói giá trị nằm trong khoảng <b>−20 tới 19</b>, với −20 là ưu tiên cao nhất và 19 là thấp nhất, và mọi nỗ lực đặt ngoài khoảng đó bị kẹp lại trong khoảng một cách âm thầm.<span class="cite"><a href="#ref-24">24</a></span> Trang này theo cách diễn đạt của Ward ở phần chính và ghi chú sự khác biệt ở đây, thay vì lặng lẽ chọn một bên. Trong thực tế điều đó không đổi gì: <code>renice 20 pid</code> mà sách nêu vẫn cho bạn tiến trình “nhường nhịn” nhất, vì 20 bị kẹp về 19.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-24">24</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Nice âm: gần như luôn là ý tồi</h4>
+          <p>Nếu là siêu người dùng, bạn <i>có thể</i> đặt giá trị nice âm, nhưng làm vậy gần như luôn là một ý tồi vì các tiến trình hệ thống có thể không nhận đủ thời gian CPU. Ward còn nói thẳng: bạn có lẽ sẽ không cần sửa giá trị nice nhiều, vì nhiều hệ thống Linux chỉ có một người dùng và người đó không thực hiện nhiều tính toán thật sự — giá trị nice quan trọng hơn hẳn ở thời còn nhiều người dùng chung một máy.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">load average</span>
+      <h3>
+        <span class="standard-copy">Tải trung bình — số tiến trình <i>sẵn sàng chạy</i>, không phải số tiến trình đang mở</span>
+        <span class="easy-only">Tải trung bình — bao nhiêu việc đang xếp hàng</span>
+        <span class="en-only" lang="en">Load average — how many processes are <i>ready to run</i></span>
+      </h3>
+      <p class="standard-copy"><b>Tải trung bình là số tiến trình trung bình hiện đang sẵn sàng chạy</b> — một ước lượng cho số tiến trình có khả năng dùng CPU tại một thời điểm bất kỳ, bao gồm cả tiến trình đang chạy lẫn tiến trình đang chờ tới lượt dùng CPU.<span class="cite"><a href="#ref-1">1</a></span> Điểm mấu chốt để khỏi hiểu sai: phần lớn tiến trình trên máy bạn thường đang <i>chờ đầu vào</i> (từ bàn phím, chuột, hay mạng), nghĩa là chúng không sẵn sàng chạy và không đóng góp gì vào tải trung bình. <b>Chỉ những tiến trình đang thật sự làm gì đó mới ảnh hưởng tới tải trung bình.</b><span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Tải trung bình đếm xem có bao nhiêu việc đang <i>chờ tới lượt làm</i>. Mở mười cửa sổ mà cả mười đều đứng im thì tải vẫn gần 0. <b>Nhớ nhé: đếm việc đang làm, không đếm cửa sổ đang mở.</b></p>
+      <p class="en-only" lang="en"><b>The load average is the average number of processes currently ready to run</b> — an estimate of how many processes are capable of using the CPU at any given time, including those running and those waiting for a chance.<span class="cite"><a href="#ref-1">1</a></span> The key to not misreading it: most processes on your system are usually waiting for input (keyboard, mouse, network), meaning they aren't ready to run and contribute nothing. <b>Only processes actually doing something affect the load average.</b><span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lệnh <code>uptime</code> cho bạn ba tải trung bình cùng với thời gian nhân đã chạy; ba con số đó lần lượt là tải trung bình của 1 phút, 5 phút và 15 phút vừa qua.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></span>
+        <span class="easy-only">Gõ <code>uptime</code> là thấy ba con số: 1 phút, 5 phút, 15 phút.</span>
+        <span class="en-only" lang="en">The <code>uptime</code> command gives you three load averages along with how long the kernel has been running; the three numbers are for the past 1, 5, and 15 minutes respectively.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đọc con số theo số lõi</h4>
+          <p>Trong ví dụ của sách, một hệ thống báo <code>load average: 0.08, 0.03, 0.01</code> — trung bình chỉ 0,01 tiến trình chạy trên tất cả bộ xử lý trong 15 phút qua; nói cách khác, nếu chỉ có một bộ xử lý thì nó chạy ứng dụng không gian người dùng đúng 1 phần trăm của 15 phút vừa rồi.<span class="cite"><a href="#ref-1">1</a></span> Nếu tải lên khoảng 1, nhiều khả năng một tiến trình duy nhất đang dùng CPU gần như toàn bộ thời gian; dùng <code>top</code> để nhận diện nó, vì nó thường nổi lên đầu màn hình.<span class="cite"><a href="#ref-1">1</a></span> Trên máy nhiều lõi, tải 1 với hai lõi nghĩa là chỉ một lõi có việc tại một thời điểm, còn tải 2 nghĩa là cả hai lõi đều vừa đủ việc suốt.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tải cao mà máy vẫn mượt</h4>
+          <p>Tải trung bình cao <i>không</i> đồng nghĩa hệ thống đang gặp rắc rối: một hệ thống đủ bộ nhớ và tài nguyên vào/ra hoàn toàn có thể gánh nhiều tiến trình đang chạy. Nếu tải cao mà máy vẫn phản hồi tốt, đừng hoảng — chỉ là nhiều tiến trình đang chia nhau CPU, nên mỗi việc mất lâu hơn so với khi được độc chiếm CPU.<span class="cite"><a href="#ref-1">1</a></span> Một trường hợp khác mà tải cao là bình thường: máy chủ web hoặc máy chủ tính toán, nơi tiến trình sinh ra và kết thúc nhanh đến mức cơ chế đo tải trung bình không hoạt động hiệu quả.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tải rất cao kèm cảm giác chậm</h4>
+          <p>Nhưng nếu tải rất cao <i>và</i> bạn cảm thấy hệ thống đang chậm lại, có thể bạn đang gặp vấn đề hiệu năng bộ nhớ. Khi hệ thống cạn bộ nhớ, nhân có thể bắt đầu <b>thrash</b> — hoán đổi bộ nhớ ra đĩa và về lại liên tục. Khi đó nhiều tiến trình trở nên sẵn sàng chạy nhưng bộ nhớ của chúng lại không có sẵn, nên chúng nằm ở trạng thái sẵn-sàng-chạy (và đóng góp vào tải trung bình) lâu hơn bình thường rất nhiều.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">demand paging</span>
+      <h3>
+        <span class="standard-copy">Trang, bảng trang, và cấp phát theo nhu cầu</span>
+        <span class="easy-only">Bộ nhớ được chia thành các trang</span>
+        <span class="en-only" lang="en">Pages, page tables, and demand paging</span>
+      </h3>
+      <p class="standard-copy">CPU có một <b>đơn vị quản lý bộ nhớ</b> (MMU) để tăng độ linh hoạt khi truy cập bộ nhớ. Nhân hỗ trợ MMU bằng cách chia bộ nhớ mà các tiến trình dùng thành những mẩu nhỏ hơn gọi là <b>trang</b> (<span lang="en">page</span>), và duy trì một cấu trúc dữ liệu gọi là <b>bảng trang</b> (<span lang="en">page table</span>) ánh xạ địa chỉ trang ảo của tiến trình sang địa chỉ trang thật trong bộ nhớ. Khi tiến trình truy cập bộ nhớ, MMU dịch địa chỉ ảo sang địa chỉ thật dựa trên bảng trang của nhân.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+      <p class="easy-only">Bộ nhớ được cắt thành nhiều ô bằng nhau gọi là <i>trang</i>. Nhân giữ một quyển sổ ghi trang nào của ai nằm ở đâu. Chương trình đọc địa chỉ giả, còn phần cứng tra sổ để đổi ra địa chỉ thật. <b>Nhớ nhé: bộ nhớ chia ô, nhân giữ sổ.</b></p>
+      <p class="en-only" lang="en">The CPU has a <b>memory management unit</b> (MMU) to add flexibility in memory access. The kernel assists it by breaking the memory processes use into smaller chunks called <b>pages</b>, and maintaining a data structure called a <b>page table</b> that maps a process's virtual page addresses to real page addresses in memory. As a process accesses memory, the MMU translates virtual into real addresses based on the kernel's page table.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Bạn lấy kích thước trang của hệ thống từ cấu hình nhân bằng <code>getconf PAGE_SIZE</code>; con số trả về tính bằng byte, và <b>4k là điển hình cho hầu hết hệ thống Linux</b>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Gõ <code>getconf PAGE_SIZE</code> là biết mỗi ô to bao nhiêu — thường là 4096.</span>
+        <span class="en-only" lang="en">You get a system's page size from the kernel configuration with <code>getconf PAGE_SIZE</code>; the number is in bytes, and <b>4k is typical for most Linux systems</b>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bốn bước của cấp phát theo nhu cầu</h4>
+          <p>Một tiến trình người dùng không cần mọi trang bộ nhớ của nó có mặt ngay lập tức mới chạy được; nhân thường nạp và cấp phát trang khi tiến trình cần — hệ thống này gọi là <b>cấp phát trang theo nhu cầu</b> (<span lang="en">on-demand paging</span>, hay gọn hơn là <span lang="en">demand paging</span>).<span class="cite"><a href="#ref-1">1</a></span> Bốn bước sách liệt kê: (1) nhân nạp phần đầu mã lệnh của chương trình vào các trang bộ nhớ; (2) nhân có thể cấp một ít trang bộ nhớ làm việc cho tiến trình mới; (3) khi chạy, tiến trình có thể tới chỗ mà lệnh kế tiếp không nằm trong trang nào đã nạp — lúc đó nhân tiếp quản, nạp trang cần thiết vào bộ nhớ, rồi cho chương trình chạy tiếp; (4) tương tự, nếu chương trình cần nhiều bộ nhớ làm việc hơn phần đã cấp ban đầu, nhân xử lý bằng cách tìm trang trống (hoặc dọn chỗ) và gán cho tiến trình.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Bộ nhớ thật không phải một cái hồ chung</h4>
+          <p>Nhân không ánh xạ trang bộ nhớ thật sang địa chỉ ảo một cách tuỳ tiện: nó không gom mọi trang khả dụng vào một hồ lớn rồi cấp phát từ đó. Bộ nhớ thật có nhiều phân chia phụ thuộc vào giới hạn phần cứng, việc nhân tối ưu các trang liền kề, và các yếu tố khác — nhưng Ward nói rõ rằng bạn không cần bận tâm chuyện này khi mới bắt đầu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">page fault</span>
+      <h3>
+        <span class="standard-copy">Lỗi trang nhỏ và lớn — một loại vô hại, một loại tốn đĩa</span>
+        <span class="easy-only">Lỗi trang — khi ô nhớ chưa sẵn sàng</span>
+        <span class="en-only" lang="en">Minor and major page faults — one harmless, one costly</span>
+      </h3>
+      <p class="standard-copy">Nếu một trang bộ nhớ chưa sẵn sàng khi tiến trình muốn dùng, tiến trình kích hoạt một <b>lỗi trang</b> (<span lang="en">page fault</span>); khi đó nhân giành quyền kiểm soát CPU từ tiến trình để chuẩn bị trang đó. Có hai loại: <b>nhỏ</b> (<span lang="en">minor</span>) và <b>lớn</b> (<span lang="en">major</span>).<span class="cite"><a href="#ref-1">1</a></span> Lỗi trang <b>nhỏ</b> xảy ra khi trang cần thiết thật ra <i>đang ở trong bộ nhớ chính</i>, nhưng MMU không biết nó ở đâu — nhân chỉ việc mách cho MMU biết và cho tiến trình chạy tiếp; <b>lỗi trang nhỏ không có gì phải lo, và rất nhiều lỗi loại này xảy ra trong lúc một tiến trình chạy</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Khi chương trình với tay lấy một ô nhớ mà ô đó chưa sẵn sàng, ta gọi đó là <i>lỗi trang</i>. Loại nhỏ: ô vẫn ở trong nhà, chỉ là tìm chưa ra — rất nhanh, không đáng lo. Loại lớn: ô nằm ngoài đĩa, phải đi lấy về — chậm. <b>Nhớ nhé: nhỏ thì tìm trong nhà, lớn thì phải ra kho.</b></p>
+      <p class="en-only" lang="en">If a memory page isn't ready when a process wants it, the process triggers a <b>page fault</b>; the kernel then takes control of the CPU from the process to get the page ready. There are two kinds: <b>minor</b> and <b>major</b>.<span class="cite"><a href="#ref-1">1</a></span> A <b>minor</b> fault happens when the desired page is actually <i>in main memory</i> but the MMU doesn't know where — the kernel simply tells the MMU about the page and lets the process continue; <b>minor page faults are nothing to worry about, and many occur as a process runs</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong ví dụ của sách, <code>/usr/bin/time cal &gt; /dev/null</code> báo <code>(2major+254minor)pagefaults</code> — <b>2 lỗi trang lớn và 254 lỗi nhỏ</b>. Các lỗi lớn xảy ra khi nhân cần nạp chương trình từ đĩa lần đầu; chạy lại lệnh đó, bạn có lẽ sẽ không còn lỗi trang lớn nào vì nhân đã đệm các trang từ đĩa.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span>
+        <span class="easy-only">Chạy lần đầu thì chậm, chạy lần hai thì nhanh — vì lần đầu phải đi lấy từ đĩa.</span>
+        <span class="en-only" lang="en">In the book's example, <code>/usr/bin/time cal &gt; /dev/null</code> reports <code>(2major+254minor)pagefaults</code> — <b>2 major and 254 minor faults</b>. The major ones occurred when the kernel loaded the program from disk for the first time; run it again and you probably get no major faults, because the kernel cached the pages.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Lỗi trang lớn và thrashing</h4>
+          <p>Lỗi trang <b>lớn</b> xảy ra khi trang cần thiết hoàn toàn không có trong bộ nhớ chính, nghĩa là nhân phải nạp nó từ đĩa hoặc một cơ chế lưu trữ chậm khác. Nhiều lỗi trang lớn sẽ làm hệ thống ì ạch, vì nhân phải làm một lượng công việc đáng kể để cung cấp trang, cướp mất cơ hội chạy của các tiến trình bình thường.<span class="cite"><a href="#ref-1">1</a></span> Một số lỗi lớn là không tránh được — chẳng hạn khi bạn nạp mã từ đĩa lúc chạy chương trình lần đầu. Vấn đề lớn nhất xảy ra khi bạn bắt đầu cạn bộ nhớ, buộc nhân hoán đổi các trang bộ nhớ làm việc ra đĩa để lấy chỗ cho trang mới, và điều này có thể dẫn tới thrashing.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Xem lỗi trang theo từng tiến trình</h4>
+          <p>Với <code>top</code>, bấm <b>f</b> để đổi các trường hiển thị và chọn <b>nMaj</b> làm một cột để xem số lỗi trang lớn; chọn <b>vMj</b> (số lỗi trang lớn kể từ lần cập nhật trước) hữu ích khi bạn đang lần theo một tiến trình có thể đang hành xử bất thường.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Với <code>ps</code>, dùng định dạng kết xuất tuỳ biến, ví dụ <code>ps -o pid,min_flt,maj_flt 20365</code>: hai cột <code>MINFL</code> và <code>MAJFL</code> cho số lỗi trang nhỏ và lớn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đừng đổ tội cho bộ nhớ quá nhanh</h4>
+          <p>Một trong những cách đơn giản nhất để kiểm tra tình trạng bộ nhớ toàn hệ thống là chạy <code>free</code> hoặc xem <code>/proc/meminfo</code> để biết bao nhiêu bộ nhớ thật đang dùng cho bộ đệm (<span lang="en">cache</span>) và vùng đệm (<span lang="en">buffer</span>). Nếu không có nhiều bộ nhớ cache/buffer được dùng (mà phần bộ nhớ thật còn lại đã bị chiếm), có thể bạn cần thêm bộ nhớ. Nhưng Ward cảnh báo ngay: <b>“quá dễ để đổ lỗi cho tình trạng thiếu bộ nhớ trong mọi vấn đề hiệu năng trên máy bạn”</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Xem lỗi trang theo từng tiến trình giúp bạn khoanh vùng vài thành phần có vấn đề. Nhưng nếu bạn quan tâm tới hiệu năng của <i>cả hệ thống</i>, bạn cần một công cụ tóm tắt hoạt động CPU và bộ nhớ trên tất cả tiến trình.<span class="cite"><a href="#ref-1">1</a></span> Bốn công cụ ở mục sau chính là bốn cách tóm tắt đó, mỗi cái nhắm vào một trục khác nhau.</p>
+    <p class="easy-only">Nhìn từng chương trình thì thấy được thủ phạm. Nhưng muốn biết cả máy đang thế nào thì cần một cái nhìn tổng. <b>Nhớ nhé: nhìn gần rồi phải nhìn xa.</b></p>
+    <p class="en-only" lang="en">Viewing page faults by process helps you zero in on certain problematic components. But if you're interested in your system performance <i>as a whole</i>, you need a tool that summarizes CPU and memory action across all processes.<span class="cite"><a href="#ref-1">1</a></span> The four tools in the next section are exactly four such summaries, each aimed at a different axis.</p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="do-dac" aria-labelledby="do-dac-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="do-dac-title">
+      <span class="standard-copy">Bốn máy đo: vmstat, iostat, iotop, pidstat</span>
+      <span class="easy-only">Bốn cái đồng hồ đo khác nhau</span>
+      <span class="en-only" lang="en">Four meters: vmstat, iostat, iotop, pidstat</span>
+    </h2>
+    <p class="standard-copy">Trong số rất nhiều công cụ theo dõi hiệu năng hệ thống, <code>vmstat</code> là một trong những công cụ <b>cổ nhất và có chi phí phụ trội tối thiểu</b>. Ward gọi nó là thứ tiện tay để có cái nhìn tổng quát về việc nhân hoán đổi trang ra vào bao nhiêu lần, CPU bận cỡ nào, và tài nguyên vào/ra đang được dùng ra sao. Ông nói luôn mẹo mở khoá sức mạnh của nó: <b>hiểu kết xuất của nó</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></p>
+    <p class="easy-only">Bốn lệnh này giống bốn cái đồng hồ trên bảng điều khiển xe: một cái đo chung, một cái đo đĩa, một cái đo ai đang đọc ghi đĩa, một cái đo riêng một chương trình. <b>Nhớ nhé: đúng đồng hồ thì đọc ra đúng chuyện.</b></p>
+    <p class="en-only" lang="en">Among the many tools for monitoring system performance, <code>vmstat</code> is one of the <b>oldest, with minimal overhead</b>. Ward calls it handy for a high-level view of how often the kernel swaps pages in and out, how busy the CPU is, and how I/O resources are being used. He states the trick to unlocking its power at once: <b>understand its output</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></p>
+    <p class="deep-only"><b>Một chi tiết dễ bỏ sót khi đọc <code>vmstat</code>.</b> Bạn thường bắt đầu nhìn từ <b>dòng thứ hai</b> của kết xuất — vì dòng đầu tiên là trung bình cho toàn bộ thời gian máy đã chạy, chứ không phải khoảng đo vừa rồi.<span class="cite"><a href="#ref-1">1</a></span> Ward cũng thừa nhận chương này không khai thác hết các cột: bạn có thể đào sâu qua trang <code>vmstat(8)</code>, nhưng có lẽ cần học thêm về quản lý bộ nhớ của nhân từ một khoá học hay một quyển như <i>Operating System Concepts</i>, ấn bản 10 (Wiley, 2018) của Silberschatz, Gagne và Galvin để hiểu chúng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span><span class="cite"><a href="#ref-15">15</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Sáu nhóm cột của vmstat.</b> Kết xuất chia thành các nhóm: <b>procs</b> cho tiến trình, <b>memory</b> cho việc dùng bộ nhớ, <b>swap</b> cho các trang được kéo vào và đẩy ra vùng hoán đổi, <b>io</b> cho việc dùng đĩa, <b>system</b> cho số lần nhân chuyển sang mã của nhân, và <b>cpu</b> cho thời gian được các phần khác nhau của hệ thống sử dụng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Bảng của <code>vmstat</code> có sáu nhóm cột: việc đang chạy, bộ nhớ, hoán đổi, đĩa, nhân, và CPU. Nhìn nhóm nào thì biết chuyện nhóm đó. <b>Nhớ nhé: sáu nhóm, sáu câu chuyện.</b></p>
+      <p class="en-only" lang="en"><b>vmstat's six column groups.</b> The output falls into categories: <b>procs</b> for processes, <b>memory</b> for memory usage, <b>swap</b> for pages pulled in and out of swap, <b>io</b> for disk usage, <b>system</b> for the number of times the kernel switches into kernel code, and <b>cpu</b> for the time used by different parts of the system.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">vmstat 2&nbsp;&nbsp;→ toàn hệ thống, mỗi 2 s<br>iostat -d 2 → theo thiết bị<br>iotop&nbsp;&nbsp;&nbsp;&nbsp;→ theo luồng (TID)<br>pidstat -p 1329 1 → một tiến trình</p>
+      <p class="easy-only">vmstat → cả máy<br>iostat → từng ổ đĩa<br>iotop&nbsp;→ ai đang đọc ghi<br>pidstat → một chương trình</p>
+      <p class="en-only" lang="en">vmstat 2&nbsp;&nbsp;→ whole system, every 2 s<br>iostat -d 2 → per device<br>iotop&nbsp;&nbsp;&nbsp;&nbsp;→ per thread (TID)<br>pidstat -p 1329 1 → one process</p>
+    </div>
+  </div>
+
+  <div class="loop-diagram" role="img" aria-label="Từ rộng tới hẹp: vmstat đo cả hệ thống, iostat đo theo thiết bị, iotop đo theo luồng, pidstat đo một tiến trình theo thời gian. From wide to narrow: vmstat measures the whole system, iostat per device, iotop per thread, pidstat one process over time.">
+    <span>vmstat</span><em>→ hẹp lại</em><span>iostat</span><em>→ hẹp lại</em><span>iotop</span><em>→ hẹp lại</em><span>pidstat</span>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">vmstat</span>
+      <h3>
+        <span class="standard-copy">vmstat — đọc một máy nhàn rỗi, rồi đọc một máy đang cạn bộ nhớ</span>
+        <span class="easy-only">vmstat — máy đang rảnh hay đang đuối</span>
+        <span class="en-only" lang="en">vmstat — reading an idle machine, then a memory-starved one</span>
+      </h3>
+      <p class="standard-copy">Trong ví dụ <code>vmstat 2</code> của sách (báo cáo mỗi hai giây) trên một hệ thống không làm gì nhiều: hệ thống có <b>320.416 KB</b> bộ nhớ đã bị hoán đổi ra đĩa (cột <code>swpd</code>) và khoảng <b>3.027.000 KB (3 GB)</b> bộ nhớ thật còn trống. Dù có một ít không gian hoán đổi đang được dùng, hai cột <code>si</code> (hoán đổi vào) và <code>so</code> (hoán đổi ra) đều bằng 0, cho biết nhân hiện <i>không</i> hoán đổi thứ gì vào hay ra khỏi đĩa. Cột <code>buff</code> chỉ lượng bộ nhớ nhân đang dùng cho vùng đệm đĩa.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></p>
+      <p class="easy-only">Chạy <code>vmstat 2</code> thì cứ hai giây có một dòng mới. Nếu hai cột <code>si</code> và <code>so</code> đều là 0 thì máy đang thoải mái. Nếu chúng bắt đầu nhảy số thì máy đang thiếu bộ nhớ. <b>Nhớ nhé: si và so bằng 0 là tin tốt.</b></p>
+      <p class="en-only" lang="en">In the book's <code>vmstat 2</code> example (reporting every two seconds) on a system that isn't doing much: it has <b>320,416KB</b> of memory swapped out to disk (<code>swpd</code>) and around <b>3,027,000KB (3GB)</b> of real memory free. Even though some swap space is in use, the zero-valued <code>si</code> (swap-in) and <code>so</code> (swap-out) columns report the kernel is not currently swapping anything in or out. The <code>buff</code> column indicates memory the kernel is using for disk buffers.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Bốn cột <code>us</code>, <code>sy</code>, <code>id</code>, <code>wa</code> dưới tiêu đề CPU lần lượt cho phần trăm thời gian CPU dành cho tác vụ người dùng, tác vụ hệ thống (nhân), thời gian nhàn rỗi, và thời gian chờ vào/ra. Trong ví dụ, CPU ngồi không <b>99 phần trăm</b> thời gian.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Bốn cột cuối cho biết CPU đang làm gì: việc của bạn, việc của nhân, ngồi không, hay đang chờ đĩa.</span>
+        <span class="en-only" lang="en">The four columns <code>us</code>, <code>sy</code>, <code>id</code>, <code>wa</code> under the CPU heading give the percentage of time the CPU spends on user tasks, system (kernel) tasks, idle time, and waiting for I/O. In the example, the CPU sits idle <b>99 percent</b> of the time.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Khi một chương trình lớn khởi động</h4>
+          <p>Listing 8-3 của sách cho thấy CPU bắt đầu có việc trong một quãng dài, nhất là từ các tiến trình người dùng; vì còn đủ bộ nhớ trống, lượng bộ nhớ dùng cho cache và buffer bắt đầu tăng khi nhân dùng đĩa nhiều hơn.<span class="cite"><a href="#ref-1">1</a></span> Một chi tiết thú vị: nhân kéo về bộ nhớ một số trang từng bị hoán đổi ra (cột <code>si</code>) — nghĩa là chương trình vừa chạy có lẽ đã truy cập vài trang dùng chung với tiến trình khác, chuyện rất thường gặp vì nhiều tiến trình chỉ dùng mã trong một số thư viện chia sẻ lúc khởi động.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Khi bộ nhớ cạn kiệt</h4>
+          <p>Kết xuất khác hẳn khi bạn hết bộ nhớ: khi chỗ trống cạn dần, <i>cả</i> kích thước buffer lẫn cache đều giảm vì nhân ngày càng cần chỗ cho các tiến trình người dùng. Khi không còn gì nữa, bạn sẽ thấy hoạt động ở cột <code>so</code> (hoán đổi ra) lúc nhân bắt đầu chuyển trang lên đĩa — và gần như mọi cột kết xuất khác đều đổi theo để phản ánh khối lượng công việc nhân đang gánh: nhiều thời gian hệ thống hơn, nhiều dữ liệu ra vào đĩa hơn, và nhiều tiến trình bị chặn hơn vì bộ nhớ chúng muốn dùng không có sẵn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">iostat</span>
+      <h3>
+        <span class="standard-copy">iostat — năm cột cho mỗi thiết bị</span>
+        <span class="easy-only">iostat — đĩa nào đang bận</span>
+        <span class="en-only" lang="en">iostat — five columns per device</span>
+      </h3>
+      <p class="standard-copy">Mặc định <code>vmstat</code> cung cấp một ít thống kê vào/ra tổng quát; bạn lấy được mức dùng tài nguyên rất chi tiết theo từng phân vùng bằng <code>vmstat -d</code>, nhưng lượng kết xuất có thể làm bạn choáng. Thay vào đó, Ward giới thiệu một công cụ dành riêng cho vào/ra: <code>iostat</code>. Giống <code>vmstat</code>, khi chạy không kèm tuỳ chọn, <code>iostat</code> hiển thị thống kê cho toàn bộ thời gian máy đã chạy tới hiện tại.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+      <p class="easy-only">Muốn biết ổ đĩa nào đang bận thì dùng <code>iostat</code>. Nó cho mỗi ổ một dòng: bao nhiêu lượt đọc ghi mỗi giây, bao nhiêu kilobyte đọc, bao nhiêu kilobyte ghi. <b>Nhớ nhé: mỗi ổ một dòng, đọc và ghi riêng.</b></p>
+      <p class="en-only" lang="en">By default <code>vmstat</code> provides some general I/O statistics; you can get very detailed per-partition usage with <code>vmstat -d</code>, but the volume may overwhelm you. Instead Ward introduces a tool just for I/O: <code>iostat</code>. Like <code>vmstat</code>, run without options it shows statistics for your machine's current uptime.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Năm cột cho mỗi thiết bị: <code>tps</code> (số lần truyền dữ liệu trung bình mỗi giây), <code>kB_read/s</code>, <code>kB_wrtn/s</code> (trung bình kilobyte đọc và ghi mỗi giây), <code>kB_read</code> và <code>kB_wrtn</code> (tổng kilobyte đã đọc và đã ghi).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></span>
+        <span class="easy-only">Khi bạn nghi ổ đĩa là thủ phạm làm máy chậm.</span>
+        <span class="en-only" lang="en">Five columns per device: <code>tps</code> (average data transfers per second), <code>kB_read/s</code>, <code>kB_wrtn/s</code> (average kilobytes read and written per second), <code>kB_read</code> and <code>kB_wrtn</code> (total kilobytes read and written).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Khoảng thời gian và phân vùng</h4>
+          <p>Giống <code>vmstat</code>, bạn cung cấp một đối số khoảng thời gian — <code>iostat 2</code> để cập nhật mỗi hai giây — và khi dùng khoảng thời gian, bạn thường chỉ muốn hiện báo cáo thiết bị bằng tuỳ chọn <code>-d</code> (ví dụ <code>iostat -d 2</code>). Mặc định kết xuất bỏ qua thông tin phân vùng; dùng <code>-p ALL</code> để hiện tất cả — và vì một hệ thống điển hình có nhiều phân vùng, bạn sẽ nhận rất nhiều kết xuất.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tổng phân vùng không bằng tổng đĩa</h4>
+          <p>Trong ví dụ của sách, <code>sda1</code>, <code>sda2</code> và <code>sda5</code> đều là phân vùng của đĩa <code>sda</code>, nên các cột đọc và ghi có phần chồng lấn. Nhưng <b>tổng các cột phân vùng không nhất thiết cộng lại bằng cột của đĩa</b>: dù một lần đọc từ <code>sda1</code> cũng tính là một lần đọc từ <code>sda</code>, bạn vẫn có thể đọc thẳng từ <code>sda</code> — chẳng hạn khi đọc bảng phân vùng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">iotop</span>
+      <h3>
+        <span class="standard-copy">iotop — công cụ hiếm hoi hiển thị luồng thay vì tiến trình</span>
+        <span class="easy-only">iotop — ai đang đọc ghi đĩa nhiều nhất</span>
+        <span class="en-only" lang="en">iotop — one of the few tools that shows threads, not processes</span>
+      </h3>
+      <p class="standard-copy">Nếu cần đào sâu hơn để thấy tài nguyên vào/ra mà từng tiến trình dùng, <code>iotop</code> giúp được. Dùng nó giống dùng <code>top</code>: nó tạo một màn hình cập nhật liên tục cho thấy các tiến trình đang dùng nhiều vào/ra nhất, kèm một bản tóm tắt chung ở đầu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span> Điểm đáng chú ý nhất: cùng với các cột người dùng, lệnh và đọc/ghi, nó có cột <b>TID thay vì cột PID</b> — <code>iotop</code> là <b>một trong số ít tiện ích hiển thị luồng thay vì tiến trình</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><code>iotop</code> giống <code>top</code>, nhưng xếp hạng theo việc đọc ghi đĩa chứ không theo CPU. Một điểm lạ: nó liệt kê từng <i>luồng</i>, không phải từng chương trình. <b>Nhớ nhé: iotop đếm theo luồng.</b></p>
+      <p class="en-only" lang="en">If you need to dig deeper into the I/O resources individual processes use, <code>iotop</code> helps. Using it is similar to using <code>top</code>: it generates a continuously updating display showing the processes using the most I/O, with a general summary at the top.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span> Most notable: alongside the user, command and read/write columns there's a <b>TID column instead of a PID column</b> — <code>iotop</code> is <b>one of the few utilities that displays threads instead of processes</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Cột <b>PRIO</b> cho biết độ ưu tiên vào/ra; nó giống độ ưu tiên CPU nhưng ảnh hưởng tới tốc độ nhân lập lịch các lần đọc và ghi cho tiến trình. Trong một độ ưu tiên như <code>be/4</code>, phần <code>be</code> là <b>lớp lập lịch</b> còn con số là <b>mức ưu tiên</b>; số nhỏ hơn thì quan trọng hơn, nên nhân cho tiến trình ưu tiên <code>be/3</code> nhiều thời gian vào/ra hơn tiến trình <code>be/4</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi máy kêu è è vì đĩa quay liên tục mà bạn không biết vì ai.</span>
+        <span class="en-only" lang="en">The <b>PRIO</b> column shows the I/O priority; it resembles the CPU priority but affects how quickly the kernel schedules I/O reads and writes. In a priority like <code>be/4</code>, <code>be</code> is the <b>scheduling class</b> and the number is the <b>priority level</b>; lower numbers are more important, so the kernel allows more I/O time to a <code>be/3</code> process than a <code>be/4</code> one.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ba lớp lập lịch vào/ra</h4>
+          <p>Nhân dùng lớp lập lịch để có thêm quyền kiểm soát khi sắp xếp vào/ra. Bạn sẽ thấy ba lớp trong <code>iotop</code>: <b>be</b> (<span lang="en">best effort</span>) — nhân cố hết sức lập lịch vào/ra một cách công bằng cho lớp này, và <i>phần lớn tiến trình chạy dưới lớp này</i>; <b>rt</b> (<span lang="en">real time</span>) — nhân lập lịch mọi vào/ra thời gian thực trước bất kỳ lớp nào khác, bất kể thế nào; và <b>idle</b> — nhân chỉ thực hiện vào/ra cho lớp này khi không còn vào/ra nào khác phải làm, và lớp idle không có mức ưu tiên.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đổi độ ưu tiên vào/ra</h4>
+          <p>Bạn kiểm tra và thay đổi độ ưu tiên vào/ra của một tiến trình bằng tiện ích <code>ionice</code>; chi tiết ở trang <code>ionice(1)</code>. Ward nói thẳng phần kết luận thực dụng: <b>bạn có lẽ sẽ chẳng bao giờ cần bận tâm tới độ ưu tiên vào/ra</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">pidstat</span>
+      <h3>
+        <span class="standard-copy">pidstat — một tiến trình, một dòng mỗi giây, không xoá quá khứ</span>
+        <span class="easy-only">pidstat — ghi nhật ký cho một chương trình</span>
+        <span class="en-only" lang="en">pidstat — one process, one line per second, history kept</span>
+      </h3>
+      <p class="standard-copy">Bạn đã thấy cách theo dõi các tiến trình cụ thể bằng <code>top</code> và <code>iotop</code>. Nhưng màn hình của chúng làm mới theo thời gian, và <b>mỗi lần cập nhật lại xoá mất kết xuất trước đó</b>. Tiện ích <code>pidstat</code> cho bạn thấy mức tiêu thụ tài nguyên của một tiến trình theo thời gian theo lối của <code>vmstat</code> — mỗi khoảng một dòng mới, giữ nguyên các dòng cũ. Ví dụ của sách theo dõi tiến trình 1329, cập nhật mỗi giây: <code>pidstat -p 1329 1</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span></p>
+      <p class="easy-only"><code>top</code> làm mới màn hình nên bạn mất dữ liệu cũ. <code>pidstat</code> thì in thêm một dòng mới mỗi giây, nên bạn giữ được cả lịch sử để so sánh. <b>Nhớ nhé: muốn so sánh theo thời gian thì dùng pidstat.</b></p>
+      <p class="en-only" lang="en">You've seen how to monitor specific processes with <code>top</code> and <code>iotop</code>. But their displays refresh over time, and <b>each update erases the previous output</b>. The <code>pidstat</code> utility lets you see a process's resource consumption over time in the style of <code>vmstat</code> — a new line per interval, old lines kept. The book's example monitors process 1329, updating every second: <code>pidstat -p 1329 1</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Kết xuất mặc định cho phần trăm thời gian người dùng và thời gian hệ thống, tổng phần trăm thời gian CPU, và thậm chí cả việc tiến trình đang chạy trên CPU nào.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span></span>
+        <span class="easy-only">Khi bạn muốn xem một chương trình ngốn máy đều đều hay chỉ thỉnh thoảng.</span>
+        <span class="en-only" lang="en">The default output shows the percentages of user and system time and the overall percentage of CPU time, and even tells you which CPU the process was running on.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cột %guest</h4>
+          <p>Ward gọi cột <code>%guest</code> là “hơi lạ”: đó là phần trăm thời gian tiến trình dành để chạy thứ gì đó <i>bên trong một máy ảo</i>. Trừ khi bạn đang chạy máy ảo, đừng bận tâm tới nó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Không chỉ CPU</h4>
+          <p>Dù mặc định hiện mức dùng CPU, <code>pidstat</code> làm được nhiều hơn thế: tuỳ chọn <code>-r</code> để theo dõi bộ nhớ và <code>-d</code> để bật theo dõi đĩa. Trang <code>pidstat(1)</code> còn nhiều tuỳ chọn nữa cho luồng, chuyển ngữ cảnh, hay gần như bất kỳ thứ gì đã bàn trong chương.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đến đây bạn đã có đủ cách <i>xem</i> và <i>theo dõi</i> mức dùng tài nguyên. Ward đặt câu hỏi bắc cầu: <b>nhưng nếu bạn muốn giới hạn những gì tiến trình có thể tiêu thụ, vượt ra ngoài những gì <code>nice</code> làm được thì sao?</b><span class="cite"><a href="#ref-1">1</a></span> Có vài hệ thống truyền thống cho việc đó, chẳng hạn giao diện <span lang="en">rlimit</span> của POSIX, nhưng <b>lựa chọn linh hoạt nhất cho hầu hết kiểu giới hạn tài nguyên trên hệ thống Linux hiện nay là tính năng cgroup (control group) của nhân</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+    <p class="easy-only">Đến đây bạn đã biết cách <i>nhìn</i>. Còn muốn <i>đặt hạn mức</i> thì sao? Đó là việc của cgroups. <b>Nhớ nhé: nhìn xong rồi mới tới đặt luật.</b></p>
+    <p class="en-only" lang="en">By now you have plenty of ways to <i>view</i> and <i>monitor</i> resource usage. Ward asks the bridging question: <b>what if you'd like to limit what processes can consume, beyond what <code>nice</code> does?</b><span class="cite"><a href="#ref-1">1</a></span> There are several traditional systems for that, such as the POSIX rlimit interface, but <b>the most flexible option for most types of resource limits on Linux systems is now the cgroup (control group) kernel feature</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 5 ===================== -->
+<section class="section" id="cgroups" aria-labelledby="cgroups-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 05</span>
+      <span class="en-only" lang="en">Concept cluster 05</span>
+    </p>
+    <h2 id="cgroups-title">
+      <span class="standard-copy">Nhóm điều khiển: từ “nhìn” sang “giới hạn”</span>
+      <span class="easy-only">cgroups — đặt hạn mức cho một nhóm</span>
+      <span class="en-only" lang="en">Control groups: from watching to limiting</span>
+    </h2>
+    <p class="standard-copy">Ý tưởng cơ bản rất gọn: bạn <b>đặt nhiều tiến trình vào một cgroup</b>, và điều đó cho phép bạn quản lý tài nguyên chúng tiêu thụ <i>trên phạm vi cả nhóm</i>. Ví dụ, nếu muốn giới hạn lượng bộ nhớ mà một tập tiến trình có thể tiêu thụ cộng gộp, một cgroup làm được việc đó. Sau khi tạo cgroup, bạn thêm tiến trình vào nó, rồi dùng một <b>bộ điều khiển</b> (<span lang="en">controller</span>) để thay đổi cách các tiến trình đó hành xử — chẳng hạn có bộ điều khiển <code>cpu</code> cho phép giới hạn thời gian bộ xử lý, một bộ điều khiển <code>memory</code>, và vân vân.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+    <p class="easy-only">cgroup giống như xếp nhiều chương trình vào chung một cái hộp, rồi dán lên hộp một tấm biển: “cả hộp này chỉ được dùng ngần này bộ nhớ”. Muốn giới hạn gì thì gắn thêm một cái “bộ điều khiển” cho hộp đó. <b>Nhớ nhé: đặt luật cho cả hộp, không đặt cho từng người.</b></p>
+    <p class="en-only" lang="en">The basic idea is compact: you <b>place several processes into a cgroup</b>, which lets you manage the resources they consume <i>on a group-wide basis</i>. For example, if you want to limit the memory a set of processes may cumulatively consume, a cgroup can do it. After creating a cgroup you add processes to it, then use a <b>controller</b> to change how those processes behave — there is a <code>cpu</code> controller allowing you to limit processor time, a <code>memory</code> controller, and so on.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+    <p class="deep-only"><b>Một đính chính về quyền sở hữu.</b> Ward ghi chú riêng: dù <span lang="en">systemd</span> dùng tính năng cgroup rất nhiều và phần lớn (nếu không muốn nói là toàn bộ) cgroup trên máy bạn có thể do <span lang="en">systemd</span> quản lý, <b>cgroup nằm trong không gian nhân và không phụ thuộc vào systemd</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span> Đây là phân biệt hữu ích khi bạn đọc tài liệu: cấu trúc thư mục bạn thấy có thể do <span lang="en">systemd</span> dựng, nhưng cơ chế thì của nhân.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Hai phiên bản, một khác biệt cấu trúc.</b> Có hai phiên bản cgroup, 1 và 2, và không may là <b>cả hai hiện đều đang được dùng và có thể được cấu hình đồng thời trên một hệ thống</b>, dẫn tới khả năng gây nhầm lẫn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span> Trong <b>cgroups v1</b>, mỗi loại bộ điều khiển (<code>cpu</code>, <code>memory</code>…) có tập cgroup riêng; một tiến trình có thể thuộc một cgroup cho mỗi bộ điều khiển, nghĩa là nó có thể thuộc nhiều cgroup. Trong <b>cgroups v2</b>, <b>một tiến trình chỉ có thể thuộc một cgroup duy nhất</b>, và bạn thiết lập nhiều loại bộ điều khiển khác nhau cho từng cgroup.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Bản cũ (v1): mỗi loại hạn mức là một cái hộp riêng, nên một chương trình nằm trong nhiều hộp. Bản mới (v2): mỗi chương trình chỉ nằm trong <i>một</i> hộp, và cái hộp đó có thể mang nhiều loại hạn mức. <b>Nhớ nhé: bản mới gọn hơn — một chương trình, một hộp.</b></p>
+      <p class="en-only" lang="en"><b>Two versions, one structural difference.</b> There are two versions of cgroups, 1 and 2, and unfortunately <b>both are currently in use and can be configured simultaneously on a system</b>, leading to potential confusion.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span> In <b>cgroups v1</b>, each type of controller (<code>cpu</code>, <code>memory</code>, …) has its own set of cgroups; a process can belong to one cgroup per controller, meaning it can belong to multiple cgroups. In <b>cgroups v2</b>, <b>a process can belong to only one cgroup</b>, and you set up different types of controllers for each cgroup.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">v1: 3 nhóm × 2 controller = 6 cgroup<br>v2: 3 nhóm × 2 controller = 3 cgroup<br>giao diện: /sys/fs/cgroup (cgroup2)<br>tệp giao diện: cgroup.*</p>
+      <p class="easy-only">bản cũ: 3 nhóm cần 6 hộp<br>bản mới: 3 nhóm cần 3 hộp<br>xem ở: /sys/fs/cgroup<br>tệp điều khiển bắt đầu bằng cgroup.</p>
+      <p class="en-only" lang="en">v1: 3 sets × 2 controllers = 6 cgroups<br>v2: 3 sets × 2 controllers = 3 cgroups<br>interface: /sys/fs/cgroup (cgroup2)<br>interface files: cgroup.*</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">viewing cgroups</span>
+      <h3>
+        <span class="standard-copy">Xem cgroup — qua hệ thống tệp, không qua lời gọi hệ thống</span>
+        <span class="easy-only">Xem cgroup bằng cách mở thư mục</span>
+        <span class="en-only" lang="en">Viewing cgroups — through the filesystem, not a system call</span>
+      </h3>
+      <p class="standard-copy">Khác với giao diện lời gọi hệ thống Unix truyền thống để tương tác với nhân, <b>cgroup được truy cập hoàn toàn qua hệ thống tệp</b>, thường được gắn dưới dạng hệ thống tệp <code>cgroup2</code> tại <code>/sys/fs/cgroup</code>. (Nếu bạn cũng đang chạy cgroups v1, chỗ này có lẽ nằm dưới <code>/sys/fs/cgroup/unified</code>.)<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span> Bạn liệt kê cgroup v1 và v2 của bất kỳ tiến trình nào bằng cách xem tệp <code>cgroup</code> của nó trong <code>/proc/&lt;pid&gt;</code> — ví dụ <code>cat /proc/self/cgroup</code> cho cgroup của chính shell bạn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span></p>
+      <p class="easy-only">Bạn không cần lệnh đặc biệt nào để xem cgroup — chỉ cần <code>cat</code> mấy tệp trong thư mục <code>/sys/fs/cgroup</code>. Gõ <code>cat /proc/self/cgroup</code> thì thấy cái hộp mà shell của bạn đang nằm trong. <b>Nhớ nhé: cgroup là thư mục, không phải lệnh.</b></p>
+      <p class="en-only" lang="en">Unlike the traditional Unix system-call interface for interacting with the kernel, <b>cgroups are accessed entirely through the filesystem</b>, usually mounted as a <code>cgroup2</code> filesystem under <code>/sys/fs/cgroup</code>. (If you're also running cgroups v1, this will probably be under <code>/sys/fs/cgroup/unified</code>.)<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span> You can list the v1 and v2 cgroups for any process by looking at its <code>cgroup</code> file in <code>/proc/&lt;pid&gt;</code> — for instance <code>cat /proc/self/cgroup</code> for your own shell.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong kết xuất của <code>/proc/self/cgroup</code>, các số từ 2 đến 12 là của cgroups v1 (bộ điều khiển được liệt kê ngay cạnh số); số 1 cũng thuộc v1 nhưng không có bộ điều khiển, chỉ dùng cho mục đích quản lý; và <b>dòng cuối, số 0, là của cgroups v2</b>. Trên một hệ thống không có cgroups v1, đó sẽ là dòng duy nhất.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span></span>
+        <span class="easy-only">Dòng bắt đầu bằng số 0 là bản mới. Nếu chỉ có một dòng thì máy bạn chỉ dùng bản mới.</span>
+        <span class="en-only" lang="en">In <code>/proc/self/cgroup</code> output, numbers 2–12 are for cgroups v1 (their controllers listed next to the number); number 1 is also v1 but has no controller and exists for management purposes only; and <b>the last line, number 0, is for cgroups v2</b>. On a system without cgroups v1, that will be the only line.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Tên cgroup là phân cấp</h4>
+          <p>Tên cgroup có tính phân cấp và trông giống các phần của đường dẫn tệp: trong ví dụ của sách có những cgroup tên <code>/user.slice</code> và những cái khác tên <code>/user.slice/user-1000.slice/session-2.scope</code>.<span class="cite"><a href="#ref-1">1</a></span> Những tên dưới <code>user.slice</code> có chứa <code>session</code> là các phiên đăng nhập do <span lang="en">systemd</span> gán — bạn sẽ thấy chúng khi xem cgroup của một shell; còn cgroup cho các dịch vụ hệ thống của bạn nằm dưới <code>system.slice</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Các tệp giao diện chính</h4>
+          <p>Trong nhiều tệp có thể có ở đó, các <b>tệp giao diện cgroup chính bắt đầu bằng <code>cgroup</code></b>. Hãy bắt đầu bằng <code>cgroup.procs</code> (dùng <code>cat</code> là được), tệp này liệt kê các tiến trình trong cgroup; một tệp tương tự, <code>cgroup.threads</code>, bao gồm cả luồng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span> Để xem các bộ điều khiển đang dùng, xem <code>cgroup.controllers</code>; trong ví dụ của sách nó trả về <code>memory pids</code> — hai bộ điều khiển mà phần lớn cgroup dùng cho shell đều có, kiểm soát lượng bộ nhớ dùng và tổng số tiến trình trong cgroup.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đọc một giá trị: pids.current và memory.max</h4>
+          <p>Để tương tác với một bộ điều khiển, tìm các tệp khớp với tiền tố của nó. Muốn biết số luồng đang chạy trong cgroup, xem <code>pids.current</code>; muốn biết lượng bộ nhớ tối đa cgroup được tiêu thụ, xem <code>memory.max</code>. Giá trị <code>max</code> nghĩa là cgroup này không có giới hạn cụ thể — nhưng vì cgroup có tính phân cấp, <b>một cgroup ở phía trên chuỗi thư mục vẫn có thể giới hạn nó</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">manipulating cgroups</span>
+      <h3>
+        <span class="standard-copy">Thao tác và tạo cgroup — ba luật dễ vấp</span>
+        <span class="easy-only">Tạo cgroup — ba điều luật</span>
+        <span class="en-only" lang="en">Manipulating and creating cgroups — three rules that trip you up</span>
+      </h3>
+      <p class="standard-copy">Ward nói rằng bạn có lẽ sẽ chẳng bao giờ cần sửa cgroup, nhưng việc đó rất dễ. Để đặt một tiến trình vào cgroup, hãy ghi PID của nó vào tệp <code>cgroup.procs</code> với quyền root: <code># echo pid &gt; cgroup.procs</code>. <b>Đây là cách phần lớn thay đổi với cgroup hoạt động</b> — ví dụ, muốn giới hạn số PID tối đa của một cgroup ở mức 3.000, làm như sau: <code># echo 3000 &gt; pids.max</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+      <p class="easy-only">Muốn cho một chương trình vào hộp, bạn ghi số của nó vào một tệp. Muốn đặt hạn mức, bạn ghi con số hạn mức vào một tệp khác. Tất cả chỉ là ghi tệp. <b>Nhớ nhé: đặt luật = ghi một con số vào một tệp.</b></p>
+      <p class="en-only" lang="en">Ward says you probably won't ever need to alter cgroups, but it's easy. To put a process into a cgroup, write its PID to its <code>cgroup.procs</code> file as root: <code># echo pid &gt; cgroup.procs</code>. <b>This is how many changes to cgroups work</b> — for example, to limit a cgroup's maximum number of PIDs to, say, 3,000: <code># echo 3000 &gt; pids.max</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Về mặt kỹ thuật, tạo cgroup dễ như tạo một thư mục con ở đâu đó trong cây cgroup — khi bạn làm vậy, nhân tự động tạo các tệp giao diện; và nếu một cgroup không có tiến trình nào, bạn gỡ nó bằng <code>rmdir</code> ngay cả khi các tệp giao diện vẫn còn đó.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Tạo hộp mới = tạo một thư mục mới. Bỏ hộp rỗng = xoá thư mục.</span>
+        <span class="en-only" lang="en">Technically, creating a cgroup is as easy as creating a subdirectory somewhere in the cgroup tree — the kernel then automatically creates the interface files; and if a cgroup has no processes you can remove it with <code>rmdir</code> even with the interface files present.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ba luật chi phối cgroup</h4>
+          <p>(1) Bạn <b>chỉ đặt được tiến trình vào các cgroup ở tầng ngoài cùng (“lá”)</b>: nếu có <code>/my-cgroup</code> và <code>/my-cgroup/my-subgroup</code>, bạn không đặt tiến trình vào <code>/my-cgroup</code> được, nhưng <code>/my-cgroup/my-subgroup</code> thì được (ngoại lệ là khi các cgroup không có bộ điều khiển nào). (2) <b>Một cgroup không thể có bộ điều khiển mà cgroup cha của nó không có.</b> (3) Bạn <b>phải chỉ định tường minh các bộ điều khiển cho cgroup con</b>, thông qua tệp <code>cgroup.subtree_control</code> — ví dụ muốn một cgroup con có bộ điều khiển <code>cpu</code> và <code>pids</code>, hãy ghi <code>+cpu +pids</code> vào tệp đó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ngoại lệ: cgroup gốc</h4>
+          <p>Một ngoại lệ cho các luật trên là <b>cgroup gốc</b>, nằm ở đáy của phân cấp: bạn <i>có thể</i> đặt tiến trình vào cgroup này. Một lý do bạn có thể muốn làm thế là để <b>tách một tiến trình khỏi quyền kiểm soát của systemd</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">cpu.stat</span>
+      <h3>
+        <span class="standard-copy">Xem mức dùng tài nguyên — cả đời một nhóm, gộp cả tiến trình con</span>
+        <span class="easy-only">Xem cả nhóm đã dùng bao nhiêu</span>
+        <span class="en-only" lang="en">Viewing resource utilization — a group's whole lifespan, subprocesses included</span>
+      </h3>
+      <p class="standard-copy">Ngoài việc giới hạn tài nguyên theo cgroup, bạn còn <b>xem được mức dùng tài nguyên hiện tại của mọi tiến trình theo cgroup của chúng</b>. Ngay cả khi <i>không</i> bật bộ điều khiển nào, bạn vẫn thấy mức dùng CPU của một cgroup qua tệp <code>cpu.stat</code> của nó — ví dụ của sách trả về ba dòng <code>usage_usec</code>, <code>user_usec</code>, <code>system_usec</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+      <p class="easy-only">Bạn xem được cả nhóm đã dùng bao nhiêu CPU từ lúc sinh ra, kể cả phần của những chương trình con đã chết. <b>Nhớ nhé: sổ ghi cho cả hộp, không mất dấu khi ai đó rời đi.</b></p>
+      <p class="en-only" lang="en">Besides limiting resources by cgroup, you can also <b>see the current resource utilization of all processes across their cgroups</b>. Even with no controllers enabled, you can see a cgroup's CPU usage by looking at its <code>cpu.stat</code> file — the book's example returns three lines: <code>usage_usec</code>, <code>user_usec</code>, <code>system_usec</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Vì đây là mức dùng CPU tích luỹ trên toàn bộ vòng đời của cgroup, bạn thấy được một dịch vụ tiêu thụ bao nhiêu thời gian bộ xử lý <b>ngay cả khi nó sinh ra nhiều tiến trình con rồi các tiến trình đó kết thúc</b>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi một dịch vụ cứ sinh con rồi con chết, mà bạn vẫn muốn tính tổng.</span>
+        <span class="en-only" lang="en">Because this is accumulated CPU usage over the cgroup's entire lifespan, you can see how a service consumes processor time <b>even if it spawns many subprocesses that eventually terminate</b>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Khi bật bộ điều khiển memory</h4>
+          <p>Bạn xem được các loại mức dùng khác nếu bộ điều khiển thích hợp đã bật: ví dụ bộ điều khiển <code>memory</code> cho truy cập vào tệp <code>memory.current</code> (mức dùng bộ nhớ hiện thời) và tệp <code>memory.stat</code> (dữ liệu bộ nhớ chi tiết cho toàn bộ vòng đời của cgroup). <b>Các tệp này không có ở cgroup gốc.</b><span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đi xa hơn</h4>
+          <p>Ward chỉ thẳng chỗ tra cứu: chi tiết đầy đủ về cách dùng từng bộ điều khiển, cũng như mọi luật tạo cgroup, nằm trong tài liệu của nhân — “chỉ cần tìm trực tuyến ‘cgroups2 documentation’ là bạn sẽ thấy”.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span> Hiểu cơ chế cơ bản của cgroup cũng giúp giải thích cách <span lang="en">systemd</span> tổ chức tiến trình, và sau này khi đọc về <span lang="en">container</span>, bạn sẽ thấy chúng được dùng cho một mục đích rất khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Ward khép chương bằng câu trả lời cho một câu hỏi ngầm: <b>vì sao lại lắm công cụ đến thế?</b> Lý do thứ nhất: các loại tài nguyên khác nhau bị tiêu thụ theo nhiều cách rất khác nhau — trong chương này bạn đã thấy CPU, bộ nhớ và vào/ra bị tiêu thụ bởi tiến trình, bởi luồng bên trong tiến trình, và bởi chính nhân. Lý do thứ hai: <b>tài nguyên là hữu hạn</b>, và để hệ thống chạy tốt, các thành phần của nó phải cố tiêu thụ ít đi.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Vì sao nhiều lệnh thế? Vì mỗi loại tài nguyên bị tiêu theo một kiểu khác nhau, và vì tài nguyên thì luôn có hạn. <b>Nhớ nhé: nhiều công cụ vì có nhiều kiểu hao.</b></p>
+    <p class="en-only" lang="en">Ward closes the chapter by answering an implicit question: <b>why are there so many tools?</b> First, because different types of resources are consumed in many different ways — in this chapter you've seen CPU, memory and I/O consumed by processes, by threads inside processes, and by the kernel. Second, because <b>resources are limited</b>, and for a system to perform well its components must strive to consume fewer of them.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only"><b>Ba hướng đi tiếp mà sách nêu tên.</b> <code>sar</code> (<span lang="en">System Activity Reporter</span>): gói <code>sar</code> có nhiều khả năng theo dõi liên tục của <code>vmstat</code>, nhưng nó còn <i>ghi lại</i> mức dùng tài nguyên theo thời gian, nên bạn có thể nhìn lại một thời điểm cụ thể để biết hệ thống lúc đó đang làm gì — rất tiện khi cần phân tích một sự kiện đã qua.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-22">22</a></span> <code>acct</code> (<span lang="en">process accounting</span>): gói <code>acct</code> ghi lại các tiến trình và mức dùng tài nguyên của chúng.<span class="cite"><a href="#ref-1">1</a></span> <b>Quota</b>: bạn giới hạn được dung lượng đĩa một người dùng có thể dùng bằng hệ thống quota.<span class="cite"><a href="#ref-1">1</a></span> Nếu bạn đặc biệt quan tâm tới tinh chỉnh và hiệu năng hệ thống, Ward giới thiệu <i>Systems Performance: Enterprise and the Cloud</i>, ấn bản 2, của Brendan Gregg (Addison-Wesley, 2020).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== MISCONCEPTIONS ===================== -->
+<section class="section" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Đính chính</span>
+      <span class="en-only" lang="en">Corrections</span>
+    </p>
+    <h2 id="ngo-nhan-title">
+      <span class="standard-copy">Ba ngộ nhận mà người đọc lần đầu hay mắc</span>
+      <span class="easy-only">Ba chỗ hay hiểu nhầm</span>
+      <span class="en-only" lang="en">Three misconceptions first readers hit</span>
+    </h2>
+    <p class="standard-copy">Phần này thuộc mức đọc <b>Đầy đủ</b>: nó đối chiếu điều người đọc thường nghĩ với điều bản văn thật sự nói.</p>
+    <p class="easy-only">Phần này hơi khó, bạn có thể bỏ qua và quay lại sau. <b>Nhớ nhé: hiểu chậm mà chắc vẫn hơn.</b></p>
+    <p class="en-only" lang="en">This block belongs to the <b>Đầy đủ</b> (full) reading level: it sets what readers usually assume against what the text actually says.</p>
+  </div>
+
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Tải trung bình 4 nghĩa là CPU đã quá tải”</span>
+          <span class="en-only" lang="en">"A load average of 4 means the CPU is overloaded"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> con số tải trung bình là một thang đo tuyệt đối, cứ vượt một ngưỡng nào đó là hệ thống có vấn đề.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> tải trung bình cao <b>không nhất thiết</b> nghĩa là hệ thống đang gặp trục trặc — một hệ thống đủ bộ nhớ và tài nguyên vào/ra dễ dàng gánh được nhiều tiến trình đang chạy, và nếu máy vẫn phản hồi tốt thì đừng hoảng.<span class="cite"><a href="#ref-1">1</a></span> Con số còn phải đọc theo số lõi: với hai lõi, tải 1 nghĩa là chỉ một lõi có việc tại một thời điểm, còn tải 2 nghĩa là cả hai lõi vừa đủ việc suốt.<span class="cite"><a href="#ref-1">1</a></span> Trên máy chủ web hay máy chủ tính toán, tiến trình có thể sinh ra và kết thúc nhanh đến mức <i>chính cơ chế đo</i> không hoạt động hiệu quả.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> the load average is an absolute scale, and crossing some threshold means trouble.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> a high load average <b>doesn't necessarily</b> mean your system is in trouble — a system with enough memory and I/O resources can easily handle many running processes, and if it still responds well, don't panic.<span class="cite"><a href="#ref-1">1</a></span> The number must also be read against the core count: with two cores, a load of 1 means only one core is likely active at a time, and 2 means both have just enough to do all the time.<span class="cite"><a href="#ref-1">1</a></span> On a web or compute server, processes can start and terminate so quickly that <i>the measurement mechanism itself</i> can't function effectively.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Lỗi trang là lỗi — nên phải tìm cách loại bỏ”</span>
+          <span class="en-only" lang="en">"Page faults are errors — so they must be eliminated"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> chữ “lỗi” trong <i>lỗi trang</i> hàm ý điều gì đó hỏng hóc.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> lỗi trang <b>nhỏ</b> là chuyện thường ngày — “không có gì phải lo, và rất nhiều lỗi loại này xảy ra trong lúc một tiến trình chạy”.<span class="cite"><a href="#ref-1">1</a></span> Ngay cả một số lỗi trang <b>lớn</b> cũng không tránh được, chẳng hạn khi nạp mã từ đĩa lúc chạy chương trình lần đầu.<span class="cite"><a href="#ref-1">1</a></span> Điều đáng lo không phải sự tồn tại của lỗi trang, mà là <i>số lượng lớn lỗi trang lớn</i> khi máy cạn bộ nhớ và bắt đầu thrash.<span class="cite"><a href="#ref-1">1</a></span> Trong ví dụ của sách, một lệnh <code>cal</code> hết sức bình thường đã sinh ra 254 lỗi trang nhỏ.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> the word "fault" in <i>page fault</i> implies something broken.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> <b>minor</b> page faults are routine — "nothing to worry about, and many occur as a process runs."<span class="cite"><a href="#ref-1">1</a></span> Even some <b>major</b> faults are unavoidable, such as loading code from disk when running a program for the first time.<span class="cite"><a href="#ref-1">1</a></span> What matters is not that faults occur but <i>a lot of major ones</i> when the machine runs out of memory and starts thrashing.<span class="cite"><a href="#ref-1">1</a></span> In the book's example an utterly ordinary <code>cal</code> command produced 254 minor faults.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“cgroups là tính năng của systemd”</span>
+          <span class="en-only" lang="en">"cgroups are a systemd feature"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> vì mọi cgroup bạn thấy đều có tên kiểu <code>user.slice</code> và <code>system.slice</code>, cgroup hẳn là do <span lang="en">systemd</span> tạo ra và sở hữu.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> dù <span lang="en">systemd</span> dùng tính năng cgroup rất nhiều và phần lớn (nếu không muốn nói là toàn bộ) cgroup trên máy bạn có thể do nó quản lý, <b>cgroup nằm trong không gian nhân và không phụ thuộc vào systemd</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span> Chính vì thế bạn thao tác với chúng bằng cách đọc ghi tệp dưới <code>/sys/fs/cgroup</code>, chứ không qua bất kỳ lệnh riêng nào của <span lang="en">systemd</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> since every cgroup you see is named like <code>user.slice</code> or <code>system.slice</code>, cgroups must be created and owned by <span lang="en">systemd</span>.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> although <span lang="en">systemd</span> makes extensive use of the cgroup feature and most (if not all) of the cgroups on your system may be managed by it, <b>cgroups are in kernel space and do not depend on systemd</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span> That is exactly why you manipulate them by reading and writing files under <code>/sys/fs/cgroup</code>, not through any systemd-specific command.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="tu-kiem-tra" aria-labelledby="tu-kiem-tra-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm tra</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="tu-kiem-tra-title">
+      <span class="standard-copy">Bạn đã đọc được các con số chưa?</span>
+      <span class="easy-only">Thử trả lời xem nào</span>
+      <span class="en-only" lang="en">Can you read the numbers yet?</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Trả lời bằng lời của bạn, không tra sách. Nếu một câu khiến bạn ngập ngừng, đó chính là công cụ bạn nên mở lên gõ thử.</p>
+      <p class="easy-only">Thử trả lời miệng thôi, không cần giở lại. Câu nào bí thì mở terminal gõ thử lệnh đó nhé. <b>Nhớ nhé: chỗ bí chính là chỗ cần gõ.</b></p>
+      <p class="en-only" lang="en">Answer in your own words, without looking back. Whichever question makes you hesitate points at the tool you should open a terminal and try.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p><code>ps</code> và <code>top</code> khác nhau ở điểm cốt lõi nào, và vì sao khác biệt đó quyết định việc bạn chọn công cụ nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: hãy nói thêm ba phím <b>M</b>, <b>T</b>, <b>P</b> sắp xếp theo tiêu chí nào.</p>
+      </li>
+      <li>
+        <p>Cột FD trong kết xuất <code>lsof</code> có thể chứa hai loại nội dung khác nhau — đó là hai loại nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: <code>cwd</code> thuộc loại nào, và con số <code>3</code> thuộc loại nào?</p>
+      </li>
+      <li>
+        <p><code>strace</code> và <code>ltrace</code> quan sát hai tầng khác nhau — hãy đặt chúng vào mô hình ba tầng của Chương 1.</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao <code>ltrace</code> không chạy được trên nhị phân liên kết tĩnh?</p>
+      </li>
+      <li>
+        <p>Trong <code>time</code>, hiệu số <code>real − (user + sys)</code> nói lên điều gì về tiến trình?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao muốn xem lỗi trang bạn phải dùng <code>/usr/bin/time</code> chứ không dùng bản dựng sẵn của shell?</p>
+      </li>
+      <li>
+        <p>Vì sao một máy mở hai mươi cửa sổ vẫn có thể có tải trung bình gần 0?</p>
+        <p class="deep-only">Gợi ý sâu hơn: tải trung bình đếm tiến trình ở trạng thái nào, và bỏ qua trạng thái nào?</p>
+      </li>
+      <li>
+        <p>Lỗi trang nhỏ khác lỗi trang lớn ở chỗ nào, và loại nào đáng lo?</p>
+        <p class="deep-only">Gợi ý sâu hơn: hai cột nào của <code>ps -o</code> cho bạn hai con số đó?</p>
+      </li>
+      <li>
+        <p>Trong <code>vmstat</code>, vì sao bạn nên bắt đầu đọc từ dòng thứ hai chứ không phải dòng đầu?</p>
+        <p class="deep-only">Gợi ý sâu hơn: hai cột <code>si</code> và <code>so</code> bằng 0 nói lên điều gì?</p>
+      </li>
+      <li>
+        <p>Khác biệt cấu trúc giữa cgroups v1 và v2 là gì — nói bằng đúng một câu?</p>
+        <p class="deep-only">Gợi ý sâu hơn: ba nhóm tiến trình với hai bộ điều khiển cần bao nhiêu cgroup ở mỗi phiên bản?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Lệnh nào cho bạn xem ai đang ngốn máy nhiều nhất, và nó tự cập nhật bao lâu một lần?</p></li>
+      <li><p>Muốn biết chương trình nào đang mở một tệp thì dùng lệnh gì?</p></li>
+      <li><p>Máy tính chỉ có ba thứ để tranh nhau — kể tên ba thứ đó.</p></li>
+      <li><p><code>nice</code> để làm gì? Số lớn hơn nghĩa là được ưu tiên hơn hay chịu nhường hơn?</p></li>
+      <li><p>“Trang nhớ” là gì, và một trang thường to bao nhiêu?</p></li>
+      <li><p>cgroup dùng để làm gì? Nói một câu thôi cũng được.</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>
+        <p>What is the core difference between <code>ps</code> and <code>top</code>, and why does it decide which tool you reach for?</p>
+      </li>
+      <li>
+        <p>The FD column in <code>lsof</code> output can hold two different kinds of content — which two?</p>
+      </li>
+      <li>
+        <p><code>strace</code> and <code>ltrace</code> watch two different layers — place them in Chapter 1's three-level model.</p>
+      </li>
+      <li>
+        <p>In <code>time</code>, what does the difference <code>real − (user + sys)</code> tell you about a process?</p>
+      </li>
+      <li>
+        <p>Why can a machine with twenty open windows still show a load average near 0?</p>
+      </li>
+      <li>
+        <p>How does a minor page fault differ from a major one, and which should worry you?</p>
+      </li>
+      <li>
+        <p>In <code>vmstat</code>, why should you start reading at the second line rather than the first?</p>
+      </li>
+      <li>
+        <p>What is the structural difference between cgroups v1 and v2 — in exactly one sentence?</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Đừng để hiệu năng làm bạn phân tâm: <span class="closing-accent">tối ưu một hệ thống vốn đã chạy đúng là phí thời gian</span>. Hãy tập trung hiểu các công cụ thật sự đo cái gì — và <span class="closing-accent">bạn sẽ nhìn thấy nhân đang hành động khi nó chia tài nguyên cho các tiến trình</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Máy đang chạy tốt thì đừng vặn nữa — <span class="closing-accent">vặn chỉ tốn thời gian</span>. Học mấy lệnh này để <span class="closing-accent">nhìn thấy máy đang chia phần cho ai</span>. <b>Nhớ nhé: học để nhìn, không phải để vặn.</b></p>
+    <p class="en-only" lang="en">Don't get distracted by performance: <span class="closing-accent">trying to optimize a system that's already working correctly is a waste of time</span>. Concentrate on understanding what the tools actually measure — and <span class="closing-accent">you'll see the kernel in action as it divides resources among processes</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START -->
+<!-- Region owned by book-cover-curator; body authored by book-chapter-author.
+     Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-7-system-configuration.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 7 · Cấu hình hệ thống</span>
+    <span class="nav-title en-only" lang="en">Chapter 7 · System Configuration</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-9-network-configuration.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 9 · Mạng và cấu hình mạng</span>
+    <span class="nav-title en-only" lang="en">Chapter 9 · Understanding Your Network and Its Configuration</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, tái bản lần thứ 3, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chương 8, “A Closer Look at Processes and Resource Utilization”, trang 199–222.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd edition, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chapter 8, "A Closer Look at Processes and Resource Utilization", pp. 199–222.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd ed., No Starch Press, 2021, ch. 8 “A Closer Look at Processes and Resource Utilization”, pp. 199–222. — <a href="https://openlibrary.org/books/OL29462444M" target="_blank" rel="noopener noreferrer">openlibrary.org/books/OL29462444M</a></li>
+      <li id="ref-2"><code>ps(1)</code> — report a snapshot of the current processes, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/ps.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/ps.1.html</a></li>
+      <li id="ref-3"><code>top(1)</code> — display Linux processes, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/top.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/top.1.html</a></li>
+      <li id="ref-4"><code>lsof(8)</code> — list open files, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man8/lsof.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/lsof.8.html</a></li>
+      <li id="ref-5"><code>strace(1)</code> — trace system calls and signals, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/strace.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/strace.1.html</a></li>
+      <li id="ref-6"><code>ltrace(1)</code> — a library call tracer, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/ltrace.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/ltrace.1.html</a></li>
+      <li id="ref-7"><code>pthreads(7)</code> — POSIX threads, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man7/pthreads.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/pthreads.7.html</a></li>
+      <li id="ref-8"><code>fork(2)</code> — create a child process, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man2/fork.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/fork.2.html</a></li>
+      <li id="ref-9"><code>time(1)</code> — time a simple command, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/time.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/time.1.html</a></li>
+      <li id="ref-10"><code>nice(1)</code> — run a program with modified scheduling priority, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/nice.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/nice.1.html</a></li>
+      <li id="ref-11"><code>uptime(1)</code> — tell how long the system has been running, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/uptime.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/uptime.1.html</a></li>
+      <li id="ref-12">“Page Tables”, The Linux Kernel documentation. <a href="https://docs.kernel.org/mm/page_tables.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/mm/page_tables.html</a></li>
+      <li id="ref-13">“Concepts overview” (memory management), The Linux Kernel documentation. <a href="https://docs.kernel.org/admin-guide/mm/concepts.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/admin-guide/mm/concepts.html</a></li>
+      <li id="ref-14"><code>vmstat(8)</code> — report virtual memory statistics, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man8/vmstat.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/vmstat.8.html</a></li>
+      <li id="ref-15">Abraham Silberschatz, Peter B. Galvin, Greg Gagne, <i>Operating System Concepts</i>, 10th ed., Wiley, 2018 — the textbook Ward recommends for kernel memory management in ch. 8. <a href="https://www.os-book.com/OS10/" target="_blank" rel="noopener noreferrer">os-book.com/OS10</a></li>
+      <li id="ref-16"><code>iostat(1)</code> — report CPU and I/O statistics, sysstat, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/iostat.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/iostat.1.html</a></li>
+      <li id="ref-17"><code>iotop(8)</code> — simple top-like I/O monitor, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man8/iotop.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/iotop.8.html</a></li>
+      <li id="ref-18"><code>ionice(1)</code> — set or get process I/O scheduling class and priority, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/ionice.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/ionice.1.html</a></li>
+      <li id="ref-19"><code>pidstat(1)</code> — report statistics for Linux tasks, sysstat, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/pidstat.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/pidstat.1.html</a></li>
+      <li id="ref-20">“Control Group v2”, The Linux Kernel documentation — the “cgroups2 documentation” Ward points readers to. <a href="https://docs.kernel.org/admin-guide/cgroup-v2.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/admin-guide/cgroup-v2.html</a></li>
+      <li id="ref-21"><code>proc_pid_cgroup(5)</code> — the <code>/proc/pid/cgroup</code> file, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man5/proc_pid_cgroup.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/proc_pid_cgroup.5.html</a></li>
+      <li id="ref-22"><code>sar(1)</code> — collect, report or save system activity information, sysstat, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/sar.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/sar.1.html</a></li>
+      <li id="ref-23">Brendan Gregg, <i>Systems Performance: Enterprise and the Cloud</i>, 2nd ed., Addison-Wesley, 2020 — recommended by Ward at the end of ch. 8. <a href="https://www.brendangregg.com/systems-performance-2nd-edition-book.html" target="_blank" rel="noopener noreferrer">brendangregg.com/systems-performance-2nd-edition-book.html</a></li>
+      <li id="ref-24"><code>getpriority(2)</code> — get/set program scheduling priority, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man2/getpriority.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/getpriority.2.html</a></li>
+    </ol>
+
+    <!-- NAV:START -->
+    <!-- Footer neighbour row — owned by book-cover-curator, body authored by
+         book-chapter-author. Absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-7-system-configuration.html">chapter 7</a>
+      <a href="chapter-9-network-configuration.html">chapter 9</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('hlw-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('hlw-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('hlw-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

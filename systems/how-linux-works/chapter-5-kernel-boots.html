@@ -1,0 +1,1655 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 5 · Nhân Linux khởi động thế nào — How Linux Works</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 5 “How the Linux Kernel Boots” trong How Linux Works (Brian Ward, No Starch Press, 3rd ed., 2021): thông điệp khởi động, thứ tự khởi tạo nhân, tham số nhân, boot loader và GRUB, MBR và UEFI, secure boot, chainloading.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('hlw-reading-mode'),
+l=localStorage.getItem('hlw-lang'),
+t=localStorage.getItem('hlw-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"HOW LINUX WORKS / 05";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    How Linux Works
+    <span>Chương 5 · How the Linux Kernel Boots</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 5 · Nhân Linux khởi động thế nào</span>
+      <span class="en-only" lang="en">Chapter 5 · How the Linux Kernel Boots</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Khởi động không phải một khoảnh khắc — nó là một chuỗi bảy bước bạn có thể chỉ tên</span>
+      <span class="easy-only">Bật máy lên không phải một cú bật — nó là bảy bước nối nhau</span>
+      <span class="en-only" lang="en">Booting is not a moment — it is a seven-step sequence you can name</span>
+    </h1>
+
+    <p class="standard-copy">Brian Ward mở chương này bằng một lời hứa rất cụ thể: bạn sẽ học cách nhân di chuyển vào bộ nhớ, và nó làm những gì cho tới thời điểm tiến trình người dùng đầu tiên bắt đầu.<span class="cite"><a href="#ref-1">1</a></span> Ông gói toàn bộ quá trình đó vào một bản tóm tắt bảy bước — từ lúc BIOS hoặc firmware nạp một <span lang="en">boot loader</span>, cho tới lúc <code>init</code> dựng phần còn lại của hệ thống dậy.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Khi bạn bấm nút nguồn, máy không “chạy ngay” đâu. Nó đi qua một chuỗi việc, từng việc một, giống như xếp hàng domino. Máy đánh thức một chương trình nhỏ, chương trình nhỏ đó tìm và đánh thức nhân, nhân đánh thức các thiết bị, rồi cuối cùng nhân mở chương trình đầu tiên cho bạn. <b>Nhớ nhé: bật máy là một chuỗi bảy bước, không phải một cú bấm.</b></p>
+    <p class="en-only" lang="en">Brian Ward opens this chapter with a very concrete promise: you will learn how the kernel moves into memory, and what it does up to the point where the first user process starts.<span class="cite"><a href="#ref-1">1</a></span> He packs that whole span into a seven-step summary — from the machine's BIOS or boot firmware loading a <span lang="en">boot loader</span>, through to <code>init</code> setting the rest of the system processes in motion.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Ward kèm ngay một lời cảnh báo thực tế, và nó giải thích vì sao chương này khó học bằng cách “ngồi nhìn máy khởi động”: hành vi mặc định của nhiều bản phân phối Linux khiến việc nhận diện vài giai đoạn đầu trở nên khó, nếu không nói là bất khả thi, ngay trong lúc chúng diễn ra — nên bạn thường chỉ nhìn rõ được chúng <i>sau khi</i> chúng đã xong và bạn đã đăng nhập.<span class="cite"><a href="#ref-1">1</a></span> Toàn bộ kỹ thuật trong chương — đọc nhật ký nhân, đọc <code>/proc/cmdline</code>, mở dòng lệnh GRUB — đều là cách xem lại một cuốn phim đã chiếu xong.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> giữa “bật nguồn” và “màn hình đăng nhập” có một chuỗi giai đoạn rạch ròi; biết gọi tên từng giai đoạn — firmware, boot loader, nhân, gắn hệ thống tập tin gốc, tiến trình người dùng đầu tiên — là điều sẽ trở nên vô giá khi bạn phải sửa lỗi khởi động và hiểu hệ thống như một tổng thể.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> máy khởi động theo từng chặng. Khi máy không lên, bạn không cần đoán mò — bạn chỉ cần hỏi “nó dừng ở chặng nào?”. <b>Nhớ nhé: biết tên từng chặng là biết chỗ để tìm lỗi.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> between "power on" and "login prompt" lies a sequence of distinct stages; being able to identify each one — firmware, boot loader, kernel, root filesystem mount, first user process — will prove invaluable in fixing boot problems and understanding the system as a whole.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: chuỗi khởi động Linux từ firmware qua boot loader tới nhân và tiến trình init đầu tiên. Diagram: the Linux boot chain from firmware through the boot loader to the kernel and the first init process.">
+    <div class="core">
+      <b>Boot chain</b>
+      <small class="standard-copy">Firmware → boot loader → nhân → init</small>
+      <small class="easy-only">Bốn chặng nối tiếp nhau</small>
+      <small class="en-only" lang="en">Firmware → boot loader → kernel → init</small>
+    </div>
+
+    <div class="node">
+      <b>BIOS / UEFI</b>
+      <small class="standard-copy">Khởi tạo phần cứng, tìm mã khởi động trên thiết bị theo thứ tự boot</small>
+      <small class="easy-only">Máy tự kiểm tra rồi đi tìm “người mở cửa”</small>
+      <small class="en-only" lang="en">Initializes hardware, searches boot-order devices for boot code</small>
+    </div>
+
+    <div class="node">
+      <b>Boot loader (GRUB)</b>
+      <small class="standard-copy">Tìm ảnh nhân trên đĩa, nạp vào bộ nhớ, khởi động nhân kèm tham số</small>
+      <small class="easy-only">Người mở cửa: tìm nhân và bấm nút chạy</small>
+      <small class="en-only" lang="en">Finds the kernel image on disk, loads it into memory, starts it with parameters</small>
+    </div>
+
+    <div class="node">
+      <b>Kernel → init (PID 1)</b>
+      <small class="standard-copy">Khởi tạo thiết bị, gắn hệ thống tập tin gốc, chạy <code>init</code> với PID 1</small>
+      <small class="easy-only">Nhân dựng máy dậy rồi mở chương trình đầu tiên</small>
+      <small class="en-only" lang="en">Initializes devices, mounts the root filesystem, starts <code>init</code> with PID 1</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#chuoi-khoi-dong">
+    <span>01</span>
+    <b class="standard-copy">Chuỗi khởi động và thông điệp của nhân</b>
+    <b class="easy-only">Bảy bước và những dòng chữ chạy qua</b>
+    <b class="en-only" lang="en">The boot sequence and the kernel's messages</b>
+  </a>
+  <a href="#tham-so-nhan">
+    <span>02</span>
+    <b class="standard-copy">Tham số nhân: dòng chữ quyết định</b>
+    <b class="easy-only">Dòng chữ dặn dò nhân</b>
+    <b class="en-only" lang="en">Kernel parameters: the decisive line of text</b>
+  </a>
+  <a href="#boot-loader-va-grub">
+    <span>03</span>
+    <b class="standard-copy">Boot loader và GRUB</b>
+    <b class="easy-only">Người mở cửa tên GRUB</b>
+    <b class="en-only" lang="en">Boot loaders and GRUB</b>
+  </a>
+  <a href="#mbr-va-uefi">
+    <span>04</span>
+    <b class="standard-copy">MBR, UEFI, và cách GRUB thật sự chạy</b>
+    <b class="easy-only">Hai kiểu khởi động của máy PC</b>
+    <b class="en-only" lang="en">MBR, UEFI, and how GRUB really works</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>05</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="chuoi-khoi-dong" aria-labelledby="chuoi-khoi-dong-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="chuoi-khoi-dong-title">
+      <span class="standard-copy">Chuỗi bảy bước, và những thông điệp nhân để lại phía sau</span>
+      <span class="easy-only">Bảy bước, và dấu vết chúng để lại</span>
+      <span class="en-only" lang="en">The seven-step chain, and the messages the kernel leaves behind</span>
+    </h2>
+    <p class="standard-copy">Ward bắt đầu bằng một cái nhìn <i>đơn giản hoá</i> về quá trình khởi động, rồi nói rõ chương này chỉ bàn vài giai đoạn đầu, tập trung vào boot loader và nhân; phần khởi động không gian người dùng với <span lang="en">systemd</span> được để lại cho Chương 6.<span class="cite"><a href="#ref-1">1</a></span> Cách học tốt nhất là đọc lại dấu vết mà nhân đã ghi vào nhật ký.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Máy khởi động rất nhanh, nhanh tới mức chữ chạy qua màn hình bạn đọc không kịp. Nhưng máy có ghi nhật ký. Ta sẽ mở nhật ký đó ra xem lại. <b>Nhớ nhé: không xem kịp thì xem lại, máy có ghi hết.</b></p>
+    <p class="en-only" lang="en">Ward starts with a <i>simplified</i> view of the boot process, then says plainly that this chapter covers only the first couple of stages, focusing on the boot loaders and the kernel; the user space start with <span lang="en">systemd</span> is left to Chapter 6.<span class="cite"><a href="#ref-1">1</a></span> The best way to study it is to read back the trail the kernel wrote into its journal.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Khởi động</i> (<span lang="en">boot</span>) ở đây có nghĩa hẹp và chính xác: quá trình nhân di chuyển vào bộ nhớ và làm việc của nó cho tới thời điểm tiến trình người dùng đầu tiên bắt đầu.<span class="cite"><a href="#ref-1">1</a></span> Điểm kết thúc của “khởi động nhân” chính là bước 5 trong danh sách của Ward: nhân chạy một chương trình tên <code>init</code> với mã tiến trình bằng 1 — và đó là <i>điểm bắt đầu của không gian người dùng</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> “Khởi động” là đoạn từ lúc nhân được đưa vào bộ nhớ cho tới lúc chương trình đầu tiên chạy. Chương trình đầu tiên đó tên là <code>init</code>, và nó mang số 1. <b>Nhớ nhé: init là số 1 — trước nó là nhân, sau nó là tất cả.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <i>Booting</i> here has a narrow, precise meaning: the process of the kernel moving into memory and doing its work up to the point where the first user process starts.<span class="cite"><a href="#ref-1">1</a></span> The end of "kernel boot" is step 5 in Ward's list: the kernel starts a program called <code>init</code> with a process ID of 1 — and that point <i>is</i> the user space start.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">1. firmware → boot loader<br>2. boot loader → nhân vào bộ nhớ<br>3. nhân → thiết bị + trình điều khiển<br>4. nhân → gắn hệ thống tập tin gốc<br>5. nhân → init (PID 1)<br>6. init → các tiến trình hệ thống<br>7. init → cho bạn đăng nhập</p>
+      <p class="easy-only">1. máy gọi người mở cửa<br>2. người mở cửa gọi nhân<br>3. nhân bật thiết bị<br>4. nhân mở ổ đĩa gốc<br>5. nhân gọi init<br>6. init gọi phần còn lại<br>7. init mở màn hình đăng nhập</p>
+      <p class="en-only" lang="en">1. firmware → boot loader<br>2. boot loader → kernel into memory<br>3. kernel → devices + drivers<br>4. kernel → mount root filesystem<br>5. kernel → init (PID 1)<br>6. init → system processes<br>7. init → login</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">boot sequence</span>
+      <h3>
+        <span class="standard-copy">Chuỗi khởi động — bảy bước, không phải một khoảnh khắc</span>
+        <span class="easy-only">Bảy bước nối nhau</span>
+        <span class="en-only" lang="en">The boot sequence — seven steps, not a moment</span>
+      </h3>
+      <p class="standard-copy">Bản tóm tắt của Ward đi như sau: BIOS hoặc firmware khởi động nạp và chạy một boot loader; boot loader tìm ảnh nhân trên đĩa, nạp nó vào bộ nhớ rồi khởi động nó; nhân khởi tạo các thiết bị và trình điều khiển; nhân gắn hệ thống tập tin gốc; nhân chạy <code>init</code> với PID 1; <code>init</code> đặt phần còn lại của các tiến trình hệ thống vào chuyển động; và tới một lúc nào đó, <code>init</code> khởi động một tiến trình cho phép bạn đăng nhập, thường ở cuối hoặc gần cuối chuỗi khởi động.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bảy bước ấy giống một dây chuyền: mỗi người chỉ làm một việc rồi chuyền cho người kế tiếp. Máy gọi người mở cửa, người mở cửa gọi nhân, nhân bật thiết bị, mở ổ đĩa, rồi gọi chương trình số 1. Chương trình số 1 gọi tất cả những chương trình còn lại, cuối cùng mới tới màn hình đăng nhập. <b>Nhớ nhé: mỗi bước chỉ có một nhiệm vụ, và nó chuyền tiếp cho bước sau.</b></p>
+      <p class="en-only" lang="en">Ward's summary runs like this: the machine's BIOS or boot firmware loads and runs a boot loader; the boot loader finds the kernel image on disk, loads it into memory and starts it; the kernel initializes the devices and its drivers; the kernel mounts the root filesystem; the kernel starts a program called <code>init</code> with a process ID of 1; <code>init</code> sets the rest of the system processes in motion; and at some point <code>init</code> starts a process allowing you to log in, usually at or near the end of the boot sequence.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi máy “treo lúc khởi động”, câu hỏi đầu tiên đáng hỏi không phải “hỏng cái gì” mà là “nó dừng ở bước mấy trong bảy bước này”.</span>
+        <span class="easy-only">Khi máy không lên, hãy hỏi: nó đi được tới bước nào rồi?</span>
+        <span class="en-only" lang="en">Whenever a machine "hangs on boot", the first useful question is not "what broke" but "which of these seven steps did it stop at".</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ranh giới của chương</h4>
+          <p>Ward nói rõ chương 5 bao phủ vài giai đoạn đầu — boot loader và nhân — còn Chương 6 tiếp tục với khởi động không gian người dùng bằng cách mô tả chi tiết <span lang="en">systemd</span>, phiên bản <code>init</code> phổ biến nhất trên các hệ thống Linux.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao khó quan sát trực tiếp</h4>
+          <p>Hành vi mặc định của nhiều bản phân phối khiến vài giai đoạn đầu khó, nếu không nói là bất khả thi, để nhận diện ngay lúc chúng diễn ra; bạn thường chỉ nhìn rõ được sau khi chúng đã hoàn tất và bạn đã đăng nhập.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">startup messages</span>
+      <h3>
+        <span class="standard-copy">Thông điệp khởi động — chẩn đoán bị giấu sau màn hình splash</span>
+        <span class="easy-only">Những dòng chữ chạy vụt qua</span>
+        <span class="en-only" lang="en">Startup messages — diagnostics hidden behind a splash screen</span>
+      </h3>
+      <p class="standard-copy">Các hệ thống Unix truyền thống sinh ra rất nhiều thông điệp chẩn đoán lúc khởi động: trước hết từ nhân, rồi từ các tiến trình và thủ tục khởi tạo mà <code>init</code> chạy. Nhưng Ward thẳng thắn nhận xét rằng những thông điệp này không đẹp, không nhất quán, và đôi khi thậm chí không mấy hữu ích.<span class="cite"><a href="#ref-1">1</a></span> Tệ hơn, cải tiến phần cứng khiến nhân khởi động nhanh hơn trước rất nhiều; thông điệp vụt qua nhanh đến mức khó thấy chuyện gì đang xảy ra — nên hầu hết bản phân phối hiện tại cố hết sức <i>giấu</i> chẩn đoán khởi động sau màn hình splash và các loại nội dung lấp chỗ.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ngày xưa máy vừa bật vừa kể lể: “tôi đang tìm ổ đĩa”, “tôi thấy bàn phím rồi”. Bây giờ máy chạy nhanh quá, chữ vụt qua không đọc kịp, nên người ta che lại bằng một bức ảnh đẹp cho đỡ sốt ruột. Chữ vẫn còn đó, chỉ là bị che thôi. <b>Nhớ nhé: chữ không mất, nó chỉ bị bức ảnh che mặt.</b></p>
+      <p class="en-only" lang="en">Traditional Unix systems produce many diagnostic messages at boot: first from the kernel, then from the processes and initialization procedures that <code>init</code> starts. But Ward is blunt that these messages aren't pretty or consistent, and in some cases aren't even very informative.<span class="cite"><a href="#ref-1">1</a></span> Worse, hardware improvements have made the kernel start much faster than before; the messages flash by so quickly it can be difficult to see what's happening — so most current distributions do their best to <i>hide</i> boot diagnostics behind splash screens and other filler.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Màn hình logo mượt mà lúc khởi động chính là “nội dung lấp chỗ” mà Ward nói tới; nó không làm máy nhanh hơn, chỉ làm bạn bớt nhìn thấy.</span>
+        <span class="easy-only">Cái logo đẹp lúc bật máy chính là bức ảnh che chữ.</span>
+        <span class="en-only" lang="en">That smooth logo screen at boot is exactly the "filler" Ward describes; it doesn't make the machine faster, it just makes you see less.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Sau khi nhân xong việc</h4>
+          <p>Thủ tục khởi động không gian người dùng cũng sinh thông điệp, và chúng khó xem lại hơn vì trên hầu hết hệ thống bạn sẽ không tìm thấy chúng trong một tệp nhật ký duy nhất; các kịch bản khởi động được thiết kế để gửi thông điệp ra console rồi bị xoá sau khi khởi động xong. Ward nói điều này không thành vấn đề trên hệ thống Linux vì <span lang="en">systemd</span> bắt lại các thông điệp chẩn đoán lúc khởi động và lúc chạy mà lẽ ra đã ra thẳng console.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đọc tên một dòng nhật ký</h4>
+          <p>Trong mẫu <code>journalctl -k</code> mà Ward trích, dòng <code>Linux version …</code> cho biết phiên bản nhân và trình biên dịch đã dựng nó, còn dòng <code>Command line: …</code> chính là tham số nhân — bạn sẽ gặp lại nó nguyên vẹn trong <code>/proc/cmdline</code> ở mục sau.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">journalctl -k</span>
+      <h3>
+        <span class="standard-copy">Nhật ký nhân — cách xem lại cuốn phim đã chiếu</span>
+        <span class="easy-only">Mở sổ ghi chép của nhân</span>
+        <span class="en-only" lang="en">The kernel journal — replaying a film that already ran</span>
+      </h3>
+      <p class="standard-copy">Cách tốt nhất để xem thông điệp chẩn đoán lúc khởi động và lúc chạy của nhân, theo Ward, là lấy nhật ký dành cho nhân bằng lệnh <code>journalctl</code>: chạy <code>journalctl -k</code> sẽ hiển thị thông điệp của lần khởi động hiện tại, còn tuỳ chọn <code>-b</code> cho phép bạn xem các lần khởi động trước.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Nếu máy bạn không có <span lang="en">systemd</span>, ông chỉ hai lối thoát: tìm một tệp nhật ký như <code>/var/log/kern.log</code>, hoặc chạy <code>dmesg</code> để xem thông điệp trong <i>vùng đệm vòng</i> của nhân (<span lang="en">kernel ring buffer</span>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only">Muốn đọc lại những dòng chữ bị che, bạn gõ <code>journalctl -k</code>. Máy sẽ in ra đúng những gì nhân đã nói lúc khởi động. Nếu máy bạn kiểu cũ, gõ <code>dmesg</code> cũng được. <b>Nhớ nhé: journalctl -k là nút “tua lại” của nhân.</b></p>
+      <p class="en-only" lang="en">The best way to view the kernel's boot and runtime diagnostic messages, Ward says, is to retrieve the journal for the kernel with <code>journalctl</code>: running <code>journalctl -k</code> displays the messages from the current boot, while the <code>-b</code> option lets you view previous boots.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> If you don't have <span lang="en">systemd</span>, he offers two escapes: look for a logfile such as <code>/var/log/kern.log</code>, or run <code>dmesg</code> to view the messages in the kernel ring buffer.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một thiết bị “không được nhận”, dòng nhật ký nhân lúc khởi động thường nói thẳng lý do — trước cả khi bạn kịp đoán.</span>
+        <span class="easy-only">Khi cắm thiết bị mà máy không thấy, hãy mở nhật ký ra đọc.</span>
+        <span class="en-only" lang="en">When a device "isn't detected", the kernel's boot log usually states the reason outright — before you have a chance to guess.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hẹn ở chương sau</h4>
+          <p>Ward chỉ dùng <code>journalctl</code> ở đây như một công cụ đọc, và hẹn bàn kỹ về nhật ký (<span lang="en">the journal</span>) trong Chương 7.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vùng đệm vòng</h4>
+          <p><code>dmesg</code> đọc vùng đệm vòng của nhân — một bộ nhớ có kích thước cố định, nên thông điệp cũ bị ghi đè khi vùng đệm đầy. Đó là lý do <code>journalctl -b</code> (đọc nhật ký đã lưu xuống đĩa) mạnh hơn khi bạn cần truy lại một lần khởi động đã lâu.<span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">kernel initialization</span>
+      <h3>
+        <span class="standard-copy">Thứ tự khởi tạo — và bài toán phụ thuộc ở giữa</span>
+        <span class="easy-only">Nhân làm việc theo thứ tự</span>
+        <span class="en-only" lang="en">Initialization order — and the dependency problem in the middle</span>
+      </h3>
+      <p class="standard-copy">Ward liệt kê thứ tự tổng quát mà nhân Linux khởi tạo: kiểm tra CPU, kiểm tra bộ nhớ, dò bus thiết bị, dò thiết bị, thiết lập các hệ thống con phụ trợ (mạng và những thứ tương tự), gắn hệ thống tập tin gốc, rồi khởi động không gian người dùng.<span class="cite"><a href="#ref-1">1</a></span> Hai bước đầu không có gì đáng chú ý, nhưng khi nhân chạm tới thiết bị thì câu hỏi về <b>phụ thuộc</b> nảy sinh: trình điều khiển thiết bị đĩa có thể phụ thuộc vào hỗ trợ bus và hỗ trợ hệ thống con SCSI.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nhân làm việc có thứ tự: xem CPU, xem bộ nhớ, tìm các đường nối, tìm thiết bị, bật mạng, mở ổ đĩa gốc, rồi mới gọi chương trình đầu tiên. Rắc rối nằm ở chỗ có thứ phải có trước thì thứ sau mới chạy được — giống như phải có đường thì xe mới đi được. <b>Nhớ nhé: thứ tự quan trọng, vì cái sau cần cái trước.</b></p>
+      <p class="en-only" lang="en">Ward lists the general order in which the Linux kernel initializes: CPU inspection, memory inspection, device bus discovery, device discovery, auxiliary kernel subsystem setup (networking and the like), root filesystem mount, and user space start.<span class="cite"><a href="#ref-1">1</a></span> The first two steps aren't too remarkable, but when the kernel gets to devices the question of <b>dependencies</b> arises: disk device drivers may depend on bus support and SCSI subsystem support.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Một máy “không tìm thấy hệ thống tập tin gốc” gần như luôn là một máy thiếu đúng một mô-đun ở bước dò thiết bị.</span>
+        <span class="easy-only">Máy báo “không tìm thấy ổ đĩa gốc” thường là vì thiếu một mảnh trình điều khiển.</span>
+        <span class="en-only" lang="en">A machine that "cannot find the root filesystem" is almost always a machine missing exactly one module at the device-discovery step.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao cần initrd</h4>
+          <p>Ward nói nhìn chung bạn không phải lo về phụ thuộc, <i>trừ</i> việc một số thành phần cần thiết có thể là mô-đun nhân nạp được chứ không phải phần của nhân chính; một số máy cần nạp các mô-đun đó <i>trước khi</i> hệ thống tập tin gốc thật sự được gắn. Ông hẹn giải quyết bài toán này và giải pháp chữa cháy bằng hệ thống tập tin RAM ban đầu (<span lang="en">initrd</span>) ở Mục 6.7.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Dấu hiệu nhân sắp trao quyền</h4>
+          <p>Nhân phát ra vài loại thông điệp báo rằng nó đang chuẩn bị khởi động tiến trình người dùng đầu tiên — trong đó có <code>Freeing unused kernel memory</code> và <code>Write protecting the kernel read-only data</code>. Ward chỉ ra rằng ở đây nhân không chỉ dọn bộ nhớ không dùng, mà còn <i>bảo vệ dữ liệu của chính nó</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">Run /init as init process</span>
+      <h3>
+        <span class="standard-copy">Lằn ranh — dòng nhật ký nói rằng không gian người dùng đã bắt đầu</span>
+        <span class="easy-only">Dòng chữ báo “xong phần nhân”</span>
+        <span class="en-only" lang="en">The boundary — the log line that says user space has started</span>
+      </h3>
+      <p class="standard-copy">Sau các thông điệp dọn dẹp bộ nhớ, nếu bạn chạy một nhân đủ mới, bạn sẽ thấy nhân khởi động tiến trình không gian người dùng đầu tiên với dòng <code>Run /init as init process</code>.<span class="cite"><a href="#ref-1">1</a></span> Muộn hơn nữa, bạn sẽ thấy hệ thống tập tin gốc được gắn và <span lang="en">systemd</span> khởi động, tự gửi vài thông điệp của nó vào nhật ký nhân — ví dụ dòng <code>systemd[1]: Detected architecture x86-64.</code> Tới điểm này, Ward viết, bạn <i>chắc chắn</i> biết rằng không gian người dùng đã bắt đầu.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Trong nhật ký có một dòng đánh dấu “hết phần nhân, bắt đầu phần chương trình”. Thấy dòng đó là bạn biết nửa đầu đã xong trót lọt. <b>Nhớ nhé: tìm dòng nói về init — đó là vạch phân chia.</b></p>
+      <p class="en-only" lang="en">After the memory-cleanup messages, if you're running a new enough kernel you'll see it start the first user-space process with the line <code>Run /init as init process</code>.<span class="cite"><a href="#ref-1">1</a></span> Later still you'll see the root filesystem mounted and <span lang="en">systemd</span> starting up, sending a few messages of its own to the kernel log — for instance <code>systemd[1]: Detected architecture x86-64.</code> At this point, Ward writes, you <i>definitely</i> know that user space has started.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Nếu nhật ký của bạn dừng <i>trước</i> dòng này, lỗi nằm ở nhân hoặc ở hệ thống tập tin gốc; nếu nó dừng <i>sau</i>, lỗi thuộc về không gian người dùng — và là chuyện của Chương 6.</span>
+        <span class="easy-only">Nhật ký dừng trước dòng đó thì lỗi ở nhân; dừng sau thì lỗi ở chương trình.</span>
+        <span class="en-only" lang="en">If your log stops <i>before</i> this line, the fault lies in the kernel or the root filesystem; if it stops <i>after</i>, the fault belongs to user space — and to Chapter 6.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Con số 1</h4>
+          <p><code>init</code> mang mã tiến trình 1 không phải ngẫu nhiên: nó là tiến trình người dùng đầu tiên nhân tạo ra, nên nó nhận số nhỏ nhất, và mọi tiến trình khác trên máy đều là hậu duệ của nó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đường dẫn <code>/init</code></h4>
+          <p>Lưu ý dòng nhật ký nói <code>/init</code> chứ không phải <code>/sbin/init</code>: đó là chương trình nằm trong hệ thống tập tin RAM ban đầu, chạy trước khi hệ thống tập tin gốc thật sự tiếp quản — cơ chế mà Ward để dành cho Mục 6.7.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Bảy bước cho bạn khung thời gian. Nhưng thứ quyết định <i>nội dung</i> của các bước đó — nhân nào, ổ đĩa nào là gốc, chế độ nào — lại nằm gọn trong một dòng văn bản mà boot loader trao cho nhân. Đó là chỗ chúng ta đi tiếp.</p>
+    <p class="easy-only">Bảy bước cho biết <i>khi nào</i>. Còn <i>cái gì</i> thì nằm trong một dòng chữ ngắn mà người mở cửa đưa cho nhân. Xem dòng chữ đó nhé. <b>Nhớ nhé: một dòng chữ quyết định cả buổi khởi động.</b></p>
+    <p class="en-only" lang="en">The seven steps give you the timeline. But what decides the <i>content</i> of those steps — which kernel, which disk is the root, which mode — fits into a single line of text the boot loader hands the kernel. That is where we go next.</p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="tham-so-nhan" aria-labelledby="tham-so-nhan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="tham-so-nhan-title">
+      <span class="standard-copy">Tham số nhân: một dòng văn bản, và tất cả những gì nó quyết định</span>
+      <span class="easy-only">Dòng chữ dặn dò nhân</span>
+      <span class="en-only" lang="en">Kernel parameters: one line of text, and everything it decides</span>
+    </h2>
+    <p class="standard-copy">Khi nhân Linux khởi động, nó nhận một tập <b>tham số nhân</b> dạng văn bản chứa vài chi tiết hệ thống bổ sung. Các tham số này quy định nhiều kiểu hành vi khác nhau — chẳng hạn lượng đầu ra chẩn đoán mà nhân nên sinh ra, và các tuỳ chọn riêng của từng trình điều khiển thiết bị.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Trước khi chạy, nhân được đưa cho một mẩu giấy dặn dò: “ổ đĩa gốc ở chỗ này nhé”, “đừng nói nhiều quá nhé”. Mẩu giấy đó là tham số nhân. <b>Nhớ nhé: nhân nhận một mẩu giấy dặn dò trước khi làm việc.</b></p>
+    <p class="en-only" lang="en">When the Linux kernel starts, it receives a set of text-based <b>kernel parameters</b> containing a few additional system details. They specify many different types of behavior — such as how much diagnostic output the kernel should produce, and device driver–specific options.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Tham số nhân hoặc là <i>cờ một từ</i> như <code>ro</code> và <code>quiet</code>, hoặc là <i>cặp khoá=giá trị</i> như <code>vt.handoff=1</code>.<span class="cite"><a href="#ref-1">1</a></span> Bạn xem các tham số đã được truyền cho nhân đang chạy bằng cách đọc tệp <code>/proc/cmdline</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Tham số có hai kiểu: một từ trơ trọi (như <code>ro</code>), hoặc kiểu “tên bằng giá trị” (như <code>root=…</code>). Muốn xem máy mình đang dùng gì thì gõ <code>cat /proc/cmdline</code>. <b>Nhớ nhé: /proc/cmdline là mẩu giấy dặn dò của máy bạn.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Kernel parameters are either simple one-word flags such as <code>ro</code> and <code>quiet</code>, or key=value pairs such as <code>vt.handoff=1</code>.<span class="cite"><a href="#ref-1">1</a></span> You view the parameters passed to your currently running kernel by reading the <code>/proc/cmdline</code> file.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">$ cat /proc/cmdline<br>BOOT_IMAGE=/boot/vmlinuz-…<br>&nbsp;&nbsp;root=UUID=…<br>&nbsp;&nbsp;ro quiet splash<br>&nbsp;&nbsp;vt.handoff=1</p>
+      <p class="easy-only">gõ: cat /proc/cmdline<br>→ máy in ra mẩu giấy<br>&nbsp;&nbsp;root = ổ đĩa gốc<br>&nbsp;&nbsp;ro = chỉ đọc<br>&nbsp;&nbsp;quiet = nói ít thôi</p>
+      <p class="en-only" lang="en">$ cat /proc/cmdline<br>BOOT_IMAGE=/boot/vmlinuz-…<br>&nbsp;&nbsp;root=UUID=…<br>&nbsp;&nbsp;ro quiet splash<br>&nbsp;&nbsp;vt.handoff=1</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">root=</span>
+      <h3>
+        <span class="standard-copy">root= — tham số không thể thiếu</span>
+        <span class="easy-only">root= — chỉ cho nhân ổ đĩa gốc</span>
+        <span class="en-only" lang="en">root= — the one parameter you cannot omit</span>
+      </h3>
+      <p class="standard-copy">Nhiều tham số không quan trọng — Ward lấy ví dụ cờ <code>splash</code> để hiện màn hình splash — nhưng một tham số <i>then chốt</i> là <code>root</code>: nó là vị trí của hệ thống tập tin gốc, và <b>không có nó, nhân không thể thực hiện khởi động không gian người dùng một cách đúng đắn</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only">Trong mẩu giấy dặn dò, có một dòng bắt buộc phải có: <code>root=</code>. Nó chỉ cho nhân biết ổ đĩa nào chứa hệ điều hành. Thiếu dòng này thì nhân không biết đi đâu, và máy không lên được. <b>Nhớ nhé: root= là địa chỉ nhà — thiếu nó thì nhân lạc đường.</b></p>
+      <p class="en-only" lang="en">Many parameters are unimportant — Ward's example is the <code>splash</code> flag for displaying a splash screen — but one that is <i>critical</i> is <code>root</code>: it is the location of the root filesystem, and <b>without it the kernel cannot properly perform the user space start</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Thông điệp hoảng loạn kiểu “unable to mount root fs” hầu như luôn là một <code>root=</code> trỏ sai chỗ — hoặc một trình điều khiển chưa kịp có mặt để đọc chỗ đó.</span>
+        <span class="easy-only">Máy báo không mở được ổ đĩa gốc thường là do dòng root= trỏ sai.</span>
+        <span class="en-only" lang="en">A panic reading "unable to mount root fs" is almost always a <code>root=</code> pointing at the wrong place — or a driver not yet present to read that place.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ba cách viết</h4>
+          <p>Hệ thống tập tin gốc có thể được chỉ định bằng tệp thiết bị (<code>root=/dev/sda1</code>), nhưng trên hầu hết hệ thống đương đại có hai lựa chọn phổ biến hơn: một ổ luận lý như <code>root=/dev/mapper/my-system-root</code>, hoặc một UUID như <code>root=UUID=…</code>. Ward nói rõ cả hai lựa chọn sau đều <i>đáng chuộng hơn</i> vì chúng không phụ thuộc vào một ánh xạ thiết bị cụ thể của nhân.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đối chiếu với tài liệu nhân</h4>
+          <p>Trang <code>bootparam(7)</code> xác nhận <code>root=</code> nằm trong nhóm đối số <i>đặc biệt</i> mà nhân kiểm tra trước tiên, cùng với <code>ro</code>, <code>rw</code>, <code>debug</code> và <code>init</code>.<span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">ro</span>
+      <h3>
+        <span class="standard-copy">ro — gắn chỉ đọc để fsck làm việc an toàn</span>
+        <span class="easy-only">ro — mở ổ đĩa ở chế độ chỉ xem</span>
+        <span class="en-only" lang="en">ro — mount read-only so fsck can work safely</span>
+      </h3>
+      <p class="standard-copy">Tham số <code>ro</code> chỉ thị nhân gắn hệ thống tập tin gốc ở chế độ chỉ đọc khi khởi động không gian người dùng. Ward nhấn mạnh đây là chuyện <i>bình thường</i>: chế độ chỉ đọc bảo đảm <code>fsck</code> có thể kiểm tra hệ thống tập tin gốc một cách an toàn trước khi bất cứ việc nghiêm trọng nào được thực hiện. Sau khi kiểm tra xong, tiến trình khởi động gắn lại hệ thống tập tin gốc ở chế độ đọc-ghi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only">Lúc mới mở ổ đĩa, máy mở ở chế độ “chỉ xem, không sửa”. Lý do rất hợp lý: để một chương trình đi kiểm tra sức khoẻ ổ đĩa trong lúc không ai đụng vào. Kiểm tra xong, máy mới mở lại cho phép ghi. <b>Nhớ nhé: khám sức khoẻ thì bệnh nhân phải nằm yên.</b></p>
+      <p class="en-only" lang="en">The <code>ro</code> parameter instructs the kernel to mount the root filesystem read-only upon user space start. Ward stresses this is <i>normal</i>: read-only mode ensures <code>fsck</code> can check the root filesystem safely before anything serious is attempted. After the check, the bootup process remounts the root filesystem read-write.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một máy hỏng nửa chừng và “rơi” vào shell cứu hộ với hệ thống tập tin gốc chỉ đọc, bạn đang đứng đúng ở khoảnh khắc <i>trước</i> lần gắn lại đọc-ghi.</span>
+        <span class="easy-only">Khi máy lỗi và chỉ cho xem chứ không cho sửa, đó là lúc nó đang ở chế độ ro.</span>
+        <span class="en-only" lang="en">When a machine breaks mid-boot and drops into a rescue shell with a read-only root, you are standing exactly at the moment <i>before</i> the read-write remount.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Tài liệu nói gì thêm</h4>
+          <p><code>bootparam(7)</code> mô tả cùng một cơ chế và nói rõ chi tiết mà Ward lướt qua: không tiến trình nào có thể ghi vào các tệp trên hệ thống tập tin đó cho tới khi nó được gắn lại ở chế độ đọc-ghi — ví dụ bằng <code>mount -w -n -o remount /</code>. Tham số đối lập <code>rw</code> gắn ngay ở chế độ đọc-ghi.<span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao fsck cần đĩa “đứng yên”</h4>
+          <p><code>fsck</code> sửa cấu trúc siêu dữ liệu trong khi đọc nó; nếu một tiến trình khác ghi song song, công cụ kiểm tra có thể sửa dựa trên một bức ảnh đã lỗi thời và làm hỏng thêm. Trang hướng dẫn <code>fsck(8)</code> cùng cách đọc đó.<span class="cite"><a href="#ref-5">5</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">unrecognized parameters</span>
+      <h3>
+        <span class="standard-copy">Tham số lạ — nhân không vứt đi, nhân chuyển tiếp cho init</span>
+        <span class="easy-only">Chữ nhân không hiểu thì nhân chuyển cho người khác</span>
+        <span class="en-only" lang="en">Unknown parameters — the kernel doesn't discard them, it forwards them to init</span>
+      </h3>
+      <p class="standard-copy">Đây là chi tiết dễ bỏ sót nhất trong mục này. Khi gặp một tham số nó không hiểu, nhân Linux <b>lưu lại</b> tham số đó, rồi chuyển cho <code>init</code> khi thực hiện khởi động không gian người dùng. Ward lấy ví dụ: nếu bạn thêm <code>-s</code> vào tham số nhân, nhân chuyển <code>-s</code> sang chương trình <code>init</code> để báo rằng nó nên khởi động ở chế độ một người dùng (<span lang="en">single-user mode</span>).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nếu trong mẩu giấy có chữ nhân không hiểu, nhân không xé bỏ. Nó cất đi, rồi đưa lại cho chương trình số 1 — biết đâu chương trình đó hiểu. <b>Nhớ nhé: không hiểu thì chuyển tiếp, đừng vứt.</b></p>
+      <p class="en-only" lang="en">This is the easiest detail in the section to miss. Upon encountering a parameter it doesn't understand, the Linux kernel <b>saves</b> that parameter and later passes it to <code>init</code> when performing the user space start. Ward's example: add <code>-s</code> to the kernel parameters and the kernel passes the <code>-s</code> along to the <code>init</code> program to indicate it should start in single-user mode.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đây là cơ chế đằng sau mọi mẹo “sửa máy hỏng” kiểu thêm một từ vào dòng GRUB rồi nhấn khởi động.</span>
+        <span class="easy-only">Đây là lý do thêm một chữ vào dòng GRUB có thể cứu một máy hỏng.</span>
+        <span class="en-only" lang="en">This is the mechanism behind every "rescue a broken machine" trick that adds a word to the GRUB line and boots.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Quy tắc phân loại chính xác</h4>
+          <p>Tài liệu nhân nói rõ hơn Ward một bậc về <i>cách</i> chuyển tiếp: tham số có dấu <code>=</code> đi vào <b>môi trường</b> của <code>init</code>, còn các tham số khác được truyền làm <b>đối số dòng lệnh</b> cho <code>init</code>; mọi thứ sau <code>--</code> được truyền làm đối số cho <code>init</code>.<span class="cite"><a href="#ref-7">7</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Biến thể <code>single</code></h4>
+          <p><code>bootparam(7)</code> mô tả cùng cơ chế nhưng nêu đối số phổ biến nhất được truyền cho tiến trình init là từ <code>single</code>, chỉ thị nó khởi động ở chế độ một người dùng và không chạy các dịch vụ thông thường.<span class="cite"><a href="#ref-4">4</a></span> Ward nêu <code>-s</code>; cả hai đều là cách quen thuộc để yêu cầu cùng một chế độ, và cái nào hiệu lực phụ thuộc vào phiên bản <code>init</code> trên máy bạn — chính <code>bootparam(7)</code> khuyên tra trang hướng dẫn của <code>init</code> đang cài để biết nó nhận đối số nào.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">bootparam(7)</span>
+      <h3>
+        <span class="standard-copy">Tra cứu ở đâu — hai địa chỉ Ward chỉ tên</span>
+        <span class="easy-only">Muốn tra thì tra ở đâu</span>
+        <span class="en-only" lang="en">Where to look it up — the two addresses Ward names</span>
+      </h3>
+      <p class="standard-copy">Ward đưa hai chỉ dẫn tra cứu rất cụ thể. Nếu bạn quan tâm tới các tham số khởi động cơ bản, trang hướng dẫn <code>bootparam(7)</code> cho một cái nhìn tổng quan. Còn nếu bạn tìm thứ gì rất cụ thể, hãy xem <i>kernel-params.txt</i>, tệp tham chiếu đi kèm mã nguồn nhân Linux.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <p class="easy-only">Không ai nhớ hết tham số đâu. Có hai cuốn từ điển: một cuốn ngắn là <code>bootparam(7)</code>, một cuốn rất dài đi kèm mã nguồn nhân. Cần thì tra. <b>Nhớ nhé: không cần thuộc, chỉ cần biết tra ở đâu.</b></p>
+      <p class="en-only" lang="en">Ward gives two very specific lookup pointers. If you're interested in the basic boot parameters, the <code>bootparam(7)</code> manual page gives an overview. If you're looking for something very specific, check <i>kernel-params.txt</i>, a reference file that ships with the Linux kernel.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi lần một hướng dẫn trên mạng bảo bạn “thêm tham số X vào GRUB”, bạn nên tra X trong một trong hai nguồn này trước khi gõ.</span>
+        <span class="easy-only">Trước khi làm theo hướng dẫn trên mạng, hãy tra xem tham số đó là gì.</span>
+        <span class="en-only" lang="en">Every time a guide online tells you to "add parameter X to GRUB", look X up in one of these two sources before you type it.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Tệp tham chiếu hôm nay</h4>
+          <p>Tệp mà Ward gọi là <i>kernel-params.txt</i> ngày nay được xuất bản trong tài liệu nhân dưới tên “The kernel's command-line parameters” — danh sách đầy đủ theo từng tham số, kèm ghi chú kiến trúc.<span class="cite"><a href="#ref-7">7</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một giới hạn đáng biết</h4>
+          <p>Tài liệu đó cũng nêu một ràng buộc thực tế mà Ward không nhắc: số lượng tham số nhân không bị giới hạn, nhưng <i>độ dài</i> của toàn bộ dòng lệnh (bao gồm cả khoảng trắng) thì có giới hạn.<span class="cite"><a href="#ref-7">7</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Ward kết mục này bằng một lời mời rất thẳng: với những điều cơ bản trên, bạn <i>được phép</i> nhảy sang Chương 6 để học về khởi động không gian người dùng. Phần còn lại của chương dành cho người muốn biết nhân được nạp vào bộ nhớ và khởi động ra sao — <i>kể cả việc nó lấy tham số từ đâu</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Tới đây bạn đã hiểu đủ để dùng máy rồi. Phần sau dành cho ai tò mò muốn biết ai là người đưa mẩu giấy cho nhân. <b>Nhớ nhé: hiểu đủ để dùng là một mốc, hiểu tới cơ chế là mốc sau.</b></p>
+    <p class="en-only" lang="en">Ward closes this section with a frank invitation: with these basics covered, you should feel free to skip ahead to Chapter 6 and learn about the user space start. The remainder of the chapter is for readers who want to know how the kernel gets loaded into memory and started — <i>including where it gets its parameters</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="boot-loader-va-grub" aria-labelledby="boot-loader-va-grub-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="boot-loader-va-grub-title">
+      <span class="standard-copy">Boot loader: bài toán “con gà và quả trứng”, và GRUB giải nó thế nào</span>
+      <span class="easy-only">Người mở cửa và thế khó của nó</span>
+      <span class="en-only" lang="en">The boot loader: a chicken-and-egg problem, and how GRUB solves it</span>
+    </h2>
+    <p class="standard-copy">Công việc của boot loader <i>nghe có vẻ</i> đơn giản: nạp nhân vào bộ nhớ từ đâu đó trên đĩa rồi khởi động nhân với một tập tham số. Nhưng Ward lập tức nói rõ công việc này phức tạp hơn vẻ ngoài, và để thấy vì sao, hãy nhìn hai câu hỏi mà boot loader buộc phải trả lời: <b>nhân ở đâu?</b> và <b>tham số nào nên được truyền cho nhân khi nó khởi động?</b><span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Người mở cửa chỉ phải làm hai việc: tìm nhân, và đưa cho nhân mẩu giấy dặn dò. Nghe dễ, nhưng khó ở chỗ cả hai thứ đó đều nằm trên ổ đĩa — mà lúc đó chưa ai biết cách đọc ổ đĩa cả. <b>Nhớ nhé: chìa khoá nằm trong nhà bị khoá — đó là thế khó.</b></p>
+    <p class="en-only" lang="en">The boot loader's job <i>sounds</i> simple: load the kernel into memory from somewhere on a disk, then start it with a set of kernel parameters. But Ward says at once that the job is more complicated than it appears, and to see why, look at the two questions the boot loader must answer: <b>where is the kernel?</b> and <b>what kernel parameters should be passed to the kernel when it starts?</b><span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Thế khó.</b> Câu trả lời thường là: nhân và tham số của nó nằm đâu đó trên hệ thống tập tin gốc. Nghe dễ, nhưng — Ward nhắc — bản thân nhân <i>chưa chạy</i>, và chính nhân mới là thứ thường đi xuyên hệ thống tập tin để tìm các tệp cần thiết. Tệ hơn, các trình điều khiển thiết bị của nhân thường dùng để truy cập đĩa cũng chưa sẵn sàng. Ông gọi đây là một kiểu bài toán “con gà hay quả trứng”.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Muốn đọc ổ đĩa thì cần nhân. Muốn có nhân thì phải đọc ổ đĩa. Vòng luẩn quẩn! Người mở cửa phải thoát ra bằng một lối khác. <b>Nhớ nhé: cần A mới có B, cần B mới có A — phải có lối thứ ba.</b></p>
+      <p class="en-only" lang="en"><b>The bind.</b> The answers are typically that the kernel and its parameters live somewhere on the root filesystem. That sounds easy, but — Ward reminds you — the kernel itself is not yet running, and it's the kernel that usually traverses a filesystem to find the necessary files. Worse, the kernel device drivers normally used to access the disk are also unavailable. He calls it a kind of "chicken or egg" problem.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">boot loader cần:<br>&nbsp;&nbsp;1. đọc được đĩa → BIOS/UEFI + LBA<br>&nbsp;&nbsp;2. đọc được bảng phân vùng<br>&nbsp;&nbsp;3. đọc được hệ thống tập tin<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(chỉ đọc là đủ)</p>
+      <p class="easy-only">người mở cửa cần:<br>&nbsp;&nbsp;1. cách đọc đĩa (mượn của máy)<br>&nbsp;&nbsp;2. biết đĩa chia làm mấy phần<br>&nbsp;&nbsp;3. biết đọc tên tệp</p>
+      <p class="en-only" lang="en">a boot loader needs:<br>&nbsp;&nbsp;1. disk access → BIOS/UEFI + LBA<br>&nbsp;&nbsp;2. to read partition tables<br>&nbsp;&nbsp;3. to read filesystems<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(read-only suffices)</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">LBA</span>
+      <h3>
+        <span class="standard-copy">Lối thoát: mượn trình điều khiển của firmware</span>
+        <span class="easy-only">Mượn tay của máy để đọc đĩa</span>
+        <span class="en-only" lang="en">The escape: borrow the firmware's driver</span>
+      </h3>
+      <p class="standard-copy">Boot loader <i>có</i> cần một trình điều khiển để truy cập đĩa, nhưng không phải trình điều khiển mà nhân dùng. Trên PC, boot loader dùng BIOS truyền thống hoặc UEFI mới hơn để truy cập đĩa.<span class="cite"><a href="#ref-1">1</a></span> Phần cứng đĩa đương đại có firmware cho phép BIOS hoặc UEFI truy cập thiết bị lưu trữ gắn kèm qua <b>Logical Block Addressing</b> (LBA) — một cách phổ quát, đơn giản để lấy dữ liệu từ bất kỳ đĩa nào, nhưng <i>hiệu năng kém</i>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <p class="easy-only">Người mở cửa không tự đọc đĩa được, nên nó mượn tay của máy. Cách mượn này chậm, nhưng dùng được với mọi ổ đĩa — mà nó chỉ cần đọc một lần thôi nên chậm cũng không sao. <b>Nhớ nhé: chậm mà chắc, dùng một lần rồi thôi.</b></p>
+      <p class="en-only" lang="en">A boot loader <i>does</i> need a driver to access the disk, but not the one the kernel uses. On PCs, boot loaders use the traditional BIOS or the newer UEFI to access disks.<span class="cite"><a href="#ref-1">1</a></span> Contemporary disk hardware includes firmware allowing BIOS or UEFI to reach attached storage via <b>Logical Block Addressing</b> (LBA) — a universal, simple way to read data from any disk, but with poor performance.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đây là lý do menu GRUB luôn chậm hơn cảm giác của bạn về tốc độ máy: lúc đó máy đang đọc đĩa bằng lối đi phổ quát nhưng chậm.</span>
+        <span class="easy-only">Đó là lý do lúc khởi động ổ đĩa chạy chậm hơn bình thường.</span>
+        <span class="en-only" lang="en">This is why the GRUB menu always feels slower than the machine you know: the disk is being read through the universal-but-slow path.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao chậm không thành vấn đề</h4>
+          <p>Ward giải thích: boot loader thường là chương trình <i>duy nhất</i> phải dùng chế độ này để truy cập đĩa; sau khi khởi động, nhân có các trình điều khiển hiệu năng cao của riêng nó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đọc được hệ thống tập tin</h4>
+          <p>Sau khi giải quyết được việc đọc dữ liệu thô, boot loader còn phải tự định vị dữ liệu trên hệ thống tập tin. Hầu hết boot loader phổ biến <i>đọc được bảng phân vùng</i> và có hỗ trợ tích hợp cho <i>truy cập chỉ đọc</i> tới các hệ thống tập tin. Ward lưu ý boot loader Linux không phải lúc nào cũng có khả năng này — và khi chưa có, việc cấu hình boot loader khó hơn nhiều.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">boot loader tasks</span>
+      <h3>
+        <span class="standard-copy">Bốn khả năng cốt lõi của một boot loader Linux</span>
+        <span class="easy-only">Người mở cửa phải làm được bốn việc</span>
+        <span class="en-only" lang="en">The four core abilities of a Linux boot loader</span>
+      </h3>
+      <p class="standard-copy">Ward liệt kê chức năng cốt lõi: chọn trong nhiều nhân; chuyển giữa các tập tham số nhân; cho phép người dùng ghi đè và sửa thủ công tên ảnh nhân cùng tham số (ví dụ để vào chế độ một người dùng); và hỗ trợ khởi động các hệ điều hành khác.<span class="cite"><a href="#ref-1">1</a></span> Boot loader đã tiến xa nhiều kể từ khi nhân Linux ra đời — với lịch sử dòng lệnh, hệ thống menu — nhưng một nhu cầu cơ bản luôn không đổi: <b>sự linh hoạt trong việc chọn ảnh nhân và tham số</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Người mở cửa phải làm được bốn việc: chọn được nhiều nhân khác nhau, đổi được mẩu giấy dặn dò, cho bạn sửa tay lúc cần, và mở được cả hệ điều hành khác. <b>Nhớ nhé: bốn việc, và việc quan trọng nhất là cho bạn quyền chọn.</b></p>
+      <p class="en-only" lang="en">Ward lists the core functionality: select from multiple kernels; switch between sets of kernel parameters; allow the user to manually override and edit kernel image names and parameters (for example, to enter single-user mode); and provide support for booting other operating systems.<span class="cite"><a href="#ref-1">1</a></span> Boot loaders have advanced considerably since the kernel's inception — command-line history, menu systems — but one basic need has never changed: <b>flexibility in kernel image and parameter selection</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Danh sách “Advanced options” trong menu GRUB sau một lần cập nhật nhân chính là khả năng thứ nhất đang hiện hình.</span>
+        <span class="easy-only">Danh sách nhiều phiên bản trong menu khởi động chính là khả năng “chọn nhân”.</span>
+        <span class="en-only" lang="en">The "Advanced options" list in the GRUB menu after a kernel update is ability number one, made visible.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Một nhu cầu đã teo lại</h4>
+          <p>Ward ghi nhận một hiện tượng ông gọi là đáng ngạc nhiên: một số nhu cầu thực ra đã <i>giảm đi</i>. Vì bạn có thể thực hiện khởi động khẩn cấp hoặc phục hồi từ một thiết bị lưu trữ USB, bạn hiếm khi phải lo việc nhập tay tham số nhân hay vào chế độ một người dùng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một quy luật lặp lại</h4>
+          <p>Ông nêu một mô thức chung của lịch sử: nhân thêm tính năng mới (đặc biệt trong công nghệ lưu trữ), rồi boot loader thêm các phiên bản riêng, đơn giản hoá của những tính năng đó để bù lại.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">GRUB</span>
+      <h3>
+        <span class="standard-copy">GRUB — thế giới riêng có “nhân” và <code>insmod</code> của chính nó</span>
+        <span class="easy-only">GRUB — một thế giới riêng, đừng nhầm với Linux</span>
+        <span class="en-only" lang="en">GRUB — a separate world with its own "kernel" and <code>insmod</code></span>
+      </h3>
+      <p class="standard-copy">GRUB là viết tắt của <b>Grand Unified Boot Loader</b>; Ward bàn về GRUB 2, và nhắc rằng có một phiên bản cũ hơn gọi là GRUB Legacy nay không còn được dùng tích cực.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> Điểm gây nhầm lẫn lớn nhất, theo ông, là GRUB <i>không dùng nhân Linux</i> — nhiệm vụ của nó là khởi động nhân. Cấu hình bạn thấy hoàn toàn gồm các tính năng và lệnh nội tại của GRUB, tồn tại trong thế giới riêng của nó: GRUB có “nhân” của riêng mình và lệnh <code>insmod</code> của riêng mình để nạp động các mô-đun GRUB, hoàn toàn độc lập với nhân Linux.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">GRUB là tên người mở cửa phổ biến nhất trên Linux. Nó có một điều dễ làm bạn rối: nó dùng nhiều từ giống Linux — cũng có “nhân”, cũng có lệnh <code>ls</code>, cũng có <code>insmod</code> — nhưng đó là đồ của riêng nó, không phải của Linux. <b>Nhớ nhé: cùng tên, khác người.</b></p>
+      <p class="en-only" lang="en">GRUB stands for <b>Grand Unified Boot Loader</b>; Ward covers GRUB 2, noting there is an older version called GRUB Legacy no longer in active use.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> The biggest source of confusion, he says, is that GRUB <i>does not use the Linux kernel</i> — its job is to start the kernel. The configuration you see consists wholly of features and commands internal to GRUB, which exists in its own separate world: GRUB has its own "kernel" and its own <code>insmod</code> command for dynamically loading GRUB modules, completely independent of the Linux kernel.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bạn nhấn <code>e</code> ở menu GRUB và thấy <code>insmod ext2</code>, đừng đi tìm mô-đun nhân Linux cùng tên — đó là mô-đun của GRUB.</span>
+        <span class="easy-only">Thấy chữ <code>insmod</code> trong màn hình GRUB thì đừng đi tìm nó trong Linux.</span>
+        <span class="en-only" lang="en">When you press <code>e</code> at the GRUB menu and see <code>insmod ext2</code>, don't go hunting for a Linux kernel module of that name — it's GRUB's own.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vào menu bằng cách nào</h4>
+          <p>Ward chỉ cách rất cụ thể: nhấn và giữ <code>SHIFT</code> khi màn hình khởi động BIOS lần đầu xuất hiện, hoặc <code>ESC</code> nếu hệ thống của bạn dùng UEFI; nếu không, cấu hình boot loader có thể không dừng lại trước khi nạp nhân. Ở menu, nhấn <code>e</code> để xem các lệnh cấu hình của lựa chọn khởi động mặc định, và <code>c</code> để vào dòng lệnh GRUB.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hai chữ “root” khác nhau</h4>
+          <p>Nhầm lẫn lớn nhất, theo Ward, đến từ cách GRUB dùng từ <i>root</i>. Trong cấu hình GRUB, <code>root=</code> nằm sau tên ảnh nhân của lệnh <code>linux</code> là <b>tham số nhân</b>. Mọi tham chiếu <code>root</code> khác là <b>GRUB root</b> — thứ chỉ tồn tại bên trong GRUB, và là hệ thống tập tin nơi GRUB tìm các tệp ảnh nhân và ảnh hệ thống tập tin RAM.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">(hd0,msdos1)</span>
+      <h3>
+        <span class="standard-copy">Dòng lệnh GRUB — lược đồ địa chỉ thiết bị riêng</span>
+        <span class="easy-only">GRUB gọi tên ổ đĩa theo kiểu của nó</span>
+        <span class="en-only" lang="en">The GRUB command line — its own device-addressing scheme</span>
+      </h3>
+      <p class="standard-copy">GRUB có lược đồ địa chỉ thiết bị riêng: đĩa cứng đầu tiên tìm thấy được đặt tên <code>hd0</code>, rồi <code>hd1</code>, v.v.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> Ward lưu ý việc gán tên thiết bị có thể thay đổi, nhưng may mắn là GRUB có thể tìm UUID trên mọi phân vùng để xác định phân vùng chứa nhân — đó là việc lệnh <code>search</code> làm.<span class="cite"><a href="#ref-1">1</a></span> Tiền tố <code>msdos</code> trên tên phân vùng cho bạn biết đĩa mang bảng phân vùng MBR; nó sẽ bắt đầu bằng <code>gpt</code> nếu là GPT, thứ tìm thấy trên hệ thống UEFI.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">GRUB gọi ổ đĩa đầu tiên là <code>hd0</code>, ổ thứ hai là <code>hd1</code>. Phần bên trong ổ thì thêm tên nữa, ví dụ <code>(hd0,msdos1)</code>. Chữ <code>msdos</code> hay <code>gpt</code> cho biết đĩa được chia theo kiểu cũ hay kiểu mới. <b>Nhớ nhé: hd0 là ổ đầu tiên, số sau dấu phẩy là phần thứ mấy.</b></p>
+      <p class="en-only" lang="en">GRUB has its own device-addressing scheme: the first hard disk found is named <code>hd0</code>, then <code>hd1</code>, and so on.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> Ward notes device name assignments are subject to change, but fortunately GRUB can search all partitions for UUIDs to find the one where the kernel resides — that's what the <code>search</code> command does.<span class="cite"><a href="#ref-1">1</a></span> The <code>msdos</code> prefix on a partition tells you the disk carries an MBR partition table; it would begin with <code>gpt</code> for GPT, found on UEFI systems.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi máy không khởi động, dòng lệnh GRUB là nơi bạn kiểm chứng giả thuyết “đĩa còn đọc được không” trước khi nghi ngờ bất cứ thứ gì khác.</span>
+        <span class="easy-only">Máy không lên thì vào dòng lệnh GRUB gõ <code>ls</code> xem đĩa còn thấy không.</span>
+        <span class="en-only" lang="en">When a machine won't boot, the GRUB command line is where you test the hypothesis "is the disk still readable" before suspecting anything else.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hai nghĩa của <code>ls</code></h4>
+          <p>Ward chỉ ra <code>ls</code> trong GRUB có <i>hai</i> chức năng hoàn toàn khác nhau. Không đối số, nó liệt kê các thiết bị GRUB biết. Với một đường dẫn kết thúc bằng dấu gạch chéo — ví dụ <code>ls ($root)/</code> — nó liệt kê nội dung của hệ thống tập tin. Ông cũng cho biết <code>ls -l</code> đặc biệt hữu ích vì nó hiển thị UUID của các hệ thống tập tin phân vùng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hai biến quan trọng</h4>
+          <p>Lệnh <code>echo $root</code> cho biết GRUB root hiện tại. Lệnh <code>set</code> liệt kê mọi biến GRUB đang đặt; trong số đó, Ward nhấn mạnh <code>$prefix</code> — hệ thống tập tin và thư mục nơi GRUB mong tìm thấy cấu hình và phần hỗ trợ phụ trợ của nó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">grub-mkconfig</span>
+      <h3>
+        <span class="standard-copy">Cấu hình — đừng sửa <code>grub.cfg</code>, hãy sinh ra nó</span>
+        <span class="easy-only">Đừng sửa tay tệp cấu hình</span>
+        <span class="en-only" lang="en">Configuration — don't edit <code>grub.cfg</code>, generate it</span>
+      </h3>
+      <p class="standard-copy">Thư mục cấu hình GRUB thường là <code>/boot/grub</code> hoặc <code>/boot/grub2</code>; nó chứa tệp cấu hình trung tâm <code>grub.cfg</code>, một thư mục theo kiến trúc như <code>i386-pc</code> chứa các mô-đun nạp được với đuôi <code>.mod</code>, cùng vài thứ khác như phông chữ và thông tin bản địa hoá.<span class="cite"><a href="#ref-1">1</a></span> Nguyên tắc của Ward rất dứt khoát: <b>đừng sửa trực tiếp <code>grub.cfg</code></b>, vì nó được sinh tự động và hệ thống thỉnh thoảng ghi đè lên nó; thay vào đó hãy dùng <code>grub-mkconfig</code> (hoặc <code>grub2-mkconfig</code> trên Fedora).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+      <p class="easy-only">Tệp cấu hình của GRUB <i>trông như</i> để bạn sửa, nhưng đừng. Nó được máy viết ra, và lần sau máy sẽ viết lại, xoá hết chữ của bạn. Muốn đổi thì đổi chỗ khác rồi bảo máy viết lại. <b>Nhớ nhé: đừng sửa bản in, hãy sửa bản gốc.</b></p>
+      <p class="en-only" lang="en">The GRUB configuration directory is usually <code>/boot/grub</code> or <code>/boot/grub2</code>; it holds the central <code>grub.cfg</code>, an architecture-specific directory such as <code>i386-pc</code> containing loadable modules with a <code>.mod</code> suffix, and a few other items such as fonts and localization data.<span class="cite"><a href="#ref-1">1</a></span> Ward's rule is categorical: <b>don't edit <code>grub.cfg</code> directly</b>, because it's automatically generated and the system occasionally overwrites it; use <code>grub-mkconfig</code> instead (or <code>grub2-mkconfig</code> on Fedora).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi lần bản cập nhật nhân “xoá mất” tuỳ chỉnh khởi động của bạn, đó chính là quy tắc này bị bỏ qua.</span>
+        <span class="easy-only">Cập nhật xong mà mất hết chỉnh sửa — là vì đã sửa nhầm chỗ.</span>
+        <span class="en-only" lang="en">Every time a kernel update "erases" your boot tweak, this rule was the one that got skipped.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cấu hình được sinh ra thế nào</h4>
+          <p>Gần như mọi tệp trong <code>/etc/grub.d</code> là một kịch bản shell sinh ra một mẩu của <code>grub.cfg</code>; bản thân <code>grub-mkconfig</code> cũng là một kịch bản shell chạy mọi thứ trong <code>/etc/grub.d</code>. Ward nhấn mạnh điều then chốt: <b>GRUB không chạy các kịch bản này lúc khởi động</b> — ta chạy chúng trong không gian người dùng để sinh ra tệp <code>grub.cfg</code> mà GRUB sẽ chạy.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tuỳ chỉnh ở đâu</h4>
+          <p>Câu trả lời ngắn của Ward: đặt tuỳ chỉnh vào một tệp <code>custom.cfg</code> mới trong thư mục cấu hình GRUB (thường là <code>/boot/grub/custom.cfg</code>). Câu trả lời dài: <code>/etc/grub.d</code> cho hai lựa chọn — <code>40_custom</code>, tệp bạn tự sửa nhưng kém ổn định nhất vì một lần nâng cấp gói nhiều khả năng sẽ phá hỏng thay đổi của bạn; và <code>41_custom</code>, đơn giản hơn, chỉ là một chuỗi lệnh nạp <code>custom.cfg</code> khi GRUB khởi động.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ghi ra đúng chỗ</h4>
+          <p>Chạy <code>grub-mkconfig</code> không đối số chỉ in cấu hình ra đầu ra chuẩn — Ward nói thẳng là đừng lo ghi đè. Để cài đặt cấu hình mới, dùng tuỳ chọn <code>-o</code>: <code>grub-mkconfig -o /boot/grub/grub.cfg</code>. Ông kèm lời dặn thường lệ: sao lưu cấu hình cũ và bảo đảm bạn đang cài vào đúng thư mục.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">grub-install</span>
+      <h3>
+        <span class="standard-copy">Cài đặt — khó hơn cấu hình, và nguy hiểm hơn</span>
+        <span class="easy-only">Cài GRUB — việc cần cẩn thận</span>
+        <span class="en-only" lang="en">Installation — harder than configuration, and riskier</span>
+      </h3>
+      <p class="standard-copy">Ward nói thẳng: cài đặt GRUB phức tạp hơn cấu hình nó, nhưng may mắn là bạn thường không phải lo vì bản phân phối của bạn đã lo hộ. Bạn chỉ cần tự làm khi đang nhân bản hoặc phục hồi một đĩa khởi động được, hoặc chuẩn bị chuỗi khởi động của riêng mình.<span class="cite"><a href="#ref-1">1</a></span> Nhiệm vụ của bạn, ông mô tả, là dựng một phiên bản GRUB <i>đọc được hệ thống tập tin chứa thư mục GRUB</i>, để nó có thể nạp phần còn lại của cấu hình và các mô-đun cần thiết — trên Linux, điều này thường có nghĩa là dựng một phiên bản GRUB với mô-đun <code>ext2.mod</code> (và có thể cả <code>lvm.mod</code>) được nạp sẵn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Cài GRUB là việc khó và dễ làm hỏng máy. Bình thường bản Linux bạn dùng đã cài sẵn rồi, bạn không phải làm gì. Chỉ khi tự làm đĩa khởi động bạn mới cần đụng tới. <b>Nhớ nhé: việc này có nút “hỏng máy” — hãy đọc kỹ trước khi gõ.</b></p>
+      <p class="en-only" lang="en">Ward is blunt: installing GRUB is more involved than configuring it, but fortunately you normally won't have to worry because your distribution handles it. You only do it yourself when duplicating or restoring a bootable disk, or preparing your own boot sequence.<span class="cite"><a href="#ref-1">1</a></span> Your task, as he frames it, is to construct a version of GRUB <i>capable of reading the filesystem that contains the GRUB directory</i>, so it can load the rest of its configuration and any required modules — on Linux this usually means building a GRUB with its <code>ext2.mod</code> module (and possibly <code>lvm.mod</code>) preloaded.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khôi phục một máy “mất boot loader” sau khi cài song song một hệ điều hành khác — đó gần như luôn là một lần chạy <code>grub-install</code>.</span>
+        <span class="easy-only">Cài Windows xong mất Linux — thường phải chạy lại grub-install.</span>
+        <span class="en-only" lang="en">Recovering a machine that "lost its boot loader" after installing another OS alongside is almost always one <code>grub-install</code> run.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ba thứ phải biết trước</h4>
+          <p>Bạn (hoặc trình cài đặt) phải xác định: thư mục GRUB đích như hệ thống đang chạy nhìn thấy nó (thường là <code>/boot/grub</code>); thiết bị hiện tại của đĩa GRUB đích; và — với khởi động UEFI — điểm gắn hiện tại của phân vùng hệ thống EFI (thường là <code>/boot/efi</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Lời cảnh báo của tác giả</h4>
+          <p>Ward đặt một cảnh báo in đậm quanh lệnh <code>grub-install /dev/sda</code>: cài GRUB sai cách có thể phá vỡ chuỗi khởi động của hệ thống, nên đừng xem nhẹ lệnh này; nếu lo, hãy tìm hiểu cách sao lưu MBR bằng <code>dd</code>, sao lưu thư mục GRUB đang cài, và bảo đảm bạn có kế hoạch khởi động khẩn cấp.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đĩa ngoài và UEFI</h4>
+          <p>Để cài lên một thiết bị bên ngoài hệ thống hiện tại, bạn phải nêu rõ thư mục GRUB trên thiết bị đó <i>như hệ thống hiện tại đang thấy</i> — ví dụ <code>grub-install --boot-directory=/mnt/boot /dev/sdc</code>. Với UEFI, ngoài việc chép boot loader vào chỗ, bạn còn phải “thông báo” nó cho firmware — tức lưu cấu hình loader vào NVRAM — bằng lệnh <code>efibootmgr</code>; <code>grub-install</code> tự chạy lệnh này nếu nó có sẵn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">GRUB đứng được trên đĩa nhờ hai cơ chế khởi động rất khác nhau của máy PC. Hai cơ chế đó — MBR và UEFI — cũng chính là thứ quyết định vì sao <code>grub-install</code> có hai cách dùng, và vì sao <span lang="en">secure boot</span> lại là vấn đề.</p>
+    <p class="easy-only">Người mở cửa đứng được ở đâu là do máy PC thuộc kiểu nào. Có hai kiểu, và chúng khác nhau nhiều. <b>Nhớ nhé: hai kiểu máy, hai chỗ cất người mở cửa.</b></p>
+    <p class="en-only" lang="en">GRUB gets its foothold on the disk through two very different PC boot mechanisms. Those two — MBR and UEFI — are also what decides why <code>grub-install</code> has two usages, and why <span lang="en">secure boot</span> is a problem at all.</p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="mbr-va-uefi" aria-labelledby="mbr-va-uefi-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="mbr-va-uefi-title">
+      <span class="standard-copy">MBR, UEFI, secure boot — và chín bước GRUB thật sự đi qua</span>
+      <span class="easy-only">Hai kiểu khởi động, và chín bước của GRUB</span>
+      <span class="en-only" lang="en">MBR, UEFI, secure boot — and the nine steps GRUB really takes</span>
+    </h2>
+    <p class="standard-copy">Để hiểu boot loader như GRUB làm việc ra sao, Ward khảo sát cách một máy PC khởi động khi bạn bật nó lên. Vì phải đối phó với nhiều điểm bất cập của cơ chế khởi động PC truyền thống, các lược đồ nạp khởi động có vài biến thể — nhưng có <b>hai lược đồ chính: MBR và UEFI</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Máy PC có hai kiểu khởi động: kiểu cũ và kiểu mới. Kiểu cũ nhét mã khởi động vào một góc rất chật trên đĩa. Kiểu mới thì để hẳn một ngăn riêng, rộng rãi, có tên tệp đàng hoàng. <b>Nhớ nhé: kiểu cũ chật chội, kiểu mới có ngăn riêng.</b></p>
+    <p class="en-only" lang="en">To understand how boot loaders such as GRUB work, Ward surveys how a PC boots when you turn it on. Because they must address the many inadequacies of traditional PC boot mechanisms, boot loading schemes have several variations — but there are <b>two main ones: MBR and UEFI</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Khởi động MBR</i> dựa vào một vùng nhỏ <b>441 byte</b> trong MBR mà BIOS của PC nạp và thực thi sau khi tự kiểm tra bật nguồn (<span lang="en">POST</span>). <i>Khởi động UEFI</i> thì luôn có một hệ thống tập tin VFAT đặc biệt gọi là <b>phân vùng hệ thống EFI</b> (<span lang="en">ESP</span>), chứa một thư mục tên <code>EFI</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Kiểu cũ: một mẩu mã tí xíu nhét ở đầu đĩa. Kiểu mới: một ngăn đĩa riêng, trong đó các tệp khởi động nằm ngay ngắn theo tên. <b>Nhớ nhé: cũ là mẩu giấy nhét khe cửa, mới là ngăn tủ có nhãn.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <i>MBR boot</i> rests on a small area of <b>441 bytes</b> inside the MBR that the PC BIOS loads and executes after its Power-On Self-Test (POST). <i>UEFI boot</i> always has a special VFAT filesystem called the <b>EFI System Partition</b> (ESP), containing a directory named <code>EFI</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">MBR:&nbsp;&nbsp;BIOS → 512B từ MBR<br>&nbsp;&nbsp;&nbsp;&nbsp;→ phần còn lại giữa MBR<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;và phân vùng đầu tiên<br><br>UEFI: firmware → ESP (VFAT)<br>&nbsp;&nbsp;&nbsp;&nbsp;→ /EFI/&lt;tên&gt;/*.efi</p>
+      <p class="easy-only">kiểu cũ: máy đọc đầu đĩa<br>&nbsp;&nbsp;→ rồi đọc tiếp chỗ trống kế bên<br><br>kiểu mới: máy mở ngăn riêng<br>&nbsp;&nbsp;→ chạy tệp có đuôi .efi</p>
+      <p class="en-only" lang="en">MBR:&nbsp;&nbsp;BIOS → 512B from MBR<br>&nbsp;&nbsp;&nbsp;&nbsp;→ rest between MBR<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and first partition<br><br>UEFI: firmware → ESP (VFAT)<br>&nbsp;&nbsp;&nbsp;&nbsp;→ /EFI/&lt;name&gt;/*.efi</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">MBR boot</span>
+      <h3>
+        <span class="standard-copy">Khởi động MBR — 441 byte, và một boot loader nhiều tầng</span>
+        <span class="easy-only">Kiểu cũ: chỗ chật nên phải chia làm nhiều đoạn</span>
+        <span class="en-only" lang="en">MBR boot — 441 bytes, and a multistage boot loader</span>
+      </h3>
+      <p class="standard-copy">Ngoài thông tin phân vùng đã mô tả ở Chương 4, MBR còn có một vùng nhỏ 441 byte mà BIOS nạp và thực thi sau POST. Ward nhận xét thẳng: không may là không gian này <b>không đủ</b> để chứa gần như bất kỳ boot loader nào, nên cần thêm không gian — kết quả là cái đôi khi được gọi là <b>boot loader nhiều tầng</b> (<span lang="en">multistage boot loader</span>). Trong trường hợp này, mẩu mã đầu tiên trong MBR không làm gì khác ngoài việc nạp phần còn lại của mã boot loader; các mẩu còn lại thường được nhét vào khoảng trống giữa MBR và phân vùng đầu tiên trên đĩa.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></p>
+      <p class="easy-only">Chỗ dành cho mã khởi động ở đầu đĩa bé xíu — chỉ vừa vài trăm chữ. Không đủ để chứa cả người mở cửa. Nên người ta chia làm hai: mẩu đầu chỉ biết đi gọi mẩu sau, và mẩu sau nằm ở khoảng trống kế bên. <b>Nhớ nhé: chỗ chật thì chia làm hai đoạn.</b></p>
+      <p class="en-only" lang="en">In addition to the partition information described in Chapter 4, the MBR includes a small area of 441 bytes that the PC BIOS loads and executes after POST. Ward is direct: unfortunately this space is <b>inadequate</b> to house almost any boot loader, so additional space is necessary — resulting in what is sometimes called a <b>multistage boot loader</b>. The initial piece of code in the MBR does nothing other than load the rest of the boot loader code; the remaining pieces are usually stuffed into the space between the MBR and the first partition on the disk.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đây là lý do một trình cài đặt hệ điều hành khác có thể “ăn mất” GRUB của bạn chỉ bằng cách ghi vào đúng vùng đó.</span>
+        <span class="easy-only">Vì mã nằm ở chỗ ai cũng ghi được nên nó dễ bị ghi đè mất.</span>
+        <span class="en-only" lang="en">This is why another OS installer can "eat" your GRUB simply by writing into that same area.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Điểm yếu Ward chỉ ra</h4>
+          <p>Ông nói thẳng cách làm này <i>không an toàn lắm</i>, vì bất cứ thứ gì cũng có thể ghi đè lên mã ở đó — nhưng hầu hết boot loader vẫn làm vậy, kể cả phần lớn các bản cài GRUB.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Khi đĩa dùng GPT nhưng khởi động bằng BIOS</h4>
+          <p>Lược đồ nhét mã sau MBR <i>không</i> hoạt động với đĩa phân vùng GPT dùng BIOS để khởi động, vì thông tin GPT nằm chính trong vùng sau MBR (GPT để nguyên MBR truyền thống cho tương thích ngược). Giải pháp chữa cháy cho GPT là tạo một phân vùng nhỏ gọi là <b>BIOS boot partition</b> với UUID đặc biệt <code>21686148-6449-6E6F-744E-656564454649</code>, để toàn bộ mã boot loader có chỗ cư trú.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>441 hay 446? Một con số có tranh cãi</h4>
+          <p>Ward viết <b>441 byte</b>, và đó là con số trang này dùng trong phần thân.<span class="cite"><a href="#ref-1">1</a></span> Các mô tả cấu trúc MBR khác thường nói vùng mã mồi rộng <b>446 byte</b> — tức toàn bộ 512 byte trừ 64 byte bảng phân vùng và 2 byte chữ ký — hoặc <b>440 byte</b> khi MBR hiện đại dành thêm 6 byte cho chữ ký đĩa và một trường bỏ trống.<span class="cite"><a href="#ref-14">14</a></span> Khác biệt nằm ở chỗ đếm mấy byte cuối, không ở bản chất lập luận: dù 440, 441 hay 446 thì vùng ấy vẫn quá chật để chứa một boot loader hoàn chỉnh.</p>
+        </div>
+        <div class="info-block">
+          <h4>Khi nào bạn thật sự gặp cấu hình này</h4>
+          <p>Ward nói đây <i>không</i> phải cấu hình phổ biến, vì GPT thường đi với UEFI chứ không phải BIOS truyền thống; nó thường chỉ thấy ở các hệ thống cũ có đĩa rất lớn — lớn hơn 2TB — tức quá lớn với MBR.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">ESP</span>
+      <h3>
+        <span class="standard-copy">Khởi động UEFI — mã khởi động cuối cùng cũng là <i>tệp</i></span>
+        <span class="easy-only">Kiểu mới: mã khởi động là một tệp bình thường</span>
+        <span class="en-only" lang="en">UEFI boot — boot code that is finally a <i>file</i></span>
+      </h3>
+      <p class="standard-copy">Nhà sản xuất PC và các công ty phần mềm nhận ra BIOS PC truyền thống bị giới hạn nghiêm trọng, nên họ phát triển một thứ thay thế gọi là <b>Extensible Firmware Interface</b> (EFI). Chuẩn hiện hành là <b>Unified EFI</b> (UEFI), bao gồm các tính năng như shell tích hợp và khả năng đọc bảng phân vùng cùng điều hướng hệ thống tập tin; lược đồ phân vùng GPT là một phần của chuẩn UEFI.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span> Ward nói khởi động trên hệ thống UEFI <i>khác hẳn</i> MBR, và phần lớn là <b>dễ hiểu hơn nhiều</b>: thay vì mã khởi động thực thi nằm ngoài một hệ thống tập tin, luôn có một hệ thống tập tin VFAT đặc biệt — ESP — thường được gắn trên hệ thống Linux của bạn tại <code>/boot/efi</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span></p>
+      <p class="easy-only">Kiểu mới dễ hiểu hơn nhiều: máy có hẳn một ngăn đĩa riêng, bên trong có thư mục tên <code>EFI</code>, và mỗi người mở cửa có một thư mục con với tệp đuôi <code>.efi</code>. Muốn xem thì mở <code>/boot/efi</code> ra là thấy. <b>Nhớ nhé: kiểu mới thì mã khởi động cũng chỉ là một tệp có tên.</b></p>
+      <p class="en-only" lang="en">PC manufacturers and software companies realized the traditional PC BIOS was severely limited, so they developed a replacement called <b>Extensible Firmware Interface</b> (EFI). The current standard is <b>Unified EFI</b> (UEFI), which includes features such as a built-in shell and the ability to read partition tables and navigate filesystems; the GPT partitioning scheme is part of the UEFI standard.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span> Ward says booting on UEFI systems is <i>radically different</i> from MBR, and for the most part <b>much easier to understand</b>: rather than executable boot code residing outside a filesystem, there's always a special VFAT filesystem — the ESP — usually mounted on your Linux system at <code>/boot/efi</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Bạn có thể <code>ls /boot/efi/EFI</code> ngay bây giờ trên một máy UEFI và đọc bằng mắt thường danh sách mọi hệ điều hành máy đó biết khởi động.</span>
+        <span class="easy-only">Gõ <code>ls /boot/efi/EFI</code> là thấy danh sách hệ điều hành máy biết mở.</span>
+        <span class="en-only" lang="en">You can <code>ls /boot/efi/EFI</code> right now on a UEFI machine and read, in plain sight, every operating system it knows how to boot.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cấu trúc bên trong ESP</h4>
+          <p>Mỗi boot loader có định danh riêng và một thư mục con tương ứng — chẳng hạn <code>efi/microsoft</code>, <code>efi/apple</code>, <code>efi/ubuntu</code> hay <code>efi/grub</code>. Tệp boot loader có đuôi <code>.efi</code> và nằm trong một trong các thư mục con đó, cùng các tệp hỗ trợ khác; nếu đi khám phá, bạn có thể thấy những tệp như <code>grubx64.efi</code> (phiên bản EFI của GRUB) và <code>shimx64.efi</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một nếp gấp</h4>
+          <p>Ward cảnh báo bạn không thể chỉ việc bỏ mã boot loader cũ vào ESP, vì mã cũ được viết cho giao diện BIOS; bạn phải cung cấp một boot loader viết cho UEFI — với GRUB, nghĩa là cài phiên bản UEFI chứ không phải phiên bản BIOS. Và bạn vẫn phải thông báo boot loader mới cho firmware.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đừng nhầm hai phân vùng</h4>
+          <p>Ward ghi chú rõ: ESP <i>khác</i> BIOS boot partition đã mô tả ở Mục 5.8.1 và có UUID khác; bạn không nên gặp một hệ thống có cả hai.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">secure boot</span>
+      <h3>
+        <span class="standard-copy">Secure boot — chữ ký số, cái <span lang="en">shim</span>, và giá phải trả</span>
+        <span class="easy-only">Secure boot — máy chỉ mở cửa cho người có giấy tờ</span>
+        <span class="en-only" lang="en">Secure boot — digital signatures, the shim, and the trade-off</span>
+      </h3>
+      <p class="standard-copy">Ward gọi đây là một vấn đề <i>mới hơn</i> ảnh hưởng tới các bản cài Linux. Khi kích hoạt, cơ chế UEFI này đòi hỏi mọi boot loader phải được <b>ký số bởi một thẩm quyền đáng tin</b> thì mới chạy được. Microsoft đã yêu cầu các nhà cung cấp phần cứng xuất xưởng Windows 8 trở lên phải dùng secure boot; kết quả là nếu bạn thử cài một boot loader chưa ký trên những hệ thống này, firmware sẽ từ chối loader và hệ điều hành sẽ không nạp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+      <p class="easy-only">Máy mới có một khoá an toàn: nó chỉ chịu mở cửa cho người mở cửa nào có “giấy tờ” hợp lệ. Các bản Linux lớn đều xin giấy tờ rồi nên không sao. Chỉ người tự làm người mở cửa mới thấy phiền. <b>Nhớ nhé: có giấy tờ thì qua cổng, không có thì bị chặn.</b></p>
+      <p class="en-only" lang="en">Ward calls this a <i>newer</i> problem affecting Linux installations. When active, this UEFI mechanism requires any boot loader to be <b>digitally signed by a trusted authority</b> in order to run. Microsoft has required hardware vendors shipping Windows 8 and later to use secure boot; the result is that if you try to install an unsigned boot loader on these systems, the firmware will reject the loader and the operating system won't load.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Tệp <code>shimx64.efi</code> bạn thấy trong ESP không phải rác — nó chính là mảnh giải quyết bài toán chữ ký này.</span>
+        <span class="easy-only">Tệp tên shim trong ngăn EFI chính là “người cầm giấy tờ” đi trước.</span>
+        <span class="en-only" lang="en">That <code>shimx64.efi</code> in your ESP isn't junk — it's the piece that solves this signature problem.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao các bản phân phối lớn không gặp vấn đề</h4>
+          <p>Ward giải thích: các bản phân phối Linux lớn không có vấn đề với secure boot vì chúng đi kèm boot loader đã ký, thường dựa trên phiên bản UEFI của GRUB. Thường có một <b>shim</b> nhỏ đã ký nằm giữa UEFI và GRUB; UEFI chạy shim, và shim lần lượt thực thi GRUB.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Cái giá của nó</h4>
+          <p>Ông cân bằng hai phía. Bảo vệ khỏi việc khởi động phần mềm trái phép là tính năng quan trọng nếu máy bạn không ở trong môi trường đáng tin hoặc cần đáp ứng yêu cầu bảo mật nhất định — một số bản phân phối còn đi xa hơn, đòi hỏi <i>toàn bộ</i> chuỗi khởi động (kể cả nhân) phải được ký. Nhưng có bất lợi, đặc biệt với người đang thử nghiệm dựng boot loader của riêng mình. Bạn có thể lách bằng cách tắt secure boot trong thiết lập UEFI — <i>tuy nhiên</i> cách này không gọn với hệ thống khởi động kép, vì Windows sẽ không chạy nếu secure boot không bật.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">chainloading</span>
+      <h3>
+        <span class="standard-copy">Chainloading — GRUB nạp một boot loader khác</span>
+        <span class="easy-only">Chuyền tay: GRUB gọi người mở cửa khác</span>
+        <span class="en-only" lang="en">Chainloading — GRUB loading another boot loader</span>
+      </h3>
+      <p class="standard-copy">UEFI làm cho việc hỗ trợ nạp các hệ điều hành khác tương đối dễ, vì bạn có thể cài nhiều boot loader trong phân vùng EFI. Nhưng kiểu MBR cũ hơn <i>không</i> hỗ trợ chức năng này, và ngay cả khi có UEFI, bạn vẫn có thể có một phân vùng riêng mang boot loader kiểu MBR mà bạn muốn dùng. Thay vì cấu hình và chạy một nhân Linux, GRUB có thể nạp và chạy một boot loader khác trên một phân vùng cụ thể của đĩa — Ward gọi đó là <b>chainloading</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+      <p class="easy-only">Đôi khi GRUB không tự mở cửa mà gọi một người mở cửa khác tới làm hộ — ví dụ để mở Windows. Việc chuyền tay đó gọi là chainloading. <b>Nhớ nhé: không làm được thì gọi người khác làm.</b></p>
+      <p class="en-only" lang="en">UEFI makes supporting other operating systems relatively easy, because you can install multiple boot loaders in the EFI partition. But the older MBR style does <i>not</i> support this, and even with UEFI you may still have an individual partition carrying an MBR-style boot loader you want to use. Instead of configuring and running a Linux kernel, GRUB can load and run a different boot loader on a specific partition of your disk — Ward calls this <b>chainloading</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mục “Windows Boot Manager” trong menu GRUB trên một máy khởi động kép thường chính là một mục chainloading.</span>
+        <span class="easy-only">Dòng “Windows” trong menu khởi động chính là chuyền tay.</span>
+        <span class="en-only" lang="en">The "Windows Boot Manager" entry in a dual-boot GRUB menu is typically exactly a chainloading entry.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cách viết một mục chainload</h4>
+          <p>Bạn tạo một mục menu mới trong cấu hình GRUB (dùng một trong các cách ở phần sinh tệp cấu hình). Ví dụ của Ward cho một bản cài Windows trên phân vùng thứ ba: nạp mô-đun <code>chain</code> và <code>ntfs</code>, đặt <code>set root=(hd0,3)</code>, rồi gọi <code>chainloader +1</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ý nghĩa của <code>+1</code></h4>
+          <p>Tuỳ chọn <code>+1</code> bảo <code>chainloader</code> nạp bất cứ thứ gì nằm ở <b>sector đầu tiên</b> của một phân vùng. Bạn cũng có thể bảo nó nạp thẳng một tệp — Ward nêu ví dụ nạp trình nạp MS-DOS <code>io.sys</code> bằng dòng <code>chainloader /io.sys</code>, với các mô-đun <code>chain</code> và <code>fat</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">how GRUB works</span>
+      <h3>
+        <span class="standard-copy">Chín bước — và câu hỏi “lõi GRUB nằm ở đâu”</span>
+        <span class="easy-only">Chín bước GRUB đi, và chỗ nó cất mình</span>
+        <span class="en-only" lang="en">Nine steps — and the question "where is the GRUB core"</span>
+      </h3>
+      <p class="standard-copy">Ward khép lại phần GRUB bằng một chuỗi chín bước: BIOS hoặc firmware khởi tạo phần cứng và tìm mã khởi động trên các thiết bị theo thứ tự boot; nó nạp và thực thi mã tìm thấy — đây là nơi GRUB bắt đầu; lõi GRUB nạp; lõi khởi tạo, và tới điểm này GRUB đã truy cập được đĩa và hệ thống tập tin; GRUB nhận diện phân vùng khởi động của nó và nạp cấu hình ở đó; GRUB cho người dùng một cơ hội thay đổi cấu hình; sau một khoảng chờ hoặc một thao tác của người dùng, GRUB thực thi cấu hình; trong lúc thực thi, GRUB có thể nạp thêm mã (mô-đun) trong phân vùng khởi động, một số có thể đã được nạp sẵn; và cuối cùng GRUB thực thi lệnh <code>boot</code> để nạp và chạy nhân theo lệnh <code>linux</code> trong cấu hình.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">GRUB đi qua chín bước: máy tìm nó, nó tự dựng mình dậy, nó đọc được đĩa, nó tìm cấu hình, nó cho bạn vài giây để sửa, rồi nó chạy nhân. <b>Nhớ nhé: GRUB cũng phải tự dựng mình dậy trước khi dựng nhân dậy.</b></p>
+      <p class="en-only" lang="en">Ward closes the GRUB discussion with a nine-step sequence: the BIOS or firmware initializes the hardware and searches its boot-order storage devices for boot code; it loads and executes the code it finds — this is where GRUB begins; the GRUB core loads; the core initializes, and at this point GRUB can access disks and filesystems; GRUB identifies its boot partition and loads a configuration there; GRUB gives the user a chance to change the configuration; after a timeout or user action, GRUB executes the configuration; in the course of doing so it may load additional code (modules) in the boot partition, some of which may be preloaded; and finally GRUB executes a <code>boot</code> command to load and execute the kernel as specified by the configuration's <code>linux</code> command.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Thông điệp lỗi kiểu <code>error: unknown filesystem</code> với dấu nhắc <code>grub rescue&gt;</code> là bước 4 thất bại — lõi đã chạy nhưng chưa đọc được hệ thống tập tin.</span>
+        <span class="easy-only">Thấy dấu nhắc <code>grub rescue&gt;</code> nghĩa là GRUB dậy được nhưng chưa đọc được đĩa.</span>
+        <span class="en-only" lang="en">An <code>error: unknown filesystem</code> with a <code>grub rescue&gt;</code> prompt is step 4 failing — the core ran, but couldn't read the filesystem.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ba chỗ lõi GRUB có thể nằm</h4>
+          <p>Ward nói bước 3 và 4 có thể phức tạp vì những bất cập của cơ chế khởi động PC truyền thống, và câu hỏi lớn nhất là “lõi GRUB ở đâu”. Có ba khả năng cơ bản: nhét một phần giữa MBR và đầu phân vùng đầu tiên; trong một phân vùng thông thường; hoặc trong một phân vùng khởi động đặc biệt — phân vùng khởi động GPT, ESP, hay nơi khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>512 byte đầu tiên</h4>
+          <p>Trong mọi trường hợp trừ khi bạn có UEFI/ESP, BIOS của PC nạp 512 byte từ MBR, và đó là nơi GRUB bắt đầu. Mẩu nhỏ này — dẫn xuất từ <code>boot.img</code> trong thư mục GRUB — <i>chưa</i> phải là lõi, nhưng nó chứa vị trí bắt đầu của lõi và nạp lõi từ điểm đó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Khi có ESP thì đơn giản hơn nhiều</h4>
+          <p>Nếu bạn có ESP, lõi GRUB nằm ở đó <i>dưới dạng một tệp</i>; firmware có thể điều hướng ESP và thực thi trực tiếp toàn bộ GRUB hoặc bất kỳ trình nạp hệ điều hành nào nằm ở đó. Ward thêm: bạn có thể có một shim trong ESP nằm ngay trước GRUB để xử lý secure boot, nhưng ý tưởng vẫn thế.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Ward đóng chương bằng một lưu ý rằng trên hầu hết hệ thống, đây vẫn chưa phải bức tranh đầy đủ: boot loader có thể còn phải nạp một ảnh hệ thống tập tin RAM ban đầu vào bộ nhớ trước khi nạp và thực thi nhân — đó là thứ tham số cấu hình <code>initrd</code> chỉ định.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span></p>
+    <p class="easy-only">Còn một mảnh nữa chưa kể: đôi khi người mở cửa phải mang theo một “ổ đĩa tạm trong bộ nhớ” cho nhân dùng lúc đầu. Mảnh đó để dành cho chương sau. <b>Nhớ nhé: còn một mảnh nữa, tên là initrd.</b></p>
+    <p class="en-only" lang="en">Ward closes the chapter by noting that on most systems this still isn't the complete picture: the boot loader may also need to load an initial RAM filesystem image into memory before loading and executing the kernel — that's what the <code>initrd</code> configuration parameter specifies.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 5 · MISCONCEPTIONS ===================== -->
+<section class="section" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Đính chính</span>
+      <span class="en-only" lang="en">Corrections</span>
+    </p>
+    <h2 id="ngo-nhan-title">
+      <span class="standard-copy">Ba ngộ nhận mà người đọc lần đầu hay mắc</span>
+      <span class="easy-only">Ba chỗ hay hiểu nhầm</span>
+      <span class="en-only" lang="en">Three misconceptions first readers hit</span>
+    </h2>
+    <p class="standard-copy">Phần này thuộc mức đọc <b>Đầy đủ</b>: nó đối chiếu điều người đọc thường nghĩ với điều bản văn thật sự nói.</p>
+    <p class="easy-only">Phần này hơi khó, bạn có thể bỏ qua và quay lại sau. <b>Nhớ nhé: hiểu chậm mà chắc vẫn hơn.</b></p>
+    <p class="en-only" lang="en">This block belongs to the <b>Đầy đủ</b> (full) reading level: it sets what readers usually assume against what the text actually says.</p>
+  </div>
+
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“GRUB chạy trên Linux, nên <code>insmod</code> trong GRUB là <code>insmod</code> của Linux”</span>
+          <span class="en-only" lang="en">"GRUB runs on Linux, so <code>insmod</code> in GRUB is Linux's <code>insmod</code>"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> các lệnh quen mắt trong cấu hình GRUB — <code>insmod</code>, <code>ls</code>, “kernel” — là các lệnh của hệ thống Linux.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> GRUB <i>không dùng</i> nhân Linux — nhiệm vụ của nó là khởi động nhân. Cấu hình bạn thấy hoàn toàn gồm tính năng và lệnh nội tại của GRUB, tồn tại trong thế giới riêng của nó. GRUB có “nhân” của riêng mình và lệnh <code>insmod</code> của riêng mình để nạp động các mô-đun GRUB, hoàn toàn độc lập với nhân Linux; nhiều lệnh GRUB trông giống lệnh shell Unix, thậm chí có cả <code>ls</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> the familiar-looking commands in a GRUB configuration — <code>insmod</code>, <code>ls</code>, "kernel" — are Linux system commands.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> GRUB <i>doesn't use</i> the Linux kernel — its job is to start the kernel. The configuration you see consists wholly of features and commands internal to GRUB, which exists in its own separate world. GRUB has its own "kernel" and its own <code>insmod</code> for dynamically loading GRUB modules, completely independent of the Linux kernel; many GRUB commands resemble Unix shell commands, there is even an <code>ls</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Mọi chữ <code>root</code> trong cấu hình GRUB nói về cùng một thứ”</span>
+          <span class="en-only" lang="en">"Every <code>root</code> in a GRUB configuration means the same thing"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> cấu hình GRUB nhắc <code>root</code> nhiều lần vì nó lặp lại cùng một thông tin.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> Ward viết rằng <i>phần lớn nhầm lẫn</i> đến từ cách GRUB dùng từ <code>root</code>. Trong cấu hình GRUB, chữ <code>root</code> nằm <b>sau tên ảnh nhân của lệnh <code>linux</code></b> là tham số nhân — hệ thống tập tin gốc của hệ thống bạn. <b>Mọi tham chiếu <code>root</code> khác</b> là GRUB root: thứ chỉ tồn tại bên trong GRUB, là hệ thống tập tin nơi GRUB tìm các tệp ảnh nhân và ảnh hệ thống tập tin RAM.<span class="cite"><a href="#ref-1">1</a></span> Trong ví dụ của ông, GRUB root trước hết được đặt thành một thiết bị riêng của GRUB (<code>hd0,msdos1</code>) làm giá trị mặc định, rồi lệnh <code>search</code> tìm một UUID cụ thể và nếu thấy thì đặt lại GRUB root thành phân vùng đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> a GRUB configuration mentions <code>root</code> repeatedly because it is restating one piece of information.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> Ward writes that <i>by far the most confusion</i> comes from GRUB's use of the word <code>root</code>. In a GRUB configuration, the <code>root</code> that appears <b>after the image name of the <code>linux</code> command</b> is a kernel parameter — your system's root filesystem. <b>Every other reference to <code>root</code></b> is the GRUB root: something that exists only inside GRUB, the filesystem where GRUB looks for the kernel and RAM filesystem image files.<span class="cite"><a href="#ref-1">1</a></span> In his example the GRUB root is first set to a GRUB-specific device (<code>hd0,msdos1</code>) as a default, then a <code>search</code> command looks for a particular UUID and, on finding it, sets the GRUB root to that partition.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Nhân bỏ qua những tham số nó không hiểu”</span>
+          <span class="en-only" lang="en">"The kernel discards parameters it doesn't understand"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> một tham số lạ trên dòng khởi động thì vô hại vì nhân sẽ lờ nó đi.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> khi gặp một tham số nó không hiểu, nhân Linux <b>lưu lại</b> tham số đó và sau đó chuyển cho <code>init</code> lúc khởi động không gian người dùng — ví dụ <code>-s</code> được chuyển sang <code>init</code> để báo khởi động ở chế độ một người dùng.<span class="cite"><a href="#ref-1">1</a></span> Tài liệu nhân nói rõ thêm cơ chế: tham số có dấu <code>=</code> đi vào <i>môi trường</i> của <code>init</code>, các tham số khác thành <i>đối số dòng lệnh</i> của <code>init</code>.<span class="cite"><a href="#ref-7">7</a></span> Nghĩa là một từ gõ nhầm trên dòng GRUB không biến mất — nó có thể đổi hành vi của tiến trình số 1.</p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> a stray parameter on the boot line is harmless because the kernel will ignore it.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> upon encountering a parameter it doesn't understand, the Linux kernel <b>saves</b> it and later passes it to <code>init</code> during the user space start — for example, <code>-s</code> is passed to <code>init</code> to indicate single-user mode.<span class="cite"><a href="#ref-1">1</a></span> The kernel documentation spells out the mechanism further: parameters with <code>=</code> go into <code>init</code>'s <i>environment</i>, others are passed as <i>command line arguments</i> to <code>init</code>.<span class="cite"><a href="#ref-7">7</a></span> Which means a mistyped word on the GRUB line does not vanish — it can change the behaviour of process number 1.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="tu-kiem-tra" aria-labelledby="tu-kiem-tra-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm tra</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="tu-kiem-tra-title">
+      <span class="standard-copy">Bạn đã kể được chuỗi khởi động chưa?</span>
+      <span class="easy-only">Thử trả lời xem nào</span>
+      <span class="en-only" lang="en">Can you narrate the boot chain yet?</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Trả lời bằng lời của bạn, không tra sách. Nếu một câu khiến bạn ngập ngừng, đó chính là giai đoạn khởi động bạn nên đọc lại.</p>
+      <p class="easy-only">Thử trả lời miệng thôi, không cần giở lại. Câu nào bí thì quay lại đọc phần đó nhé. <b>Nhớ nhé: chỗ bí chính là chỗ cần học.</b></p>
+      <p class="en-only" lang="en">Answer in your own words, without looking back. Whichever question makes you hesitate points at the boot stage you should reread.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Kể lại chuỗi khởi động bảy bước của Ward, và chỉ ra bước nào là điểm bắt đầu của không gian người dùng.</p>
+        <p class="deep-only">Gợi ý sâu hơn: nói thêm chương nào của sách nhận trách nhiệm cho phần sau điểm đó.</p>
+      </li>
+      <li>
+        <p>Bạn dùng lệnh nào để xem lại thông điệp chẩn đoán của nhân từ lần khởi động hiện tại — và nếu máy không có <span lang="en">systemd</span> thì dùng gì thay thế?</p>
+        <p class="deep-only">Gợi ý sâu hơn: tuỳ chọn nào cho phép xem các lần khởi động trước?</p>
+      </li>
+      <li>
+        <p>Vì sao tham số <code>root</code> là then chốt, và ba cách viết giá trị của nó khác nhau ra sao?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao hai cách viết bằng ổ luận lý và bằng UUID lại đáng chuộng hơn tệp thiết bị?</p>
+      </li>
+      <li>
+        <p>Nhân làm gì với một tham số nó không nhận ra?</p>
+        <p class="deep-only">Gợi ý sâu hơn: tham số có dấu <code>=</code> và tham số không có được xử lý khác nhau thế nào?</p>
+      </li>
+      <li>
+        <p>Bài toán “con gà hay quả trứng” của boot loader là gì, và nó thoát ra bằng cách nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: LBA đánh đổi cái gì lấy cái gì, và vì sao đánh đổi đó chấp nhận được?</p>
+      </li>
+      <li>
+        <p>Trong một cấu hình GRUB, làm sao bạn phân biệt được chữ <code>root</code> nào là tham số nhân và chữ nào là GRUB root?</p>
+        <p class="deep-only">Gợi ý sâu hơn: lệnh <code>search</code> làm gì với GRUB root?</p>
+      </li>
+      <li>
+        <p>Vì sao không nên sửa trực tiếp <code>grub.cfg</code>, và bạn nên đặt tuỳ chỉnh ở đâu?</p>
+        <p class="deep-only">Gợi ý sâu hơn: <code>40_custom</code> và <code>41_custom</code> khác nhau ở điểm nào?</p>
+      </li>
+      <li>
+        <p>Khởi động MBR và khởi động UEFI khác nhau ở chỗ nào về <i>nơi cất mã khởi động</i>?</p>
+        <p class="deep-only">Gợi ý sâu hơn: phân vùng hệ thống EFI dùng loại hệ thống tập tin nào, và thường được gắn ở đâu trên Linux?</p>
+      </li>
+      <li>
+        <p><span lang="en">Secure boot</span> yêu cầu điều gì, và cái <span lang="en">shim</span> giải quyết vấn đề đó thế nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao tắt secure boot lại không gọn với hệ thống khởi động kép?</p>
+      </li>
+      <li>
+        <p>Chainloading là gì, và <code>chainloader +1</code> nạp cái gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao UEFI làm việc hỗ trợ nhiều hệ điều hành dễ hơn kiểu MBR?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Bật máy lên thì máy đi qua mấy bước? Kể được ba bước là tốt rồi.</p></li>
+      <li><p>Muốn đọc lại những dòng chữ chạy vụt qua lúc khởi động, bạn gõ lệnh gì?</p></li>
+      <li><p>Dòng <code>root=</code> trong mẩu giấy dặn dò dùng để làm gì?</p></li>
+      <li><p>GRUB là ai, và nó làm việc gì?</p></li>
+      <li><p>Máy PC có hai kiểu khởi động — kể tên và nói chúng khác nhau chỗ nào.</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>
+        <p>Recite Ward's seven-step boot sequence, and identify which step is the user space start.</p>
+      </li>
+      <li>
+        <p>Which command shows the kernel's diagnostic messages from the current boot — and what do you use instead without <span lang="en">systemd</span>?</p>
+      </li>
+      <li>
+        <p>Why is the <code>root</code> parameter critical, and how do its three notations differ?</p>
+      </li>
+      <li>
+        <p>What does the kernel do with a parameter it doesn't recognize?</p>
+      </li>
+      <li>
+        <p>What is the boot loader's "chicken or egg" problem, and how does it escape?</p>
+      </li>
+      <li>
+        <p>In a GRUB configuration, how do you tell which <code>root</code> is a kernel parameter and which is the GRUB root?</p>
+      </li>
+      <li>
+        <p>Why shouldn't you edit <code>grub.cfg</code> directly, and where should customizations go?</p>
+      </li>
+      <li>
+        <p>How do MBR boot and UEFI boot differ in <i>where the boot code lives</i>?</p>
+      </li>
+      <li>
+        <p>What does secure boot require, and how does the shim resolve it?</p>
+      </li>
+      <li>
+        <p>What is chainloading, and what does <code>chainloader +1</code> load?</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Boot loader phải trả lời hai câu hỏi — <span class="closing-accent">nhân ở đâu, và tham số nào đi cùng nó</span> — trong lúc chính thứ biết đọc đĩa vẫn chưa chạy.<span class="cite"><a href="#ref-1">1</a></span> Đó là lý do cả chương này tồn tại; và khi một máy không lên, <span class="closing-accent">việc nhận diện từng giai đoạn của quá trình khởi động sẽ là vô giá</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Người mở cửa phải tìm nhân và đưa cho nhân mẩu giấy dặn dò, <span class="closing-accent">trong lúc chưa ai biết đọc ổ đĩa cả</span>. Khi máy không lên, <span class="closing-accent">hãy hỏi nó dừng ở chặng nào</span>. <b>Nhớ nhé: biết tên từng chặng là biết chỗ để tìm.</b></p>
+    <p class="en-only" lang="en">The boot loader must answer two questions — <span class="closing-accent">where is the kernel, and what parameters go with it</span> — while the very thing that knows how to read a disk is not yet running.<span class="cite"><a href="#ref-1">1</a></span> That is why this chapter exists; and when a machine won't come up, <span class="closing-accent">being able to identify each stage of the boot process proves invaluable</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START -->
+<!-- Region owned by book-cover-curator; body authored by book-chapter-author.
+     Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-4-disks-filesystems.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 4 · Đĩa và hệ thống tập tin</span>
+    <span class="nav-title en-only" lang="en">Chapter 4 · Disks and Filesystems</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-6-user-space-starts.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 6 · Không gian người dùng khởi động thế nào</span>
+    <span class="nav-title en-only" lang="en">Chapter 6 · How User Space Starts</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, tái bản lần thứ 3, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chương 5, “How the Linux Kernel Boots”, trang 117–135.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd edition, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chapter 5, "How the Linux Kernel Boots", pp. 117–135.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd ed., No Starch Press, 2021, ch. 5 “How the Linux Kernel Boots”, pp. 117–135. — <a href="https://openlibrary.org/books/OL29462444M" target="_blank" rel="noopener noreferrer">openlibrary.org/books/OL29462444M</a></li>
+      <li id="ref-2"><code>journalctl(1)</code> — query the systemd journal, freedesktop.org. <a href="https://www.freedesktop.org/software/systemd/man/latest/journalctl.html" target="_blank" rel="noopener noreferrer">freedesktop.org/software/systemd/man/latest/journalctl.html</a></li>
+      <li id="ref-3"><code>dmesg(1)</code> — print or control the kernel ring buffer, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/dmesg.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/dmesg.1.html</a></li>
+      <li id="ref-4"><code>bootparam(7)</code> — introduction to boot time parameters of the Linux kernel, man7.org. <a href="https://man7.org/linux/man-pages/man7/bootparam.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/bootparam.7.html</a></li>
+      <li id="ref-5"><code>fsck(8)</code> — check and repair a Linux filesystem, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man8/fsck.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/fsck.8.html</a></li>
+      <li id="ref-6"><code>proc(5)</code> — the <code>/proc</code> filesystem, including <code>/proc/cmdline</code>, man7.org. <a href="https://man7.org/linux/man-pages/man5/proc.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/proc.5.html</a></li>
+      <li id="ref-7">“The kernel's command-line parameters”, The Linux Kernel documentation — the reference list Ward calls <i>kernel-params.txt</i>. <a href="https://docs.kernel.org/admin-guide/kernel-parameters.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/admin-guide/kernel-parameters.html</a></li>
+      <li id="ref-8">“Logical block addressing”, Wikipedia — background on the LBA disk-access scheme. <a href="https://en.wikipedia.org/wiki/Logical_block_addressing" target="_blank" rel="noopener noreferrer">en.wikipedia.org/wiki/Logical_block_addressing</a></li>
+      <li id="ref-9">GNU GRUB Manual 2.x — the official manual for the Grand Unified Bootloader, including device syntax, <code>chainloader</code> and configuration. <a href="https://www.gnu.org/software/grub/manual/grub/grub.html" target="_blank" rel="noopener noreferrer">gnu.org/software/grub/manual/grub/grub.html</a></li>
+      <li id="ref-10"><code>grub-install(8)</code> — Debian manual page for the GRUB installer utility. <a href="https://manpages.debian.org/bookworm/grub2-common/grub-install.8.en.html" target="_blank" rel="noopener noreferrer">manpages.debian.org/bookworm/grub2-common/grub-install.8.en.html</a></li>
+      <li id="ref-11"><code>grub-mkconfig(8)</code> — Debian manual page for the GRUB configuration generator. <a href="https://manpages.debian.org/bookworm/grub2-common/grub-mkconfig.8.en.html" target="_blank" rel="noopener noreferrer">manpages.debian.org/bookworm/grub2-common/grub-mkconfig.8.en.html</a></li>
+      <li id="ref-12"><code>efibootmgr</code> — a Linux user-space application to modify the EFI Boot Manager (create/delete boot entries, change boot order), rhboot. <a href="https://github.com/rhboot/efibootmgr" target="_blank" rel="noopener noreferrer">github.com/rhboot/efibootmgr</a></li>
+      <li id="ref-13">“EFI system partition”, Wikipedia — the VFAT ESP, its <code>EFI</code> directory layout and usual Linux mount point. <a href="https://en.wikipedia.org/wiki/EFI_system_partition" target="_blank" rel="noopener noreferrer">en.wikipedia.org/wiki/EFI_system_partition</a></li>
+      <li id="ref-14">“Master boot record”, Wikipedia — MBR layout, the bootstrap code area and its size. <a href="https://en.wikipedia.org/wiki/Master_boot_record" target="_blank" rel="noopener noreferrer">en.wikipedia.org/wiki/Master_boot_record</a></li>
+      <li id="ref-15">“GUID Partition Table”, Wikipedia — GPT layout and the BIOS boot partition GUID <code>21686148-6449-6E6F-744E-656564454649</code>. <a href="https://en.wikipedia.org/wiki/GUID_Partition_Table" target="_blank" rel="noopener noreferrer">en.wikipedia.org/wiki/GUID_Partition_Table</a></li>
+      <li id="ref-16">“UEFI”, Wikipedia — the Unified Extensible Firmware Interface standard, its capabilities and the secure boot requirement. <a href="https://en.wikipedia.org/wiki/UEFI" target="_blank" rel="noopener noreferrer">en.wikipedia.org/wiki/UEFI</a></li>
+      <li id="ref-17"><code>shim</code> — a first-stage UEFI boot loader that validates and executes a second-stage loader such as GRUB when secure boot is enabled (rhboot). <a href="https://github.com/rhboot/shim" target="_blank" rel="noopener noreferrer">github.com/rhboot/shim</a></li>
+      <li id="ref-18">“Using the initial RAM disk (initrd)”, The Linux Kernel documentation. <a href="https://docs.kernel.org/admin-guide/initrd.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/admin-guide/initrd.html</a></li>
+    </ol>
+
+    <!-- NAV:START -->
+    <!-- Footer neighbour row — owned by book-cover-curator, body authored by
+         book-chapter-author. Absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-4-disks-filesystems.html">chapter 4</a>
+      <a href="chapter-6-user-space-starts.html">chapter 6</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('hlw-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('hlw-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('hlw-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

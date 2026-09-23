@@ -1,0 +1,1863 @@
+<!doctype html>
+<html lang="vi" data-reading-mode="deep">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Diễn giải song ngữ Việt–Anh Chương 10 cuốn AI Engineering của Chip Huyen: kiến trúc ứng dụng AI dựng dần từng bước — bối cảnh, rào chắn, định tuyến và cổng mô hình, bộ nhớ đệm, mẫu hình tác tử — cùng khả năng quan sát, điều phối và vòng phản hồi người dùng.">
+<title>Chương 10 · Kiến trúc kỹ thuật AI và phản hồi người dùng · AI Engineering</title>
+<link rel="icon" href="data:,">
+<script>
+  (function () {
+    const validModes = ["easy", "quick", "deep"];
+    let storedMode = "deep";
+    let storedLang = "vi";
+    try {
+      const preference = localStorage.getItem("aie-reading-mode");
+      if (validModes.includes(preference)) storedMode = preference;
+      if (localStorage.getItem("aie-lang") === "en") storedLang = "en";
+    } catch (_) {}
+    document.documentElement.dataset.readingMode = storedMode;
+    document.documentElement.dataset.lang = storedLang;
+    document.documentElement.setAttribute("lang", storedLang);
+  })();
+</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&family=Noto+Serif:wght@600;700&display=swap">
+
+<style>
+  :root {
+    --bg: #eef4ec;
+    --surface: #f5faf3;
+    --surface-strong: #ffffff;
+    --ink: #17281c;
+    --muted: #566b56;
+    --line: #cfe3c9;
+    --teal: #3f7d52;
+    --teal-soft: #d9ecdb;
+    --blue: #2f7d78;
+    --blue-soft: #d3e9e6;
+    --amber: #b0812b;
+    --amber-soft: #f0e5cb;
+    --leaf: #5aa15f;
+    --leaf-soft: #dcecd6;
+    --shadow: 0 22px 60px rgba(20, 50, 28, 0.14);
+    --display: "Noto Serif", Georgia, serif;
+    --body: "Be Vietnam Pro", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10231a;
+      --surface: #163020;
+      --surface-strong: #1d3b28;
+      --ink: #e9f5ea;
+      --muted: #9fc3a3;
+      --line: #294a35;
+      --teal: #6fce86;
+      --teal-soft: #163a24;
+      --blue: #63c3bc;
+      --blue-soft: #123833;
+      --amber: #e0b45f;
+      --amber-soft: #3a2f18;
+      --leaf: #7fd08a;
+      --leaf-soft: #163a22;
+      --shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #10231a;
+    --surface: #163020;
+    --surface-strong: #1d3b28;
+    --ink: #e9f5ea;
+    --muted: #9fc3a3;
+    --line: #294a35;
+    --teal: #6fce86;
+    --teal-soft: #163a24;
+    --blue: #63c3bc;
+    --blue-soft: #123833;
+    --amber: #e0b45f;
+    --amber-soft: #3a2f18;
+    --leaf: #7fd08a;
+    --leaf-soft: #163a22;
+    --shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(circle at 8% 4%, color-mix(in srgb, var(--teal-soft) 74%, transparent), transparent 31rem),
+      var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    line-height: 1.72;
+    overflow-x: hidden;
+  }
+
+  a { color: var(--teal); }
+
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible {
+    outline: 3px solid var(--amber);
+    outline-offset: 4px;
+  }
+
+  .page {
+    width: min(1180px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 28px 0 72px;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 10px 0 28px;
+  }
+
+  .book-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .book-label::before {
+    content: "";
+    width: 28px;
+    height: 2px;
+    background: var(--teal);
+  }
+
+  .reading-controls {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+  }
+
+  .reading-controls button {
+    min-height: 44px;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 13px;
+    background: transparent;
+    color: var(--muted);
+    font: 600 0.8rem var(--body);
+    cursor: pointer;
+  }
+
+  html[data-reading-mode="easy"] .reading-controls button[data-mode="easy"],
+  html[data-reading-mode="quick"] .reading-controls button[data-mode="quick"],
+  html[data-reading-mode="deep"] .reading-controls button[data-mode="deep"] {
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+    align-items: center;
+    gap: clamp(36px, 7vw, 92px);
+    min-height: 620px;
+    padding: 46px clamp(24px, 5vw, 64px);
+    border: 1px solid var(--line);
+    border-radius: 34px 34px 8px 34px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .hero::after {
+    content: "AI ENGINEERING / 10";
+    position: absolute;
+    right: 22px;
+    bottom: 16px;
+    color: var(--line);
+    font: 500 0.72rem var(--mono);
+    letter-spacing: 0.14em;
+  }
+
+  .eyebrow {
+    color: var(--teal);
+    font: 500 0.78rem var(--mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--display);
+    line-height: 1.13;
+    text-wrap: balance;
+  }
+
+  h1 {
+    max-width: 720px;
+    margin: 18px 0 24px;
+    font-size: clamp(3rem, 6.4vw, 6.2rem);
+    letter-spacing: -0.045em;
+  }
+
+  html[data-reading-mode="easy"] h1 {
+    font-size: clamp(2.6rem, 5.2vw, 5rem);
+  }
+
+  .hero-title-accent {
+    color: var(--teal);
+    font-style: italic;
+  }
+
+  .hero-copy > p {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: clamp(1.02rem, 1.5vw, 1.22rem);
+  }
+
+  .thesis {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    align-items: start;
+    margin-top: 34px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+  }
+
+  .thesis-mark {
+    color: var(--amber);
+    font: 700 1.5rem var(--display);
+  }
+
+  .thesis strong { display: block; margin-bottom: 4px; }
+  .thesis p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+
+  .system-map {
+    position: relative;
+    width: min(100%, 470px);
+    aspect-ratio: 1;
+    margin: auto;
+  }
+
+  .system-map::before,
+  .system-map::after {
+    content: "";
+    position: absolute;
+    inset: 14%;
+    border: 1px dashed var(--line);
+    border-radius: 50%;
+  }
+
+  .system-map::after {
+    inset: 29%;
+    border-style: solid;
+    opacity: 0.75;
+  }
+
+  .core {
+    position: absolute;
+    inset: 36%;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--surface);
+    text-align: center;
+    font: 600 0.77rem/1.35 var(--mono);
+    letter-spacing: 0.05em;
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--teal-soft) 72%, transparent);
+  }
+
+  .node {
+    position: absolute;
+    width: 132px;
+    min-height: 92px;
+    display: grid;
+    align-content: center;
+    gap: 4px;
+    padding: 15px;
+    border: 1px solid var(--line);
+    border-radius: 22px 22px 5px 22px;
+    background: var(--surface-strong);
+    box-shadow: 0 12px 30px color-mix(in srgb, var(--ink) 10%, transparent);
+  }
+
+  .node b { font-family: var(--display); font-size: 1rem; }
+  .node small { color: var(--muted); font-size: 0.7rem; line-height: 1.4; }
+  .node-resilience { top: 2%; left: 50%; transform: translateX(-50%); }
+  .node-organization { left: 2%; bottom: 8%; }
+  .node-hierarchy { right: 2%; bottom: 8%; }
+
+  .node-resilience b { color: var(--teal); }
+  .node-organization b { color: var(--blue); }
+  .node-hierarchy b { color: var(--amber); }
+
+  .pulse {
+    position: absolute;
+    inset: 29%;
+    border-radius: 50%;
+    border: 2px solid var(--teal);
+    opacity: 0;
+    animation: pulse 4.8s ease-out infinite;
+  }
+
+  @keyframes pulse {
+    0% { transform: scale(0.6); opacity: 0; }
+    18% { opacity: 0.34; }
+    78%, 100% { transform: scale(1.9); opacity: 0; }
+  }
+
+  .section {
+    padding: clamp(74px, 10vw, 128px) clamp(4px, 3vw, 28px) 0;
+  }
+
+  .section-heading {
+    display: grid;
+    grid-template-columns: minmax(210px, 0.42fr) minmax(0, 1fr);
+    gap: clamp(28px, 7vw, 86px);
+    align-items: end;
+    margin-bottom: 44px;
+  }
+
+  .section-heading h2 {
+    margin: 8px 0 0;
+    font-size: clamp(2rem, 4vw, 3.8rem);
+    letter-spacing: -0.035em;
+  }
+
+  .section-heading p {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: 1.04rem;
+  }
+
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .overview-card {
+    display: grid;
+    gap: 18px;
+    min-height: 280px;
+    padding: 26px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .overview-card:first-child { border-radius: 28px 8px 8px 8px; }
+  .overview-card:last-child { border-radius: 8px 28px 8px 8px; }
+
+  .overview-card .term {
+    font: 500 0.7rem var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .overview-card h3 { margin: 0; font-size: 1.72rem; }
+  .overview-card p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+  .overview-card .result { align-self: end; padding-top: 14px; border-top: 1px solid var(--line); font-weight: 600; }
+  .overview-card.teal .term, .overview-card.teal .result { color: var(--teal); }
+  .overview-card.blue .term, .overview-card.blue .result { color: var(--blue); }
+  .overview-card.amber .term, .overview-card.amber .result { color: var(--amber); }
+
+  .info-block {
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface-strong);
+  }
+
+  .info-block h4 {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font: 500 0.72rem var(--mono);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .info-block p { margin: 0; font-size: 0.92rem; }
+
+  .signal {
+    padding: 18px 20px;
+    border-left: 4px solid var(--teal);
+    background: var(--teal-soft);
+    color: var(--ink);
+    font-size: 0.92rem;
+  }
+
+  .signal strong { display: block; margin-bottom: 4px; }
+
+  html:not([data-reading-mode="easy"]) .easy-only,
+  html[data-reading-mode="easy"] .standard-copy,
+  html:not([data-reading-mode="deep"]) .deep-only {
+    display: none !important;
+  }
+
+  /* Bilingual: EN shows the single standard translation; VN keeps 3 modes.
+     .vi-only marks Vietnamese text outside the reading-mode system. */
+  html:not([data-lang="en"]) .en-only { display: none !important; }
+  html[data-lang="en"] .standard-copy,
+  html[data-lang="en"] .easy-only,
+  html[data-lang="en"] .deep-only,
+  html[data-lang="en"] .vi-only,
+  html[data-lang="en"] .reading-controls { display: none !important; }
+
+  .lang-controls {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+  }
+
+  .lang-controls button {
+    min-height: 44px;
+    min-width: 48px;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 13px;
+    background: transparent;
+    color: var(--muted);
+    font: 600 0.8rem var(--body);
+    cursor: pointer;
+  }
+
+  html:not([data-lang="en"]) .lang-controls button[data-lang-option="vi"],
+  html[data-lang="en"] .lang-controls button[data-lang-option="en"] {
+    background: var(--teal);
+    color: var(--surface);
+  }
+
+  .topbar-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .synthesis {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  .loop-diagram,
+  .synthesis-copy {
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .loop-diagram {
+    min-height: 500px;
+    position: relative;
+    display: grid;
+    place-items: center;
+    padding: 38px;
+    border-radius: 34px 8px 8px 8px;
+    overflow: hidden;
+  }
+
+  .loop-diagram::before {
+    content: "";
+    width: 65%;
+    aspect-ratio: 1;
+    border: 2px solid var(--line);
+    border-radius: 50%;
+  }
+
+  .loop-center {
+    position: absolute;
+    width: 150px;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--surface);
+    text-align: center;
+    font: 600 0.9rem/1.45 var(--body);
+  }
+
+  .loop-label {
+    position: absolute;
+    width: 150px;
+    padding: 13px 15px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-strong);
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .loop-label.top { top: 11%; color: var(--teal); }
+  .loop-label.left { left: 7%; bottom: 14%; color: var(--blue); }
+  .loop-label.right { right: 7%; bottom: 14%; color: var(--amber); }
+
+  .synthesis-copy {
+    display: grid;
+    align-content: center;
+    gap: 24px;
+    padding: clamp(28px, 5vw, 54px);
+    border-radius: 8px 34px 34px 8px;
+  }
+
+  .synthesis-copy h3 { margin: 0; font-size: clamp(2rem, 3.4vw, 3rem); }
+  .synthesis-copy > p { margin: 0; color: var(--muted); }
+
+  .equation {
+    display: grid;
+    gap: 10px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    background: var(--surface-strong);
+  }
+
+  .equation-row {
+    display: grid;
+    grid-template-columns: minmax(110px, 0.65fr) 1fr;
+    gap: 16px;
+    align-items: baseline;
+    font-size: 0.9rem;
+  }
+
+  .equation-row b { font-family: var(--display); font-size: 1.05rem; }
+  .equation-row span { color: var(--muted); }
+
+  .surprise-lead {
+    display: grid;
+    grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
+    gap: clamp(28px, 6vw, 72px);
+    align-items: center;
+    margin-bottom: 22px;
+    padding: clamp(28px, 5vw, 52px);
+    border: 1px solid var(--line);
+    border-radius: 34px 8px 34px 8px;
+    background: var(--surface);
+  }
+
+  .surprise-lead-copy {
+    display: grid;
+    gap: 18px;
+  }
+
+  .surprise-lead-copy p { margin: 0; }
+  .surprise-lead-copy .deep-only { color: var(--muted); font-size: 0.94rem; }
+
+  .definition {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--display);
+    font-size: clamp(1.25rem, 2vw, 1.62rem);
+    line-height: 1.5;
+  }
+
+  .english-term { color: var(--muted); font: 500 0.75rem var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+
+  .surprise-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .surprise-mechanism {
+    --mechanism-accent: var(--teal);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 18px;
+    align-content: start;
+    padding: 26px;
+    border: 1px solid var(--line);
+    border-top: 4px solid var(--mechanism-accent);
+    border-radius: 8px 24px 8px 24px;
+    background: var(--surface);
+  }
+
+  .surprise-number {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--mechanism-accent);
+    color: var(--surface);
+    font: 500 0.76rem var(--mono);
+  }
+
+  .surprise-content {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .surprise-content h3 {
+    margin: 0;
+    font-size: clamp(1.35rem, 2.3vw, 1.85rem);
+  }
+
+  .surprise-content > p { margin: 0; color: var(--muted); }
+  .surprise-content .info-block { margin-top: 2px; }
+  .surprise-connection { margin-top: 22px; }
+
+  .mechanics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .chapter-path {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 18px 0 0;
+  }
+
+  .chapter-path a {
+    display: grid;
+    gap: 5px;
+    min-height: 82px;
+    align-content: center;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .chapter-path a:first-child { border-radius: 20px 5px 5px 5px; }
+  .chapter-path a:last-child { border-radius: 5px 20px 5px 5px; }
+  .chapter-path a:hover { border-color: var(--teal); background: var(--surface-strong); }
+  .chapter-path b { font-family: var(--display); }
+  .chapter-path span { color: var(--muted); font: 500 0.7rem var(--mono); letter-spacing: 0.05em; text-transform: uppercase; }
+
+  .trap-lead { border-top: 4px solid var(--leaf); }
+  .trap-grid { margin-top: 22px; }
+  .trap-card { --mechanism-accent: var(--leaf); }
+  .trap-card:nth-child(4n + 2) { --mechanism-accent: var(--teal); }
+  .trap-card:nth-child(4n + 3) { --mechanism-accent: var(--blue); }
+  .trap-card:nth-child(4n) { --mechanism-accent: var(--amber); }
+  .trap-card .english-term { overflow-wrap: anywhere; }
+
+  .opportunity {
+    margin-top: 2px;
+    padding: 18px 20px;
+    border-left: 4px solid var(--leaf);
+    background: var(--leaf-soft);
+    color: var(--ink);
+    font-size: 0.92rem;
+  }
+
+  .opportunity strong { display: block; margin-bottom: 4px; color: var(--leaf); }
+
+  .trap-comparison {
+    display: grid;
+    gap: 18px;
+    margin-top: 24px;
+    padding: clamp(26px, 5vw, 46px);
+    border: 1px solid var(--line);
+    border-radius: 28px 8px 28px 8px;
+    background: var(--surface);
+  }
+
+  .trap-comparison h3 { margin: 0; font-size: clamp(1.65rem, 3vw, 2.35rem); }
+
+  .comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .comparison-card {
+    display: grid;
+    gap: 10px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--leaf);
+    background: var(--surface-strong);
+  }
+
+  .comparison-card h4 { margin: 0; font: 700 1rem var(--body); }
+  .comparison-card p { margin: 0; color: var(--muted); font-size: 0.88rem; }
+
+  .myths {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .myth {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 16px;
+    padding: 23px;
+    border-top: 1px solid var(--line);
+  }
+
+  .myth-mark {
+    color: var(--amber);
+    font: 700 1.4rem var(--display);
+  }
+
+  .myth h3 { margin: 0 0 6px; font: 700 1.08rem var(--body); }
+  .myth p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+  .diagnostic {
+    display: grid;
+    grid-template-columns: 0.72fr 1.28fr;
+    gap: clamp(28px, 7vw, 84px);
+    padding: clamp(34px, 6vw, 64px);
+    border-radius: 34px 8px 34px 8px;
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .diagnostic h2 { margin: 10px 0 18px; font-size: clamp(2.3rem, 4.5vw, 4rem); }
+  .diagnostic .eyebrow { color: var(--surface); }
+  .diagnostic-intro p { margin: 0; color: color-mix(in srgb, var(--surface) 70%, transparent); }
+
+  .question-list {
+    display: grid;
+    gap: 0;
+    counter-reset: question;
+  }
+
+  .question {
+    counter-increment: question;
+    display: grid;
+    grid-template-columns: 38px 1fr;
+    gap: 14px;
+    padding: 18px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--surface) 22%, transparent);
+  }
+
+  .question::before {
+    content: counter(question, decimal-leading-zero);
+    color: var(--teal);
+    font: 500 0.74rem var(--mono);
+  }
+
+  .question strong { display: block; margin-bottom: 5px; }
+  .question span { color: color-mix(in srgb, var(--surface) 70%, transparent); font-size: 0.88rem; }
+
+  .closing {
+    display: grid;
+    grid-template-columns: 0.45fr 1.55fr;
+    gap: clamp(28px, 8vw, 100px);
+    align-items: start;
+    padding: clamp(74px, 10vw, 128px) clamp(4px, 3vw, 28px) 40px;
+  }
+
+  .closing .eyebrow { padding-top: 12px; }
+  .closing blockquote {
+    margin: 0;
+    font: 600 clamp(1.7rem, 3.6vw, 3.25rem)/1.35 var(--display);
+    letter-spacing: -0.025em;
+  }
+
+  .closing-accent { color: var(--teal); }
+
+  .chapter-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: clamp(24px, 3.5vw, 40px);
+    padding-top: clamp(24px, 3.5vw, 40px);
+    border-top: 1px solid var(--line);
+  }
+
+  .chapter-nav .nav-cell {
+    display: grid;
+    gap: 5px;
+    align-content: start;
+    padding: 18px 22px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .chapter-nav a.nav-cell:hover {
+    border-color: var(--teal);
+    background: var(--surface-strong);
+  }
+
+  .chapter-nav .nav-next { text-align: right; }
+
+  .chapter-nav .nav-cell.disabled { opacity: 0.55; }
+
+  .chapter-nav .nav-label {
+    color: var(--muted);
+    font: 500 0.7rem var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .chapter-nav .nav-title {
+    font-family: var(--display);
+    font-size: clamp(1.05rem, 1.8vw, 1.28rem);
+    line-height: 1.25;
+  }
+
+  @media (max-width: 620px) {
+    .chapter-nav { grid-template-columns: 1fr; }
+    .chapter-nav .nav-next { text-align: left; }
+  }
+
+  .cite { font: 500 0.82em var(--mono); white-space: nowrap; }
+  .cite a { color: var(--amber); text-decoration: none; }
+  .cite a:hover { text-decoration: underline; }
+  .cite a::before { content: "["; }
+  .cite a::after { content: "]"; }
+
+  .footer-main { display: grid; gap: 10px; }
+
+  .ref-list { margin: 2px 0 0; padding-left: 1.4em; display: grid; gap: 4px; }
+  .ref-list li { font-size: 0.78rem; }
+  .ref-list li:target { color: var(--ink); font-weight: 600; }
+
+  footer {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    margin-top: clamp(24px, 3.5vw, 40px);
+    padding: clamp(24px, 3.5vw, 40px) clamp(4px, 3vw, 28px) 0;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+
+  footer p { max-width: 80ch; margin: 0; }
+  footer .edition { font-family: var(--mono); white-space: nowrap; }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; min-height: auto; }
+    .system-map { width: min(100%, 420px); }
+    .section-heading,
+    .synthesis,
+    .surprise-lead,
+    .surprise-grid,
+    .comparison-grid,
+    .diagnostic,
+    .closing { grid-template-columns: 1fr; }
+    .chapter-path { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .overview-grid { grid-template-columns: 1fr; }
+    .overview-card { min-height: auto; border-radius: 18px !important; }
+    .loop-diagram { min-height: 440px; }
+  }
+
+  @media (max-width: 620px) {
+    .page { width: min(100% - 20px, 1180px); padding-top: 12px; }
+    .topbar { flex-direction: column; align-items: stretch; gap: 14px; }
+    .book-label { max-width: none; }
+    .reading-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+    .reading-controls button { width: 100%; padding: 8px 6px; font-size: 0.78rem; white-space: nowrap; }
+    .hero { padding: 34px 20px 54px; border-radius: 24px 24px 6px 24px; }
+    h1 { font-size: clamp(2.7rem, 14vw, 4rem); }
+    .system-map { aspect-ratio: auto; display: grid; gap: 10px; }
+    .system-map::before,
+    .system-map::after,
+    .core,
+    .pulse { display: none; }
+    .node { position: static; transform: none; width: 100%; min-height: auto; }
+    .mechanics, .myths { grid-template-columns: 1fr; }
+    .chapter-path { grid-template-columns: 1fr; }
+    .chapter-path a { min-height: auto; border-radius: 12px !important; }
+    .surprise-lead { padding: 28px 20px; }
+    .surprise-mechanism { grid-template-columns: 1fr; padding: 22px 20px; }
+    .trap-comparison { padding: 24px 20px; }
+    .equation-row { grid-template-columns: 1fr; gap: 3px; }
+    .loop-diagram { min-height: 390px; padding: 20px; }
+    .loop-label { width: 122px; padding: 10px; font-size: 0.7rem; }
+    .loop-label.left { left: 2%; }
+    .loop-label.right { right: 2%; }
+    .diagnostic { padding: 32px 22px; }
+    footer { grid-template-columns: 1fr; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .pulse { animation: none; }
+  }
+
+  /* SECTION-RAIL:START — on-page section index (scroll-spy); markup injected by the bottom script */
+  .section-rail {
+    position: fixed;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 50;
+    padding: 10px;
+    pointer-events: none;
+  }
+  .section-rail::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--surface-strong);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    transform: translateX(-6px);
+    transform-origin: left center;
+    transition: opacity 0.18s ease, transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+  }
+  .section-rail::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 42px;
+    pointer-events: auto;
+  }
+  .section-rail:hover::before,
+  .section-rail:focus-within::before {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .section-rail__list {
+    position: relative;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .section-rail__list::before {
+    content: "";
+    position: absolute;
+    left: 13px;
+    top: 16px;
+    bottom: 16px;
+    width: 2px;
+    transform: translateX(-50%);
+    background: var(--line);
+    border-radius: 2px;
+  }
+  .section-rail__link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--muted);
+    pointer-events: none;
+    transition: background-color 0.16s ease, color 0.16s ease;
+  }
+  .section-rail:hover .section-rail__link,
+  .section-rail:focus-within .section-rail__link { pointer-events: auto; }
+  .section-rail__tick {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: 0 0 0 2px var(--line);
+    transition: transform 0.2s cubic-bezier(0.34, 1.28, 0.64, 1), background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .section-rail__label {
+    white-space: nowrap;
+    font: 500 0.78rem/1.35 var(--body);
+    letter-spacing: -0.005em;
+    opacity: 0;
+    transition: opacity 0.16s ease;
+  }
+  .section-rail:hover .section-rail__label,
+  .section-rail:focus-within .section-rail__label { opacity: 1; }
+  .section-rail__link:hover { background: var(--teal-soft); color: var(--ink); }
+  .section-rail__link:hover .section-rail__tick { box-shadow: 0 0 0 2px var(--teal); }
+  .section-rail__item.is-active .section-rail__link { color: var(--ink); }
+  .section-rail__item.is-active .section-rail__tick {
+    background: var(--teal);
+    box-shadow: 0 0 0 3px var(--teal-soft);
+    transform: scale(1.5);
+  }
+  @media (max-width: 1279px) { .section-rail { display: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .section-rail::before,
+    .section-rail__tick,
+    .section-rail__label,
+    .section-rail__link { transition: none; }
+  }
+  /* SECTION-RAIL:END */
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="topbar">
+    <div class="book-label"><span class="standard-copy">AI Engineering · Chip Huyen · Chương 10</span><span class="easy-only">AI Engineering · Chip Huyen · Chương 10</span><span class="en-only" lang="en">AI Engineering · Chip Huyen · Chapter 10</span></div>
+    <div class="topbar-controls">
+      <div class="lang-controls" role="group" aria-label="Ngôn ngữ / Language">
+        <button type="button" data-lang-option="vi" aria-pressed="true">VI</button>
+        <button type="button" data-lang-option="en" aria-pressed="false">EN</button>
+      </div>
+      <div class="reading-controls" role="group" aria-label="Chế độ đọc">
+        <button type="button" data-mode="easy" aria-label="Dễ hiểu: giải thích bằng ví dụ cho người mới và trẻ nhỏ" aria-pressed="false">Dễ hiểu</button>
+        <button type="button" data-mode="quick" aria-pressed="false">Tóm tắt</button>
+        <button type="button" data-mode="deep" aria-pressed="true">Đầy đủ</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="hero" aria-labelledby="page-title">
+    <div class="hero-copy">
+      <div class="eyebrow"><span class="standard-copy">Chương 10 · Chương khép lại</span><span class="easy-only">Chương 10 · Bài cuối</span><span class="en-only" lang="en">Chapter 10 · The closing chapter</span></div>
+      <h1 id="page-title"><span class="standard-copy">Ráp tất cả lại: <span class="hero-title-accent">kiến trúc</span> và vòng phản hồi</span><span class="easy-only">Lắp mọi mảnh lại thành <span class="hero-title-accent">một cỗ máy</span></span><span class="en-only" lang="en">Putting it together: <span class="hero-title-accent">architecture</span> and the feedback loop</span></h1>
+      <p class="standard-copy">Chín chương trước mỗi chương lo một mảnh. Chương cuối ráp chúng lại. Huyen bắt đầu từ kiến trúc đơn giản nhất — truy vấn vào, mô hình trả lời, hết — rồi lần lượt chỉ ra chỗ hỏng của nó và thêm đúng một thành phần để vá: bối cảnh, rào chắn, bộ định tuyến và cổng mô hình, bộ nhớ đệm, rồi vòng lặp tác tử và hành động ghi.<span class="cite"><a href="#ref-1">1</a></span> Nửa sau chương quay sang thứ không nằm trong sơ đồ nào: người dùng — nguồn dữ liệu riêng nuôi lại chính hệ thống ấy.</p>
+      <p class="easy-only">Chín bài trước, mỗi bài lo một việc nhỏ. Bài này lắp hết lại thành một cỗ máy hoàn chỉnh. Cách lắp rất hay: bắt đầu từ cỗ máy đơn giản nhất, thấy nó hỏng chỗ nào thì thêm đúng một mảnh vào chỗ đó. Rồi cuối cùng, hỏi chính người dùng xem máy chạy tốt không. Nhớ nhé: đừng lắp sẵn cả cỗ máy khổng lồ — thêm từng mảnh khi thật sự cần.</p>
+      <p class="en-only" lang="en">The previous nine chapters each handled one piece. The closing chapter assembles them. Huyen starts from the simplest possible architecture — query in, model answers, done — then names what breaks and adds exactly one component to fix it: context, guardrails, a model router and gateway, caches, then agentic loops and write actions.<span class="cite"><a href="#ref-1">1</a></span> The second half turns to the thing no diagram contains: users — the proprietary data source that feeds the system back into itself.</p>
+      <div class="thesis">
+        <div class="thesis-mark">∴</div>
+        <div>
+          <strong class="standard-copy">Luận đề của chương</strong>
+          <strong class="easy-only">Ý chính của bài</strong>
+          <strong class="en-only" lang="en">The chapter's thesis</strong>
+          <p class="standard-copy">Phần lớn thách thức của AI, theo Huyen, thực chất là <em>bài toán hệ thống</em>: để giải, phải lùi lại nhìn toàn bộ. Mỗi thành phần thêm vào có thể làm hệ thống mạnh hơn, an toàn hơn hoặc nhanh hơn, nhưng đồng thời làm nó phức tạp hơn và mở ra những kiểu hỏng mới.<span class="cite"><a href="#ref-1">1</a></span> Vì vậy kiến trúc phải mọc dần theo nhu cầu, và phải quan sát được — còn phản hồi người dùng là thứ nói cho ta biết hệ thống có thật sự đạt mục tiêu hay không.</p>
+          <p class="easy-only">Nhiều vấn đề của AI không nằm ở một mảnh nào, mà ở chỗ cả cỗ máy chạy chung với nhau. Thêm một mảnh thì máy làm được nhiều hơn, nhưng cũng dễ hỏng theo kiểu mới. Nhớ nhé: chỉ thêm mảnh khi thật sự cần, và luôn nhìn được bên trong máy đang xảy ra gì.</p>
+          <p class="en-only" lang="en">Many AI challenges, Huyen argues, are at their core <em>system problems</em>: solving them means stepping back to consider the whole. Each added component can make a system more capable, safer or faster, but also more complex and exposed to new failure modes.<span class="cite"><a href="#ref-1">1</a></span> So the architecture must grow with need, must be observable — and user feedback is what tells you whether the system actually achieves its goal.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="system-map" role="img" aria-label="Ba lớp của chương cuối: kiến trúc dựng dần, khả năng quan sát và điều phối, và vòng phản hồi người dùng quay lại nuôi hệ thống / The three layers of the closing chapter: an incrementally built architecture, observability and orchestration, and the user-feedback loop feeding back into the system">
+      <div class="pulse"></div>
+      <div class="core"><span class="vi-only">HỆ<br>THỐNG</span><span class="en-only" lang="en">THE<br>SYSTEM</span></div>
+      <div class="node node-resilience">
+        <b><span class="vi-only">Kiến trúc</span><span class="en-only" lang="en">Architecture</span></b>
+        <small class="standard-copy">Bối cảnh, rào chắn, định tuyến, đệm, tác tử</small>
+        <small class="easy-only">Từng mảnh lắp thêm khi cần.</small>
+        <small class="en-only" lang="en">Context, guardrails, routing, caches, agents</small>
+      </div>
+      <div class="node node-organization">
+        <b><span class="vi-only">Quan sát</span><span class="en-only" lang="en">Observability</span></b>
+        <small class="standard-copy">Chỉ số, nhật ký, vết truy vấn, phát hiện trôi</small>
+        <small class="easy-only">Nhìn được bên trong máy.</small>
+        <small class="en-only" lang="en">Metrics, logs, traces, drift detection</small>
+      </div>
+      <div class="node node-hierarchy">
+        <b><span class="vi-only">Phản hồi</span><span class="en-only" lang="en">Feedback</span></b>
+        <small class="standard-copy">Tín hiệu tường minh và ngầm từ hội thoại</small>
+        <small class="easy-only">Người dùng nói cho ta biết.</small>
+        <small class="en-only" lang="en">Explicit and implicit conversational signals</small>
+      </div>
+    </div>
+  </section>
+
+  <nav class="chapter-path" aria-label="Mạch chương">
+    <a href="#architecture">
+      <span>01</span>
+      <b><span class="standard-copy">Kiến trúc dựng dần</span><span class="easy-only">Lắp cỗ máy</span><span class="en-only" lang="en">The architecture, step by step</span></b>
+    </a>
+    <a href="#observability">
+      <span>02</span>
+      <b><span class="standard-copy">Quan sát &amp; điều phối</span><span class="easy-only">Nhìn vào bên trong</span><span class="en-only" lang="en">Observability &amp; orchestration</span></b>
+    </a>
+    <a href="#feedback">
+      <span>03</span>
+      <b><span class="standard-copy">Phản hồi người dùng</span><span class="easy-only">Người dùng nói gì</span><span class="en-only" lang="en">User feedback</span></b>
+    </a>
+    <a href="#diagnostic">
+      <span>04</span>
+      <b><span class="standard-copy">Tự kiểm hệ thống</span><span class="easy-only">Tự hỏi mình</span><span class="en-only" lang="en">System self-check</span></b>
+    </a>
+  </nav>
+
+  <section class="section" id="architecture" aria-labelledby="architecture-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Cụm 1 · Năm bước</span><span class="easy-only">Phần 1 · Lắp máy</span><span class="en-only" lang="en">Cluster 1 · Five steps</span></div>
+        <h2 id="architecture-title"><span class="standard-copy">Kiến trúc mọc dần từ chỗ hỏng</span><span class="easy-only">Thêm mảnh khi máy hỏng</span><span class="en-only" lang="en">An architecture grown from its failures</span></h2>
+      </div>
+      <p class="standard-copy">Huyen mô tả kiến trúc đơn giản nhất: ứng dụng nhận truy vấn, gửi tới mô hình, mô hình sinh câu trả lời, trả về người dùng — không bối cảnh, không rào chắn, không tối ưu. “Model API” ở đây bao gồm cả API của bên thứ ba lẫn mô hình tự vận hành.<span class="cite"><a href="#ref-1">1</a></span> Từ đó, bà thêm thành phần theo đúng thứ tự mà bà thường thấy trong sản xuất: bổ sung bối cảnh, dựng rào chắn, thêm bộ định tuyến và cổng mô hình, giảm độ trễ bằng bộ nhớ đệm, rồi thêm các mẫu hình tác tử.</p>
+      <p class="easy-only">Đầu tiên cỗ máy rất đơn giản: hỏi một câu, máy trả lời, xong. Nhưng rồi ta phát hiện nó thiếu tài liệu, nó nói bậy, nó chậm, nó đắt. Mỗi lần phát hiện một chỗ hỏng, ta lắp thêm đúng một mảnh để vá. Nhớ nhé: cỗ máy lớn không được vẽ ra từ đầu — nó lớn lên từ những chỗ hỏng.</p>
+      <p class="en-only" lang="en">Huyen describes the simplest architecture: the application receives a query, sends it to the model, the model generates a response, and it is returned to the user — no context augmentation, no guardrails, no optimisation. “Model API” here covers both third-party APIs and self-hosted models.<span class="cite"><a href="#ref-1">1</a></span> From there she adds components in the order she commonly sees in production: enhance context, put in guardrails, add a model router and gateway, reduce latency with caches, then add agentic patterns.</p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Kiến trúc không phải bản vẽ có sẵn. Nó là một chuỗi câu trả lời cho những câu hỏi mà hệ thống tự đặt ra khi chạy thật.</p>
+        <p class="definition easy-only">Cỗ máy không được vẽ trước. Nó được vá dần, mỗi lần một chỗ.</p>
+        <p class="definition en-only" lang="en">An architecture is not a blueprint you start with. It is a sequence of answers to the questions a running system asks you.</p>
+        <p class="deep-only">Huyen nói rõ rằng bà theo thứ tự thường gặp trong sản xuất, nhưng “nhu cầu của mỗi người mỗi khác — bạn nên theo thứ tự hợp lý nhất cho ứng dụng của mình”. Vì vậy đừng đọc năm bước này như một danh sách bắt buộc; đọc chúng như năm loại vấn đề sẽ lần lượt xuất hiện.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="equation">
+        <div class="equation-row"><b><span class="vi-only">Bước 1</span><span class="en-only" lang="en">Step 1</span></b><span class="vi-only">Bổ sung bối cảnh — truy xuất và công cụ</span><span class="en-only" lang="en">Enhance context — retrieval and tools</span></div>
+        <div class="equation-row"><b><span class="vi-only">Bước 2</span><span class="en-only" lang="en">Step 2</span></b><span class="vi-only">Rào chắn — bảo vệ hệ thống và người dùng</span><span class="en-only" lang="en">Guardrails — protect the system and its users</span></div>
+        <div class="equation-row"><b><span class="vi-only">Bước 3</span><span class="en-only" lang="en">Step 3</span></b><span class="vi-only">Định tuyến và cổng mô hình</span><span class="en-only" lang="en">Model router and gateway</span></div>
+        <div class="equation-row"><b><span class="vi-only">Bước 4</span><span class="en-only" lang="en">Step 4</span></b><span class="vi-only">Bộ nhớ đệm — giảm độ trễ và chi phí</span><span class="en-only" lang="en">Caches — reduce latency and cost</span></div>
+        <div class="equation-row"><b><span class="vi-only">Bước 5</span><span class="en-only" lang="en">Step 5</span></b><span class="vi-only">Mẫu hình tác tử và hành động ghi</span><span class="en-only" lang="en">Agent patterns and write actions</span></div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">01</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Context construction</div>
+          <h3><span class="standard-copy">Context construction — dựng bối cảnh</span><span class="easy-only">Đưa thêm tài liệu cho máy đọc</span><span class="en-only" lang="en">Context construction</span></h3>
+          <p class="standard-copy">Bước mở rộng đầu tiên gần như luôn là cho hệ thống khả năng tự dựng bối cảnh cần thiết cho mỗi truy vấn — qua các cơ chế truy xuất văn bản, hình ảnh, dữ liệu bảng, hoặc qua công cụ gọi API như tìm kiếm web, tin tức, thời tiết. Huyen gọi đây là <span lang="en">feature engineering</span> của mô hình nền tảng: nó cấp cho mô hình thông tin cần thiết để tạo ra đầu ra.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Máy chỉ biết những gì nó từng học. Muốn nó trả lời đúng về công ty bạn, phải đưa tài liệu của công ty cho nó đọc ngay lúc hỏi — như đặt cuốn sổ tay lên bàn trước khi hỏi. Nhớ nhé: câu trả lời tốt thường bắt đầu từ tài liệu tốt, không phải từ mô hình xịn hơn.</p>
+          <p class="en-only" lang="en">The first expansion is almost always giving the system a way to construct the context each query needs — through text, image or tabular retrieval, or through tools that gather information via APIs such as web search, news or weather. Huyen calls this the feature engineering of foundation models: it gives the model the information it needs to produce an output.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Vì vai trò trung tâm của nó với chất lượng đầu ra, dựng bối cảnh được hầu hết nhà cung cấp API hỗ trợ sẵn: OpenAI, Claude và Gemini đều cho tải tệp lên và cho mô hình dùng công cụ.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Mấy ứng dụng chat lớn đều có nút “đính kèm tệp” — đó chính là bước này.</span>
+            <span class="en-only" lang="en">Because it is so central to output quality, context construction is near-universally supported by model API providers: OpenAI, Claude and Gemini all let users upload files and let their models use tools.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Khác biệt giữa các nhà cung cấp</h4>
+              <p>Họ khác nhau ở loại và số lượng tài liệu cho phép tải lên. Một giải pháp RAG chuyên dụng có thể nhận bao nhiêu tài liệu tùy sức chứa của cơ sở dữ liệu vector, còn một API mô hình phổ thông có thể chỉ cho vài tệp.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Khác biệt ở công cụ</h4>
+              <p>Các giải pháp cũng khác nhau ở loại công cụ hỗ trợ và chế độ thực thi — có cho gọi hàm song song không, có chạy được tác vụ dài không.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">02</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Input &amp; output guardrails</div>
+          <h3><span class="standard-copy">Guardrails — rào chắn hai đầu</span><span class="easy-only">Hàng rào chặn hai chiều</span><span class="en-only" lang="en">Guardrails — at both ends</span></h3>
+          <p class="standard-copy">Rào chắn đặt ở bất cứ đâu có phơi nhiễm rủi ro, và chia thành hai nhóm. Rào chắn đầu vào chống hai loại rủi ro: rò rỉ thông tin riêng tư ra API bên ngoài, và các prompt độc hại tấn công hệ thống. Rào chắn đầu ra có hai việc: bắt các lỗi đầu ra, và quy định chính sách xử lý từng kiểu lỗi — lỗi chất lượng (định dạng sai, ảo giác, câu trả lời dở) và lỗi an toàn (độc hại, lộ thông tin nhạy cảm, kích hoạt thực thi mã từ xa, gây rủi ro thương hiệu).<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Hãy tưởng tượng hai người gác cổng: một người đứng ở cửa vào, kiểm tra xem ta có lỡ đưa bí mật ra ngoài không; một người đứng ở cửa ra, kiểm tra xem máy có nói bậy không. Nhớ nhé: gác cổng hai chiều, vào cũng canh mà ra cũng canh.</p>
+          <p class="en-only" lang="en">Guardrails belong wherever there is exposure to risk, and split in two. Input guardrails protect against two kinds: leaking private information to external APIs, and bad prompts that compromise your system. Output guardrails have two jobs: catch output failures, and specify the policy for handling each failure mode — quality failures (malformatted responses, hallucinations, generally bad answers) and security failures (toxicity, leaked sensitive data, triggered remote tool or code execution, brand risk).<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Rò rỉ không phải giả thuyết: Huyen dẫn trường hợp một nhân viên Samsung đưa thông tin độc quyền của công ty vào ChatGPT và vô tình làm lộ bí mật.<span class="cite"><a href="#ref-1">1</a></span> Cách giảm thiểu quen thuộc là che thông tin nhạy cảm bằng chỗ giữ chỗ như <span lang="en">[PHONE NUMBER]</span>, rồi dùng từ điển ngược để khôi phục khi trả lời.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Có thật chuyện nhân viên dán bí mật công ty vào ô chat rồi lộ ra ngoài. Nên trước khi gửi đi, ta thay số điện thoại bằng một cái nhãn giả, lúc trả về mới đổi lại.</span>
+            <span class="en-only" lang="en">The leak is not hypothetical: Huyen cites a Samsung employee who put the company's proprietary information into ChatGPT and accidentally leaked its secrets.<span class="cite"><a href="#ref-1">1</a></span> The familiar mitigation is masking sensitive data with a placeholder such as [PHONE NUMBER] and using a reverse PII dictionary to unmask it in the response.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Đánh đổi: độ tin cậy và độ trễ</h4>
+              <p>Huyen kể có đội nói thẳng rằng độ trễ quan trọng hơn, nên họ quyết định không cài rào chắn vì nó làm ứng dụng chậm đi đáng kể — và bà ghi chú rằng ý tưởng ấy khiến vài độc giả bản thảo gặp ác mộng. Rào chắn đầu ra cũng khó hoạt động ở chế độ phát trực tiếp, vì khó đánh giá một câu trả lời còn dang dở.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Thử lại, song song, và con người</h4>
+              <p>Nhiều lỗi vá được bằng logic thử lại — nhưng mỗi lần thử lại là thêm một vòng gọi API, và nếu thử sau khi hỏng thì độ trễ người dùng cảm nhận sẽ gấp đôi; gọi song song rồi chọn câu tốt hơn giữ được độ trễ. Với ca khó, nhiều đội chuyển cho người thật: một đội chuyển khi mô hình phân tích cảm xúc phát hiện người dùng đang giận, một đội khác chuyển sau một số lượt nhất định.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Đừng quên tỉ lệ từ chối sai</h4>
+              <p>Với phép đo an toàn, phải theo dõi không chỉ lỗi an toàn mà cả <span lang="en">false refusal rate</span>: một hệ thống quá an toàn sẽ chặn cả yêu cầu chính đáng, làm gián đoạn công việc và gây bực bội.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Giải pháp dùng sẵn</h4>
+              <p>Huyen liệt kê Purple Llama của Meta, NeMo Guardrails của NVIDIA, PyRIT và bộ lọc nội dung AI của Azure, Perspective API, và API kiểm duyệt nội dung của OpenAI. Vì rủi ro ở đầu vào và đầu ra chồng lấn nhau, một giải pháp thường bảo vệ cả hai phía.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">03</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Model router &amp; gateway</div>
+          <h3><span class="standard-copy">Router và gateway — chia đường, gom cửa</span><span class="easy-only">Người chỉ đường và một cửa chung</span><span class="en-only" lang="en">Router and gateway — split the path, unify the door</span></h3>
+          <p class="standard-copy">Thay vì dùng một mô hình cho mọi truy vấn, bộ định tuyến gửi mỗi loại truy vấn tới giải pháp phù hợp. Lợi ích kép: mô hình chuyên biệt thường làm tốt hơn mô hình đa dụng trên đúng mảng của nó, và truy vấn đơn giản có thể đẩy sang mô hình rẻ hơn. Bộ định tuyến thường gồm một bộ phân loại ý định dự đoán người dùng đang muốn gì.<span class="cite"><a href="#ref-1">1</a></span> Cổng mô hình thì ngược lại: nó gom mọi mô hình — tự vận hành lẫn thương mại — về một giao diện thống nhất.</p>
+          <p class="easy-only">Ở quầy tiếp tân có một người chỉ đường: nghe bạn hỏi gì rồi chỉ đúng phòng — hỏi về hóa đơn thì sang phòng kế toán, hỏi về máy hỏng thì sang phòng kỹ thuật. Còn cổng mô hình giống một cánh cửa chung: bên trong có nhiều phòng, nhưng ai cũng chỉ cần đi qua một cửa. Nhớ nhé: chỉ đúng đường thì vừa nhanh vừa rẻ.</p>
+          <p class="en-only" lang="en">Instead of one model for every query, a router sends each type of query to the right solution. The benefit is double: specialised models can outperform a general-purpose one on their own slice, and simpler queries can go to cheaper models. A router typically consists of an intent classifier that predicts what the user is trying to do.<span class="cite"><a href="#ref-1">1</a></span> A model gateway does the opposite: it gathers every model — self-hosted and commercial — behind one unified interface.</p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Huyen lấy ví dụ một chatbot hỗ trợ khách hàng: muốn đặt lại mật khẩu thì chỉ sang trang hỏi đáp, muốn sửa sai sót hóa đơn thì chuyển cho người thật, còn trục trặc kỹ thuật thì chuyển cho chatbot chuyên khắc phục sự cố.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Chatbot của ngân hàng hay tổng đài đều có người chỉ đường như thế: câu nào máy trả lời được thì máy trả lời, câu nào khó thì chuyển cho người.</span>
+            <span class="en-only" lang="en">Huyen's example is a customer support chatbot: password resets are routed to the FAQ page, billing corrections to a human operator, and technical troubleshooting to a chatbot specialised in it.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Bộ định tuyến phải nhỏ và rẻ</h4>
+              <p>Nhiều đội thích ứng các mô hình ngôn ngữ nhỏ như GPT-2, BERT hay Llama 7B làm bộ phân loại ý định; nhiều đội huấn luyện hẳn bộ phân loại nhỏ hơn từ đầu. Bộ định tuyến phải nhanh và rẻ để dùng nhiều cái mà không phát sinh độ trễ và chi phí đáng kể.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Không chỉ phân loại ý định</h4>
+              <p>Bộ định tuyến còn có thể là bộ dự đoán hành động kế tiếp cho tác tử — nên dùng trình thông dịch mã hay API tìm kiếm — hoặc quyết định lấy thông tin từ tầng nào trong hệ thống bộ nhớ. Huyen minh họa bằng một tài liệu đính kèm nhắc tới Melbourne: khi người dùng hỏi “con vật đáng yêu nhất ở Melbourne là gì”, mô hình phải quyết định dựa vào tài liệu hay tra internet.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Gateway làm được nhiều hơn là bọc API</h4>
+              <p>Vì mọi yêu cầu và phản hồi đã chảy qua nó, cổng mô hình là chỗ tốt để đặt kiểm soát truy cập, quản lý chi phí, chính sách dự phòng khi API chính hỏng hoặc chạm giới hạn tần suất, cân bằng tải, ghi nhật ký và phân tích — một số cổng còn cung cấp cả bộ nhớ đệm và rào chắn.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Cổng dùng sẵn</h4>
+              <p>Huyen kể tên AI Gateway của Portkey, MLflow AI Gateway, LLM Gateway của Wealthsimple, TrueFoundry, Kong và Cloudflare — vì cổng tương đối dễ dựng nên có sẵn khá nhiều.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">04</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Exact &amp; semantic caching</div>
+          <h3><span class="standard-copy">Bộ nhớ đệm — chính xác và ngữ nghĩa</span><span class="easy-only">Nhớ lại câu đã trả lời</span><span class="en-only" lang="en">Caches — exact and semantic</span></h3>
+          <p class="standard-copy">Đệm chính xác chỉ dùng lại mục đã lưu khi đúng mục ấy được yêu cầu: hỏi tóm tắt một sản phẩm, hệ thống xem trong đệm đã có bản tóm tắt của đúng sản phẩm đó chưa. Đệm ngữ nghĩa nới lỏng điều kiện — dùng lại cả khi câu hỏi chỉ <em>tương tự</em>. Huyen minh họa: một người hỏi “thủ đô của Việt Nam là gì”, mô hình trả lời “Hà Nội”; người sau hỏi “thành phố thủ đô của Việt Nam là gì” — cùng ý, khác chữ — và hệ thống dùng lại câu trả lời cũ.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Nếu ai đó vừa hỏi một câu và ta đã trả lời, lần sau có người hỏi y hệt thì cứ lấy câu cũ ra dùng, khỏi nghĩ lại. Có loại đệm khó hơn: câu hỏi chỉ <em>na ná</em> cũng dùng lại. Nhớ nhé: nhớ lại thì nhanh và rẻ, nhưng nhớ nhầm thì trả lời sai.</p>
+          <p class="en-only" lang="en">With exact caching, a cached item is reused only when that exact item is requested: ask for a product summary, and the system checks whether a summary of that exact product exists. Semantic caching loosens the condition — items are reused even when the query is merely <em>similar</em>. Huyen's example: one user asks “What's the capital of Vietnam?” and gets “Hanoi”; a later user asks “What's the capital city of Vietnam?” — the same question, different wording — and the system reuses the answer.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Đệm đặc biệt hấp dẫn với truy vấn nhiều bước như chuỗi suy luận, hoặc các hành động tốn thời gian như truy xuất, chạy SQL, tìm kiếm web.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Việc càng lâu — phải tra nhiều chỗ, chạy nhiều bước — thì nhớ lại càng đáng giá.</span>
+            <span class="en-only" lang="en">Caching is especially appealing for multi-step queries such as chain-of-thought, and for time-consuming actions such as retrieval, SQL execution or web search.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Chính sách loại bỏ</h4>
+              <p>Đệm phải có chính sách loại bỏ để giữ kích thước và hiệu năng; thường dùng là LRU (ít dùng gần đây nhất), LFU (ít dùng nhất) và FIFO (vào trước ra trước). Truy vấn riêng của từng người — “đơn hàng gần nhất của tôi đến đâu rồi” — hay truy vấn nhạy thời gian như “thời tiết thế nào” thì không nên đệm; nhiều đội huấn luyện hẳn một bộ phân loại để đoán câu nào đáng đệm.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Đệm làm rò rỉ dữ liệu</h4>
+              <p>Huyen cảnh báo bằng một ví dụ thương mại điện tử: người X hỏi “chính sách đổi trả với đồ điện tử là gì” — câu nghe rất chung — nhưng chính sách lại phụ thuộc hạng thành viên, nên câu trả lời chứa thông tin của X. Hệ thống tưởng đây là câu chung và đệm lại; sau đó người Y hỏi y hệt và nhận về thông tin của X.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Vì sao đệm ngữ nghĩa đáng ngờ hơn</h4>
+              <p>Giá trị của nó bấp bênh vì nhiều bộ phận dễ hỏng: nó cần nhúng chất lượng cao, tìm kiếm vector hoạt động tốt và một thước đo tương đồng đáng tin. Đặt ngưỡng tương đồng cũng khó, phải thử đi thử lại; đặt sai thì hệ thống nhầm hai câu khác nhau là một và trả về câu sai.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Và nó không miễn phí</h4>
+              <p>Đệm ngữ nghĩa tốn thời gian và tính toán vì phải tìm kiếm vector; tốc độ và chi phí phụ thuộc kích thước tập nhúng đã đệm. Nó chỉ đáng khi tỉ lệ trúng đệm cao — và nên đánh giá rủi ro về hiệu quả, chi phí, chất lượng trước khi rước thêm phức tạp.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">05</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Agent patterns &amp; write actions</div>
+          <h3><span class="standard-copy">Vòng lặp tác tử và hành động ghi</span><span class="easy-only">Máy tự làm thêm một vòng</span><span class="en-only" lang="en">Agentic loops and write actions</span></h3>
+          <p class="standard-copy">Tới đây mỗi truy vấn vẫn chạy tuần tự. Mẫu hình tác tử phá vỡ điều đó: sau khi sinh ra đầu ra, hệ thống có thể tự xác định rằng nó chưa hoàn thành nhiệm vụ và cần truy xuất thêm; câu trả lời cũ cùng bối cảnh mới được đưa lại vào chính mô hình đó hoặc một mô hình khác, tạo thành vòng lặp. Đầu ra cũng có thể kích hoạt <em>hành động ghi</em>: soạn email, đặt đơn hàng, khởi tạo một lệnh chuyển tiền.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Đến đây máy mới chỉ trả lời. Bước này cho nó quyền tự làm thêm vòng nữa nếu thấy chưa xong — và thậm chí quyền <em>làm thật</em>: gửi thư, đặt hàng, chuyển tiền. Nhớ nhé: cho máy quyền làm thật thì phải hết sức cẩn thận, vì nó sửa được cả thế giới bên ngoài.</p>
+          <p class="en-only" lang="en">Until now each query has followed a sequential flow. Agentic patterns break that: after generating an output, the system may determine it has not accomplished the task and needs another retrieval; the original response plus the new context is passed back into the same model or a different one, creating a loop. Outputs can also invoke <em>write actions</em>: composing an email, placing an order, initialising a bank transfer.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Hành động ghi cho phép hệ thống thay đổi trực tiếp môi trường của nó — điều này làm hệ thống mạnh hơn rất nhiều nhưng cũng phơi nó ra rủi ro lớn hơn nhiều; Huyen viết rằng trao quyền ấy cho mô hình phải làm với sự cẩn trọng tối đa.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Trợ lý biết đặt vé, gửi thư thay bạn — tiện, nhưng nếu nó hiểu sai thì hậu quả là thật.</span>
+            <span class="en-only" lang="en">Write actions let a system change its environment directly — which makes it vastly more capable but also exposes it to significantly more risk; Huyen writes that giving a model access to write actions should be done with the utmost care.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Cái giá của sự phức tạp</h4>
+              <p>Huyen chốt lại bước này bằng một nhận xét: nếu đã đi hết các bước, kiến trúc của bạn giờ hẳn đã khá phức tạp — hệ thống phức tạp giải được nhiều việc hơn nhưng cũng sinh thêm nhiều kiểu hỏng, khó gỡ lỗi hơn vì có quá nhiều điểm có thể hỏng.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Ranh giới giữa các thành phần là mềm</h4>
+              <p>Trong phần tổng kết, bà nhấn mạnh rằng tách thành phần là để giữ hệ thống mô-đun, nhưng ranh giới ấy linh động: rào chắn có thể nằm trong dịch vụ suy luận, trong cổng mô hình, hoặc đứng riêng thành một thành phần.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Nối sang cụm sau</strong>
+      <strong class="easy-only">Nối sang phần sau</strong>
+      <strong class="en-only" lang="en">Bridge to the next cluster</strong>
+      <p class="standard-copy">Mỗi thành phần vừa thêm đều là một điểm có thể hỏng mới. Vì thế Huyen viết rằng khả năng quan sát phải là một phần trong thiết kế sản phẩm ngay từ đầu, chứ không phải nghĩ sau — và sản phẩm càng phức tạp thì nó càng thiết yếu.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Càng lắp nhiều mảnh, càng nhiều chỗ có thể hỏng. Nhớ nhé: lắp tới đâu phải nhìn được vào tới đó.</p>
+      <p class="en-only" lang="en">Every component you just added is a new place to fail. That is why Huyen insists observability should be integral to a product's design rather than an afterthought — and the more complex the product, the more crucial it is.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </aside>
+  </section>
+
+  <section class="section" id="observability" aria-labelledby="observability-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Cụm 2 · Nhìn vào trong</span><span class="easy-only">Phần 2 · Nhìn vào trong</span><span class="en-only" lang="en">Cluster 2 · Looking inside</span></div>
+        <h2 id="observability-title"><span class="standard-copy">Quan sát được, rồi mới sửa được</span><span class="easy-only">Nhìn được thì mới sửa được</span><span class="en-only" lang="en">You can only fix what you can see</span></h2>
+      </div>
+      <p class="standard-copy">Mục tiêu của giám sát, Huyen viết, giống hệt mục tiêu của đánh giá: giảm thiểu rủi ro và phát hiện cơ hội. Rủi ro cần chặn gồm lỗi ứng dụng, tấn công bảo mật và trôi lệch; cơ hội thì nằm ở cải thiện ứng dụng và tiết kiệm chi phí. Giám sát còn giữ ta có trách nhiệm, bằng cách làm hiệu năng hệ thống trở nên nhìn thấy được.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Muốn sửa một cỗ máy, trước hết phải nhìn được nó đang làm gì bên trong. Phần này nói về cách gắn “đèn báo” và “sổ ghi chép” vào máy, để khi hỏng ta biết hỏng ở đâu. Nhớ nhé: cái gì không nhìn thấy thì không sửa được.</p>
+      <p class="en-only" lang="en">The goal of monitoring, Huyen writes, is the same as the goal of evaluation: mitigate risks and discover opportunities. The risks are application failures, security attacks and drifts; the opportunities are improvement and cost savings. Monitoring also keeps you accountable by giving visibility into your system's performance.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Giám sát chỉ nhìn đầu ra bên ngoài. Khả năng quan sát đòi hỏi nhiều hơn: rằng trạng thái bên trong của hệ thống có thể suy ra được từ chính những đầu ra ấy.</p>
+        <p class="definition easy-only">Giám sát là nhìn máy từ bên ngoài. Quan sát là nhìn được cả bên trong mà không phải mở máy ra.</p>
+        <p class="definition en-only" lang="en">Monitoring only watches external outputs. Observability assumes something stronger: that a system's internal states can be inferred from those outputs.</p>
+        <p class="deep-only">Từ giữa thập niên 2010, ngành công nghiệp đã chuyển sang dùng từ “khả năng quan sát” thay cho “giám sát”. Trong sách này, Huyen dùng “giám sát” cho hành vi theo dõi thông tin của hệ thống, và “khả năng quan sát” cho toàn bộ quá trình gắn thiết bị đo, theo dõi và gỡ lỗi.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="equation">
+        <div class="equation-row"><b><span class="vi-only">MTTD</span><span class="en-only" lang="en">MTTD</span></b><span class="vi-only">Khi có chuyện xấu, mất bao lâu để phát hiện?</span><span class="en-only" lang="en">When something bad happens, how long to detect it?</span></div>
+        <div class="equation-row"><b><span class="vi-only">MTTR</span><span class="en-only" lang="en">MTTR</span></b><span class="vi-only">Sau khi phát hiện, mất bao lâu để xử lý xong?</span><span class="en-only" lang="en">After detection, how long to resolve it?</span></div>
+        <div class="equation-row"><b><span class="vi-only">CFR</span><span class="en-only" lang="en">CFR</span></b><span class="vi-only">Bao nhiêu phần trăm lần triển khai gây hỏng phải sửa hoặc quay lui?</span><span class="en-only" lang="en">What share of deployments cause failures needing fixes or rollbacks?</span></div>
+        <div class="equation-row"><b><span class="vi-only">Không biết CFR</span><span class="en-only" lang="en">CFR unknown</span></b><span class="vi-only">Đã đến lúc thiết kế lại nền tảng cho dễ quan sát hơn</span><span class="en-only" lang="en">Time to redesign the platform to make it more observable</span></div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">06</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Metrics designed around failures</div>
+          <h3><span class="standard-copy">Chỉ số thiết kế quanh kiểu hỏng</span><span class="easy-only">Đo cái gì, và vì sao đo</span><span class="en-only" lang="en">Metrics designed around failure modes</span></h3>
+          <p class="standard-copy">Huyen viết thẳng rằng bản thân chỉ số không phải mục tiêu: hầu như không công ty nào quan tâm điểm liên quan của đầu ra là bao nhiêu, trừ khi nó phục vụ một mục đích. Mục đích của một chỉ số là báo cho ta biết có gì đó sai, và chỉ ra cơ hội cải thiện. Vì thế thứ tự đúng là: xác định kiểu hỏng muốn bắt trước, rồi mới thiết kế chỉ số quanh những kiểu hỏng ấy.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Đừng đo bừa. Trước hết hãy hỏi: mình sợ máy hỏng kiểu gì nhất? Sợ nó bịa chuyện thì đo xem câu trả lời có bám vào tài liệu không. Sợ tốn tiền thì đo số chữ mỗi lần hỏi. Nhớ nhé: cứ hỏi “mình sợ gì” trước, rồi mới nghĩ cách đo.</p>
+          <p class="en-only" lang="en">Metrics are not the goal, Huyen writes bluntly: almost no company cares what your output relevancy score is unless it serves a purpose. A metric's purpose is to tell you when something is wrong and to identify opportunities. So the right order is: understand the failure modes you want to catch first, then design metrics around them.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Dễ theo dõi nhất là lỗi định dạng, vì dễ nhận ra và dễ kiểm chứng: nếu mong đợi JSON, hãy đếm xem mô hình sinh JSON không hợp lệ bao nhiêu lần, và trong số đó bao nhiêu dễ vá — thiếu dấu ngoặc đóng thì dễ, thiếu khóa mong đợi thì khó.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Lỗi dễ bắt nhất là lỗi hình thức — máy phải trả về đúng khuôn mà lại trả sai khuôn. Cái đó đếm được ngay.</span>
+            <span class="en-only" lang="en">The easiest failures to track are format failures, because they are easy to notice and verify: if you expect JSON, track how often the model outputs invalid JSON and how much of it is easily fixable — a missing closing bracket is easy, a missing expected key is harder.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Chỉ số suy ra từ hành vi</h4>
+              <p>Chất lượng mô hình còn suy ra được từ tín hiệu hội thoại: bao nhiêu lần người dùng dừng sinh giữa chừng, trung bình một cuộc hội thoại mấy lượt, trung bình mỗi đầu vào bao nhiêu token — người dùng đang giao việc phức tạp hơn hay đang học cách viết prompt ngắn gọn hơn — và phân bố token đầu ra thay đổi thế nào theo thời gian.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Độ trễ và chi phí</h4>
+              <p>Các chỉ số độ trễ quen thuộc từ Chương 9 vẫn được dùng: TTFT (thời gian tới token đầu tiên), TPOT (thời gian mỗi token đầu ra) và tổng độ trễ — nên theo dõi theo từng người dùng để biết hệ thống co giãn ra sao. Chỉ số chi phí gồm số truy vấn và khối lượng token vào/ra; nếu API có giới hạn tần suất thì phải theo dõi số yêu cầu mỗi giây.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Tương quan với ngôi sao Bắc Đẩu</h4>
+              <p>Khi đã có nhiều chỉ số, nên đo xem chúng tương quan với nhau và với chỉ số ngôi sao Bắc Đẩu của doanh nghiệp ra sao — DAU, thời lượng phiên, hay số thuê bao. Chỉ số tương quan mạnh gợi ý cách cải thiện; chỉ số không tương quan chút nào cũng hữu ích, vì nó gợi ý thứ <em>không</em> nên tối ưu.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Kiểm điểm hay kiểm toàn bộ</h4>
+              <p>Có thể chọn kiểm mẫu — lấy một tập con để phát hiện nhanh vấn đề — hoặc kiểm toàn bộ mọi yêu cầu để có bức tranh đầy đủ; kết hợp cả hai thường là chiến lược cân bằng. Và chỉ số phải tách được theo các trục liên quan: người dùng, bản phát hành, phiên bản prompt hoặc chuỗi, loại prompt, và thời gian.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">07</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Logs and traces</div>
+          <h3><span class="standard-copy">Nhật ký và vết truy vấn</span><span class="easy-only">Sổ ghi chép và đường đi</span><span class="en-only" lang="en">Logs and traces</span></h3>
+          <p class="standard-copy">Chỉ số là số liệu tổng hợp; chúng cô đặc thông tin từ các sự kiện và cho ta thấy tình hình trong một cái liếc. Nhưng có những câu hỏi chúng không trả lời được. Nhật ký thì ngược lại: một bản ghi chỉ-thêm về các sự kiện. Quy trình gỡ lỗi điển hình là chỉ số báo có chuyện xấu năm phút trước, ta mở nhật ký quanh thời điểm ấy để biết chuyện gì, rồi đối chiếu lỗi trong nhật ký với chỉ số để chắc đã nhận diện đúng vấn đề.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Đèn báo trên máy chỉ nói “có gì đó sai”. Muốn biết sai gì thì phải mở sổ ghi chép ra đọc. Còn “vết” là cả đường đi của một câu hỏi qua từng phòng trong nhà máy. Nhớ nhé: ghi lại mọi thứ, vì hôm nay ta chưa biết mai mình sẽ cần đọc gì.</p>
+          <p class="en-only" lang="en">Metrics are aggregated; they condense events and show you at a glance how the system is doing. But there are questions they cannot answer. Logs are the opposite: an append-only record of events. The typical debugging flow is that metrics tell you something went wrong five minutes ago, you read the logs from around then to find out what happened, then correlate the errors with the metrics to confirm you identified the right issue.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Vết truy vấn cho thấy toàn bộ quá trình từ lúc người dùng gửi câu hỏi tới lúc nhận câu trả lời: hệ thống đã làm gì, lấy về tài liệu nào, gửi prompt cuối cùng nào cho mô hình, mỗi bước mất bao lâu và tốn bao nhiêu. Huyen minh họa bằng một vết được LangSmith trực quan hóa.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Nhiều công cụ vẽ được cả hành trình của một câu hỏi, từng chặng mất mấy giây — nhìn vào là biết tắc ở đâu.</span>
+            <span class="en-only" lang="en">A trace shows the whole process from a user's query to the final response: what actions the system took, which documents it retrieved, the final prompt sent to the model, and how long and how much each step cost. Huyen illustrates it with a request trace visualised in LangSmith.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Quy tắc: ghi hết</h4>
+              <p>Vì không thể biết trước mai sẽ cần đọc nhật ký nào, quy tắc chung là ghi mọi thứ: toàn bộ cấu hình (điểm cuối API, tên mô hình, thiết lập lấy mẫu như nhiệt độ, top-p, top-k, điều kiện dừng, mẫu prompt), truy vấn người dùng, prompt cuối cùng, đầu ra và các đầu ra trung gian, việc gọi công cụ và kết quả công cụ, cùng thời điểm một thành phần bắt đầu, kết thúc hay sập — kèm thẻ và mã định danh để biết nhật ký đến từ đâu.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Đọc dữ liệu sản xuất bằng mắt</h4>
+              <p>Dù không thể xử lý nhật ký thủ công, Huyen khuyên vẫn nên tự xem dữ liệu sản xuất hằng ngày. Shankar và cộng sự (2024) phát hiện rằng cảm nhận của lập trình viên về thế nào là đầu ra tốt hay xấu <em>thay đổi</em> khi họ tiếp xúc nhiều dữ liệu hơn — cho phép họ vừa viết lại prompt để tăng cơ hội có câu trả lời tốt, vừa cập nhật quy trình đánh giá để bắt được câu xấu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">08</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Drift detection</div>
+          <h3><span class="standard-copy">Phát hiện trôi — ba thứ tự đổi</span><span class="easy-only">Ba thứ đổi mà ta không hay</span><span class="en-only" lang="en">Drift detection — three things that change</span></h3>
+          <p class="standard-copy">Hệ thống càng nhiều bộ phận thì càng nhiều thứ có thể đổi. Huyen kể ba thứ. Một là <em>prompt hệ thống</em>: nó có thể dựng trên một mẫu prompt và mẫu ấy được cập nhật, hoặc một đồng nghiệp thấy lỗi chính tả rồi sửa — một logic đơn giản đủ để bắt được thay đổi này. Hai là <em>hành vi người dùng</em>. Ba là <em>chính mô hình bên dưới</em>.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Có ba thứ âm thầm đổi mà ta không để ý: lời dặn ta viết cho máy, thói quen của người dùng, và chính cái máy ở phía nhà cung cấp. Nhớ nhé: máy hôm nay trả lời khác hôm qua, chưa chắc tại bạn.</p>
+          <p class="en-only" lang="en">The more parts a system has, the more things can change. Huyen names three. First, the <em>system prompt</em>: it may have been built on a prompt template that was updated, or a coworker may have fixed a typo — simple logic is enough to catch this. Second, <em>user behaviour</em>. Third, the <em>underlying model</em> itself.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Khi dùng mô hình qua API, API có thể giữ nguyên trong khi mô hình bên dưới được cập nhật — và nhà cung cấp không phải lúc nào cũng công bố. Chen và cộng sự (2023) ghi nhận khác biệt đáng kể về điểm chuẩn giữa phiên bản tháng 3 và tháng 6 năm 2023 của GPT-4 và GPT-3.5; Voiceflow báo cáo hiệu năng giảm 10% khi chuyển từ <span lang="en">GPT-3.5-turbo-0301</span> cũ sang <span lang="en">GPT-3.5-turbo-1106</span> mới.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+            <span class="easy-only">Cùng một cái nút bấm, nhưng cái máy phía sau có thể đã được thay mà không ai báo — và kết quả khác đi.</span>
+            <span class="en-only" lang="en">When using a model through an API, the API can stay the same while the underlying model is updated — and providers do not always disclose it. Chen et al. (2023) observed notable benchmark differences between the March 2023 and June 2023 versions of GPT-4 and GPT-3.5; Voiceflow reported a 10% performance drop moving from the older GPT-3.5-turbo-0301 to the newer GPT-3.5-turbo-1106.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Người dùng thích nghi với công nghệ</h4>
+              <p>Theo thời gian, người dùng đổi hành vi để lấy kết quả tốt hơn — như người ta đã học cách đặt câu hỏi trên Google Search, hay cách viết bài để lên hạng tìm kiếm. Huyen còn dẫn một ví dụ lạ: dân sống ở vùng có xe tự lái đã học được cách “bắt nạt” xe tự lái để giành quyền đi trước (Liu và cộng sự, 2020).<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Vì sao chỉ nhìn chỉ số là không đủ</h4>
+              <p>Nếu người dùng học cách yêu cầu câu trả lời ngắn gọn hơn, độ dài phản hồi sẽ giảm dần theo thời gian. Nhìn riêng chỉ số thì không rõ vì sao — phải điều tra mới hiểu nguyên nhân gốc.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">09</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">AI pipeline orchestration</div>
+          <h3><span class="standard-copy">Điều phối — định nghĩa và xâu chuỗi</span><span class="easy-only">Người nhạc trưởng của cỗ máy</span><span class="en-only" lang="en">Orchestration — define, then chain</span></h3>
+          <p class="standard-copy">Bộ điều phối cho ta chỉ định các thành phần làm việc với nhau thế nào để thành một đường ống đầu-cuối, và bảo đảm dữ liệu chảy trơn tru giữa chúng. Ở mức cao nó làm hai việc: <em>định nghĩa thành phần</em> — khai báo các mô hình, nguồn dữ liệu truy xuất, công cụ, và cả công cụ đánh giá, giám sát nếu có — và <em>xâu chuỗi</em>, về bản chất là hợp thành hàm: ta nói cho nó các bước hệ thống đi từ lúc nhận truy vấn tới lúc xong việc.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Khi trong nhà máy có nhiều phòng, cần một người nhạc trưởng nói rõ: câu hỏi vào thì đi phòng nào trước, rồi phòng nào sau, và ai đưa gì cho ai. Nhớ nhé: lúc mới bắt đầu, đừng vội thuê nhạc trưởng — hãy tự xếp trước cho hiểu máy mình.</p>
+          <p class="en-only" lang="en">An orchestrator lets you specify how components work together into an end-to-end pipeline and ensures data flows between them. At a high level it does two things: <em>components definition</em> — telling it which models, retrieval data sources and tools your system uses, plus any evaluation and monitoring tools — and <em>chaining</em>, which is essentially function composition: you tell it the steps your system takes from receiving the query to completing the task.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Huyen kể tên LangChain, LlamaIndex, Flowise, Langflow và Haystack; vì truy xuất và dùng công cụ là mẫu hình phổ biến, nhiều khung RAG và tác tử cũng chính là công cụ điều phối. Bà lưu ý riêng: bộ điều phối đường ống AI khác với bộ điều phối luồng công việc tổng quát như Airflow hay Metaflow.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Có sẵn nhiều bộ khung làm việc này — nhưng chúng khác với mấy công cụ lập lịch công việc thông thường.</span>
+            <span class="en-only" lang="en">Huyen names LangChain, LlamaIndex, Flowise, Langflow and Haystack; because retrieval and tool use are common patterns, many RAG and agent frameworks are orchestration tools too. She flags separately that an AI pipeline orchestrator is different from a general workflow orchestrator like Airflow or Metaflow.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Vì sao nên bắt đầu mà không có nó</h4>
+              <p>Huyen khuyên đừng nhảy ngay vào một công cụ điều phối khi khởi động dự án: mọi công cụ ngoài đều mang thêm phức tạp, và bộ điều phối có thể che mất những chi tiết then chốt về cách hệ thống hoạt động, khiến nó khó hiểu và khó gỡ lỗi.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Ba tiêu chí khi chọn</h4>
+              <p>Tích hợp và khả năng mở rộng (nó có hỗ trợ thành phần bạn đang dùng hoặc sẽ dùng không, và nếu không thì sửa khó tới đâu); hỗ trợ đường ống phức tạp (rẽ nhánh, xử lý song song, xử lý lỗi); và tính dễ dùng, hiệu năng, khả năng mở rộng quy mô — tránh những bộ điều phối tự ý gọi API ngầm hoặc thêm độ trễ.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Song song hóa khi cần độ trễ thấp</h4>
+              <p>Với ứng dụng có yêu cầu độ trễ khắt khe, hãy làm song song nhiều nhất có thể. Ví dụ của Huyen: thành phần định tuyến (quyết định gửi truy vấn đi đâu) và thành phần loại bỏ PII có thể chạy cùng lúc.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Đánh giá và giám sát phải đi đôi</h4>
+              <p>CFR cao không nhất thiết có nghĩa hệ thống giám sát tệ, nhưng nên xem lại quy trình đánh giá để bắt được thay đổi xấu <em>trước</em> khi triển khai. Chỉ số đánh giá phải chuyển hóa tốt thành chỉ số giám sát, và vấn đề phát hiện lúc giám sát phải được đưa ngược về quy trình đánh giá.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Nối sang cụm sau</strong>
+      <strong class="easy-only">Nối sang phần sau</strong>
+      <strong class="en-only" lang="en">Bridge to the next cluster</strong>
+      <p class="standard-copy">Chỉ số, nhật ký và vết nói cho ta biết hệ thống <em>chạy</em> thế nào. Nhưng như Huyen mở đầu chương: ta có thể bàn mãi về cách xây một ứng dụng thành công, và cách duy nhất để biết nó có đạt mục tiêu hay không là đặt nó trước mặt người dùng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Đèn báo nói máy chạy ra sao. Nhưng muốn biết máy có <em>giúp được ai</em> không thì phải hỏi người dùng. Nhớ nhé: chỉ người dùng mới trả lời được câu đó.</p>
+      <p class="en-only" lang="en">Metrics, logs and traces tell you how the system <em>runs</em>. But as Huyen opens the chapter: we can spend eternity reasoning about how to build a successful application, and the only way to find out whether it achieves its goal is to put it in front of users.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </aside>
+  </section>
+
+  <section class="section" id="feedback" aria-labelledby="feedback-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Cụm 3 · Vòng phản hồi</span><span class="easy-only">Phần 3 · Người dùng nói gì</span><span class="en-only" lang="en">Cluster 3 · The feedback loop</span></div>
+        <h2 id="feedback-title"><span class="standard-copy">Phản hồi người dùng là dữ liệu riêng</span><span class="easy-only">Người dùng dạy máy mà không biết</span><span class="en-only" lang="en">User feedback is proprietary data</span></h2>
+      </div>
+      <p class="standard-copy">Phản hồi người dùng xưa nay luôn giữ hai vai trò trong phần mềm: đánh giá hiệu năng và định hướng phát triển. Với ứng dụng AI, nó còn thêm một vai trò lớn hơn — nó là <em>dữ liệu riêng</em>, và dữ liệu là lợi thế cạnh tranh. Một hệ thống phản hồi được thiết kế tốt là điều kiện cần để tạo ra bánh đà dữ liệu đã bàn ở Chương 8: sản phẩm ra mắt sớm, hút người dùng sớm, thu dữ liệu để liên tục cải thiện mô hình, khiến đối thủ khó đuổi kịp.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mỗi lần bạn bấm “thích”, sửa lại câu máy viết, hay hỏi lại vì máy hiểu sai — bạn đang dạy nó. Cái kho “người dùng đã dạy gì” ấy là của riêng công ty, đối thủ không mua được. Nhớ nhé: người dùng là thầy giáo mà không ai trả lương.</p>
+      <p class="en-only" lang="en">User feedback has always played two roles in software: evaluating performance and informing development. In AI applications it takes on a bigger one — it is <em>proprietary data</em>, and data is a competitive advantage. A well-designed feedback system is necessary to create the data flywheel of Chapter 8: a product that launches quickly and attracts users early gathers the data to keep improving its models, making it hard for competitors to catch up.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Giao diện hội thoại khiến người dùng dễ đưa phản hồi hơn — và khiến người làm sản phẩm khó rút ra tín hiệu hơn.</p>
+        <p class="definition easy-only">Nói chuyện thì dễ góp ý, nhưng góp ý lẫn trong câu chuyện thì khó nhặt ra.</p>
+        <p class="definition en-only" lang="en">The conversational interface makes it easier for users to give feedback and harder for developers to extract signals.</p>
+        <p class="deep-only">Huyen nhắc rằng phản hồi người dùng <em>là</em> dữ liệu người dùng: khai thác nó đòi hỏi đúng những thận trọng như với mọi dữ liệu khác. Quyền riêng tư phải được tôn trọng, và người dùng có quyền biết dữ liệu của họ đang được dùng thế nào.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="equation">
+        <div class="equation-row"><b><span class="vi-only">Tường minh</span><span class="en-only" lang="en">Explicit</span></b><span class="vi-only">Thích/không thích, sao, “chúng tôi đã giải quyết được vấn đề chưa?”</span><span class="en-only" lang="en">Thumbs up/down, star ratings, “Did we solve your problem?”</span></div>
+        <div class="equation-row"><b><span class="vi-only">Ngầm</span><span class="en-only" lang="en">Implicit</span></b><span class="vi-only">Suy ra từ hành động: mua, sửa, dừng, hỏi lại</span><span class="en-only" lang="en">Inferred from actions: buying, editing, stopping, rephrasing</span></div>
+        <div class="equation-row"><b><span class="vi-only">Dùng để làm gì</span><span class="en-only" lang="en">Used for</span></b><span class="vi-only">Đánh giá · phát triển · cá nhân hóa</span><span class="en-only" lang="en">Evaluation · development · personalisation</span></div>
+        <div class="equation-row"><b><span class="vi-only">Cảnh giác</span><span class="en-only" lang="en">Caution</span></b><span class="vi-only">Thiên lệch, và vòng lặp phản hồi thoái hóa</span><span class="en-only" lang="en">Biases, and degenerate feedback loops</span></div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">10</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Explicit vs implicit feedback</div>
+          <h3><span class="standard-copy">Tường minh và ngầm — hai loại tín hiệu</span><span class="easy-only">Nói thẳng và nói bằng hành động</span><span class="en-only" lang="en">Explicit and implicit — two kinds of signal</span></h3>
+          <p class="standard-copy">Phản hồi tường minh là thông tin người dùng cung cấp khi ứng dụng hỏi thẳng. Nó khá chuẩn hóa giữa các ứng dụng — có bao nhiêu cách để hỏi một người rằng họ có thích thứ gì đó đâu — nên nó được hiểu rõ hơn. Phản hồi ngầm thì suy ra từ hành động, và phụ thuộc hoàn toàn vào việc ứng dụng cho người dùng làm được gì; mô hình nền tảng mở ra cả một thế giới ứng dụng mới, kéo theo nhiều thể loại phản hồi ngầm mới.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Có hai cách người ta khen chê. Một là nói thẳng: bấm nút thích hay không thích. Hai là nói bằng việc làm: mua món được gợi ý, sửa lại câu máy viết, hoặc bỏ đi giữa chừng. Nhớ nhé: việc làm nói nhiều hơn lời nói, nhưng cũng khó hiểu hơn.</p>
+          <p class="en-only" lang="en">Explicit feedback is what users provide when the application asks. It is fairly standard across applications — there are only so many ways to ask someone whether they like something — so it is better understood. Implicit feedback is inferred from actions, and depends entirely on what a user can do inside the application; foundation models enable a new world of applications and, with them, many new genres of implicit feedback.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Huyen minh họa bằng một trợ lý lên kế hoạch du lịch: nó gợi ý ba khách sạn ở Sydney, và chính cách bạn đáp lại đã hé lộ sở thích. “Đặt cho tôi cái gần phòng tranh” cho thấy bạn quan tâm nghệ thuật; “Không có cái nào dưới 200 đô à?” cho thấy bạn nhạy giá — và rằng trợ lý chưa hiểu bạn lắm.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Trợ lý gợi ý ba khách sạn. Bạn chọn cái gần bảo tàng, hay hỏi “có cái nào rẻ hơn không” — chỉ một câu ấy thôi, nó đã biết bạn thích gì.</span>
+            <span class="en-only" lang="en">Huyen's illustration is a trip-planning assistant: it suggests three hotels in Sydney, and how you reply reveals your preference. “Yes book me the one close to galleries” shows an interest in art; “Is there nothing under $200?” reveals a price-conscious user — and that the assistant doesn't quite get you yet.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Ưu và nhược của từng loại</h4>
+              <p>Tường minh dễ diễn giải nhưng đòi thêm công sức từ người dùng, nên thường thưa thớt — nhất là với ứng dụng ít người dùng — và chịu thiên lệch phản hồi: người không hài lòng dễ lên tiếng hơn, làm bức tranh trông tiêu cực hơn thực tế. Ngầm thì dồi dào — “giới hạn duy nhất là trí tưởng tượng của bạn” — nhưng nhiễu.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Vì sao tín hiệu ngầm khó đọc</h4>
+              <p>Chia sẻ một cuộc hội thoại có thể là khen hoặc chê. Huyen kể một người bạn của bà chủ yếu chia sẻ khi mô hình phạm lỗi lộ liễu, còn một người bạn khác chủ yếu chia sẻ những hội thoại hữu ích cho đồng nghiệp — phải nghiên cứu người dùng của chính mình mới hiểu vì sao họ làm mỗi hành động. Thêm tín hiệu có thể làm rõ ý định: nếu người dùng diễn đạt lại câu hỏi <em>sau khi</em> chia sẻ một liên kết, có lẽ cuộc hội thoại đã không như họ mong.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Ba mục đích sử dụng</h4>
+              <p>Phản hồi rút ra từ hội thoại dùng cho ba việc: đánh giá (rút ra chỉ số để giám sát ứng dụng), phát triển (huấn luyện mô hình tương lai hoặc dẫn hướng phát triển chúng), và cá nhân hóa (làm ứng dụng hợp với từng người).<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Không phải chủ đề mới</h4>
+              <p>Huyen ghi rằng phản hồi hội thoại được chú ý nhiều nhờ chatbot, nhưng nó đã là hướng nghiên cứu tích cực nhiều năm trước ChatGPT — cộng đồng học tăng cường đã thử cho thuật toán học từ phản hồi ngôn ngữ tự nhiên từ cuối thập niên 2010, và nó cũng được quan tâm ở các ứng dụng hội thoại sớm như Amazon Alexa, tính năng điều khiển giọng nói của Spotify và Yahoo! Voice.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">11</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Natural language feedback</div>
+          <h3><span class="standard-copy">Phản hồi ngôn ngữ tự nhiên</span><span class="easy-only">Góp ý giấu trong câu nói</span><span class="en-only" lang="en">Natural language feedback</span></h3>
+          <p class="standard-copy">Phản hồi rút ra từ <em>nội dung</em> tin nhắn được gọi là phản hồi ngôn ngữ tự nhiên, và Huyen liệt kê vài tín hiệu đáng theo dõi trong sản xuất. <em>Dừng sớm</em>: người dùng ngắt giữa chừng, thoát ứng dụng, bảo mô hình dừng, hay đơn giản là bỏ mặc tác tử đang chờ — nhiều khả năng cuộc hội thoại không ổn. <em>Sửa lỗi</em>: nếu câu tiếp theo bắt đầu bằng “Không, …” hay “Ý tôi là …”, câu trả lời có lẽ đã trật.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Khi máy trả lời trật, ta ít khi bấm nút chê — ta chỉ nói “Không, ý tôi là…” rồi hỏi lại. Chính câu ấy là lời chê. Nhớ nhé: lời chê thật thường nấp trong câu nói tiếp theo, không nằm ở nút bấm.</p>
+          <p class="en-only" lang="en">Feedback extracted from the <em>content</em> of messages is called natural language feedback, and Huyen lists signals worth tracking in production. <em>Early termination</em>: the user stops a generation halfway, exits the app, tells the model to stop, or simply leaves the agent hanging — the conversation likely isn't going well. <em>Error correction</em>: if a follow-up starts with “No, …” or “I meant, …”, the response was probably off the mark.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Khi người dùng tự sửa câu trả lời — ví dụ sửa lại đoạn mã mô hình vừa sinh — đó là tín hiệu rất mạnh rằng phần bị sửa chưa đúng. Mỗi lần sửa còn là một mẫu dữ liệu ưu tiên: câu gốc là bản thua, câu đã sửa là bản thắng.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Bạn sửa lại đoạn mã máy viết — đó là cách chê rõ ràng nhất, và cũng là bài học tốt nhất cho nó.</span>
+            <span class="en-only" lang="en">When a user edits a response directly — correcting generated code, say — that is a very strong signal that the edited part wasn't right. Each edit is also a preference example: the original is the losing response, the edit is the winning one.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Tám nhóm than phiền</h4>
+              <p>Huyen dẫn Bảng 10-1: tám nhóm phản hồi ngôn ngữ tự nhiên thu được từ phân cụm tự động bộ dữ liệu FITS (Xu và cộng sự, 2022), kết quả từ Yuan và cộng sự (2023). Nhóm lớn nhất là “làm rõ lại yêu cầu” với 3.702 mẫu (26,54%); kế đó là than phiền rằng bot không trả lời câu hỏi, đưa thông tin không liên quan, hoặc bảo người dùng tự đi tìm — 2.260 mẫu (16,20%). Nhóm nhỏ nhất, than phiền bot lặp lại hoặc thô lỗ, chỉ 137 mẫu (0,99%).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Hiểu kiểu hỏng để vá đúng chỗ</h4>
+              <p>Biết bot hỏng kiểu gì là chìa khóa để làm nó tốt lên: nếu người dùng không thích câu dài dòng, đổi prompt cho bot cô đọng hơn; nếu họ không hài lòng vì câu thiếu chi tiết, nhắc bot cụ thể hơn.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Cảm xúc và tỉ lệ từ chối</h4>
+              <p>Than phiền cũng có thể chỉ là biểu lộ cảm xúc tiêu cực không nêu lý do — kiểu “Ugh”. Một số tổng đài theo dõi giọng người gọi suốt cuộc: nếu càng lúc càng to tiếng thì có chuyện; ngược lại, bắt đầu giận mà kết thúc vui thì có lẽ vấn đề đã được giải quyết. Phản hồi còn suy ra được từ chính câu của mô hình: tỉ lệ từ chối cao — “Xin lỗi, tôi không biết điều đó” — thường đi kèm người dùng không hài lòng.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Tín hiệu từ hành động, không phải lời</h4>
+              <p>Sinh lại có thể vì không hài lòng, nhưng cũng có thể vì muốn có lựa chọn để so — và Huyen nói bà hay sinh lại với yêu cầu phức tạp để kiểm tra tính nhất quán: nếu hai câu trả lời mâu thuẫn nhau thì bà không tin câu nào. Việc tổ chức hội thoại cũng là tín hiệu: xóa là chê khá mạnh, còn đổi tên lại gợi ý rằng hội thoại tốt nhưng tiêu đề tự sinh thì dở. Độ dài hội thoại thì tùy ứng dụng — với bạn đồng hành AI, dài là thích; với bot hỗ trợ khách hàng, dài có thể là kém hiệu quả — và nên đọc cùng độ đa dạng lời thoại, vì hội thoại dài mà bot cứ lặp vài câu nghĩa là người dùng đang mắc kẹt trong vòng lặp.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">12</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Feedback design</div>
+          <h3><span class="standard-copy">Thiết kế phản hồi — khi nào và bằng cách nào</span><span class="easy-only">Hỏi lúc nào, hỏi thế nào</span><span class="en-only" lang="en">Feedback design — when and how</span></h3>
+          <p class="standard-copy">Phản hồi nên được thu suốt hành trình người dùng, nhưng phải không xâm phạm và không cản trở luồng làm việc. Huyen nêu ba thời điểm đặc biệt đáng giá: <em>lúc mới bắt đầu</em>, để hiệu chỉnh ứng dụng cho người mới đăng ký; <em>khi có chuyện xấu</em>, để người dùng báo lỗi; và <em>khi mô hình thiếu tự tin</em>, để hỏi người dùng nhằm tăng độ chắc chắn.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Hỏi ý kiến cũng phải đúng lúc: lúc mới làm quen, lúc máy làm sai, và lúc máy phân vân giữa hai cách. Hỏi đúng lúc thì người ta vui lòng trả lời. Nhớ nhé: đừng bắt người dùng làm thêm việc chỉ để khen chê.</p>
+          <p class="en-only" lang="en">Feedback should be collected throughout the user journey, but nonintrusively and without interfering with the workflow. Huyen names three especially valuable moments: <em>in the beginning</em>, to calibrate the application for a new user; <em>when something bad happens</em>, so users can report failures; and <em>when the model has low confidence</em>, so asking the user raises its certainty.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Huyen coi Midjourney là ví dụ hay được nhắc tới về thiết kế phản hồi tốt: mỗi prompt sinh ra bốn ảnh, và người dùng có ba lựa chọn — phóng to một ảnh, sinh biến thể từ một ảnh, hoặc sinh lại. Lựa chọn 1 là tín hiệu tích cực mạnh nhất về ảnh được chọn, lựa chọn 2 yếu hơn, lựa chọn 3 báo rằng không ảnh nào đủ tốt.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Midjourney đưa bốn bức ảnh và ba nút bấm. Bạn bấm nút nào cũng là đang chấm điểm cho nó mà không hay.</span>
+            <span class="en-only" lang="en">Huyen cites Midjourney as a frequently praised example of good feedback design: each prompt generates a set of four images, with three options — upscale one, generate variations of one, or regenerate. Option 1 is the strongest positive signal about the chosen image, option 2 a weaker one, option 3 says none was good enough.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Khi sản phẩm sai, người dùng vẫn phải xong việc</h4>
+              <p>Lý tưởng là khi mô hình sai, người dùng vẫn hoàn thành được việc của họ: phân loại sai thì cho họ sửa nhãn. Hãy để người dùng cộng tác với AI; nếu không được thì để họ cộng tác với người. Ví dụ đẹp của cộng tác người–AI là tính năng vẽ đè (<span lang="en">inpainting</span>) trong sinh ảnh — chọn một vùng ảnh và mô tả cách sửa — vừa cho người dùng kết quả tốt hơn vừa cho lập trình viên phản hồi chất lượng cao.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>So sánh cạnh nhau: đầy đủ hay một phần?</h4>
+              <p>Khi mô hình phân vân giữa bản tóm tắt ngắn và bản chi tiết, nó có thể đưa cả hai ra cạnh nhau cho người dùng chọn — tín hiệu so sánh ấy dùng được cho tinh chỉnh theo ưu tiên. Nhưng bày hai câu trả lời đầy đủ là đòi hỏi phản hồi tường minh, mà người dùng có thể không có thời gian đọc hết, dẫn tới phiếu nhiễu. Google Gemini chỉ bày phần đầu mỗi câu và để người dùng bấm mở cái họ muốn đọc; Huyen ghi rõ rằng chưa rõ cách nào cho phản hồi đáng tin hơn.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Có nên hỏi cả khi mọi thứ tốt?</h4>
+              <p>Hướng dẫn giao diện người dùng của Apple cảnh báo không nên hỏi cả phản hồi tích cực lẫn tiêu cực: ứng dụng vốn phải cho kết quả tốt, hỏi về kết quả tốt có thể khiến người dùng nghĩ rằng kết quả tốt là ngoại lệ. Nhưng nhiều người Huyen trò chuyện lại nghĩ ngược lại — một quản lý sản phẩm nói đội của họ <em>cần</em> phản hồi tích cực vì nó chỉ ra đúng những tính năng người dùng yêu thích, để đội tập trung mài giũa một nhóm nhỏ thay vì dàn trải. Rủi ro làm rối giao diện có thể quản lý bằng cách hạn chế tần suất: với tập người dùng lớn, chỉ hiện lời mời cho 1% người dùng mỗi lần cũng đủ dữ liệu.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Đừng bắt người ta làm điều bất khả</h4>
+              <p>Huyen kể bà từng chưng hửng khi ChatGPT bắt chọn giữa hai câu trả lời cho một câu hỏi thống kê — với câu hỏi toán, đáp án đúng đâu phải chuyện sở thích, và bà ước có nút “Tôi không biết”. Thiết kế mập mờ cũng sinh phản hồi nhiễu: khi bà tổ chức một buổi tập huấn tối ưu GPU và dùng Luma để thu phản hồi, bà thấy nhiều đánh giá 1/5 kèm lời khen — hóa ra Luma đặt biểu tượng mặt giận, tương ứng một sao, vào đúng chỗ đáng lẽ là năm sao.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Công khai hay riêng tư</h4>
+              <p>Độ hiển thị của một tín hiệu ảnh hưởng sâu tới hành vi, trải nghiệm và chất lượng phản hồi. Người ta thẳng thắn hơn khi riêng tư, nên tín hiệu thường chất lượng hơn: năm 2024, X (trước là Twitter) chuyển lượt “thích” thành riêng tư, và Elon Musk — chủ sở hữu X — tuyên bố số lượt thích tăng đáng kể sau thay đổi ấy. Nhưng tín hiệu riêng tư làm giảm khả năng khám phá và giải thích: giấu lượt thích thì người dùng không tìm được bài mà bạn bè đã thích, và có thể bối rối vì sao bài nọ hiện trên bảng tin.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Bối cảnh quanh phản hồi, và sự đồng ý</h4>
+              <p>Chỉ riêng con số thích/không thích đã hữu ích cho phân tích sản phẩm, nhưng muốn phân tích sâu thì cần bối cảnh — chẳng hạn 5 tới 10 lượt hội thoại trước đó — mà bối cảnh ấy có thể chứa thông tin định danh cá nhân, nên không lấy được nếu không có sự đồng ý rõ ràng. Vì thế một số sản phẩm đưa điều khoản cho phép dùng dữ liệu để phân tích và cải thiện, hoặc gắn phản hồi với một luồng “hiến tặng dữ liệu”: khi gửi góp ý, người dùng tích một ô để chia sẻ dữ liệu tương tác gần đây làm bối cảnh.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">13</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Feedback limitations</div>
+          <h3><span class="standard-copy">Giới hạn — thiên lệch và vòng lặp thoái hóa</span><span class="easy-only">Nghe theo người dùng cũng có thể hỏng</span><span class="en-only" lang="en">Limitations — biases and degenerate loops</span></h3>
+          <p class="standard-copy">Phản hồi không phải bữa trưa miễn phí. Giống mọi dữ liệu khác, nó có thiên lệch — và mỗi ứng dụng có thiên lệch riêng. Huyen nêu bốn nhóm: <em>thiên lệch khoan dung</em> (chấm cao hơn mức đáng, để tránh va chạm hoặc vì đó là lựa chọn dễ nhất), <em>tính ngẫu nhiên</em> (chọn bừa vì thiếu động lực đọc kỹ), <em>thiên lệch vị trí</em> (dễ bấm vào gợi ý đầu tiên hơn), và <em>thiên lệch ưu tiên</em> (thích câu dài hơn dù kém chính xác hơn; hoặc thiên lệch gần đây, thiên về câu nhìn thấy sau cùng).<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Người ta hay chấm điểm dễ dãi, hay bấm bừa, hay chọn cái nằm trên đầu, hay thích câu dài. Nên đừng tin phản hồi một cách mù quáng. Nhớ nhé: nghe người dùng thì tốt, nhưng nghe mà không suy nghĩ thì hỏng sản phẩm.</p>
+          <p class="en-only" lang="en">Feedback isn't a free lunch. Like any data it carries biases, and each application has its own. Huyen names four: <em>leniency bias</em> (rating more positively than warranted, to avoid conflict or because it is easiest), <em>randomness</em> (clicking at random for lack of motivation), <em>position bias</em> (users are more likely to click the first suggestion), and <em>preference bias</em> (preferring the longer response even when it is less accurate; or recency bias, favouring the answer seen last).<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Trên thang năm sao, bốn và năm sao đáng lẽ đều nghĩa là trải nghiệm tốt, nhưng người dùng thường thấy sức ép phải cho năm sao, để dành bốn sao cho lúc có chuyện. Theo Uber, năm 2015 điểm trung bình của tài xế là 4,8, và dưới 4,6 thì tài xế có nguy cơ bị ngừng hoạt động.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Đi xe công nghệ, ai cũng cho 5 sao cho xong — nên 4 sao lại thành điểm xấu. Thang điểm bị lệch cả cụm như thế.</span>
+            <span class="en-only" lang="en">On a five-star scale, four and five stars should both mean a good experience, but users often feel pressured to give five, reserving four for when something goes wrong. According to Uber, in 2015 the average driver rating was 4.8, with scores below 4.6 putting drivers at risk of deactivation.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Thiên lệch không nhất thiết là dấu chấm hết</h4>
+              <p>Mục tiêu của Uber là phân biệt tài xế tốt với tài xế kém, và ngay cả với thiên lệch ấy, hệ thống đánh giá của họ vẫn có vẻ đạt mục tiêu. Điều thiết yếu là nhìn vào <em>phân bố</em> điểm để phát hiện thiên lệch. Muốn phản hồi mịn hơn, có thể gỡ bỏ hàm ý tiêu cực nặng nề của điểm thấp — thay vì hiện số 1 tới 5, hiện các câu như “Chuyến đi tuyệt, tài xế tuyệt”, “Khá ổn”, “Không có gì để phàn nàn nhưng cũng không có gì xuất sắc”, “Đáng lẽ có thể tốt hơn”, “Đừng ghép tôi với tài xế này nữa”.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Vòng lặp phản hồi thoái hóa</h4>
+              <p>Phản hồi là không đầy đủ: ta chỉ nhận được phản hồi về những gì ta đã bày ra cho người dùng thấy. Khi phản hồi được dùng để đổi hành vi mô hình, vòng lặp thoái hóa có thể xuất hiện — dự đoán ảnh hưởng tới phản hồi, phản hồi ảnh hưởng tới vòng huấn luyện sau, khuếch đại thiên lệch ban đầu. Huyen minh họa bằng hệ gợi ý video: video A xếp trên B chỉ vì chênh lệch nhỏ ban đầu, nên được bấm nhiều hơn, nên càng được đẩy lên — vấn đề này được biết tới với các tên “thiên lệch phơi bày”, “thiên lệch phổ biến” hay “bong bóng lọc”.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Khi sản phẩm biến thành xứ sở mèo</h4>
+              <p>Vòng lặp thoái hóa còn đổi cả trọng tâm sản phẩm lẫn tập người dùng. Ban đầu một nhóm nhỏ phản hồi rằng họ thích ảnh mèo; hệ thống bắt được và sinh thêm ảnh mèo; điều đó hút người yêu mèo tới, họ lại phản hồi rằng ảnh mèo tốt — chẳng mấy chốc ứng dụng thành xứ sở mèo. Huyen nhấn mạnh rằng cùng cơ chế ấy khuếch đại được cả những thiên lệch khác: phân biệt chủng tộc, phân biệt giới, hay thiên về nội dung khiêu dâm.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Và biến trợ lý thành kẻ nịnh</h4>
+              <p>Hành động theo phản hồi người dùng có thể biến một tác tử hội thoại thành — theo cách nói của Huyen, vì không có từ nào khá hơn — kẻ nói dối. Nhiều nghiên cứu cho thấy huấn luyện mô hình trên phản hồi người dùng dạy nó đưa ra thứ nó <em>nghĩ</em> người dùng muốn nghe, kể cả khi đó không phải thứ chính xác hay có lợi nhất (Stray, 2023); Sharma và cộng sự (2023) chỉ ra rằng mô hình huấn luyện trên phản hồi con người có xu hướng <span lang="en">sycophancy</span> — nịnh hót, thiên về những câu trả lời khớp với quan điểm sẵn có của người dùng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <div class="trap-comparison deep-only">
+      <h3><span class="standard-copy">Ba hiểu lầm khi đọc chương này</span><span class="en-only" lang="en">Three misconceptions this chapter corrects</span></h3>
+      <p class="standard-copy">Chương cuối dễ bị đọc như một bản vẽ thi công hoặc một danh sách tính năng. Nó không phải cả hai.</p>
+      <p class="en-only" lang="en">A closing chapter is easily misread as a blueprint or a feature checklist. It is neither.</p>
+      <div class="comparison-grid">
+        <div class="comparison-card">
+          <h4><span class="vi-only">“Kiến trúc đầy đủ là đích đến”</span><span class="en-only" lang="en">“The full architecture is the destination”</span></h4>
+          <p class="standard-copy">Huyen dựng kiến trúc theo lối tăng dần chính là để chống lại cách đọc này: thêm thành phần “khi nhu cầu phát sinh”, và bà nói rõ thứ tự của bà chỉ là thứ tự bà thường thấy, mỗi người nên theo thứ tự hợp với ứng dụng của mình. Mỗi thành phần thêm vào đều làm hệ thống phức tạp hơn và phơi nó ra những kiểu hỏng mới.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="en-only" lang="en">The incremental construction is precisely the argument against this reading: components are added “as needs arise”, and Huyen says explicitly that her order is just the one she commonly sees — you should follow the order that makes sense for your application. Every added component increases complexity and exposes new failure modes.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="comparison-card">
+          <h4><span class="vi-only">“Nút thích/không thích là đủ”</span><span class="en-only" lang="en">“Thumbs up/down is enough”</span></h4>
+          <p class="standard-copy">Phản hồi tường minh đòi thêm công sức nên thường thưa thớt, và chịu thiên lệch phản hồi. Phần lớn tín hiệu thật nằm ở hành vi: dừng sớm, hỏi lại, sửa câu trả lời, xóa hội thoại — dồi dào hơn nhiều nhưng cũng nhiễu hơn nhiều, và cùng một hành động có thể mang hai nghĩa trái ngược tùy người.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="en-only" lang="en">Explicit feedback demands extra work, so it is sparse and subject to response biases. Most of the real signal is behavioural: early termination, rephrasing, editing a response, deleting a conversation — far more abundant and far noisier, and the same action can mean opposite things for different users.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="comparison-card">
+          <h4><span class="vi-only">“Càng nghe người dùng càng tốt”</span><span class="en-only" lang="en">“The more you listen to users, the better”</span></h4>
+          <p class="standard-copy">Phản hồi dùng bừa bãi có thể kéo dài thiên lệch và phá hỏng sản phẩm: vòng lặp thoái hóa khuếch đại thiên lệch ban đầu, và huấn luyện trên phản hồi có thể dạy mô hình nịnh hót thay vì nói đúng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> Phải hiểu giới hạn của phản hồi trước khi đưa nó vào sản phẩm.</p>
+          <p class="en-only" lang="en">Used indiscriminately, feedback can perpetuate biases and destroy your product: degenerate loops amplify initial biases, and training on feedback can teach a model sycophancy rather than accuracy.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> Understand the limitations before you build feedback into the product.</p>
+        </div>
+      </div>
+    </div>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Nối sang phần tự kiểm</strong>
+      <strong class="easy-only">Nối sang phần tự hỏi</strong>
+      <strong class="en-only" lang="en">Bridge to the self-check</strong>
+      <p class="standard-copy">Huyen khép chương bằng một quan sát về nghề: thiết kế phản hồi xưa nay được coi là việc của sản phẩm chứ không phải của kỹ thuật, nên kỹ sư thường bỏ qua. Nhưng vì phản hồi là nguồn dữ liệu then chốt để cải thiện mô hình liên tục, ngày càng nhiều kỹ sư AI tham gia vào quá trình ấy — củng cố ý từ Chương 1 rằng so với học máy truyền thống, kỹ thuật AI đang dịch lại gần sản phẩm hơn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Trước đây, chuyện hỏi ý kiến người dùng là việc của người làm sản phẩm. Giờ thì kỹ sư AI cũng phải lo, vì đó chính là nguồn dữ liệu để dạy máy. Nhớ nhé: làm AI giỏi thì phải hiểu cả người dùng.</p>
+      <p class="en-only" lang="en">Huyen closes the chapter with an observation about the discipline: feedback design has traditionally been seen as a product responsibility rather than an engineering one, so engineers often overlook it. But because user feedback is a crucial data source for continuously improving models, more AI engineers are now involved — reinforcing the idea from Chapter 1 that, compared to traditional ML engineering, AI engineering is moving closer to product.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </aside>
+  </section>
+
+  <section class="section" id="diagnostic" aria-labelledby="diagnostic-title">
+    <div class="diagnostic">
+      <div class="diagnostic-intro">
+        <div class="eyebrow"><span class="standard-copy">Tự kiểm</span><span class="easy-only">Tự hỏi mình</span><span class="en-only" lang="en">Self-check</span></div>
+        <h2 id="diagnostic-title"><span class="standard-copy">Hệ thống của bạn đang ở bước nào?</span><span class="easy-only">Cỗ máy của bạn đã có gì?</span><span class="en-only" lang="en">Where is your system on this path?</span></h2>
+        <p class="standard-copy">Sáu câu hỏi bám theo mạch chương — kiến trúc, khả năng quan sát, vòng phản hồi. Trả lời thành thật thường lộ ra bước tiếp theo nên làm.</p>
+        <p class="easy-only">Sáu câu hỏi để soi lại cỗ máy của bạn. Trả lời thật lòng thì sẽ biết nên lắp thêm mảnh nào.</p>
+        <p class="en-only" lang="en">Six questions following the chapter's arc — architecture, observability, the feedback loop. Answering honestly usually reveals which step comes next.</p>
+      </div>
+      <div>
+        <div class="question-list standard-copy">
+          <div class="question"><div><strong>Bạn thêm thành phần vì nhu cầu, hay vì nó đang thời thượng?</strong><span>Kiến trúc trong chương mọc lên từ những chỗ hỏng cụ thể. Nếu không nêu được chỗ hỏng mà một thành phần đang vá, có lẽ nó chưa cần.</span><span class="deep-only"> Huyen lưu ý rằng mỗi thành phần thêm vào đều mở ra kiểu hỏng mới và làm hệ thống khó gỡ lỗi hơn.</span></div></div>
+          <div class="question"><div><strong>Rào chắn của bạn canh cả hai đầu chưa?</strong><span>Đầu vào chống rò rỉ dữ liệu và prompt độc hại; đầu ra bắt lỗi chất lượng lẫn lỗi an toàn — và có chính sách rõ cho từng kiểu lỗi.</span><span class="deep-only"> Đừng quên đo cả tỉ lệ từ chối sai: một hệ thống quá an toàn cũng là một hệ thống hỏng.</span></div></div>
+          <div class="question"><div><strong>Bạn có biết MTTD, MTTR và CFR của mình không?</strong><span>Ba con số này đo chất lượng khả năng quan sát chứ không đo chất lượng mô hình.</span><span class="deep-only"> Huyen viết rằng nếu bạn không biết CFR của mình, đã đến lúc thiết kế lại nền tảng cho dễ quan sát hơn.</span></div></div>
+          <div class="question"><div><strong>Một truy vấn hỏng — bạn chỉ ra được đúng bước hỏng không?</strong><span>Đó là phép thử của vết truy vấn: xử lý sai, bối cảnh lấy về không liên quan, hay mô hình sinh sai?</span><span class="deep-only"> Vết phải cho thấy cả thời gian và chi phí của từng bước, nếu đo được.</span></div></div>
+          <div class="question"><div><strong>Bạn đang đọc tín hiệu ngầm nào?</strong><span>Dừng sớm, hỏi lại, sửa câu trả lời, xóa hội thoại — những tín hiệu này có mặt sẵn, chỉ là có được ghi lại và diễn giải hay không.</span><span class="deep-only"> Mỗi lần người dùng sửa câu trả lời là một cặp dữ liệu ưu tiên: bản gốc thua, bản sửa thắng.</span></div></div>
+          <div class="question"><div><strong>Bạn đã tìm thiên lệch trong phản hồi của chính mình chưa?</strong><span>Nhìn phân bố điểm, vị trí lựa chọn, độ dài câu được chọn. Phản hồi chưa soi kỹ có thể dẫn tới quyết định sản phẩm sai lệch.</span><span class="deep-only"> Và hãy hỏi liệu hệ thống của bạn có đang tự nuôi lại chính thiên lệch của nó — vòng lặp thoái hóa hiếm khi tự lộ ra trong chỉ số.</span></div></div>
+        </div>
+        <div class="question-list easy-only">
+          <div class="question"><div><strong>Bạn lắp thêm mảnh vì máy hỏng, hay vì thấy người ta lắp?</strong><span>Nếu không chỉ ra được chỗ hỏng, thì chưa cần lắp.</span></div></div>
+          <div class="question"><div><strong>Có người gác ở cả cửa vào lẫn cửa ra chưa?</strong><span>Cửa vào canh bí mật đi ra; cửa ra canh máy nói bậy.</span></div></div>
+          <div class="question"><div><strong>Máy hỏng thì bao lâu bạn biết?</strong><span>Biết chậm thì sửa chậm.</span></div></div>
+          <div class="question"><div><strong>Bạn có xem được đường đi của một câu hỏi không?</strong><span>Đi qua phòng nào, tắc ở đâu.</span></div></div>
+          <div class="question"><div><strong>Bạn có để ý lúc người dùng bỏ đi giữa chừng không?</strong><span>Đó là lời chê rõ nhất mà không ai nói ra.</span></div></div>
+          <div class="question"><div><strong>Bạn có tin phản hồi một cách mù quáng không?</strong><span>Nhớ nhé: nghe người dùng, nhưng phải suy nghĩ.</span></div></div>
+        </div>
+        <div class="question-list en-only" lang="en">
+          <div class="question"><div><strong>Do you add components out of need, or out of fashion?</strong><span>The chapter's architecture grows from concrete failures. If you can't name the failure a component fixes, you probably don't need it yet.</span></div></div>
+          <div class="question"><div><strong>Do your guardrails cover both ends?</strong><span>Inputs against data leaks and prompt attacks; outputs against both quality and security failures — with an explicit policy per failure mode.</span></div></div>
+          <div class="question"><div><strong>Do you know your MTTD, MTTR and CFR?</strong><span>These three measure the quality of your observability, not the quality of your model.</span></div></div>
+          <div class="question"><div><strong>When a query fails, can you pinpoint the step?</strong><span>That is the test of tracing: was it processed wrong, was the retrieved context irrelevant, or did the model generate a wrong response?</span></div></div>
+          <div class="question"><div><strong>Which implicit signals are you reading?</strong><span>Early termination, rephrasing, edits, deleted conversations — they are already there; the question is whether you log and interpret them.</span></div></div>
+          <div class="question"><div><strong>Have you looked for the biases in your own feedback?</strong><span>Inspect the rating distribution, the position of chosen options, the length of preferred answers. Uninspected feedback leads to misleading product decisions.</span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="closing" id="closing" aria-labelledby="closing-title">
+    <div class="eyebrow" id="closing-title"><span class="standard-copy">Khép lại cả bộ</span><span class="easy-only">Khép lại cả bộ</span><span class="en-only" lang="en">Closing the series</span></div>
+    <blockquote>
+      <span class="standard-copy">Mười chương đi từ một câu hỏi — <span class="closing-accent">việc này có cần AI không</span> — tới một cỗ máy biết tự nhìn mình. Điều còn lại sau tất cả là lời Huyen: nhiều thách thức của AI, ở cốt lõi, là <span class="closing-accent">bài toán hệ thống</span>; muốn giải, phải lùi lại và nhìn toàn bộ.<span class="cite"><a href="#ref-1">1</a></span></span>
+      <span class="easy-only">Mười bài, từ câu hỏi <span class="closing-accent">“có cần AI không”</span> tới một cỗ máy biết tự soi mình. Nhớ nhé: đừng chỉ sửa từng mảnh — hãy <span class="closing-accent">lùi lại nhìn cả cỗ máy</span>.</span>
+      <span class="en-only" lang="en">Ten chapters, from one question — <span class="closing-accent">does this need AI at all</span> — to a machine that can watch itself. What remains is Huyen's own line: many AI challenges are, at their core, <span class="closing-accent">system problems</span>; to solve them you must step back and consider the whole.<span class="cite"><a href="#ref-1">1</a></span></span>
+    </blockquote>
+  </section>
+
+  <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+  <nav class="chapter-nav" aria-label="Điều hướng chương">
+    <a class="nav-cell nav-prev" href="chapter-9-inference-optimization.html">
+      <span class="nav-label">◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span></span>
+      <span class="nav-title"><span class="vi-only">Chương 9 · Tối ưu suy luận</span><span class="en-only" lang="en">Chapter 9 · Inference Optimization</span></span>
+    </a>
+    <div class="nav-cell nav-next disabled" aria-disabled="true">
+      <span class="nav-label"><span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶</span>
+      <span class="nav-title"><span class="vi-only">Chương cuối của bộ · hết</span><span class="en-only" lang="en">Final chapter of the series · the end</span></span>
+    </div>
+  </nav>
+  <!-- NAV:END -->
+
+  <footer>
+    <div class="footer-main">
+      <p class="standard-copy"><strong>Nguồn chính:</strong> Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, ấn bản thứ nhất, tháng 12 năm 2024 (ISBN 9781098166304) — Chương 10, <em lang="en">AI Engineering Architecture and User Feedback</em>. Bài này là bản diễn giải và tổng hợp phục vụ học tập, không phải bản dịch nguyên văn hoặc bản sao nội dung sách. Các ví dụ trong chế độ “Dễ hiểu” là minh họa do người biên soạn thêm vào.</p>
+      <p class="easy-only"><strong>Nguồn chính:</strong> Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, 2024 — Chương 10. Đây là bản diễn giải để học, không phải bản dịch. Các ví dụ dễ hiểu là do người biên soạn thêm vào cho dễ hình dung.</p>
+      <p class="en-only" lang="en"><strong>Primary source:</strong> Chip Huyen, <em>AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, first edition, December 2024 (ISBN 9781098166304) — Chapter 10, <em>AI Engineering Architecture and User Feedback</em>. This article is an interpretive study companion, not a verbatim translation or reproduction of the book. Examples in the “Dễ hiểu” mode are added illustrations by the compiler.</p>
+      <p class="vi-only"><strong>Tham chiếu</strong></p>
+      <p class="en-only" lang="en"><strong>References</strong></p>
+      <ol class="ref-list">
+        <li id="ref-1">Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em> — Chapter 10, “AI Engineering Architecture and User Feedback” (O’Reilly Media, 2024). <a href="https://www.oreilly.com/library/view/ai-engineering/9781098166298/" target="_blank" rel="noopener noreferrer">oreilly.com — trang sách</a></li>
+        <li id="ref-2">Chip Huyen — <a href="https://huyenchip.com/books/" target="_blank" rel="noopener noreferrer">huyenchip.com/books — trang giới thiệu sách của tác giả</a></li>
+        <li id="ref-3">Mã nguồn và tài liệu bổ trợ chính thức của sách — <a href="https://github.com/chiphuyen/aie-book" target="_blank" rel="noopener noreferrer">github.com/chiphuyen/aie-book</a></li>
+        <li id="ref-4">Lingjiao Chen, Matei Zaharia, James Zou, <em lang="en">How is ChatGPT’s Behavior Changing over Time?</em> (arXiv:2307.09009, 2023). <a href="https://arxiv.org/abs/2307.09009" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2307.09009</a></li>
+        <li id="ref-5">Shreya Shankar et al., <em lang="en">Who Validates the Validators? Aligning LLM-Assisted Evaluation of LLM Outputs with Human Preferences</em> (arXiv:2404.12272, 2024). <a href="https://arxiv.org/abs/2404.12272" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2404.12272</a></li>
+        <li id="ref-6">Jing Xu et al., <em lang="en">Learning New Skills after Deployment: Improving Open-Domain Internet-Driven Dialogue with Human Feedback</em> — bộ dữ liệu FITS (arXiv:2208.03270, 2022). <a href="https://arxiv.org/abs/2208.03270" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2208.03270</a></li>
+        <li id="ref-7">Weizhe Yuan et al., <em lang="en">System-Level Natural Language Feedback</em> (arXiv:2306.13588, 2023). <a href="https://arxiv.org/abs/2306.13588" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2306.13588</a></li>
+        <li id="ref-8">Mrinank Sharma et al., <em lang="en">Towards Understanding Sycophancy in Language Models</em> (arXiv:2310.13548, 2023). <a href="https://arxiv.org/abs/2310.13548" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2310.13548</a></li>
+      </ol>
+      <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+      <p class="vi-only"><strong>Trong bộ bài:</strong> <a href="index.html">Trang bìa</a> · <a href="chapter-8-dataset-engineering.html">Chương 8 · Kỹ thuật dữ liệu</a> · <a href="chapter-9-inference-optimization.html">Chương 9 · Tối ưu suy luận</a> · Chương 10 · Kiến trúc kỹ thuật AI và phản hồi người dùng (trang này)</p>
+      <p class="en-only" lang="en"><strong>In this series:</strong> <a href="index.html">Cover</a> · <a href="chapter-8-dataset-engineering.html">Chapter 8 · Dataset Engineering</a> · <a href="chapter-9-inference-optimization.html">Chapter 9 · Inference Optimization</a> · Chapter 10 · AI Engineering Architecture and User Feedback (this page)</p>
+      <!-- NAV:END -->
+    </div>
+    <div class="edition"><span class="standard-copy">VI · 2026</span><span class="easy-only">VI · 2026</span><span class="en-only" lang="en">EN · 2026</span></div>
+  </footer>
+</main>
+
+
+
+<script>
+  (function () {
+    const STORAGE_KEY = "aie-reading-mode";
+    const VALID_MODES = ["easy", "quick", "deep"];
+    const modeButtons = document.querySelectorAll(".reading-controls [data-mode]");
+
+    function setMode(requestedMode, persist) {
+      const mode = VALID_MODES.includes(requestedMode) ? requestedMode : "deep";
+      document.documentElement.dataset.readingMode = mode;
+      modeButtons.forEach(function (button) {
+        button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
+      });
+      if (persist) {
+        try { localStorage.setItem(STORAGE_KEY, mode); } catch (_) {}
+      }
+    }
+
+    setMode(document.documentElement.dataset.readingMode, false);
+    modeButtons.forEach(function (button) {
+      button.addEventListener("click", function () { setMode(button.dataset.mode, true); });
+    });
+
+    const LANG_KEY = "aie-lang";
+    const langButtons = document.querySelectorAll(".lang-controls [data-lang-option]");
+
+    function setLang(requestedLang, persist) {
+      const lang = requestedLang === "en" ? "en" : "vi";
+      document.documentElement.dataset.lang = lang;
+      document.documentElement.setAttribute("lang", lang);
+      langButtons.forEach(function (button) {
+        button.setAttribute("aria-pressed", String(button.dataset.langOption === lang));
+      });
+      if (persist) {
+        try { localStorage.setItem(LANG_KEY, lang); } catch (_) {}
+      }
+    }
+
+    setLang(document.documentElement.dataset.lang, false);
+    langButtons.forEach(function (button) {
+      button.addEventListener("click", function () { setLang(button.dataset.langOption, true); });
+    });
+  })();
+
+  /* SECTION-RAIL: on-page section index (scroll-spy). Built from the page's own id'd
+     sections; reuses each heading's vi-only/en-only + reading-mode spans so language
+     and reading mode are handled by the existing CSS. No per-page markup. */
+  (function () {
+    if (document.querySelector(".section-rail")) return;
+    var main = document.querySelector("main") || document.body;
+    var targets = Array.prototype.slice.call(
+      document.querySelectorAll("main .section[id], main .closing[id]")
+    );
+    if (targets.length < 2) return;
+
+    function labelFor(sec) {
+      var id = sec.getAttribute("aria-labelledby");
+      var el = (id && document.getElementById(id)) ||
+               sec.querySelector(".section-heading h2, h2, h3, .eyebrow");
+      return el ? el.innerHTML : sec.id;
+    }
+
+    var nav = document.createElement("nav");
+    nav.className = "section-rail";
+    nav.setAttribute("aria-label", "Mục lục trang");
+    var list = document.createElement("ol");
+    list.className = "section-rail__list";
+    var byId = {};
+
+    targets.forEach(function (sec) {
+      var li = document.createElement("li");
+      li.className = "section-rail__item";
+      var a = document.createElement("a");
+      a.className = "section-rail__link";
+      a.href = "#" + sec.id;
+      a.innerHTML =
+        '<span class="section-rail__tick" aria-hidden="true"></span>' +
+        '<span class="section-rail__label">' + labelFor(sec) + "</span>";
+      li.appendChild(a);
+      list.appendChild(li);
+      byId[sec.id] = li;
+    });
+    nav.appendChild(list);
+    main.appendChild(nav);
+
+    var activeId = null;
+    function setActive(id) {
+      if (id === activeId) return;
+      if (activeId && byId[activeId]) byId[activeId].classList.remove("is-active");
+      if (id && byId[id]) byId[id].classList.add("is-active");
+      activeId = id;
+    }
+    function update() {
+      var line = window.innerHeight * 0.3;
+      var current = targets[0].id;
+      for (var i = 0; i < targets.length; i++) {
+        if (targets[i].getBoundingClientRect().top - line <= 0) current = targets[i].id;
+      }
+      setActive(current);
+    }
+    var ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(function () { update(); ticking = false; });
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    update();
+  })();
+</script>
+</body>
+</html>

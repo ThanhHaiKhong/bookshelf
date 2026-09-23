@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="vi" data-mode="standard" data-lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 5 · Cài đặt và khởi động — Linux Kernel in a Nutshell</title>
+<meta name="description" content="Người đồng hành song ngữ Việt/Anh cho Chương 5 &quot;Installing and Booting from a Kernel&quot; của Linux Kernel in a Nutshell (Greg Kroah-Hartman, O&#39;Reilly, 2006): cài nhân bằng script của bản phân phối, cài bằng tay, và sửa bộ nạp khởi động — kèm đối chiếu với GRUB 2 và kernel-install ngày nay.">
+<script>
+/* pre-hydration: đọc lựa chọn đã lưu trước khi vẽ, tránh nháy màn hình */
+(function () {
+  try {
+    var m = localStorage.getItem("lkn-reading-mode");
+    var l = localStorage.getItem("lkn-lang");
+    if (m === "standard" || m === "easy" || m === "deep") document.documentElement.setAttribute("data-mode", m);
+    if (l === "vi" || l === "en") document.documentElement.setAttribute("data-lang", l);
+    if (localStorage.getItem("lkn-theme") === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  } catch (e) {}
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --teal: #0f766e;
+  --blue: #1d4ed8;
+  --amber: #b45309;
+  --leaf: #4d7c0f;
+  --ink: #16202a;
+  --ink-soft: #4a5a68;
+  --ink-faint: #7c8b98;
+  --surface: #fbfaf7;
+  --surface-2: #ffffff;
+  --surface-3: #f2efe8;
+  --line: #ded8cd;
+  --line-soft: #ebe6dc;
+  --shadow: 0 1px 2px rgba(22, 32, 42, .05), 0 8px 24px rgba(22, 32, 42, .06);
+  --serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --measure: 34rem;
+}
+:root[data-theme="dark"] {
+  --teal: #5eead4;
+  --blue: #93b4ff;
+  --amber: #fbbf24;
+  --leaf: #a3e635;
+  --ink: #e8eef4;
+  --ink-soft: #a6b6c4;
+  --ink-faint: #74869a;
+  --surface: #11171d;
+  --surface-2: #171f27;
+  --surface-3: #1e2831;
+  --line: #2d3945;
+  --line-soft: #232e38;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --teal: #5eead4; --blue: #93b4ff; --amber: #fbbf24; --leaf: #a3e635;
+    --ink: #e8eef4; --ink-soft: #a6b6c4; --ink-faint: #74869a;
+    --surface: #11171d; --surface-2: #171f27; --surface-3: #1e2831;
+    --line: #2d3945; --line-soft: #232e38;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.72;
+  -webkit-font-smoothing: antialiased;
+}
+main { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem 4rem; }
+p { margin: 0 0 1.05rem; max-width: var(--measure); }
+a { color: var(--blue); }
+h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; line-height: 1.22; color: var(--ink); }
+code, kbd, samp { font-family: var(--mono); font-size: .88em; background: var(--surface-3); padding: .12em .38em; border-radius: 4px; }
+
+/* ---------- reading mode + bilingual visibility ---------- */
+.easy-only, .deep-only, .en-only { display: none; }
+:root[data-mode="standard"] .standard-copy,
+:root[data-mode="deep"] .standard-copy { display: revert; }
+:root[data-mode="deep"] .deep-only { display: revert; }
+:root[data-mode="easy"] .standard-copy { display: none; }
+:root[data-mode="easy"] .easy-only { display: revert; }
+:root[data-lang="vi"] .vi-only { display: revert; }
+:root[data-lang="en"] .vi-only,
+:root[data-lang="en"] .standard-copy,
+:root[data-lang="en"] .easy-only,
+:root[data-lang="en"] .deep-only { display: none; }
+:root[data-lang="en"] .en-only { display: revert; }
+:root[data-lang="en"] .mode-switch { opacity: .35; pointer-events: none; }
+
+/* ---------- topbar ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: .7rem 1.5rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.book-label { font-size: .78rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-right: auto; }
+.switch-group { display: flex; gap: .3rem; align-items: center; }
+.switch-group + .switch-group { margin-left: .35rem; }
+.switch-label { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin-right: .25rem; }
+button.chip {
+  font: inherit; font-size: .78rem; font-weight: 600;
+  padding: .3rem .72rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft);
+  transition: background .15s, color .15s, border-color .15s;
+}
+button.chip:hover { border-color: var(--teal); color: var(--teal); }
+button.chip[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: var(--surface); }
+:root[data-theme="dark"] button.chip[aria-pressed="true"] { color: #0b1116; }
+
+/* ---------- hero ---------- */
+.hero {
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  gap: 2.75rem; align-items: center;
+  padding: 3.75rem 0 3rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.hero::after {
+  content: "LKN / 05";
+  position: absolute; top: 1.15rem; right: 0;
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .22em;
+  color: var(--ink-faint);
+}
+.eyebrow { font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--teal); font-weight: 700; margin: 0 0 .85rem; }
+.hero h1 { font-size: clamp(2.05rem, 4.6vw, 3.1rem); margin: 0 0 1.15rem; letter-spacing: -.015em; }
+.hero p { font-size: 1.06rem; color: var(--ink-soft); }
+.thesis {
+  margin-top: 1.5rem; padding: 1.05rem 1.25rem 1.05rem 2.6rem;
+  position: relative; max-width: var(--measure);
+  background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--amber);
+  border-radius: 0 10px 10px 0; box-shadow: var(--shadow);
+}
+.thesis::before { content: "∴"; position: absolute; left: .95rem; top: .95rem; font-size: 1.15rem; color: var(--amber); }
+.thesis p { margin: 0; font-size: .97rem; color: var(--ink); }
+
+/* ---------- CSS diagrams ---------- */
+.system-map {
+  position: relative; display: grid; gap: .75rem;
+  padding: 1.5rem; border-radius: 16px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.system-map .core {
+  justify-self: center; text-align: center;
+  padding: .85rem 1.25rem; border-radius: 999px;
+  background: var(--teal); color: var(--surface); font-weight: 700; font-size: .9rem;
+  max-width: 100%;
+}
+:root[data-theme="dark"] .system-map .core { color: #0b1116; }
+.system-map .spokes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
+.system-map .node {
+  padding: .8rem .85rem; border-radius: 12px; text-align: center;
+  background: var(--surface-3); border: 1px solid var(--line-soft);
+}
+.system-map .node b { display: block; font-size: .82rem; color: var(--ink); margin-bottom: .3rem; }
+.system-map .node small { display: block; font-size: .73rem; line-height: 1.5; color: var(--ink-soft); }
+.loop-diagram { display: grid; gap: .55rem; padding: 1.25rem; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.loop-diagram .step { padding: .6rem .8rem; border-radius: 10px; background: var(--surface-3); border-left: 3px solid var(--blue); font-size: .82rem; }
+
+/* ---------- chapter path ---------- */
+.chapter-path {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem;
+  margin: 2.5rem 0 3rem;
+}
+.chapter-path a {
+  display: block; padding: .9rem 1rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+  transition: border-color .15s, transform .15s;
+}
+.chapter-path a:hover { border-color: var(--teal); transform: translateY(-2px); }
+.chapter-path span { display: block; font-size: .67rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.chapter-path b { display: block; font-family: var(--serif); font-size: .96rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- sections ---------- */
+.section { padding: 2.75rem 0; border-top: 1px solid var(--line-soft); }
+.section-heading h2 { font-size: clamp(1.5rem, 3vw, 2.05rem); margin: 0 0 .9rem; }
+.section-heading p { color: var(--ink-soft); }
+.surprise-lead {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem;
+  margin: 1.75rem 0 2rem;
+}
+.definition, .equation { padding: 1rem 1.15rem; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); font-size: .92rem; }
+.definition { border-left: 3px solid var(--blue); }
+.equation { border-left: 3px solid var(--leaf); font-family: var(--mono); font-size: .82rem; line-height: 1.7; }
+.definition p, .equation p { margin: 0; max-width: none; }
+
+.surprise-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.1rem; }
+.trap-grid { grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
+.surprise-grid > li {
+  padding: 1.25rem 1.35rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.english-term { display: inline-block; font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--amber); margin-bottom: .45rem; }
+.surprise-grid h3 { font-size: 1.05rem; margin: 0 0 .7rem; }
+.surprise-grid p { font-size: .93rem; max-width: none; }
+.opportunity {
+  margin-top: .9rem; padding: .75rem .9rem; border-radius: 10px;
+  background: var(--surface-3); border-left: 3px solid var(--leaf); font-size: .87rem;
+}
+.opportunity p { margin: 0; font-size: .87rem; }
+.mechanics { margin-top: .9rem; display: grid; gap: .7rem; }
+.info-block { padding: .75rem .9rem; border-radius: 10px; border: 1px dashed var(--line); background: var(--surface); }
+.info-block h4 { font-size: .85rem; margin: 0 0 .35rem; color: var(--teal); }
+.info-block p { margin: 0; font-size: .86rem; }
+.result { margin-top: .7rem; font-size: .86rem; color: var(--ink-soft); }
+
+.signal {
+  margin: 2rem 0 0; padding: 1.1rem 1.3rem; border-radius: 12px;
+  background: var(--surface-3); border: 1px solid var(--line-soft); border-top: 3px solid var(--blue);
+}
+.signal p { margin: 0 0 .6rem; font-size: .93rem; }
+.signal p:last-child { margin-bottom: 0; }
+
+/* ---------- misconceptions ---------- */
+.trap-comparison { margin: 2.5rem 0; }
+.comparison-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; margin-top: 1.25rem; }
+.comparison-card {
+  padding: 1.1rem 1.25rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); border-top: 3px solid var(--amber);
+}
+.comparison-card h3 { font-size: .98rem; margin: 0 0 .6rem; }
+.comparison-card p { font-size: .9rem; max-width: none; }
+.comparison-card .myth { color: var(--amber); font-weight: 600; }
+.comparison-card .fact { color: var(--teal); font-weight: 600; }
+
+/* ---------- diagnostic ---------- */
+.diagnostic { padding: 1.75rem; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.diagnostic-intro p { font-size: .97rem; }
+.question-list { counter-reset: q; list-style: none; margin: 1.25rem 0 0; padding: 0; display: grid; gap: .9rem; }
+.question-list > li { counter-increment: q; position: relative; padding-left: 2.4rem; font-size: .93rem; }
+.question-list > li::before {
+  content: counter(q, decimal-leading-zero);
+  position: absolute; left: 0; top: .05rem;
+  font-family: var(--mono); font-size: .78rem; font-weight: 600; color: var(--teal);
+  border: 1px solid var(--line); border-radius: 6px; padding: .05rem .38rem;
+}
+.question-list .deep-only { margin-top: .4rem; font-size: .87rem; color: var(--ink-soft); }
+
+/* ---------- closing ---------- */
+.closing { padding: 3rem 0 1rem; border-top: 1px solid var(--line-soft); }
+.closing blockquote {
+  margin: 0; padding: 1.5rem 0 0; max-width: 46rem;
+  font-family: var(--serif); font-size: clamp(1.15rem, 2.4vw, 1.55rem); line-height: 1.5; color: var(--ink);
+}
+.closing blockquote p { max-width: none; font-size: inherit; line-height: inherit; }
+.closing-accent { color: var(--teal); font-style: italic; }
+
+/* ---------- chapter nav ---------- */
+.chapter-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 3rem 0 0; }
+.nav-cell {
+  display: block; padding: 1rem 1.15rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); transition: border-color .15s, transform .15s;
+}
+a.nav-cell:hover { border-color: var(--teal); transform: translateY(-2px); }
+.nav-cell.disabled { opacity: .5; background: var(--surface-3); cursor: default; }
+.nav-next { text-align: right; }
+.nav-label { display: block; font-size: .68rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.nav-title { display: block; font-family: var(--serif); font-size: .95rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- footer + references ---------- */
+footer {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.5rem; align-items: start;
+  margin-top: 3rem; padding: 2rem 0 3rem; border-top: 1px solid var(--line);
+  font-size: .85rem; color: var(--ink-soft);
+}
+.footer-main p { max-width: 48rem; font-size: .85rem; }
+.footer-label { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; margin: 1.5rem 0 .6rem; }
+.ref-list { margin: 0; padding-left: 1.4rem; display: grid; gap: .5rem; }
+.ref-list li { font-size: .82rem; line-height: 1.6; }
+.edition { font-family: var(--mono); font-size: .7rem; letter-spacing: .12em; color: var(--ink-faint); white-space: nowrap; }
+.cite { font-size: .7em; vertical-align: super; line-height: 0; margin-left: .1em; }
+.cite a { text-decoration: none; padding: 0 .12em; }
+
+/* SECTION-RAIL:START */
+.section-rail {
+  position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+  z-index: 30; padding: .6rem .5rem; display: none;
+}
+.section-rail__list { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+.section-rail__list a {
+  display: flex; align-items: center; gap: .55rem;
+  text-decoration: none; color: var(--ink-faint); font-size: .74rem; line-height: 1.25;
+}
+.section-rail__list a::before {
+  content: ""; flex: 0 0 auto; width: 1.15rem; height: 2px; border-radius: 2px;
+  background: var(--line); transition: width .2s, background .2s;
+}
+.section-rail__label {
+  max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0;
+  transition: max-width .24s ease, opacity .18s ease;
+}
+.section-rail:hover .section-rail__label,
+.section-rail:focus-within .section-rail__label { max-width: 13rem; opacity: 1; }
+.section-rail:hover, .section-rail:focus-within {
+  background: color-mix(in srgb, var(--surface-2) 94%, transparent);
+  border: 1px solid var(--line-soft); border-left: 0; border-radius: 0 12px 12px 0; box-shadow: var(--shadow);
+}
+.section-rail__list a:hover,
+.section-rail__list a[aria-current="true"] { color: var(--teal); }
+.section-rail__list a[aria-current="true"]::before { width: 1.9rem; background: var(--teal); }
+@media (min-width: 1180px) { .section-rail { display: block; } }
+/* SECTION-RAIL:END */
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 2rem; padding-top: 2.5rem; }
+  .hero::after { position: static; display: block; margin-bottom: .75rem; }
+  .system-map .spokes { grid-template-columns: minmax(0, 1fr); }
+  footer { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 620px) {
+  body { font-size: 16px; }
+  main { padding: 0 1.1rem 3rem; }
+  .topbar { padding: .6rem 1.1rem; gap: .5rem; }
+  .book-label { width: 100%; margin-right: 0; }
+  .chapter-nav { grid-template-columns: minmax(0, 1fr); }
+  .nav-next { text-align: left; }
+  .diagnostic { padding: 1.25rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">Linux Kernel in a Nutshell · <span class="vi-only">Chương 5 · Cài đặt và khởi động</span><span class="en-only" lang="en">Chapter 5 · Installing and Booting</span></div>
+  <div class="switch-group mode-switch">
+    <span class="switch-label vi-only">Mức đọc</span><span class="switch-label en-only" lang="en">Level</span>
+    <button class="chip" type="button" data-set-mode="easy" aria-pressed="false"><span class="vi-only">Dễ hiểu</span><span class="en-only" lang="en">Easy</span></button>
+    <button class="chip" type="button" data-set-mode="standard" aria-pressed="true"><span class="vi-only">Tiêu chuẩn</span><span class="en-only" lang="en">Standard</span></button>
+    <button class="chip" type="button" data-set-mode="deep" aria-pressed="false"><span class="vi-only">Đầy đủ</span><span class="en-only" lang="en">Deep</span></button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-set-lang="vi" aria-pressed="true">VI</button>
+    <button class="chip" type="button" data-set-lang="en" aria-pressed="false">EN</button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-toggle-theme aria-pressed="false"><span class="vi-only">Tối</span><span class="en-only" lang="en">Dark</span></button>
+  </div>
+</header>
+
+<nav class="section-rail" aria-label="Mục lục trong trang"><ul class="section-rail__list"></ul></nav>
+
+<main>
+
+<section class="hero" id="cai-dat" aria-labelledby="cai-dat-title">
+  <div>
+    <p class="eyebrow"><span class="vi-only">Phần I · Dựng nhân · Chương 5</span><span class="en-only" lang="en">Part I · Building the Kernel · Chapter 5</span></p>
+    <h1 id="cai-dat-title">
+      <span class="standard-copy">Đưa nhân vừa dựng vào chỗ máy sẽ tìm nó</span>
+      <span class="easy-only">Đặt nhân mới vào đúng chỗ để máy thấy</span>
+      <span class="en-only" lang="en">Putting a built kernel where the machine will look for it</span>
+    </h1>
+    <p class="standard-copy">Các chương trước dẫn bạn tới một tệp thực thi cùng những module đã dựng. Kroah-Hartman mở chương 5 bằng đúng câu chuyển ấy: giờ là lúc cài nhân và thử khởi động nó <span class="cite"><a href="#ref-1">1</a></span>. Và ông đặt ngay một ngoại lệ: khác với các chương trước, <em>mọi</em> lệnh trong chương này đều cần chạy với quyền <code>root</code> <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    <p class="easy-only">Ở các chương trước, bạn đã dựng xong nhân mới. Giờ phải mang nó đặt vào đúng chỗ, rồi bảo máy khởi động bằng nó <span class="cite"><a href="#ref-1">1</a></span>. Chương này là chương duy nhất trong phần đầu sách cần quyền quản trị cho mọi lệnh <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: đến đây mới được mượn quyền lớn.</p>
+    <p class="en-only" lang="en">The previous chapters led you to an executable file and whatever modules you built. Kroah-Hartman opens Chapter 5 on exactly that pivot: it is time to install the kernel and attempt to boot it <span class="cite"><a href="#ref-1">1</a></span>. And he states the exception right away: unlike in the earlier chapters, <em>all</em> of the commands here must be run as the root user <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    <p class="deep-only">Hãy để ý ranh giới này trùng khít với quy tắc của chương 1: chỉ hai hoặc ba lệnh <em>cài</em> mới cần quyền siêu người dùng, còn tải, giải nén, cấu hình, biên dịch thì không <span class="cite"><a href="#ref-9">9</a></span>. Chương 5 chính là chỗ hai hoặc ba lệnh ấy xuất hiện — không sớm hơn, không nhiều hơn.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận điểm chương 5.</b> Việc cài nhân gồm ba việc tách rời — đặt module, đặt ảnh nhân, và báo cho bộ nạp khởi động — và bạn có thể giao cả ba cho <code>make install</code>, hoặc làm từng việc bằng tay để hiểu chúng <span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-3">3</a></span>. Dù chọn đường nào, nguyên tắc an toàn không đổi: cài đặt không ghi đè các ảnh nhân cũ, nên nếu nhân mới hỏng, bạn vẫn chọn được nhân cũ lúc khởi động <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only"><b>Ý chính.</b> Cài nhân là ba việc: đặt module, đặt nhân, và báo cho phần mềm khởi động biết. Có thể để máy tự làm cả ba bằng một lệnh, hoặc tự làm tay từng bước <span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: nhân cũ không bị xóa, nên lỡ hỏng vẫn quay về được <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="en-only" lang="en"><b>Chapter 5 thesis.</b> Installing a kernel is three separable jobs — place the modules, place the kernel image, and tell the bootloader — and you can hand all three to <code>make install</code> or do each by hand to understand it <span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-3">3</a></span>. Either way the safety principle holds: the installation does not overwrite any older kernel images, so if there is a problem with the new one, the old kernel can still be selected at boot time <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: ba việc của bước cài nhân — cài module vào /lib/modules, chép ảnh nhân vào /boot, và thêm mục vào bộ nạp khởi động. Diagram: the three jobs of installation — modules into /lib/modules, the kernel image into /boot, and a new entry in the bootloader.">
+    <div class="core"><span class="vi-only">Cài một nhân</span><span class="en-only" lang="en">Installing a kernel</span></div>
+    <div class="spokes">
+      <div class="node">
+        <b><span class="vi-only">Module</span><span class="en-only" lang="en">Modules</span></b>
+        <small class="standard-copy"><code>make modules_install</code> đặt module vào <code>/lib/modules/kernel_version</code>.</small>
+        <small class="easy-only">Các mảnh rời của nhân về đúng thư mục của phiên bản mới.</small>
+        <small class="en-only" lang="en"><code>make modules_install</code> places modules in <code>/lib/modules/kernel_version</code>.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Ảnh nhân</span><span class="en-only" lang="en">Kernel image</span></b>
+        <small class="standard-copy">Phần tĩnh của nhân vào <code>/boot</code>, tên gắn theo số phiên bản.</small>
+        <small class="easy-only">Tệp nhân chính được chép vào thư mục khởi động.</small>
+        <small class="en-only" lang="en">The static kernel goes into <code>/boot</code>, named after its version.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Bộ nạp khởi động</span><span class="en-only" lang="en">Bootloader</span></b>
+        <small class="standard-copy">Một mục mới trong trình đơn để bạn chọn nhân mới khi khởi động.</small>
+        <small class="easy-only">Thêm một dòng vào trình đơn lúc bật máy.</small>
+        <small class="en-only" lang="en">A new menu entry so you can select the new kernel at boot.</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<nav class="chapter-path" aria-label="Lối đi trong chương">
+  <a href="#quyen-root">
+    <span>01</span>
+    <b><span class="standard-copy">Mượn quyền root đúng cách</span><span class="easy-only">Mượn quyền quản trị cho đúng</span><span class="en-only" lang="en">Borrowing root correctly</span></b>
+  </a>
+  <a href="#tu-dong">
+    <span>02</span>
+    <b><span class="standard-copy">Đường tự động: <code>installkernel</code></span><span class="easy-only">Cách nhanh: để máy tự làm</span><span class="en-only" lang="en">The automatic path: <code>installkernel</code></span></b>
+  </a>
+  <a href="#bang-tay">
+    <span>03</span>
+    <b><span class="standard-copy">Đường thủ công: từng bước một</span><span class="easy-only">Cách tay: làm từng bước</span><span class="en-only" lang="en">The manual path, step by step</span></b>
+  </a>
+  <a href="#bo-nap">
+    <span>04</span>
+    <b><span class="standard-copy">Sửa bộ nạp khởi động — 2006 và hôm nay</span><span class="easy-only">Sửa phần khởi động</span><span class="en-only" lang="en">The bootloader — 2006 and today</span></b>
+  </a>
+  <a href="#tu-kiem">
+    <span>05</span>
+    <b><span class="standard-copy">Tự kiểm trước khi khởi động lại</span><span class="easy-only">Tự hỏi mình trước khi bật lại máy</span><span class="en-only" lang="en">Self-check before you reboot</span></b>
+  </a>
+</nav>
+
+<section class="section" id="quyen-root" aria-labelledby="quyen-root-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 01</span><span class="en-only" lang="en">Concept cluster 01</span></p>
+    <h2 id="quyen-root-title">
+      <span class="standard-copy">Mượn quyền root đúng cách — và trả lại ngay</span>
+      <span class="easy-only">Mượn quyền quản trị, rồi trả lại liền</span>
+      <span class="en-only" lang="en">Borrowing root correctly — and giving it straight back</span>
+    </h2>
+    <p class="standard-copy">Chương mở đầu không bằng một lệnh cài, mà bằng một bài kiểm tra quyền. Ông liệt kê ba cách để chạy lệnh với quyền <code>root</code>: đặt <code>sudo</code> trước mỗi lệnh, dùng <code>su</code> để trở thành root, hoặc thực sự đăng nhập bằng tài khoản root <span class="cite"><a href="#ref-1">1</a></span>. Rồi ông đưa một phép thử nhỏ để biết máy bạn đã có <code>sudo</code> và bạn có quyền dùng nó hay chưa <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    <p class="easy-only">Chương này bắt đầu bằng việc kiểm tra xem bạn có quyền quản trị không. Có ba cách để có quyền đó: thêm <code>sudo</code> trước lệnh, gõ <code>su</code>, hoặc đăng nhập thẳng bằng tài khoản quản trị <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: thử trước rồi hãy làm.</p>
+    <p class="en-only" lang="en">The chapter does not open with an install command but with a permissions test. He lists three ways to run a command as <code>root</code>: prefixing each command with <code>sudo</code>, using <code>su</code> to become root, or actually logging in as root <span class="cite"><a href="#ref-1">1</a></span>. Then he gives a small probe to find out whether <code>sudo</code> is installed and properly set up for you <span class="cite"><a href="#ref-1">1</a></span>.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b><code>sudo</code> và <code>su</code>.</b> Hai cách khác nhau để mượn quyền. Với <code>sudo</code>, mật khẩu bạn nhập có thể là mật khẩu của chính bạn hoặc của quản trị viên — tùy cách <code>sudo</code> được cấu hình <span class="cite"><a href="#ref-1">1</a></span>. Với <code>su</code>, bạn nhập mật khẩu của <code>root</code> và từ đó <em>mọi thứ</em> bạn gõ đều chạy với toàn quyền <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="easy-only"><b>Hai cách mượn quyền.</b> <code>sudo</code> cho phép chạy <em>một</em> lệnh với quyền lớn. <code>su</code> biến toàn bộ phiên làm việc thành quyền lớn <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: <code>sudo</code> là mượn từng lần, <code>su</code> là mượn cả buổi.</p>
+      <p class="en-only" lang="en"><b><code>sudo</code> versus <code>su</code>.</b> Two different ways of borrowing privilege. With <code>sudo</code>, the password you type may be your own or the administrator's, depending on how <code>sudo</code> was set up <span class="cite"><a href="#ref-1">1</a></span>. With <code>su</code>, you type <code>root</code>'s password and from then on <em>everything</em> you type runs with full privileges <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">chương 1–4 → user thường<br>chương 5&nbsp;&nbsp;&nbsp;&nbsp; → root<br>làm ít nhất có thể → <code>exit</code></p>
+      <p class="easy-only">4 chương trước → tài khoản thường<br>chương này&nbsp;&nbsp;&nbsp;&nbsp; → quyền quản trị<br>xong việc&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → thoát ra ngay</p>
+      <p class="en-only" lang="en">chapters 1–4 → normal user<br>chapter 5&nbsp;&nbsp;&nbsp;&nbsp; → root<br>do the minimum → <code>exit</code></p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">testing sudo</span>
+      <h3>
+        <span class="standard-copy">Phép thử trước khi cần đến</span>
+        <span class="easy-only">Thử quyền trước khi dùng</span>
+        <span class="en-only" lang="en">Test the privilege before you need it</span>
+      </h3>
+      <p class="standard-copy">Phép thử của ông rất gọn: chạy <code>sudo ls ~/linux/linux-2.6.17.11/Makefile</code>, nhập mật khẩu, và nếu bạn thấy dòng <code>Makefile</code> hiện ra thì có thể bỏ qua phần còn lại và sang mục kế <span class="cite"><a href="#ref-1">1</a></span>. Nếu <code>sudo</code> chưa được cài hoặc chưa cho bạn quyền, ông chuyển sang <code>su</code> <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="easy-only">Cách thử: gõ lệnh <code>sudo ls</code> xem một tệp trong thư mục nhân. Nếu tên tệp hiện ra là được <span class="cite"><a href="#ref-1">1</a></span>. Nếu không, dùng <code>su</code> thay thế <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: thử bằng một lệnh vô hại trước đã.</p>
+      <p class="en-only" lang="en">His probe is compact: run <code>sudo ls ~/linux/linux-2.6.17.11/Makefile</code>, enter the password, and if you see the line <code>Makefile</code>, you can skip ahead to the next section <span class="cite"><a href="#ref-1">1</a></span>. If <code>sudo</code> is not installed or is not giving you the rights, he falls back to <code>su</code> <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Đường dẫn <code>~/linux/linux-2.6.17.11/</code> trong ví dụ chính là thư mục làm việc mà chương 1 và chương 3 đã dặn tạo dưới thư mục nhà <span class="cite"><a href="#ref-9">9</a></span>; hướng dẫn hiện hành của kernel.org cũng dùng đúng <code>~/linux/</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Thư mục <code>~/linux/</code> trong ví dụ là chỗ bạn đã đặt mã nguồn từ chương trước <span class="cite"><a href="#ref-9">9</a></span>, và hướng dẫn mới của kernel.org cũng dùng chỗ đó <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: vẫn là cái sân nhà cũ.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The path <code>~/linux/linux-2.6.17.11/</code> in the example is the working directory Chapters 1 and 3 told you to create in your home <span class="cite"><a href="#ref-9">9</a></span>; today's kernel.org guide uses the very same <code>~/linux/</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">minimum time as root</span>
+      <h3>
+        <span class="standard-copy">Cẩn trọng và làm ít nhất có thể</span>
+        <span class="easy-only">Làm ít thôi rồi thoát ra</span>
+        <span class="en-only" lang="en">Be careful, and do only the minimum</span>
+      </h3>
+      <p class="standard-copy">Đoạn về <code>su</code> kết thúc bằng một lời dặn mà đọc nhanh rất dễ lướt qua: hãy <em>rất</em> cẩn trọng khi đang là root, chỉ làm phần tối thiểu cần thiết, rồi thoát khỏi chương trình để trở lại tài khoản thường <span class="cite"><a href="#ref-1">1</a></span>. Đây không phải nghi thức — ở chương 1 ông đã kể lỗi từng xóa tệp trong <code>/dev</code> vì người dùng có quyền siêu người dùng lúc dựng <span class="cite"><a href="#ref-9">9</a></span>.</p>
+      <p class="easy-only">Khi đang có quyền quản trị, hãy làm thật ít rồi gõ <code>exit</code> để trở về bình thường <span class="cite"><a href="#ref-1">1</a></span>. Đã có lần lỗi làm mất tệp quan trọng vì người dùng giữ quyền đó quá lâu <span class="cite"><a href="#ref-9">9</a></span>. Nhớ nhé: mượn dao sắc thì cắt xong trả liền.</p>
+      <p class="en-only" lang="en">The passage on <code>su</code> ends with an instruction that is easy to skim past: be <em>very</em> careful while you are root, do only the minimum needed, then exit the program to continue as your normal user account <span class="cite"><a href="#ref-1">1</a></span>. This is not ritual — in Chapter 1 he recounted bugs that deleted files in <code>/dev</code> because the user held superuser permissions while building <span class="cite"><a href="#ref-9">9</a></span>.</p>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao chương này là ngoại lệ</h4>
+          <p>Ba việc của bước cài — ghi vào <code>/lib/modules/</code>, ghi vào <code>/boot/</code>, và sửa cấu hình bộ nạp khởi động trong <code>/boot/grub/</code> hoặc <code>/etc/</code> — đều nằm ngoài thư mục nhà. Không có quyền root thì không ghi được. Ranh giới của ông vì thế là ranh giới của hệ thống tệp, không phải một thói quen tùy ý.</p>
+        </div>
+        <div class="info-block">
+          <h4>Ranh giới ấy vẫn còn nguyên</h4>
+          <p>Hướng dẫn dựng nhân hiện hành của kernel.org giữ đúng mô hình: mọi lệnh <code>git</code> và <code>make</code> chạy trong <code>~/linux/</code> bằng tài khoản thường, chỉ riêng bước cài mới là <code>sudo make modules_install install</code> <span class="cite"><a href="#ref-4">4</a></span>. Hai mươi năm, một lệnh <code>sudo</code>.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Có quyền rồi thì đến câu hỏi thực chất: để bản phân phối làm hộ, hay tự làm bằng tay? Ông trình bày đường tự động trước, vì với đa số người đọc đó là đường đúng.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Có quyền rồi, giờ chọn cách làm: để máy tự làm hay tự tay làm. Nhớ nhé: cách tự động là cách nên thử trước.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> With the privilege in hand comes the real question: let the distribution do it, or do it by hand? He presents the automatic path first, because for most readers it is the right one.</p>
+  </aside>
+</section>
+
+<section class="section" id="tu-dong" aria-labelledby="tu-dong-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 02 · “Using a Distribution's Installation Scripts”</span><span class="en-only" lang="en">Concept cluster 02 · “Using a Distribution's Installation Scripts”</span></p>
+    <h2 id="tu-dong-title">
+      <span class="standard-copy">Đường tự động: hai lệnh và một chuỗi năm bước</span>
+      <span class="easy-only">Cách nhanh: hai lệnh là xong</span>
+      <span class="en-only" lang="en">The automatic path: two commands, five steps</span>
+    </h2>
+    <p class="standard-copy">Gần như mọi bản phân phối đều kèm một script tên <code>installkernel</code> mà hệ thống dựng của nhân có thể gọi để tự đặt nhân vào đúng chỗ và sửa bộ nạp khởi động, người dùng không phải làm gì thêm <span class="cite"><a href="#ref-2">2</a></span>. Nếu không tìm thấy script trên máy, ông mách rằng các bản phân phối thường đóng gói nó trong gói tên <code>mkinitrd</code> <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    <p class="easy-only">Hầu hết bản Linux đều có sẵn một script tên <code>installkernel</code>. Nó tự đặt nhân vào đúng chỗ và tự sửa phần khởi động giúp bạn <span class="cite"><a href="#ref-2">2</a></span>. Không thấy nó thì cài gói tên <code>mkinitrd</code> <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: cứ thử cách này trước.</p>
+    <p class="en-only" lang="en">Almost all distributions ship a script called <code>installkernel</code> that the kernel build system can call to install a built kernel in the proper place and modify the bootloader, so nothing extra is needed from the developer <span class="cite"><a href="#ref-2">2</a></span>. If you cannot find the script on your machine, he notes that distributions usually put it in a package called <code>mkinitrd</code> <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    <p class="deep-only">Ông cũng nêu ngoại lệ trong một chú thích: Gentoo và các bản phân phối kiểu “dựng từ đầu” cố tình không đi theo quy ước này, vì họ kỳ vọng người dùng tự biết cách cài nhân; những bản ấy có tài liệu riêng nên hãy tra đúng tài liệu của chúng <span class="cite"><a href="#ref-2">2</a></span>. Đây là một mẫu lặp lại trong cả cuốn sách: quy tắc chung kèm danh sách các ngoại lệ được nêu tên.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Hai lệnh, theo đúng thứ tự.</b> Trước hết <code>make modules_install</code> để đặt các module vừa dựng vào <code>/lib/modules/kernel_version</code>, trong đó <code>kernel_version</code> là phiên bản của nhân bạn vừa dựng <span class="cite"><a href="#ref-2">2</a></span>. Sau khi module đã vào chỗ, mới chạy <code>make install</code> để cài ảnh nhân chính <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only"><b>Hai lệnh.</b> Lệnh đầu đặt các module vào thư mục của phiên bản mới; lệnh sau đặt nhân chính <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: module trước, nhân sau — không đảo ngược.</p>
+      <p class="en-only" lang="en"><b>Two commands, in this order.</b> First <code>make modules_install</code> places the modules you built into <code>/lib/modules/kernel_version</code>, where <code>kernel_version</code> is the version of the kernel you have just built <span class="cite"><a href="#ref-2">2</a></span>. Only after the modules are in place do you run <code>make install</code> for the main kernel image <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy"># make modules_install<br># make install<br>→ kiểm tra · chép vào /boot · initrd<br>→ báo bộ nạp · reboot</p>
+      <p class="easy-only">lệnh 1 · đặt module<br>lệnh 2 · đặt nhân + sửa menu<br>→ khởi động lại và chọn nhân mới</p>
+      <p class="en-only" lang="en"># make modules_install<br># make install<br>→ verify · copy to /boot · initrd<br>→ notify bootloader · reboot</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">make modules_install</span>
+      <h3>
+        <span class="standard-copy">Module đi trước — vì ramdisk cần chúng</span>
+        <span class="easy-only">Đặt module trước đã</span>
+        <span class="en-only" lang="en">Modules first — because the ramdisk needs them</span>
+      </h3>
+      <p class="standard-copy">Thứ tự không phải tùy tiện. Ở bước 3 của chuỗi do <code>make install</code> kích hoạt, mọi ảnh ramdisk khởi tạo cần thiết sẽ được tạo tự động, <em>dùng chính những module vừa được cài ở bước <code>modules_install</code></em> <span class="cite"><a href="#ref-2">2</a></span>. Đảo ngược thứ tự thì ramdisk được dựng từ một thư mục module chưa tồn tại.</p>
+      <p class="easy-only">Phải đặt module trước vì bước sau sẽ lấy chính những module đó để dựng ảnh khởi động tạm <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: làm sai thứ tự thì máy không tìm thấy thứ nó cần.</p>
+      <p class="en-only" lang="en">The order is not arbitrary. At step 3 of the sequence that <code>make install</code> kicks off, any needed initial ramdisk images are created automatically, <em>using the modules just installed during the <code>modules_install</code> phase</em> <span class="cite"><a href="#ref-2">2</a></span>. Reverse the order and the ramdisk is built from a module directory that does not yet exist.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Tài liệu <span lang="en">initrd</span> của nhân mô tả đúng lý do tồn tại của ảnh này: nhân khởi động với một tập driver biên dịch sẵn tối thiểu, rồi nạp thêm module từ initrd <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Ảnh khởi động tạm (initrd) giúp nhân nạp thêm module cần thiết ngay lúc bật máy <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: nó là hộp đồ nghề nhân mang theo lúc mới tỉnh dậy.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The kernel's own <span lang="en">initrd</span> documentation states its purpose exactly: the kernel comes up with a minimum set of compiled-in drivers, and additional modules are loaded from initrd <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">make install</span>
+      <h3>
+        <span class="standard-copy">Năm bước ẩn sau một lệnh</span>
+        <span class="easy-only">Một lệnh, năm việc</span>
+        <span class="en-only" lang="en">Five steps hidden behind one command</span>
+      </h3>
+      <p class="standard-copy">Ông liệt kê rõ chuỗi việc mà <code>make install</code> kích hoạt: (1) hệ thống dựng kiểm tra nhân đã được dựng đúng; (2) phần nhân tĩnh được cài vào thư mục <code>/boot</code>, đặt tên theo phiên bản; (3) các ảnh ramdisk cần thiết được tạo tự động; (4) bộ nạp khởi động được báo có nhân mới và mục mới được thêm vào trình đơn thích hợp; (5) xong — bạn có thể khởi động lại và thử nhân mới <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Một lệnh <code>make install</code> làm năm việc: kiểm tra nhân, chép nhân vào <code>/boot</code>, tạo ảnh khởi động tạm, thêm dòng vào trình đơn khởi động, rồi báo là xong <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: một lệnh nhưng năm việc, nên nếu lỗi thì phải hỏi lỗi ở việc nào.</p>
+      <p class="en-only" lang="en">He spells out the sequence <code>make install</code> kicks off: (1) the build system verifies the kernel was built properly; (2) the static kernel portion is installed into <code>/boot</code>, named after the kernel version; (3) any needed initial ramdisk images are created automatically; (4) the bootloader is notified that a new kernel is present and an entry is added to the appropriate menu; (5) done — you can safely reboot and try the new image <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Hướng dẫn hiện hành của kernel.org rút gọn cả hai lệnh thành một dòng có điều kiện: <code>command -v installkernel &amp;&amp; sudo make modules_install install</code> — và cảnh báo rằng trên vài bản phân phối như Arch, dòng này không làm gì cả, khi đó phải cài bằng tay <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Hướng dẫn mới gộp hai lệnh thành một dòng, nhưng nói rõ trên vài bản Linux như Arch thì dòng đó không làm gì, phải tự cài tay <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: vẫn có chỗ bạn phải tự làm.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Today's kernel.org guide compresses both commands into one conditional line: <code>command -v installkernel &amp;&amp; sudo make modules_install install</code> — and warns that on a few distributions such as Arch this does nothing at all, in which case you must install the kernel manually <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bước 4 đã đổi hình dạng</h4>
+          <p>“Báo cho bộ nạp khởi động” năm 2006 nghĩa là ghi thêm một khối vào <code>menu.lst</code> hoặc <code>lilo.conf</code> <span class="cite"><a href="#ref-2">2</a></span>. Trên nhiều hệ thống hiện nay việc đó do <code>kernel-install</code> đảm nhiệm: nó chạy các “plugin” trong <code>/usr/lib/kernel/install.d/</code> và <code>/etc/kernel/install.d/</code> để thêm và gỡ ảnh nhân cùng initrd khỏi phân vùng khởi động <span class="cite"><a href="#ref-6">6</a></span>. Khung năm bước của ông vẫn đúng; chỉ bộ máy bên dưới bước 4 là khác.</p>
+        </div>
+        <div class="info-block">
+          <h4>Gỡ cũng là một bước</h4>
+          <p>Sách không bàn tới việc gỡ một nhân đã cài. Tài liệu hiện hành có: xóa thư mục module tương ứng rồi chạy <code>kernel-install -v remove</code> với tên phiên bản, kèm cảnh báo đừng xóa nhân đang chạy vì máy có thể không khởi động được nữa <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">old kernels kept</span>
+      <h3>
+        <span class="standard-copy">Không ghi đè — lưới an toàn nằm ngay trong quy trình</span>
+        <span class="easy-only">Nhân cũ vẫn còn đó</span>
+        <span class="en-only" lang="en">Nothing is overwritten — the safety net is built in</span>
+      </h3>
+      <p class="standard-copy">Câu quan trọng nhất của mục này là câu cuối: việc cài đặt <em>không</em> ghi đè bất kỳ ảnh nhân cũ nào, nên nếu nhân mới có vấn đề, bạn vẫn chọn được nhân cũ lúc khởi động <span class="cite"><a href="#ref-2">2</a></span>. Đó là lý do tên tệp trong <code>/boot</code> luôn mang số phiên bản: mỗi nhân một tên, không ai đè ai.</p>
+        <p class="easy-only">Cài nhân mới không xóa nhân cũ <span class="cite"><a href="#ref-2">2</a></span>. Nếu nhân mới không chạy, bật lại máy và chọn nhân cũ là xong. Nhớ nhé: luôn còn đường lùi.</p>
+      <p class="en-only" lang="en">The most important sentence here is the last one: the installation does <em>not</em> overwrite any older kernel images, so if there is a problem with your new kernel, the old kernel can be selected at boot time <span class="cite"><a href="#ref-2">2</a></span>. That is why filenames in <code>/boot</code> always carry the version number: one name per kernel, none overwriting another.</p>
+      <p class="result standard-copy"><span class="vi-only">Đây là lời khuyên an toàn duy nhất trong chương đến thẳng từ sách, không phải từ trang này.</span></p>
+      <p class="result en-only" lang="en">This is the one safety guarantee in the chapter that comes straight from the book, not from this page.</p>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Nếu <code>installkernel</code> có mặt và chạy được, chương đã kết thúc ở đây. Mục kế tiếp dành cho hai loại người đọc: người có bản phân phối không kèm script ấy, và người muốn tự làm để hiểu từng bước.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Nếu cách tự động chạy được thì bạn xong rồi. Phần sau dành cho ai không có script đó, hoặc muốn hiểu rõ từng bước. Nhớ nhé: làm tay là để hiểu, không phải để khổ.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> If <code>installkernel</code> is present and works, the chapter ends here. The next section is for two kinds of reader: those whose distribution lacks the script, and those who want to do the work by hand to understand the steps involved.</p>
+  </aside>
+</section>
+
+<section class="section" id="bang-tay" aria-labelledby="bang-tay-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 03 · “Installing by Hand”</span><span class="en-only" lang="en">Concept cluster 03 · “Installing by Hand”</span></p>
+    <h2 id="bang-tay-title">
+      <span class="standard-copy">Đường thủ công: ba lệnh và một script nhỏ</span>
+      <span class="easy-only">Làm tay: ba lệnh, rồi một script</span>
+      <span class="en-only" lang="en">The manual path: three commands and a small script</span>
+    </h2>
+    <p class="standard-copy">Ông nêu lý do mở mục này rất sòng phẳng: hoặc bản phân phối của bạn không có lệnh <code>installkernel</code>, hoặc bạn chỉ đơn giản muốn tự làm để hiểu các bước liên quan <span class="cite"><a href="#ref-3">3</a></span>. Rồi ông liệt kê đúng những bước ấy, không thêm gì.</p>
+    <p class="easy-only">Làm tay vì hai lý do: bản Linux của bạn không có script tự động, hoặc bạn muốn hiểu máy đang làm gì <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: lý do thứ hai cũng chính đáng như lý do thứ nhất.</p>
+    <p class="en-only" lang="en">He states the reason for this section plainly: either your distribution does not have an <code>installkernel</code> command, or you simply wish to do the work by hand to understand the steps involved <span class="cite"><a href="#ref-3">3</a></span>. Then he lists exactly those steps, and nothing else.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Ba lệnh của đường thủ công.</b> <code>make modules_install</code> vẫn là bước đầu <span class="cite"><a href="#ref-3">3</a></span>. Sau đó hỏi phiên bản bằng <code>make kernelversion</code> — trong sách trả về <code>2.6.17.11</code> <span class="cite"><a href="#ref-3">3</a></span> — rồi chép hai tệp: <code>arch/i386/boot/bzImage</code> thành <code>/boot/bzImage-KERNEL_VERSION</code>, và <code>System.map</code> thành <code>/boot/System.map-KERNEL_VERSION</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only"><b>Ba việc.</b> Cài module. Hỏi xem nhân là phiên bản nào. Chép hai tệp vào thư mục <code>/boot</code>, đặt tên có kèm số phiên bản <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: kèm số phiên bản vào tên thì không đè lên nhân cũ.</p>
+      <p class="en-only" lang="en"><b>The three manual commands.</b> <code>make modules_install</code> is still the first step <span class="cite"><a href="#ref-3">3</a></span>. Then ask for the version with <code>make kernelversion</code> — in the book it returns <code>2.6.17.11</code> <span class="cite"><a href="#ref-3">3</a></span> — and copy two files: <code>arch/i386/boot/bzImage</code> to <code>/boot/bzImage-KERNEL_VERSION</code>, and <code>System.map</code> to <code>/boot/System.map-KERNEL_VERSION</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy"># make modules_install<br># make kernelversion → 2.6.17.11<br># cp arch/i386/boot/bzImage /boot/bzImage-VER<br># cp System.map /boot/System.map-VER<br>→ rồi sửa bộ nạp khởi động</p>
+      <p class="easy-only">1 · cài module<br>2 · xem phiên bản<br>3 · chép 2 tệp vào /boot<br>4 · sửa trình đơn khởi động</p>
+      <p class="en-only" lang="en"># make modules_install<br># make kernelversion → 2.6.17.11<br># cp arch/i386/boot/bzImage /boot/bzImage-VER<br># cp System.map /boot/System.map-VER<br>→ then edit the bootloader</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">bzImage and System.map</span>
+      <h3>
+        <span class="standard-copy">Hai tệp, hai vai trò</span>
+        <span class="easy-only">Hai tệp cần chép</span>
+        <span class="en-only" lang="en">Two files, two roles</span>
+      </h3>
+      <p class="standard-copy">Sách chép cả <code>bzImage</code> lẫn <code>System.map</code>, và gắn số phiên bản vào tên cả hai <span class="cite"><a href="#ref-3">3</a></span>. <code>bzImage</code> là phần nhân tĩnh mà bộ nạp khởi động sẽ nạp; <code>System.map</code> là bảng tên ký hiệu tương ứng. Ông không giải thích thêm trong chương này — nhưng việc đặt chúng cạnh nhau, cùng một hậu tố phiên bản, chính là cách giữ cho mỗi nhân có đủ bộ của riêng nó.</p>
+      <p class="easy-only">Chép hai tệp: một là nhân, một là bảng tra tên bên trong nhân <span class="cite"><a href="#ref-3">3</a></span>. Cả hai đều được đặt tên kèm số phiên bản. Nhớ nhé: hai tệp phải đi cùng một phiên bản với nhau.</p>
+      <p class="en-only" lang="en">The book copies both <code>bzImage</code> and <code>System.map</code>, giving both filenames the version suffix <span class="cite"><a href="#ref-3">3</a></span>. <code>bzImage</code> is the static kernel the bootloader will load; <code>System.map</code> is the matching symbol table. He does not elaborate in this chapter — but keeping them side by side under one version suffix is exactly how each kernel keeps its own complete set.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Đường dẫn <code>arch/i386/boot/bzImage</code> là dấu thời gian: từ nhân 2.6.24, cây <code>arch/i386</code> và <code>arch/x86_64</code> được hợp nhất thành <code>arch/x86</code>, và <code>ARCH=i386</code>, <code>ARCH=x86_64</code> được thay bằng <code>ARCH=x86</code> <span class="cite"><a href="#ref-8">8</a></span>. Trên máy hôm nay, ảnh nằm ở <code>arch/x86/boot/bzImage</code>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Sách viết <code>arch/i386/</code> vì đó là năm 2006. Từ nhân 2.6.24, thư mục ấy đổi thành <code>arch/x86/</code> <span class="cite"><a href="#ref-8">8</a></span>. Nhớ nhé: gõ theo sách sẽ không tìm thấy tệp — hãy dùng tên mới.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The path <code>arch/i386/boot/bzImage</code> is a timestamp: as of kernel 2.6.24 the <code>arch/i386</code> and <code>arch/x86_64</code> trees were unified into <code>arch/x86</code>, and <code>ARCH=i386</code> / <code>ARCH=x86_64</code> were replaced by <code>ARCH=x86</code> <span class="cite"><a href="#ref-8">8</a></span>. On a machine today the image lives at <code>arch/x86/boot/bzImage</code>.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">the install script</span>
+      <h3>
+        <span class="standard-copy">Script nhỏ của tác giả — tự đọc phiên bản khỏi Makefile</span>
+        <span class="easy-only">Script tự làm thay bạn</span>
+        <span class="en-only" lang="en">The author's small script — reading the version out of the Makefile</span>
+      </h3>
+      <p class="standard-copy">Ông đưa kèm một script shell “tiện tay” để khỏi phải gõ lại các lệnh trên mỗi lần <span class="cite"><a href="#ref-3">3</a></span>. Script chạy <code>make modules_install</code>, rồi ghép phiên bản từ bốn biến trong Makefile — <code>VERSION</code>, <code>PATCHLEVEL</code>, <code>SUBLEVEL</code>, <code>EXTRAVERSION</code> — tự đoán kiến trúc bằng cách lọc <code>CONFIG_ARCH</code> trong <code>include/linux/autoconf.h</code>, rồi chép <code>bzImage</code> và <code>System.map</code> kèm hậu tố phiên bản <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Ông cho sẵn một script nhỏ làm hết mấy việc trên, để bạn khỏi gõ lại <span class="cite"><a href="#ref-3">3</a></span>. Nó tự đọc số phiên bản và tên kiến trúc từ trong mã nguồn rồi chép tệp giúp bạn <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: script chỉ là mấy lệnh tay gói lại.</p>
+      <p class="en-only" lang="en">He includes a handy shell script so you need not retype those commands every time <span class="cite"><a href="#ref-3">3</a></span>. It runs <code>make modules_install</code>, assembles the release string from four Makefile variables — <code>VERSION</code>, <code>PATCHLEVEL</code>, <code>SUBLEVEL</code>, <code>EXTRAVERSION</code> — figures out the architecture by grepping <code>CONFIG_ARCH</code> out of <code>include/linux/autoconf.h</code>, then copies <code>bzImage</code> and <code>System.map</code> with the version suffix <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bốn biến ấy vẫn còn</h4>
+          <p>Cách ghép <code>VERSION.PATCHLEVEL.SUBLEVEL</code> cộng <code>EXTRAVERSION</code> vẫn là cách Makefile gốc của nhân định nghĩa số phiên bản. Nhưng chi tiết <code>include/linux/autoconf.h</code> mà script dựa vào <span class="cite"><a href="#ref-3">3</a></span> thì thuộc về cấu trúc cây mã năm 2006 và đã dịch chuyển từ lâu. Đọc script như một mẫu tư duy, đừng chép nguyên xi.</p>
+        </div>
+        <div class="info-block">
+          <h4>Cách hỏi phiên bản an toàn hơn</h4>
+          <p>Bản thân sách đã đưa lệnh gọn hơn ở ngay phía trên script: <code>make kernelversion</code> in ra chuỗi phiên bản của cây mã bạn đang đứng <span class="cite"><a href="#ref-3">3</a></span>. Lệnh này không phụ thuộc vào vị trí tệp <code>autoconf.h</code>, nên bền hơn theo thời gian.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">when boot fails</span>
+      <h3>
+        <span class="standard-copy">Khi khởi động hỏng: thường là thiếu ramdisk</span>
+        <span class="easy-only">Máy không lên? Thường thiếu ảnh tạm</span>
+        <span class="en-only" lang="en">When the boot fails: usually a missing ramdisk</span>
+      </h3>
+      <p class="standard-copy">Ông chẩn đoán trước giúp bạn: nếu quá trình khởi động không chạy đúng, thường là vì cần một ảnh ramdisk khởi tạo <span class="cite"><a href="#ref-3">3</a></span>. Và lời khuyên của ông ở đây là quay về đường tự động — hãy dùng các bước ở đầu chương, vì script cài của bản phân phối biết cách dựng ramdisk đúng bằng những công cụ cần thiết <span class="cite"><a href="#ref-3">3</a></span>. Ông nói thẳng rằng mỗi bản phân phối làm việc này một kiểu, nên bao quát hết nằm ngoài phạm vi sách <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Nếu máy không khởi động được, phần lớn là do thiếu ảnh khởi động tạm <span class="cite"><a href="#ref-3">3</a></span>. Cách chữa: quay lại dùng cách tự động, vì script của bản Linux biết tạo ảnh đó đúng cách <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: làm tay thất bại thì quay về cách tự động, không có gì xấu hổ.</p>
+      <p class="en-only" lang="en">He diagnoses it for you in advance: if the boot process does not work properly, it is usually because an initial ramdisk image is needed <span class="cite"><a href="#ref-3">3</a></span>. And his advice is to go back to the automatic path — use the steps at the beginning of the chapter, because the distribution's install scripts know how to build the ramdisk properly with the needed tools <span class="cite"><a href="#ref-3">3</a></span>. He says outright that each distribution does this differently, so covering them all is beyond the scope of the book <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Hướng dẫn hiện hành nêu cùng một chỗ trượt: sau khi cài, nhiều bản phân phối sẽ tự tạo initramfs và thêm mục vào bộ nạp khởi động, nhưng trên một số bản bạn phải tự làm hai bước đó <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Ngày nay cũng vậy: phần lớn bản Linux tự lo hai bước ấy, một số thì không <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: nhớ kiểm tra xem bản Linux của bạn thuộc nhóm nào.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The current guide names the same stumbling point: after installing, many distributions will create an initramfs and a bootloader entry for you, but on some you have to take care of these two steps manually <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Cả hai đường thủ công đều kết thúc ở cùng một chỗ còn bỏ ngỏ: bộ nạp khởi động vẫn chưa biết có nhân mới. Ông dành mục cuối chương cho đúng việc đó — và đây cũng là mục chịu tác động của thời gian nặng nhất.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Làm tay xong thì còn một việc: báo cho phần mềm khởi động biết. Nhớ nhé: phần sau là phần cũ nhất của chương, phải đọc kèm ghi chú thời nay.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> Both manual routes end at the same open item: the bootloader still does not know the new kernel exists. He gives the last section of the chapter to precisely that — and it is also the section time has treated most harshly.</p>
+  </aside>
+</section>
+
+<section class="section" id="bo-nap" aria-labelledby="bo-nap-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 04 · “Modifying the Bootloader”</span><span class="en-only" lang="en">Concept cluster 04 · “Modifying the Bootloader”</span></p>
+    <h2 id="bo-nap-title">
+      <span class="standard-copy">Sửa bộ nạp khởi động: quy trình 2006, đọc bằng mắt hôm nay</span>
+      <span class="easy-only">Sửa phần khởi động: sách cũ, máy mới</span>
+      <span class="en-only" lang="en">Editing the bootloader: the 2006 procedure, read with today's eyes</span>
+    </h2>
+    <p class="standard-copy">Sách nêu hai bộ nạp khởi động phổ biến của thời điểm ấy — GRUB và LILO — và nhận xét GRUB được dùng nhiều hơn trong các bản phân phối hiện đại, làm vài việc dễ hơn LILO, nhưng LILO thì vẫn còn gặp <span class="cite"><a href="#ref-5">5</a></span>. Cách nhận diện cũng thực dụng: nếu <code>/boot/</code> có thư mục con <code>grub/</code> thì bạn dùng GRUB; nếu không, hãy tìm tệp <code>/etc/lilo.conf</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+    <p class="easy-only">Thời đó có hai phần mềm khởi động hay dùng: GRUB và LILO <span class="cite"><a href="#ref-5">5</a></span>. Muốn biết máy dùng cái nào: xem trong <code>/boot/</code> có thư mục <code>grub/</code> không; không có thì tìm tệp <code>/etc/lilo.conf</code> <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: mỗi loại sửa một kiểu, đừng làm lẫn.</p>
+    <p class="en-only" lang="en">The book names the two common bootloaders of its moment — GRUB and LILO — noting that GRUB is the more commonly used in modern distributions and does some things a little more easily, but that LILO is still seen as well <span class="cite"><a href="#ref-5">5</a></span>. The identification test is practical: if <code>/boot/</code> has a <code>grub/</code> subdirectory you are using GRUB; if not, look for <code>/etc/lilo.conf</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+    <p class="deep-only">Cần nói rõ một điều trước khi đi tiếp: “GRUB” trong sách là <span lang="en">GRUB Legacy</span> — dòng 0.9x với tệp <code>/boot/grub/menu.lst</code> <span class="cite"><a href="#ref-5">5</a></span>. Dự án GNU nói rõ lý do viết lại: GRUB Legacy trở nên không bảo trì nổi vì mã lộn xộn và những sai lầm thiết kế <span class="cite"><a href="#ref-10">10</a></span>. GRUB 2 dùng tệp khác (<code>grub.cfg</code>), cú pháp khác, và số hiệu phân vùng bắt đầu từ 1 chứ không phải 0 <span class="cite"><a href="#ref-11">11</a></span>. LILO thì đã dừng phát triển từ tháng 12 năm 2015, bản cuối là 24.2 ra ngày 22-11-2015 <span class="cite"><a href="#ref-12">12</a></span>. Nói cách khác: quy trình trong mục này vẫn dạy bạn <em>điều gì</em> phải xảy ra, nhưng <em>cách gõ</em> thì đã khác.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Bộ nạp khởi động (<span lang="en">bootloader</span>).</b> Chương trình chạy trước nhân, đọc một tệp cấu hình liệt kê các nhân có thể chọn, rồi nạp cái bạn chọn. Thêm một nhân mới, với cả GRUB Legacy lẫn LILO, chỉ là thêm một khối vào tệp ấy <span class="cite"><a href="#ref-5">5</a></span><span class="cite"><a href="#ref-13">13</a></span>.</p>
+      <p class="easy-only"><b>Bộ nạp khởi động là gì.</b> Là chương trình chạy trước nhất khi bật máy, đưa ra danh sách nhân để bạn chọn. Thêm nhân mới = thêm một mục vào danh sách <span class="cite"><a href="#ref-5">5</a></span><span class="cite"><a href="#ref-13">13</a></span>. Nhớ nhé: nó là cái thực đơn lúc bật máy.</p>
+      <p class="en-only" lang="en"><b>Bootloader.</b> The program that runs before the kernel, reads a configuration file listing the selectable kernels, and loads the one you pick. Adding a new kernel, in both GRUB Legacy and LILO, is just adding one block to that file <span class="cite"><a href="#ref-5">5</a></span><span class="cite"><a href="#ref-13">13</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">2006 · GRUB Legacy → /boot/grub/menu.lst (sửa tay)<br>2006 · LILO&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → /etc/lilo.conf + /sbin/lilo<br>nay&nbsp; · GRUB 2&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → grub-mkconfig -o grub.cfg<br>nay&nbsp; · systemd&nbsp;&nbsp;&nbsp;&nbsp; → kernel-install</p>
+      <p class="easy-only">sách 2006 · sửa tệp menu bằng tay<br>ngày nay&nbsp; · chạy lệnh cho máy tự sinh<br>→ cùng mục đích, khác cách gõ</p>
+      <p class="en-only" lang="en">2006 · GRUB Legacy → /boot/grub/menu.lst (hand-edited)<br>2006 · LILO&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → /etc/lilo.conf + /sbin/lilo<br>today · GRUB 2&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → grub-mkconfig -o grub.cfg<br>today · systemd&nbsp;&nbsp;&nbsp;&nbsp; → kernel-install</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">GRUB · menu.lst</span>
+      <h3>
+        <span class="standard-copy">GRUB Legacy — chép một khối, đổi số phiên bản</span>
+        <span class="easy-only">GRUB — chép một mục rồi sửa số</span>
+        <span class="en-only" lang="en">GRUB Legacy — copy a block, change the version</span>
+      </h3>
+      <p class="standard-copy">Với GRUB, tất cả những gì cần làm là sửa tệp <code>/boot/grub/menu.lst</code>; muốn biết đầy đủ cấu trúc tệp thì đọc trang info bằng <code>info grub</code> <span class="cite"><a href="#ref-5">5</a></span>. Cách dễ nhất để thêm mục là chép một mục có sẵn: mỗi dòng bắt đầu bằng từ <code>title</code> định nghĩa một mục nhân mới <span class="cite"><a href="#ref-5">5</a></span>. Chép khối ấy xuống cuối tệp, sửa số phiên bản thành nhân vừa cài; <code>title</code> đặt gì cũng được miễn là duy nhất, nhưng nó hiện trong trình đơn nên hãy đặt cho có nghĩa <span class="cite"><a href="#ref-13">13</a></span>.</p>
+      <p class="easy-only">Với GRUB, chỉ cần sửa một tệp tên <code>menu.lst</code> <span class="cite"><a href="#ref-5">5</a></span>. Cách dễ nhất: chép một mục đang có, dán xuống cuối, đổi số phiên bản thành nhân mới <span class="cite"><a href="#ref-13">13</a></span>. Tên mục đặt sao cũng được, miễn là khác các mục kia và bạn đọc hiểu <span class="cite"><a href="#ref-13">13</a></span>. Nhớ nhé: chép cái đang chạy được thì ít sai nhất.</p>
+      <p class="en-only" lang="en">For GRUB, all you need to do is modify <code>/boot/grub/menu.lst</code>; for the full structure of the file, read the info pages with <code>info grub</code> <span class="cite"><a href="#ref-5">5</a></span>. The easiest way to add an entry is to copy an existing one: each line starting with the word <code>title</code> defines a new kernel entry <span class="cite"><a href="#ref-5">5</a></span>. Add that block at the end of the file and edit the version number to your newly installed kernel; the title does not matter so long as it is unique, but it is displayed in the boot menu, so make it meaningful <span class="cite"><a href="#ref-13">13</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Ngày nay thì sao.</b> Trên GRUB 2, <code>grub.cfg</code> thường được sinh tự động bởi <code>grub-mkconfig</code>, chạy dạng <code>grub-mkconfig -o /boot/grub/grub.cfg</code> <span class="cite"><a href="#ref-14">14</a></span>; nó tự dò các nhân sẵn có và tạo mục trình đơn cho chúng <span class="cite"><a href="#ref-15">15</a></span>. Hành vi của nó được điều khiển qua <code>/etc/default/grub</code>, còn mục tùy biến thì thêm vào <code>/etc/grub.d/40_custom</code> hoặc <code>/boot/grub/custom.cfg</code> <span class="cite"><a href="#ref-15">15</a></span>.</p>
+        <p class="easy-only"><b>Ngày nay.</b> Bây giờ bạn không sửa tay tệp menu nữa, mà chạy một lệnh để máy tự sinh ra nó <span class="cite"><a href="#ref-14">14</a></span><span class="cite"><a href="#ref-15">15</a></span>. Muốn chỉnh thì sửa tệp <code>/etc/default/grub</code> <span class="cite"><a href="#ref-15">15</a></span>. Nhớ nhé: sửa tay tệp sinh tự động thì lần sau bị ghi đè.</p>
+        <p class="en-only" lang="en"><b>Today.</b> On GRUB 2, <code>grub.cfg</code> is typically generated automatically by <code>grub-mkconfig</code>, invoked as <code>grub-mkconfig -o /boot/grub/grub.cfg</code> <span class="cite"><a href="#ref-14">14</a></span>; it discovers available kernels and generates menu entries for them <span class="cite"><a href="#ref-15">15</a></span>. Its behaviour is controlled through <code>/etc/default/grub</code>, and extra custom entries go in <code>/etc/grub.d/40_custom</code> or <code>/boot/grub/custom.cfg</code> <span class="cite"><a href="#ref-15">15</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ví dụ trong sách, đọc từng dòng</h4>
+          <p>Tệp <code>menu.lst</code> mẫu lấy từ một hệ Gentoo có <code>timeout 300</code>, <code>default 0</code>, một dòng <code>splashimage</code>, rồi hai khối <code>title</code> cho 2.6.16.11 và 2.6.16; mỗi khối có <code>root (hd0,0)</code> và một dòng <code>kernel</code> trỏ tới ảnh nhân kèm <code>root=/dev/sda2</code> <span class="cite"><a href="#ref-5">5</a></span>. Sau khi thêm, tệp có ba khối, khối thứ ba là 2.6.17.11 <span class="cite"><a href="#ref-13">13</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Một quy ước đã đảo</h4>
+          <p>Chuỗi <code>(hd0,0)</code> trong ví dụ là cú pháp GRUB Legacy. Trong GRUB 2, số hiệu phân vùng bắt đầu từ 1 chứ không phải 0 <span class="cite"><a href="#ref-11">11</a></span>. Chép nguyên một dòng từ sách sang máy hiện đại là cách chắc chắn nhất để trỏ nhầm phân vùng.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">LILO · lilo.conf</span>
+      <h3>
+        <span class="standard-copy">LILO — thêm khối rồi phải chạy <code>/sbin/lilo</code></span>
+        <span class="easy-only">LILO — sửa xong phải chạy thêm một lệnh</span>
+        <span class="en-only" lang="en">LILO — add the block, then run <code>/sbin/lilo</code></span>
+      </h3>
+      <p class="standard-copy">Với LILO, bạn sửa <code>/etc/lilo.conf</code> rồi <em>phải</em> chạy lệnh <code>lilo</code> để áp dụng thay đổi <span class="cite"><a href="#ref-5">5</a></span>. Trong tệp, dòng bắt đầu bằng <code>image=</code> định nghĩa một mục nhân; chép một khối như vậy xuống cuối tệp và sửa số phiên bản, với <code>label</code> đặt tùy ý miễn là duy nhất <span class="cite"><a href="#ref-13">13</a></span>. Sau khi lưu, chạy <code>/sbin/lilo</code> để ghi thay đổi ra phần khởi động của đĩa <span class="cite"><a href="#ref-13">13</a></span>.</p>
+      <p class="easy-only">Với LILO: sửa tệp <code>/etc/lilo.conf</code>, chép một mục cũ rồi đổi số phiên bản <span class="cite"><a href="#ref-13">13</a></span>. Quan trọng nhất là sau đó phải chạy lệnh <code>/sbin/lilo</code>, nếu không thay đổi không có tác dụng <span class="cite"><a href="#ref-13">13</a></span>. Nhớ nhé: LILO cần thêm một bước mà GRUB không cần.</p>
+      <p class="en-only" lang="en">With LILO you edit <code>/etc/lilo.conf</code> and then <em>must</em> run the <code>lilo</code> command to apply the changes <span class="cite"><a href="#ref-5">5</a></span>. In the file, a line starting with <code>image=</code> defines a kernel entry; copy such a block to the end of the file and edit the version, with <code>label</code> set to anything unique <span class="cite"><a href="#ref-13">13</a></span>. After saving, run <code>/sbin/lilo</code> to write the configuration changes out to the boot section of the disk <span class="cite"><a href="#ref-13">13</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Ngày nay thì sao.</b> LILO đã dừng phát triển: bản cuối 24.2 phát hành ngày 22-11-2015, và trang chủ dự án không có thông báo nào mới hơn <span class="cite"><a href="#ref-12">12</a></span>. Dự án cũng tự nhận có giới hạn với Btrfs, GPT và RAID <span class="cite"><a href="#ref-12">12</a></span>. Nếu máy bạn thực sự còn dùng LILO thì đó là hệ rất cũ.</p>
+        <p class="easy-only"><b>Ngày nay.</b> LILO không còn được phát triển nữa; bản cuối cùng ra năm 2015 <span class="cite"><a href="#ref-12">12</a></span>. Nhớ nhé: đọc mục này để hiểu ý tưởng thôi, đừng mong gặp LILO trên máy mới.</p>
+        <p class="en-only" lang="en"><b>Today.</b> LILO's development has stopped: the final release, 24.2, came out on 22 November 2015, and the project's homepage carries no later announcement <span class="cite"><a href="#ref-12">12</a></span>. The project itself acknowledges limitations with Btrfs, GPT and RAID <span class="cite"><a href="#ref-12">12</a></span>. If your machine really still runs LILO, it is a very old system.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">reboot and select</span>
+      <h3>
+        <span class="standard-copy">Khởi động lại, mũi tên xuống, Enter</span>
+        <span class="easy-only">Bật lại máy rồi chọn dòng mới</span>
+        <span class="en-only" lang="en">Reboot, arrow down, Enter</span>
+      </h3>
+      <p class="standard-copy">Cả hai nhánh kết thúc giống hệt nhau, và đây là chỗ tính an toàn hiện ra rõ nhất: sau khi lưu, khởi động lại và kiểm tra tên mục nhân mới có xuất hiện trong trình đơn không, dùng mũi tên xuống để chọn nó rồi nhấn Enter để khởi động <span class="cite"><a href="#ref-13">13</a></span>. Nhân cũ vẫn nằm nguyên ngay phía trên trong cùng trình đơn ấy <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Cả hai cách đều kết thúc như nhau: bật lại máy, thấy dòng mới trong danh sách, bấm mũi tên xuống rồi Enter <span class="cite"><a href="#ref-13">13</a></span>. Nếu nhân mới không chạy, chọn lại dòng cũ ở ngay trên <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: đừng xóa dòng cũ đi.</p>
+      <p class="en-only" lang="en">Both branches end identically, and this is where the safety shows: after saving, reboot and check that the new kernel's title comes up in the boot menu, use the down arrow to highlight it, and press Enter to boot it <span class="cite"><a href="#ref-13">13</a></span>. The old kernel is still sitting right above it in the same menu <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hình dạng thứ ba, sách chưa có</h4>
+          <p>Ngoài GRUB 2, nhiều hệ thống hiện nay dùng <code>kernel-install</code> của systemd: nó thêm và gỡ ảnh nhân cùng initrd khỏi phân vùng khởi động (<code>/boot/</code>, <code>/efi/</code> hoặc <code>/boot/efi/</code>), và làm việc đó qua các plugin trong <code>/usr/lib/kernel/install.d/</code>, sinh mục theo Boot Loader Specification <span class="cite"><a href="#ref-6">6</a></span>. Không có tệp menu nào để bạn chép khối vào.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao vẫn nên đọc mục này</h4>
+          <p>Ba việc không đổi: một ảnh nhân có tên riêng, một mục trong danh sách, và một mục cũ được giữ lại làm đường lùi. Mọi công cụ hiện đại chỉ tự động hóa đúng ba việc ấy — nên khi công cụ tự động trượt, bạn biết phải đi tìm cái gì.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <div class="trap-comparison deep-only">
+    <p class="eyebrow"><span class="vi-only">Ba hiểu lầm thường gặp</span><span class="en-only" lang="en">Three common misconceptions</span></p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Cứ sửa tay <code>grub.cfg</code> như sách bảo”</span><span class="en-only" lang="en">“Just hand-edit <code>grub.cfg</code> like the book says”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> tệp cấu hình GRUB hôm nay cũng sửa tay như <code>menu.lst</code> năm 2006 <span class="cite"><a href="#ref-5">5</a></span>. <span class="fact">Thực tế:</span> <code>grub.cfg</code> thường do <code>grub-mkconfig</code> sinh ra <span class="cite"><a href="#ref-15">15</a></span>; sửa tay nó sẽ bị ghi đè ở lần sinh kế tiếp. Muốn thêm mục riêng thì dùng <code>/etc/grub.d/40_custom</code> hoặc <code>/boot/grub/custom.cfg</code>; ai thực sự muốn tự viết <code>grub.cfg</code> thì được khuyến khích làm, nhưng phải tắt cơ chế tự chạy <code>grub-mkconfig</code> của bản phân phối <span class="cite"><a href="#ref-15">15</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> today's GRUB config is hand-edited just like <code>menu.lst</code> in 2006 <span class="cite"><a href="#ref-5">5</a></span>. <span class="fact">Fact:</span> <code>grub.cfg</code> is typically generated by <code>grub-mkconfig</code> <span class="cite"><a href="#ref-15">15</a></span>; editing it by hand loses your changes at the next generation. Custom entries belong in <code>/etc/grub.d/40_custom</code> or <code>/boot/grub/custom.cfg</code>; those who genuinely prefer writing <code>grub.cfg</code> directly are encouraged to do so, but must disable any distribution mechanism that runs <code>grub-mkconfig</code> automatically <span class="cite"><a href="#ref-15">15</a></span>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Cài nhân mới là thay nhân cũ”</span><span class="en-only" lang="en">“Installing a new kernel replaces the old one”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> cài xong là mất nhân đang chạy, nên rủi ro cao. <span class="fact">Thực tế:</span> sách nói rõ việc cài không ghi đè bất kỳ ảnh nhân cũ nào, và nhân cũ vẫn chọn được lúc khởi động <span class="cite"><a href="#ref-2">2</a></span>. Rủi ro thật sự nằm ở chỗ khác: tài liệu hiện hành cảnh báo đừng <em>xóa</em> nhân đang chạy, vì điều đó có thể làm máy không khởi động được <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> installing replaces the kernel you are running, so it is risky. <span class="fact">Fact:</span> the book states that the installation does not overwrite any older kernel images and the old kernel can still be selected at boot <span class="cite"><a href="#ref-2">2</a></span>. The real risk is elsewhere: current documentation warns against <em>deleting</em> the kernel you are running, as that might render the system unbootable <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Máy không lên thì nhân dựng sai”</span><span class="en-only" lang="en">“If it won't boot, the build was wrong”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> khởi động thất bại nghĩa là cấu hình hoặc biên dịch có lỗi. <span class="fact">Thực tế:</span> ông chẩn đoán khác — thường là vì thiếu một ảnh ramdisk khởi tạo, và cách chữa là quay về dùng script cài của bản phân phối vì chúng biết dựng ramdisk đúng cách <span class="cite"><a href="#ref-3">3</a></span>. Tài liệu hiện hành xác nhận cùng chỗ trượt ấy <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> a failed boot means the configuration or the compile was wrong. <span class="fact">Fact:</span> his diagnosis is different — it is usually because an initial ramdisk image is needed, and the fix is to fall back on the distribution's install scripts, which know how to build the ramdisk properly <span class="cite"><a href="#ref-3">3</a></span>. Current documentation confirms the same stumbling point <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </div>
+    </div>
+  </div>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Đến đây nhân mới đã nằm trong <code>/boot</code>, module đã vào <code>/lib/modules</code>, và trình đơn khởi động đã có mục của nó. Còn đúng một việc trước khi nhấn nút nguồn: tự kiểm.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Mọi thứ đã vào chỗ. Còn một việc cuối: tự kiểm lại trước khi bật lại máy. Nhớ nhé: kiểm trước khi khởi động rẻ hơn nhiều so với sửa sau.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> By now the new kernel is in <code>/boot</code>, the modules are in <code>/lib/modules</code>, and the boot menu has its entry. One thing remains before you press the power button: a self-check.</p>
+  </aside>
+</section>
+
+<section class="section" id="tu-kiem" aria-labelledby="tu-kiem-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Tự kiểm</span><span class="en-only" lang="en">Self-check</span></p>
+    <h2 id="tu-kiem-title">
+      <span class="standard-copy">Tự kiểm trước khi khởi động lại</span>
+      <span class="easy-only">Tự hỏi mình trước khi bật lại máy</span>
+      <span class="en-only" lang="en">Self-check before you reboot</span>
+    </h2>
+  </div>
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Khác các chương trước, chương này để lại một hệ quả vật lý: lần khởi động tới sẽ khác. Hãy trả lời được những câu dưới đây <em>trước</em> khi gõ <code>reboot</code>.</p>
+      <p class="easy-only">Chương này khác các chương trước: làm xong là lần bật máy tới sẽ khác. Nhớ nhé: trả lời hết mấy câu dưới rồi hãy bật lại máy.</p>
+      <p class="en-only" lang="en">Unlike the earlier chapters, this one leaves a physical consequence: your next boot will be different. Be able to answer the following <em>before</em> you type <code>reboot</code>.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>Bạn đã chạy <code>make modules_install</code> <em>trước</em> <code>make install</code> chưa?
+        <p class="deep-only">Thứ tự này quan trọng vì bước tạo ramdisk dùng chính các module vừa cài <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </li>
+      <li>Trong <code>/boot</code> có tệp nhân mang đúng số phiên bản của nhân bạn vừa dựng không, và nhân cũ có còn nguyên ở đó không?
+        <p class="deep-only">Sách đảm bảo việc cài không ghi đè ảnh nhân cũ <span class="cite"><a href="#ref-2">2</a></span> — nhưng nếu bạn làm tay, chính bạn chịu trách nhiệm đặt tên khác.</p>
+      </li>
+      <li>Máy bạn dùng bộ nạp khởi động nào, và bạn đã kiểm bằng cách nhìn vào <code>/boot/</code> hay <code>/etc/lilo.conf</code> chưa?
+        <p class="deep-only">Nếu là hệ hiện đại, nhiều khả năng đó là GRUB 2 với <code>grub.cfg</code> sinh tự động <span class="cite"><a href="#ref-15">15</a></span>, hoặc một sơ đồ dựa trên <code>kernel-install</code> <span class="cite"><a href="#ref-6">6</a></span> — không phải <code>menu.lst</code> của sách.</p>
+      </li>
+      <li>Mục nhân <em>cũ</em> có còn trong trình đơn khởi động để bạn quay về nếu nhân mới không lên không?</li>
+      <li>Nếu máy không khởi động được, bạn biết nghi ngờ điều gì đầu tiên?
+        <p class="deep-only">Đáp án của sách: thường là thiếu ảnh ramdisk khởi tạo, và cách chữa là dùng script cài của bản phân phối <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      </li>
+      <li>Bạn đã thoát khỏi phiên <code>root</code> sau khi xong chưa?</li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li>Bạn đã cài module trước rồi mới cài nhân chưa?</li>
+      <li>Trong <code>/boot</code> đã có tệp nhân mới, và nhân cũ vẫn còn chứ?</li>
+      <li>Máy bạn dùng phần mềm khởi động nào?</li>
+      <li>Trình đơn khởi động còn dòng nhân cũ để quay về không?</li>
+      <li>Máy không lên thì bạn nghi ngờ cái gì trước?</li>
+      <li>Nhớ nhé: xong việc thì thoát khỏi quyền quản trị ngay.</li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>Did you run <code>make modules_install</code> <em>before</em> <code>make install</code>?
+        <p class="deep-only" lang="en">The order matters because the ramdisk step uses the modules just installed <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </li>
+      <li>Does <code>/boot</code> hold a kernel file carrying your new kernel's version, with the old one still intact beside it?</li>
+      <li>Which bootloader does your machine use, and did you check by looking in <code>/boot/</code> or for <code>/etc/lilo.conf</code>?
+        <p class="deep-only" lang="en">On a modern system it is most likely GRUB 2 with an auto-generated <code>grub.cfg</code> <span class="cite"><a href="#ref-15">15</a></span>, or a <code>kernel-install</code>-based scheme <span class="cite"><a href="#ref-6">6</a></span> — not the book's <code>menu.lst</code>.</p>
+      </li>
+      <li>Is the <em>old</em> kernel entry still in the boot menu, so you can fall back if the new one fails?</li>
+      <li>If the machine does not boot, what do you suspect first?
+        <p class="deep-only" lang="en">The book's answer: usually a missing initial ramdisk image, fixed by using the distribution's install scripts <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      </li>
+      <li>Have you exited your <code>root</code> session now that you are done?</li>
+    </ol>
+  </div>
+</section>
+
+<section class="closing" id="dong-lai" aria-labelledby="dong-lai-title">
+  <p class="eyebrow" id="dong-lai-title"><span class="vi-only">Đọng lại</span><span class="en-only" lang="en">What remains</span></p>
+  <blockquote>
+    <p class="standard-copy">Cài một nhân chỉ là ba việc rất nhỏ — đặt module, đặt ảnh nhân, thêm một dòng vào trình đơn — nhưng chúng là ba việc duy nhất trong cả phần đầu cuốn sách <span class="closing-accent">cần bạn mượn quyền root</span>. Đổi lại, quy trình tặng bạn một thứ hiếm trong kỹ thuật: <span class="closing-accent">một đường lùi vẫn còn nguyên ngay bên cạnh</span>.</p>
+    <p class="easy-only">Cài nhân chỉ có ba việc nhỏ, nhưng là ba việc duy nhất <span class="closing-accent">cần quyền quản trị</span>. Bù lại, <span class="closing-accent">nhân cũ vẫn còn đó</span> để bạn quay về. Nhớ nhé: giữ đường lùi thì thử nghiệm mới an toàn.</p>
+    <p class="en-only" lang="en">Installing a kernel is only three small jobs — place the modules, place the image, add one line to the menu — yet they are the only jobs in the whole first part of the book that <span class="closing-accent">require you to borrow root</span>. In return, the procedure gives you something rare in engineering: <span class="closing-accent">a way back, still intact, right beside you</span>.</p>
+  </blockquote>
+</section>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-4-configuring-building.html">
+    <span class="nav-label">◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span></span>
+    <span class="nav-title"><span class="vi-only">Chương 4 · Cấu hình và biên dịch</span><span class="en-only" lang="en">Chapter 4 · Configuring and Building</span></span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-6-upgrading.html">
+    <span class="nav-label"><span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶</span>
+    <span class="nav-title"><span class="vi-only">Chương 6 · Nâng cấp nhân</span><span class="en-only" lang="en">Chapter 6 · Upgrading a Kernel</span></span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chương 5, “Installing and Booting from a Kernel” (trang 29–34), gồm ba mục “Using a Distribution's Installation Scripts”, “Installing by Hand” và “Modifying the Bootloader for the New Kernel”. Trang này là <b>người đồng hành diễn giải</b>, không phải bản dịch: nó tóm lược, sắp xếp lại và chú giải nội dung chương, không thay thế việc đọc sách gốc. Các ví dụ và phép so sánh ở mức đọc <i>Dễ hiểu</i> là minh họa do trang này thêm vào, không có trong sách. Sách xuất bản năm 2006 và viết cho dòng nhân 2.6; đây là chương chịu tác động của thời gian nặng nhất trong Phần I — phần bộ nạp khởi động mô tả <span lang="en">GRUB Legacy</span> (<code>menu.lst</code>) và LILO, nên mọi đối chiếu với GRUB 2, <code>kernel-install</code> hay tình hình hiện nay đều được dẫn nguồn riêng.</p>
+    <p class="en-only" lang="en"><b>Primary source.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chapter 5, “Installing and Booting from a Kernel” (pages 29–34), comprising “Using a Distribution's Installation Scripts”, “Installing by Hand” and “Modifying the Bootloader for the New Kernel”. This page is an <b>interpretive study companion</b>, not a translation: it summarises, rearranges and annotates the chapter, and does not replace reading the book itself. Examples and analogies at the <i>Easy</i> reading level are illustrations added here, not the author's. The book was published in 2006 and targets the 2.6 kernel series; this is the most time-bound chapter in Part I — its bootloader material describes GRUB Legacy (<code>menu.lst</code>) and LILO, so every comparison with GRUB 2, <code>kernel-install</code> or present-day practice carries its own citation.</p>
+
+    <p class="footer-label vi-only">Tham chiếu</p>
+    <p class="footer-label en-only" lang="en">References</p>
+    <ol class="ref-list">
+      <li id="ref-1">Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006, Chapter 5 “Installing and Booting from a Kernel”, p. 29 (mọi lệnh chạy với quyền root; <code>sudo</code>, <code>su</code>, và phép thử <code>sudo ls ~/linux/linux-2.6.17.11/Makefile</code>). Bản trực tuyến miễn phí: <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-2">Sđd., Chapter 5, “Using a Distribution's Installation Scripts”, p. 30 (<code>installkernel</code>, gói <code>mkinitrd</code>, <code>make modules_install</code> → <code>/lib/modules/kernel_version</code>, chuỗi năm bước của <code>make install</code>, cam kết không ghi đè ảnh nhân cũ, và chú thích về Gentoo). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-3">Sđd., Chapter 5, “Installing by Hand”, p. 31 (<code>make kernelversion</code> → <code>2.6.17.11</code>; chép <code>arch/i386/boot/bzImage</code> và <code>System.map</code> vào <code>/boot</code>; script cài tự động; chẩn đoán thiếu ảnh ramdisk khởi tạo). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-4">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/quickly-build-trimmed-linux.html" target="_blank" rel="noopener noreferrer">“Quickly build a trimmed Linux kernel”</a>, docs.kernel.org (truy cập 22-09-2026) — <code>command -v installkernel &amp;&amp; sudo make modules_install install</code>, ghi chú về Arch Linux, initramfs và mục bộ nạp khởi động, và cảnh báo khi gỡ nhân bằng <code>kernel-install -v remove</code>.</li>
+      <li id="ref-5">Kroah-Hartman, sđd., Chapter 5, “Modifying the Bootloader for the New Kernel”, p. 32 (GRUB và LILO; cách nhận diện qua <code>/boot/grub/</code> và <code>/etc/lilo.conf</code>; <code>/boot/grub/menu.lst</code>, <code>info grub</code>, dòng <code>title</code>; tệp <code>menu.lst</code> mẫu từ một hệ Gentoo). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-6">systemd project, <a href="https://www.freedesktop.org/software/systemd/man/latest/kernel-install.html" target="_blank" rel="noopener noreferrer"><code>kernel-install</code>(8) manual</a>, freedesktop.org (truy cập 22-09-2026) — thêm/gỡ ảnh nhân và initrd khỏi phân vùng khởi động, plugin trong <code>/usr/lib/kernel/install.d/</code> và <code>/etc/kernel/install.d/</code>, mục theo Boot Loader Specification.</li>
+      <li id="ref-7">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/initrd.html" target="_blank" rel="noopener noreferrer">“Using the initial RAM disk (initrd)”</a>, docs.kernel.org (truy cập 22-09-2026) — nhân khởi động với tập driver biên dịch sẵn tối thiểu rồi nạp thêm module từ initrd.</li>
+      <li id="ref-8">LWN.net, <a href="https://lwn.net/Articles/258127/" target="_blank" rel="noopener noreferrer">“enable &lsquo;make ARCH=x86&rsquo;” (Sam Ravnborg, 11-2007)</a> và <a href="https://lwn.net/Articles/243704/" target="_blank" rel="noopener noreferrer">“i386 and x86_64: back together?”</a> — hợp nhất <code>arch/i386</code> và <code>arch/x86_64</code> thành <code>arch/x86</code> trong chu kỳ 2.6.24, thay <code>ARCH=i386</code>/<code>ARCH=x86_64</code> bằng <code>ARCH=x86</code>.</li>
+      <li id="ref-9">Kroah-Hartman, sđd., Chapter 1, “Using This Book”, p. 4 (chỉ hai hoặc ba lệnh cài mới cần quyền siêu người dùng; sự cố xóa tệp trong <code>/dev</code>; quy tắc về <code>/usr/src/linux/</code> và thư mục <code>~/linux</code>). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-10">GNU GRUB, <a href="https://www.gnu.org/software/grub/grub-faq.html" target="_blank" rel="noopener noreferrer">GRUB FAQ — “Why do you need to rewrite GRUB?”</a>, gnu.org (truy cập 22-09-2026) — GRUB Legacy trở nên không bảo trì nổi vì mã lộn xộn và sai lầm thiết kế.</li>
+      <li id="ref-11">GNU GRUB Manual, <a href="https://www.gnu.org/software/grub/manual/grub/html_node/Changes-from-GRUB-Legacy.html" target="_blank" rel="noopener noreferrer">“Differences from previous versions”</a>, gnu.org (truy cập 22-09-2026) — <code>grub.cfg</code> thay cho <code>menu.lst</code>, cú pháp mới, và số hiệu phân vùng bắt đầu từ 1 thay vì 0.</li>
+      <li id="ref-12">LILO project, <a href="https://lilo.joonet.de/" target="_blank" rel="noopener noreferrer">trang chủ chính thức</a> (truy cập 22-09-2026) — bản cuối 24.2 ngày 22-11-2015, không có thông báo nào mới hơn, và các giới hạn tự nêu với Btrfs, GPT, RAID.</li>
+      <li id="ref-13">Kroah-Hartman, sđd., Chapter 5, “GRUB” và “LILO”, pp. 33–34 (chép khối <code>title</code> / <code>image=</code> xuống cuối tệp và sửa số phiên bản; nhãn phải duy nhất và có nghĩa; chạy <code>/sbin/lilo</code> để ghi thay đổi ra đĩa; khởi động lại, mũi tên xuống, Enter). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-14">GNU GRUB Manual, <a href="https://www.gnu.org/software/grub/manual/grub/html_node/Invoking-grub_002dmkconfig.html" target="_blank" rel="noopener noreferrer">“Invoking grub-mkconfig”</a>, gnu.org (truy cập 22-09-2026) — <code>grub-mkconfig -o /boot/grub/grub.cfg</code>.</li>
+      <li id="ref-15">GNU GRUB Manual, <a href="https://www.gnu.org/software/grub/manual/grub/html_node/Simple-configuration.html" target="_blank" rel="noopener noreferrer">“Simple configuration handling”</a>, gnu.org (truy cập 22-09-2026) — <code>grub-mkconfig</code> tự dò nhân và sinh mục trình đơn; <code>/etc/default/grub</code> điều khiển nó; mục tùy biến ở <code>/etc/grub.d/40_custom</code> hoặc <code>/boot/grub/custom.cfg</code>; ai muốn tự viết <code>grub.cfg</code> phải tắt cơ chế tự chạy của bản phân phối.</li>
+    </ol>
+
+    <p class="footer-label vi-only">Trong loạt bài</p>
+    <p class="footer-label en-only" lang="en">In this series</p>
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <p class="vi-only"><a href="index.html">Trang bìa</a> · <a href="chapter-4-configuring-building.html">Chương 4 · Cấu hình và biên dịch</a> · <span>Chương 5 · Cài đặt và khởi động (trang này)</span> · <a href="chapter-6-upgrading.html">Chương 6 · Nâng cấp nhân</a></p>
+    <p class="en-only" lang="en"><a href="index.html">Cover</a> · <a href="chapter-4-configuring-building.html">Chapter 4 · Configuring and Building</a> · <span>Chapter 5 · Installing and Booting (this page)</span> · <a href="chapter-6-upgrading.html">Chapter 6 · Upgrading a Kernel</a></p>
+    <!-- NAV:END -->
+  </div>
+  <div class="edition">LKN · CH 05 · VI/EN</div>
+</footer>
+</main>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  function sync() {
+    var mode = root.getAttribute("data-mode") || "standard";
+    var lang = root.getAttribute("data-lang") || "vi";
+    var dark = root.getAttribute("data-theme") === "dark";
+    document.querySelectorAll("[data-set-mode]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-mode") === mode));
+    });
+    document.querySelectorAll("[data-set-lang]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-lang") === lang));
+    });
+    document.querySelectorAll("[data-toggle-theme]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(dark));
+    });
+    root.setAttribute("lang", lang === "en" ? "en" : "vi");
+  }
+
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button.chip");
+    if (!b) return;
+    if (b.hasAttribute("data-set-mode")) {
+      root.setAttribute("data-mode", b.getAttribute("data-set-mode"));
+      store("lkn-reading-mode", b.getAttribute("data-set-mode"));
+    } else if (b.hasAttribute("data-set-lang")) {
+      root.setAttribute("data-lang", b.getAttribute("data-set-lang"));
+      store("lkn-lang", b.getAttribute("data-set-lang"));
+    } else if (b.hasAttribute("data-toggle-theme")) {
+      var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      store("lkn-theme", next);
+    }
+    sync();
+  });
+
+  sync();
+})();
+
+/* section-index rail: built at runtime from this page's own id'd sections */
+(function () {
+  var list = document.querySelector(".section-rail__list");
+  if (!list) return;
+  var sections = Array.prototype.slice.call(document.querySelectorAll("main section[id][aria-labelledby]"));
+  if (!sections.length) { var rail = document.querySelector(".section-rail"); if (rail) rail.remove(); return; }
+
+  /* headings carry all three reading levels + both languages as sibling spans,
+     so read only the ones actually visible under the current toggles */
+  function labelFor(sec) {
+    var head = document.getElementById(sec.getAttribute("aria-labelledby"));
+    if (!head) return sec.id;
+    var parts = [];
+    Array.prototype.forEach.call(head.children, function (el) {
+      if (el.offsetParent !== null || el.getClientRects().length) parts.push(el.textContent);
+    });
+    var label = (parts.length ? parts.join(" ") : head.textContent || "").replace(/\s+/g, " ").trim();
+    return label.length > 46 ? label.slice(0, 44) + "…" : label;
+  }
+
+  var links = sections.map(function (sec) {
+    var label = labelFor(sec);
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.href = "#" + sec.id;
+    var span = document.createElement("span");
+    span.className = "section-rail__label";
+    span.textContent = label;
+    a.appendChild(span);
+    li.appendChild(a);
+    list.appendChild(li);
+    return a;
+  });
+
+  function mark(id) {
+    links.forEach(function (a) {
+      if (a.getAttribute("href") === "#" + id) a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    });
+  }
+
+  if ("IntersectionObserver" in window) {
+    var seen = new Map();
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { seen.set(e.target.id, e.intersectionRatio); });
+      var best = null, bestR = 0;
+      seen.forEach(function (r, id) { if (r > bestR) { bestR = r; best = id; } });
+      if (best) mark(best);
+    }, { rootMargin: "-20% 0px -60% 0px", threshold: [0, .25, .5, 1] });
+    sections.forEach(function (s) { obs.observe(s); });
+  }
+
+  /* the rail labels change with the language toggle, so relabel on click */
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest("button.chip")) return;
+    sections.forEach(function (sec, i) {
+      links[i].firstChild.textContent = labelFor(sec);
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

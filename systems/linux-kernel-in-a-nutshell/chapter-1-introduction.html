@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="vi" data-mode="standard" data-lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 1 · Nhập môn — Linux Kernel in a Nutshell</title>
+<meta name="description" content="Người đồng hành song ngữ Việt/Anh cho Chương 1 &quot;Introduction&quot; của Linux Kernel in a Nutshell (Greg Kroah-Hartman, O'Reilly, 2006): vì sao và khi nào bạn muốn tự dựng nhân Linux, và cách dùng cuốn sách này một cách an toàn.">
+<script>
+/* pre-hydration: đọc lựa chọn đã lưu trước khi vẽ, tránh nháy màn hình */
+(function () {
+  try {
+    var m = localStorage.getItem("lkn-reading-mode");
+    var l = localStorage.getItem("lkn-lang");
+    if (m === "standard" || m === "easy" || m === "deep") document.documentElement.setAttribute("data-mode", m);
+    if (l === "vi" || l === "en") document.documentElement.setAttribute("data-lang", l);
+    if (localStorage.getItem("lkn-theme") === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  } catch (e) {}
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --teal: #0f766e;
+  --blue: #1d4ed8;
+  --amber: #b45309;
+  --leaf: #4d7c0f;
+  --ink: #16202a;
+  --ink-soft: #4a5a68;
+  --ink-faint: #7c8b98;
+  --surface: #fbfaf7;
+  --surface-2: #ffffff;
+  --surface-3: #f2efe8;
+  --line: #ded8cd;
+  --line-soft: #ebe6dc;
+  --shadow: 0 1px 2px rgba(22, 32, 42, .05), 0 8px 24px rgba(22, 32, 42, .06);
+  --serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --measure: 34rem;
+}
+:root[data-theme="dark"] {
+  --teal: #5eead4;
+  --blue: #93b4ff;
+  --amber: #fbbf24;
+  --leaf: #a3e635;
+  --ink: #e8eef4;
+  --ink-soft: #a6b6c4;
+  --ink-faint: #74869a;
+  --surface: #11171d;
+  --surface-2: #171f27;
+  --surface-3: #1e2831;
+  --line: #2d3945;
+  --line-soft: #232e38;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --teal: #5eead4; --blue: #93b4ff; --amber: #fbbf24; --leaf: #a3e635;
+    --ink: #e8eef4; --ink-soft: #a6b6c4; --ink-faint: #74869a;
+    --surface: #11171d; --surface-2: #171f27; --surface-3: #1e2831;
+    --line: #2d3945; --line-soft: #232e38;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.72;
+  -webkit-font-smoothing: antialiased;
+}
+main { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem 4rem; }
+p { margin: 0 0 1.05rem; max-width: var(--measure); }
+a { color: var(--blue); }
+h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; line-height: 1.22; color: var(--ink); }
+code, kbd, samp { font-family: var(--mono); font-size: .88em; background: var(--surface-3); padding: .12em .38em; border-radius: 4px; }
+
+/* ---------- reading mode + bilingual visibility ---------- */
+.easy-only, .deep-only, .en-only { display: none; }
+:root[data-mode="standard"] .standard-copy,
+:root[data-mode="deep"] .standard-copy { display: revert; }
+:root[data-mode="deep"] .deep-only { display: revert; }
+:root[data-mode="easy"] .standard-copy { display: none; }
+:root[data-mode="easy"] .easy-only { display: revert; }
+:root[data-lang="vi"] .vi-only { display: revert; }
+:root[data-lang="en"] .vi-only,
+:root[data-lang="en"] .standard-copy,
+:root[data-lang="en"] .easy-only,
+:root[data-lang="en"] .deep-only { display: none; }
+:root[data-lang="en"] .en-only { display: revert; }
+:root[data-lang="en"] .mode-switch { opacity: .35; pointer-events: none; }
+
+/* ---------- topbar ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: .7rem 1.5rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.book-label { font-size: .78rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-right: auto; }
+.switch-group { display: flex; gap: .3rem; align-items: center; }
+.switch-group + .switch-group { margin-left: .35rem; }
+.switch-label { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin-right: .25rem; }
+button.chip {
+  font: inherit; font-size: .78rem; font-weight: 600;
+  padding: .3rem .72rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft);
+  transition: background .15s, color .15s, border-color .15s;
+}
+button.chip:hover { border-color: var(--teal); color: var(--teal); }
+button.chip[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: var(--surface); }
+:root[data-theme="dark"] button.chip[aria-pressed="true"] { color: #0b1116; }
+
+/* ---------- hero ---------- */
+.hero {
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  gap: 2.75rem; align-items: center;
+  padding: 3.75rem 0 3rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.hero::after {
+  content: "LKN / 01";
+  position: absolute; top: 1.15rem; right: 0;
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .22em;
+  color: var(--ink-faint);
+}
+.eyebrow { font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--teal); font-weight: 700; margin: 0 0 .85rem; }
+.hero h1 { font-size: clamp(2.05rem, 4.6vw, 3.1rem); margin: 0 0 1.15rem; letter-spacing: -.015em; }
+.hero p { font-size: 1.06rem; color: var(--ink-soft); }
+.thesis {
+  margin-top: 1.5rem; padding: 1.05rem 1.25rem 1.05rem 2.6rem;
+  position: relative; max-width: var(--measure);
+  background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--amber);
+  border-radius: 0 10px 10px 0; box-shadow: var(--shadow);
+}
+.thesis::before { content: "∴"; position: absolute; left: .95rem; top: .95rem; font-size: 1.15rem; color: var(--amber); }
+.thesis p { margin: 0; font-size: .97rem; color: var(--ink); }
+
+/* ---------- CSS diagrams ---------- */
+.system-map {
+  position: relative; display: grid; gap: .75rem;
+  padding: 1.5rem; border-radius: 16px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.system-map .core {
+  justify-self: center; text-align: center;
+  padding: .85rem 1.25rem; border-radius: 999px;
+  background: var(--teal); color: var(--surface); font-weight: 700; font-size: .9rem;
+  max-width: 100%;
+}
+:root[data-theme="dark"] .system-map .core { color: #0b1116; }
+.system-map .spokes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
+.system-map .node {
+  padding: .8rem .85rem; border-radius: 12px; text-align: center;
+  background: var(--surface-3); border: 1px solid var(--line-soft);
+}
+.system-map .node b { display: block; font-size: .82rem; color: var(--ink); margin-bottom: .3rem; }
+.system-map .node small { display: block; font-size: .73rem; line-height: 1.5; color: var(--ink-soft); }
+.loop-diagram { display: grid; gap: .55rem; padding: 1.25rem; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.loop-diagram .step { padding: .6rem .8rem; border-radius: 10px; background: var(--surface-3); border-left: 3px solid var(--blue); font-size: .82rem; }
+
+/* ---------- chapter path ---------- */
+.chapter-path {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem;
+  margin: 2.5rem 0 3rem;
+}
+.chapter-path a {
+  display: block; padding: .9rem 1rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+  transition: border-color .15s, transform .15s;
+}
+.chapter-path a:hover { border-color: var(--teal); transform: translateY(-2px); }
+.chapter-path span { display: block; font-size: .67rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.chapter-path b { display: block; font-family: var(--serif); font-size: .96rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- sections ---------- */
+.section { padding: 2.75rem 0; border-top: 1px solid var(--line-soft); }
+.section-heading h2 { font-size: clamp(1.5rem, 3vw, 2.05rem); margin: 0 0 .9rem; }
+.section-heading p { color: var(--ink-soft); }
+.surprise-lead {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem;
+  margin: 1.75rem 0 2rem;
+}
+.definition, .equation { padding: 1rem 1.15rem; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); font-size: .92rem; }
+.definition { border-left: 3px solid var(--blue); }
+.equation { border-left: 3px solid var(--leaf); font-family: var(--mono); font-size: .82rem; line-height: 1.7; }
+.definition p, .equation p { margin: 0; max-width: none; }
+
+.surprise-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.1rem; }
+.trap-grid { grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
+.surprise-grid > li {
+  padding: 1.25rem 1.35rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.english-term { display: inline-block; font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--amber); margin-bottom: .45rem; }
+.surprise-grid h3 { font-size: 1.05rem; margin: 0 0 .7rem; }
+.surprise-grid p { font-size: .93rem; max-width: none; }
+.opportunity {
+  margin-top: .9rem; padding: .75rem .9rem; border-radius: 10px;
+  background: var(--surface-3); border-left: 3px solid var(--leaf); font-size: .87rem;
+}
+.opportunity p { margin: 0; font-size: .87rem; }
+.mechanics { margin-top: .9rem; display: grid; gap: .7rem; }
+.info-block { padding: .75rem .9rem; border-radius: 10px; border: 1px dashed var(--line); background: var(--surface); }
+.info-block h4 { font-size: .85rem; margin: 0 0 .35rem; color: var(--teal); }
+.info-block p { margin: 0; font-size: .86rem; }
+.result { margin-top: .7rem; font-size: .86rem; color: var(--ink-soft); }
+
+.signal {
+  margin: 2rem 0 0; padding: 1.1rem 1.3rem; border-radius: 12px;
+  background: var(--surface-3); border: 1px solid var(--line-soft); border-top: 3px solid var(--blue);
+}
+.signal p { margin: 0 0 .6rem; font-size: .93rem; }
+.signal p:last-child { margin-bottom: 0; }
+
+/* ---------- misconceptions ---------- */
+.trap-comparison { margin: 2.5rem 0; }
+.comparison-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; margin-top: 1.25rem; }
+.comparison-card {
+  padding: 1.1rem 1.25rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); border-top: 3px solid var(--amber);
+}
+.comparison-card h3 { font-size: .98rem; margin: 0 0 .6rem; }
+.comparison-card p { font-size: .9rem; max-width: none; }
+.comparison-card .myth { color: var(--amber); font-weight: 600; }
+.comparison-card .fact { color: var(--teal); font-weight: 600; }
+
+/* ---------- diagnostic ---------- */
+.diagnostic { padding: 1.75rem; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.diagnostic-intro p { font-size: .97rem; }
+.question-list { counter-reset: q; list-style: none; margin: 1.25rem 0 0; padding: 0; display: grid; gap: .9rem; }
+.question-list > li { counter-increment: q; position: relative; padding-left: 2.4rem; font-size: .93rem; }
+.question-list > li::before {
+  content: counter(q, decimal-leading-zero);
+  position: absolute; left: 0; top: .05rem;
+  font-family: var(--mono); font-size: .78rem; font-weight: 600; color: var(--teal);
+  border: 1px solid var(--line); border-radius: 6px; padding: .05rem .38rem;
+}
+.question-list .deep-only { margin-top: .4rem; font-size: .87rem; color: var(--ink-soft); }
+
+/* ---------- closing ---------- */
+.closing { padding: 3rem 0 1rem; border-top: 1px solid var(--line-soft); }
+.closing blockquote {
+  margin: 0; padding: 1.5rem 0 0; max-width: 46rem;
+  font-family: var(--serif); font-size: clamp(1.15rem, 2.4vw, 1.55rem); line-height: 1.5; color: var(--ink);
+}
+.closing blockquote p { max-width: none; font-size: inherit; line-height: inherit; }
+.closing-accent { color: var(--teal); font-style: italic; }
+
+/* ---------- chapter nav ---------- */
+.chapter-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 3rem 0 0; }
+.nav-cell {
+  display: block; padding: 1rem 1.15rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); transition: border-color .15s, transform .15s;
+}
+a.nav-cell:hover { border-color: var(--teal); transform: translateY(-2px); }
+.nav-cell.disabled { opacity: .5; background: var(--surface-3); cursor: default; }
+.nav-next { text-align: right; }
+.nav-label { display: block; font-size: .68rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.nav-title { display: block; font-family: var(--serif); font-size: .95rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- footer + references ---------- */
+footer {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.5rem; align-items: start;
+  margin-top: 3rem; padding: 2rem 0 3rem; border-top: 1px solid var(--line);
+  font-size: .85rem; color: var(--ink-soft);
+}
+.footer-main p { max-width: 48rem; font-size: .85rem; }
+.footer-label { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; margin: 1.5rem 0 .6rem; }
+.ref-list { margin: 0; padding-left: 1.4rem; display: grid; gap: .5rem; }
+.ref-list li { font-size: .82rem; line-height: 1.6; }
+.edition { font-family: var(--mono); font-size: .7rem; letter-spacing: .12em; color: var(--ink-faint); white-space: nowrap; }
+.cite { font-size: .7em; vertical-align: super; line-height: 0; margin-left: .1em; }
+.cite a { text-decoration: none; padding: 0 .12em; }
+
+/* SECTION-RAIL:START */
+.section-rail {
+  position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+  z-index: 30; padding: .6rem .5rem; display: none;
+}
+.section-rail__list { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+.section-rail__list a {
+  display: flex; align-items: center; gap: .55rem;
+  text-decoration: none; color: var(--ink-faint); font-size: .74rem; line-height: 1.25;
+}
+.section-rail__list a::before {
+  content: ""; flex: 0 0 auto; width: 1.15rem; height: 2px; border-radius: 2px;
+  background: var(--line); transition: width .2s, background .2s;
+}
+.section-rail__label {
+  max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0;
+  transition: max-width .24s ease, opacity .18s ease;
+}
+.section-rail:hover .section-rail__label,
+.section-rail:focus-within .section-rail__label { max-width: 13rem; opacity: 1; }
+.section-rail:hover, .section-rail:focus-within {
+  background: color-mix(in srgb, var(--surface-2) 94%, transparent);
+  border: 1px solid var(--line-soft); border-left: 0; border-radius: 0 12px 12px 0; box-shadow: var(--shadow);
+}
+.section-rail__list a:hover,
+.section-rail__list a[aria-current="true"] { color: var(--teal); }
+.section-rail__list a[aria-current="true"]::before { width: 1.9rem; background: var(--teal); }
+@media (min-width: 1180px) { .section-rail { display: block; } }
+/* SECTION-RAIL:END */
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 2rem; padding-top: 2.5rem; }
+  .hero::after { position: static; display: block; margin-bottom: .75rem; }
+  .system-map .spokes { grid-template-columns: minmax(0, 1fr); }
+  footer { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 620px) {
+  body { font-size: 16px; }
+  main { padding: 0 1.1rem 3rem; }
+  .topbar { padding: .6rem 1.1rem; gap: .5rem; }
+  .book-label { width: 100%; margin-right: 0; }
+  .chapter-nav { grid-template-columns: minmax(0, 1fr); }
+  .nav-next { text-align: left; }
+  .diagnostic { padding: 1.25rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">Linux Kernel in a Nutshell · <span class="vi-only">Chương 1 · Nhập môn</span><span class="en-only" lang="en">Chapter 1 · Introduction</span></div>
+  <div class="switch-group mode-switch">
+    <span class="switch-label vi-only">Mức đọc</span><span class="switch-label en-only" lang="en">Level</span>
+    <button class="chip" type="button" data-set-mode="easy" aria-pressed="false"><span class="vi-only">Dễ hiểu</span><span class="en-only" lang="en">Easy</span></button>
+    <button class="chip" type="button" data-set-mode="standard" aria-pressed="true"><span class="vi-only">Tiêu chuẩn</span><span class="en-only" lang="en">Standard</span></button>
+    <button class="chip" type="button" data-set-mode="deep" aria-pressed="false"><span class="vi-only">Đầy đủ</span><span class="en-only" lang="en">Deep</span></button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-set-lang="vi" aria-pressed="true">VI</button>
+    <button class="chip" type="button" data-set-lang="en" aria-pressed="false">EN</button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-toggle-theme aria-pressed="false"><span class="vi-only">Tối</span><span class="en-only" lang="en">Dark</span></button>
+  </div>
+</header>
+
+<nav class="section-rail" aria-label="Mục lục trong trang"><ul class="section-rail__list"></ul></nav>
+
+<main>
+
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow"><span class="vi-only">Phần I · Dựng nhân · Chương 1</span><span class="en-only" lang="en">Part I · Building the Kernel · Chapter 1</span></p>
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Vì sao lại tự dựng một nhân Linux?</span>
+      <span class="easy-only">Tự làm “trái tim” cho máy của mình</span>
+      <span class="en-only" lang="en">Why build your own Linux kernel?</span>
+    </h1>
+    <p class="standard-copy">Greg Kroah-Hartman mở cuốn sách bằng một nghịch lý dễ chịu: nhân Linux là một khối mã khổng lồ — ông ghi nhận “hơn bảy triệu dòng mã” ở thời điểm 2006 <span class="cite"><a href="#ref-1">1</a></span> — nhưng cũng là hệ điều hành <em>linh hoạt</em> nhất từng được tạo ra, chạy được từ một mô hình trực thăng điều khiển từ xa, một chiếc điện thoại di động, cho tới phần lớn các siêu máy tính lớn nhất thế giới <span class="cite"><a href="#ref-1">1</a></span>. Chính sự linh hoạt đó là lý do để bạn tự tay chỉnh nó.</p>
+    <p class="easy-only">Nhân (kernel) là phần lõi điều khiển mọi thứ bên trong máy tính: bàn phím, màn hình, ổ cứng, mạng. Ông Greg Kroah-Hartman nói nó rất to — năm 2006 đã “hơn bảy triệu dòng” <span class="cite"><a href="#ref-1">1</a></span> — nhưng lại rất dễ uốn: cũng một cái nhân ấy có thể chạy trong đồ chơi điều khiển từ xa, trong điện thoại, và trong siêu máy tính <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: to không có nghĩa là cứng nhắc.</p>
+    <p class="en-only" lang="en">Greg Kroah-Hartman opens the book with a pleasant paradox: the Linux kernel is an enormous body of code — he records “over seven million lines of code” as of 2006 <span class="cite"><a href="#ref-1">1</a></span> — and yet it is the most <em>flexible</em> operating system ever created, running on everything from a radio-controlled model helicopter, to a cell phone, to the majority of the largest supercomputers in the world <span class="cite"><a href="#ref-1">1</a></span>. That flexibility is precisely why you would tune it yourself.</p>
+    <p class="deep-only">Con số “bảy triệu dòng” là một mốc thời gian, không phải một hằng số. Sách viết cho dòng nhân 2.6 năm 2006; đến bản 6.14-rc1 đầu năm 2025 cây mã nguồn đã vượt 40 triệu dòng theo thống kê của Phoronix được các trang kỹ thuật dẫn lại <span class="cite"><a href="#ref-5">5</a></span>. Luận điểm của ông vì thế chỉ mạnh thêm: khối mã càng lớn thì phần bạn thực sự cần càng nhỏ so với tổng thể.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận điểm chương 1.</b> Không một bản phân phối nào cung cấp đúng cái nhân mà đa số người dùng của nó mong muốn <span class="cite"><a href="#ref-1">1</a></span>; vì vậy, sớm muộn trong đời dùng Linux bạn sẽ cần dựng hoặc tinh chỉnh một nhân — và việc đó phải làm với quyền người dùng thường, không phải quyền siêu người dùng <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only"><b>Ý chính.</b> Bản Linux có sẵn được làm cho “số đông”, nên không vừa khít với máy của riêng bạn <span class="cite"><a href="#ref-1">1</a></span>. Có lúc bạn sẽ muốn tự làm một cái vừa khít. Nhớ nhé: làm bằng tài khoản thường, đừng làm bằng quyền quản trị <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="en-only" lang="en"><b>Chapter 1 thesis.</b> No Linux distribution provides the exact kernel most of its users want <span class="cite"><a href="#ref-1">1</a></span>; so at some point in your Linux career you will want to build a kernel, or tweak the parameters of one you are running — and that work belongs to a normal user account, never the superuser <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: ba lý do tự dựng nhân — phần cứng riêng, phiên bản mới, và cắt gọt cho hệ nhúng. Diagram: three reasons to build your own kernel — different hardware, newer version, and trimming for embedded systems.">
+    <div class="core"><span class="vi-only">Nhân tùy biến của bạn</span><span class="en-only" lang="en">Your custom kernel</span></div>
+    <div class="spokes">
+      <div class="node">
+        <b><span class="vi-only">Phần cứng riêng</span><span class="en-only" lang="en">Different hardware</span></b>
+        <small class="standard-copy">Nhu cầu của bạn khác với đa số người dùng mà bản phân phối phải phục vụ.</small>
+        <small class="easy-only">Máy bạn không giống máy người khác.</small>
+        <small class="en-only" lang="en">Your needs differ from the majority a distribution must serve.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Phiên bản mới</span><span class="en-only" lang="en">A newer version</span></b>
+        <small class="standard-copy">Dùng nhân mới ngay, không chờ bản phân phối đóng gói lại.</small>
+        <small class="easy-only">Muốn dùng bản mới ngay, không phải chờ.</small>
+        <small class="en-only" lang="en">Use a new kernel without waiting for a distribution to be built around it.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Cắt bớt</span><span class="en-only" lang="en">Removing features</span></b>
+        <small class="standard-copy">Nhỏ hơn và nhanh hơn — đặc biệt trên hệ nhúng hoặc máy dạng nhỏ.</small>
+        <small class="easy-only">Bỏ thứ không dùng cho máy nhỏ gọn hơn.</small>
+        <small class="en-only" lang="en">Smaller and faster — especially on an embedded or small-form-factor system.</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<nav class="chapter-path" aria-label="Lối đi trong chương">
+  <a href="#linh-hoat">
+    <span>01</span>
+    <b><span class="standard-copy">Nghịch lý linh hoạt</span><span class="easy-only">To mà vẫn mềm dẻo</span><span class="en-only" lang="en">The flexibility paradox</span></b>
+  </a>
+  <a href="#khong-vua">
+    <span>02</span>
+    <b><span class="standard-copy">Vì sao nhân dựng sẵn không vừa</span><span class="easy-only">Vì sao đồ may sẵn không vừa</span><span class="en-only" lang="en">Why a stock kernel does not fit</span></b>
+  </a>
+  <a href="#dung-sach">
+    <span>03</span>
+    <b><span class="standard-copy">Dùng cuốn sách này: quy tắc an toàn</span><span class="easy-only">Luật an toàn khi làm theo sách</span><span class="en-only" lang="en">Using this book: the safety rules</span></b>
+  </a>
+  <a href="#tu-kiem">
+    <span>04</span>
+    <b><span class="standard-copy">Tự kiểm trước khi sang chương 2</span><span class="easy-only">Tự hỏi mình vài câu</span><span class="en-only" lang="en">Self-check before Chapter 2</span></b>
+  </a>
+</nav>
+
+<section class="section" id="linh-hoat" aria-labelledby="linh-hoat-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 01</span><span class="en-only" lang="en">Concept cluster 01</span></p>
+    <h2 id="linh-hoat-title">
+      <span class="standard-copy">Nghịch lý linh hoạt: khổng lồ nhưng uốn được</span>
+      <span class="easy-only">Rất to, nhưng vẫn uốn được</span>
+      <span class="en-only" lang="en">The flexibility paradox: enormous, yet malleable</span>
+    </h2>
+    <p class="standard-copy">Câu mở đầu của chương đặt hai đại lượng cạnh nhau: kích thước và độ mềm dẻo. Kroah-Hartman viết rằng <em>bất chấp</em> khối mã lớn, nhân Linux vẫn là hệ điều hành linh hoạt nhất từng có <span class="cite"><a href="#ref-1">1</a></span>. Chữ “bất chấp” mới là điều đáng chú ý: ở hầu hết hệ thống phần mềm, lớn đồng nghĩa với cứng. Ở đây thì không, vì phần lớn khối mã ấy là <span lang="en">driver</span> và tùy chọn có thể bật, tắt, hoặc dựng thành <span lang="en">module</span> riêng lẻ.</p>
+    <p class="easy-only">Thường thì cái gì càng to càng khó đổi. Nhân Linux thì ngược lại: nó to vì chứa sẵn rất nhiều “mảnh rời” cho đủ loại thiết bị, và bạn được chọn lấy mảnh nào. Nhớ nhé: to ở đây là “nhiều lựa chọn”, không phải “nặng nề”.</p>
+    <p class="en-only" lang="en">The chapter's opening sentence sets two quantities side by side: size and malleability. Kroah-Hartman writes that <em>despite</em> its large code base, the Linux kernel is the most flexible operating system that has ever been created <span class="cite"><a href="#ref-1">1</a></span>. The word “despite” is the interesting one: in most software systems, large means rigid. Not here, because most of that code is drivers and options you can switch on, off, or build as separate modules.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Nhân (<span lang="en">kernel</span>).</b> Lớp mã chạy ở đặc quyền cao nhất, đứng giữa phần cứng và mọi chương trình bạn dùng. Cuốn sách này cố tình <em>không</em> bàn về lập trình bên trong nhân — nó bàn về cách cấu hình, dựng, cài đặt và tùy biến nhân, và ông nói rõ không cần kinh nghiệm lập trình để đọc <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only"><b>Nhân là gì.</b> Là phần lõi đứng giữa máy móc và các ứng dụng. Sách này không dạy viết mã cho nhân — nó dạy cách lắp và chỉnh nhân, và không cần biết lập trình <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: đây là sách của người dùng, không phải sách của lập trình viên.</p>
+      <p class="en-only" lang="en"><b>Kernel.</b> The layer of code running at the highest privilege, sitting between the hardware and every program you use. This book deliberately does <em>not</em> cover kernel programming — it covers configuring, building, installing and customizing, and the author states plainly that no programming experience is needed <span class="cite"><a href="#ref-3">3</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">nhân phân phối = nhu cầu của SỐ ĐÔNG<br>nhân của bạn&nbsp;&nbsp;&nbsp; = nhu cầu CỦA BẠN<br>→ nhỏ hơn + nhanh hơn</p>
+      <p class="easy-only">nhân có sẵn = cho tất cả mọi người<br>nhân tự dựng = riêng cho máy bạn<br>→ gọn hơn + nhanh hơn</p>
+      <p class="en-only" lang="en">distro kernel = needs of the MAJORITY<br>your kernel&nbsp;&nbsp; = YOUR needs<br>→ smaller + faster</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">flexibility</span>
+      <h3>
+        <span class="standard-copy">Linh hoạt — cùng một nhân, muôn vàn thân xác</span>
+        <span class="easy-only">Linh hoạt — một lõi, nhiều loại máy</span>
+        <span class="en-only" lang="en">Flexibility — one kernel, many bodies</span>
+      </h3>
+      <p class="standard-copy">Ông liệt kê dải thiết bị để minh họa: một mô hình trực thăng điều khiển từ xa, một chiếc điện thoại di động, và phần lớn các siêu máy tính lớn nhất thế giới <span class="cite"><a href="#ref-1">1</a></span>. Ba ví dụ này cách nhau nhiều bậc độ lớn về bộ nhớ, năng lượng và số nhân xử lý — nhưng vẫn là cùng một cây mã nguồn, chỉ khác tập tùy chọn cấu hình.</p>
+      <p class="easy-only">Ông kể ba ví dụ: trực thăng đồ chơi, điện thoại, và siêu máy tính <span class="cite"><a href="#ref-1">1</a></span>. Ba thứ khác nhau một trời một vực, nhưng cùng dùng một bộ mã nguồn. Nhớ nhé: khác nhau là ở phần bạn chọn bật, không phải ở bộ mã.</p>
+      <p class="en-only" lang="en">He lists a range of devices to illustrate: a radio-controlled model helicopter, a cell phone, and the majority of the largest supercomputers in the world <span class="cite"><a href="#ref-1">1</a></span>. These three sit orders of magnitude apart in memory, power and core count — yet they share one source tree, differing only in the set of configuration options.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Mỗi lần một bản phân phối phát hành “<span lang="en">kernel-server</span>” và “<span lang="en">kernel-desktop</span>” riêng, đó chính là cùng cây mã ấy được cấu hình hai kiểu.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Khi thấy có bản nhân “cho máy chủ” và bản “cho máy bàn”, đó là cùng một mã, chỉnh khác nhau. Nhớ nhé: khác cấu hình, không khác mã.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Whenever a distribution ships a separate “kernel-server” and “kernel-desktop”, that is one source tree configured two ways.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cơ chế: y / m / n</h4>
+          <p>Mỗi tùy chọn cấu hình có ba trạng thái — <code>y</code> dựng thẳng vào nhân, <code>m</code> dựng thành module nạp khi cần, <code>n</code> loại hẳn ra. Chương 4 của sách mô tả đúng ba lựa chọn này trong giao diện <code>make config</code> <span class="cite"><a href="#ref-6">6</a></span>. Đây là đòn bẩy vật lý tạo ra “linh hoạt”.</p>
+        </div>
+        <div class="info-block">
+          <h4>Quy mô hôm nay</h4>
+          <p>Sách nói “gần hai nghìn tùy chọn cấu hình” khi mô tả vì sao <code>make config</code> hỏi từng câu là quá lâu <span class="cite"><a href="#ref-6">6</a></span>. Con số ấy thuộc về dòng 2.6; cây mã ngày nay lớn hơn nhiều <span class="cite"><a href="#ref-5">5</a></span>, và các công cụ menu thay cho việc trả lời tuần tự.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">smaller and faster</span>
+      <h3>
+        <span class="standard-copy">Nhỏ hơn và nhanh hơn — phần thưởng của việc cắt gọt</span>
+        <span class="easy-only">Gọn hơn thì chạy nhanh hơn</span>
+        <span class="en-only" lang="en">Smaller and faster — the reward for trimming</span>
+      </h3>
+      <p class="standard-copy">Lời hứa của ông rất cụ thể: bằng cách tùy biến nhân cho môi trường riêng, có thể tạo ra thứ vừa nhỏ hơn vừa nhanh hơn nhân mà hầu hết bản phân phối cung cấp <span class="cite"><a href="#ref-1">1</a></span>. Ông cũng nói ngược lại một cách sòng phẳng: có những lý do chính đáng để <em>gỡ bỏ</em> tính năng khỏi nhân, đặc biệt khi chạy trên hệ nhúng hoặc máy dạng nhỏ <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="easy-only">Bỏ bớt thứ máy bạn không có thì nhân nhẹ đi và chạy nhanh hơn <span class="cite"><a href="#ref-1">1</a></span>. Với máy nhỏ, nhẹ là điều bắt buộc <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: bỏ bớt cũng là một cách làm tốt lên.</p>
+      <p class="en-only" lang="en">His promise is concrete: by customizing the kernel for your specific environment, it is possible to create something both smaller and faster than the kernel provided by most Linux distributions <span class="cite"><a href="#ref-1">1</a></span>. He states the converse just as plainly: there are good reasons to remove features from the kernel, particularly on an embedded system or one with a small form factor <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Tài liệu nhân hiện hành khuyến nghị <code>make localmodconfig</code>, lấy cấu hình của bản phân phối làm nền rồi tắt các module có vẻ thừa với máy bạn, và nói rõ cách này “giảm thời gian biên dịch một cách khổng lồ” <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Ngày nay có lệnh <code>make localmodconfig</code> tự bỏ bớt phần máy bạn không dùng, giúp biên dịch nhanh hơn rất nhiều <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: máy tự giúp bạn cắt gọt.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Current kernel documentation recommends <code>make localmodconfig</code>, which takes your distribution's config as a base and disables modules apparently superfluous for your setup — it says this “will reduce the compile time enormously” <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cái giá của việc cắt</h4>
+          <p>Tài liệu hiện hành cũng cảnh báo mặt trái: <code>localmodconfig</code> “có khả năng tắt những tính năng bạn chưa dùng kể từ lúc khởi động” <span class="cite"><a href="#ref-4">4</a></span>. Module chỉ tự nạp khi được dùng lần đầu, nên thứ bạn chưa chạm tới sẽ bị coi là không cần.</p>
+        </div>
+        <div class="info-block">
+          <h4>Giới hạn tự đặt của sách</h4>
+          <p>Ông nói thẳng rằng hiểu nội tình hành vi của nhân là hữu ích khi tinh chỉnh, nhưng nằm ngoài phạm vi cuốn sách, trừ vài tóm tắt ngắn kèm theo một số tùy chọn; Phụ lục B liệt kê sách và tài liệu để đọc thêm <span class="cite"><a href="#ref-1">1</a></span>.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Nếu tính linh hoạt là <em>khả năng</em>, thì câu hỏi kế tiếp là <em>động cơ</em>: điều gì khiến một người đang dùng nhân dựng sẵn quyết định tự dựng? Ông trả lời bằng một mệnh đề về kinh tế học của bản phân phối.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Biết là làm được rồi, giờ hỏi: tại sao lại muốn làm? Nhớ nhé: câu trả lời nằm ở chỗ bản phân phối phải chiều số đông.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> If flexibility is the <em>capability</em>, the next question is <em>motive</em>: what makes someone running a stock kernel decide to build their own? He answers with a proposition about the economics of distributions.</p>
+  </aside>
+</section>
+
+<section class="section" id="khong-vua" aria-labelledby="khong-vua-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 02</span><span class="en-only" lang="en">Concept cluster 02</span></p>
+    <h2 id="khong-vua-title">
+      <span class="standard-copy">Vì sao nhân dựng sẵn không bao giờ vừa khít</span>
+      <span class="easy-only">Vì sao đồ may sẵn không vừa người</span>
+      <span class="en-only" lang="en">Why a stock kernel never quite fits</span>
+    </h2>
+    <p class="standard-copy">Đây là đoạn văn sắc nhất của chương, và nó không phải lời chê bản phân phối. Ông thừa nhận các bản hiện đại đã “rất chiều người dùng”, biên dịch sẵn hỗ trợ cho mọi thiết bị đã biết, cho âm thanh, thậm chí cho tiết kiệm điện <span class="cite"><a href="#ref-1">1</a></span>. Vấn đề là cấu trúc chứ không phải chất lượng: <em>mỗi bản phân phối phải cố đáp ứng nhu cầu của số đông</em> <span class="cite"><a href="#ref-1">1</a></span>. Mà bạn thì gần như chắc chắn có một nhu cầu khác số đông.</p>
+    <p class="easy-only">Bản Linux có sẵn đã rất tốt: cài sẵn hỗ trợ cho gần như mọi thiết bị, cho âm thanh, cho tiết kiệm pin <span class="cite"><a href="#ref-1">1</a></span>. Nhưng nó phải làm vừa lòng số đông <span class="cite"><a href="#ref-1">1</a></span>, mà máy của bạn thì riêng. Nhớ nhé: đồ may sẵn tốt, nhưng đồ may đo mới vừa.</p>
+    <p class="en-only" lang="en">This is the sharpest passage in the chapter, and it is not a complaint about distributions. He grants that modern ones have gotten very accommodating, compiling in support for every known device, for sound, and even for power conservation <span class="cite"><a href="#ref-1">1</a></span>. The problem is structural, not qualitative: <em>every distribution has to try to meet the needs of the majority</em> <span class="cite"><a href="#ref-1">1</a></span>. And you almost certainly have a need that differs from the majority.</p>
+    <p class="deep-only">Hãy đọc kỹ cấu trúc lập luận: ông không nói nhân dựng sẵn <em>tồi</em>, ông nói nó <em>tối ưu cho một hàm mục tiêu khác</em>. Hàm mục tiêu của bản phân phối là “chạy được trên nhiều máy nhất có thể”; hàm mục tiêu của bạn là “chạy tốt nhất trên đúng một máy”. Hai bài toán khác nhau thì nghiệm khác nhau — và đó là toàn bộ chỗ đứng của cuốn sách.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Bản phân phối (<span lang="en">distribution</span>).</b> Một gói hoàn chỉnh gồm nhân đã dựng sẵn cùng công cụ người dùng. Nhân của nó được cấu hình rộng để khởi động được trên tập phần cứng lớn nhất có thể — nghĩa là mang theo rất nhiều thứ máy bạn không có.</p>
+      <p class="easy-only"><b>Bản phân phối là gì.</b> Là bộ Linux đóng gói sẵn cho bạn cài. Nhân trong đó được làm “rộng rãi” để chạy được trên nhiều máy. Nhớ nhé: rộng rãi nghĩa là mang theo nhiều thứ bạn không cần.</p>
+      <p class="en-only" lang="en"><b>Distribution.</b> A complete package of a pre-built kernel plus userspace tools. Its kernel is configured broadly, so it boots on the widest possible set of hardware — which means carrying a great deal your machine does not have.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">lý do 1 · phần cứng của bạn khác<br>lý do 2 · muốn nhân mới ngay<br>lý do 3 · cần gỡ bớt tính năng<br>→ dựng, hoặc chỉnh tham số</p>
+      <p class="easy-only">1 · máy bạn khác<br>2 · muốn bản mới sớm<br>3 · muốn bỏ bớt cho nhẹ<br>→ tự dựng hoặc tự chỉnh</p>
+      <p class="en-only" lang="en">reason 1 · your hardware differs<br>reason 2 · you want a new kernel now<br>reason 3 · you need to remove features<br>→ build it, or tweak its parameters</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">different hardware</span>
+      <h3>
+        <span class="standard-copy">Phần cứng khác — lý do tầm thường nhất và phổ biến nhất</span>
+        <span class="easy-only">Máy bạn khác máy người khác</span>
+        <span class="en-only" lang="en">Different hardware — the plainest reason, and the commonest</span>
+      </h3>
+      <p class="standard-copy">Ông diễn đạt gọn tới mức dễ bị bỏ qua: “Bạn có thể chỉ đơn giản là có phần cứng khác” <span class="cite"><a href="#ref-1">1</a></span>. Không cần tình huống kỳ lạ nào; chỉ cần một chiếc máy tính xách tay có con chip không nằm trong tập cấu hình mặc định là đủ để việc tùy biến trở nên đáng làm.</p>
+      <p class="easy-only">Ông nói đơn giản: có thể máy bạn chỉ là có phần cứng khác thôi <span class="cite"><a href="#ref-1">1</a></span>. Thế là đủ lý do rồi. Nhớ nhé: không cần lý do to tát mới được tự dựng nhân.</p>
+      <p class="en-only" lang="en">He puts it so briefly it is easy to skip: “You may just have different hardware” <span class="cite"><a href="#ref-1">1</a></span>. No exotic scenario is required; one laptop with a chip outside the default config set is reason enough for customization to be worth the effort.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Chương 7 của sách dành riêng cho việc xác định đúng module cần cho phần cứng đang có — ông tự nhận đó là chương ông tâm đắc nhất <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Chương 7 dạy cách tìm đúng phần cần bật cho máy bạn; chính tác giả nói đó là chương ông thích nhất <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: cứ đọc tiếp, sẽ có hướng dẫn cụ thể.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Chapter 7 is devoted to determining the correct module for the hardware you actually have — the author calls it the chapter he is especially proud of <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">not waiting</span>
+      <h3>
+        <span class="standard-copy">Không phải chờ — nhân mới ra là dùng được</span>
+        <span class="easy-only">Không phải chờ bản mới</span>
+        <span class="en-only" lang="en">Not waiting — using a new kernel the day it lands</span>
+      </h3>
+      <p class="standard-copy">Lý do thứ hai mang tính thời gian: khi một nhân mới ra đời, bạn có thể muốn dùng ngay mà không đợi một bản phân phối được xây quanh nó <span class="cite"><a href="#ref-1">1</a></span>. Khoảng trễ giữa hai mốc đó có thể tính bằng tháng, đôi khi bằng cả một chu kỳ phát hành.</p>
+        <p class="easy-only">Nhân mới ra hôm nay, nhưng bản Linux đóng gói nó có thể vài tháng sau mới có. Tự dựng thì dùng được ngay <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: tự dựng là cách đi trước lịch.</p>
+      <p class="en-only" lang="en">The second reason is about time: when a new kernel comes out, you may want to start using it without waiting for a distribution to be built around it <span class="cite"><a href="#ref-1">1</a></span>. The gap between those two moments can run to months, sometimes a whole release cycle.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> kernel.org hôm nay công bố song song nhiều nhánh — <span lang="en">mainline</span>, <span lang="en">stable</span>, và nhiều nhánh <span lang="en">longterm</span> — mỗi nhánh có nhịp phát hành riêng <span class="cite"><a href="#ref-8">8</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Trang kernel.org luôn có nhiều dòng nhân cùng lúc: bản thử nghiệm, bản ổn định, bản hỗ trợ dài hạn <span class="cite"><a href="#ref-8">8</a></span>. Nhớ nhé: có nhiều dòng để chọn, không chỉ một.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> kernel.org today publishes several branches in parallel — mainline, stable, and multiple longterm lines — each on its own release cadence <span class="cite"><a href="#ref-8">8</a></span>.</p>
+      </div>
+      <p class="result standard-copy"><span class="vi-only">Chương 3 sẽ giải thích các nhánh ấy liên hệ với nhau ra sao.</span></p>
+      <p class="result en-only" lang="en">Chapter 3 explains how those branches relate to one another.</p>
+    </li>
+    <li>
+      <span class="english-term">tweaking parameters</span>
+      <h3>
+        <span class="standard-copy">Chỉnh tham số — dựng lại không phải cách duy nhất</span>
+        <span class="easy-only">Đôi khi chỉ cần vặn lại vài nút</span>
+        <span class="en-only" lang="en">Tweaking parameters — rebuilding is not the only path</span>
+      </h3>
+      <p class="standard-copy">Câu tổng kết của ông cẩn trọng hơn vẻ ngoài: trong đời dùng Linux, đôi lúc bạn sẽ muốn <em>dựng</em> một nhân, <em>hoặc</em> tinh chỉnh tham số của nhân đang chạy <span class="cite"><a href="#ref-1">1</a></span>. Vế thứ hai quan trọng không kém — nhiều thay đổi hữu ích không cần biên dịch lại dòng nào.</p>
+      <p class="easy-only">Không phải lúc nào cũng phải dựng lại cả nhân. Nhiều khi chỉ cần đổi vài tham số của nhân đang chạy <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: thử cách nhẹ trước, cách nặng sau.</p>
+      <p class="en-only" lang="en">His summary sentence is more careful than it looks: during your Linux career you will sometimes want to <em>build</em> a kernel, <em>or</em> to tweak the parameters of one you are running <span class="cite"><a href="#ref-1">1</a></span>. The second half matters just as much — many useful changes require no recompilation at all.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Chương 9 của sách là một tra cứu đầy đủ các tham số dòng lệnh khởi động truyền cho nhân <span class="cite"><a href="#ref-7">7</a></span> — đúng con đường “chỉnh mà không dựng lại”.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Chương 9 liệt kê các tham số bạn truyền cho nhân lúc khởi động <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: đó là cách chỉnh mà không phải dựng lại.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Chapter 9 is a full reference to the kernel boot command-line parameters <span class="cite"><a href="#ref-7">7</a></span> — exactly the “tune without rebuilding” route.</p>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Đã rõ <em>vì sao</em>. Phần còn lại của chương — mục “Using This Book” — chuyển sang <em>cách làm cho an toàn</em>, và ông đặt vào đó cảnh báo mà chính ông gọi là điều quan trọng nhất cần nhớ trong cả cuốn sách.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Biết vì sao rồi, giờ đến phần làm sao cho an toàn. Nhớ nhé: phần tiếp theo có một lời cảnh báo rất quan trọng.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> The <em>why</em> is settled. The rest of the chapter — the “Using This Book” section — turns to <em>how to do it safely</em>, and places there the warning the author himself calls the single most important thing to remember.</p>
+  </aside>
+</section>
+
+<section class="section" id="dung-sach" aria-labelledby="dung-sach-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 03 · “Using This Book”</span><span class="en-only" lang="en">Concept cluster 03 · “Using This Book”</span></p>
+    <h2 id="dung-sach-title">
+      <span class="standard-copy">Dùng cuốn sách này: ba quy tắc an toàn</span>
+      <span class="easy-only">Ba luật an toàn khi làm theo sách</span>
+      <span class="en-only" lang="en">Using this book: three safety rules</span>
+    </h2>
+    <p class="standard-copy">Mục này ngắn nhưng là mục có hệ quả thực tế lớn nhất của chương. Nó mở đầu bằng một khung cảnh báo in đậm: <em>đừng cấu hình hay dựng nhân với quyền siêu người dùng</em> <span class="cite"><a href="#ref-2">2</a></span>. Ông gọi đây là điều quan trọng nhất cần nhớ khi đi qua các bước trong sách <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    <p class="easy-only">Phần này ngắn mà quan trọng nhất. Câu đầu tiên là một lời cảnh báo: đừng dựng nhân bằng quyền quản trị <span class="cite"><a href="#ref-2">2</a></span>. Ông bảo đây là điều quan trọng nhất phải nhớ <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: dùng tài khoản thường thôi.</p>
+    <p class="en-only" lang="en">This section is short but carries the chapter's largest practical consequence. It opens with a boxed warning: <em>do not configure or build your kernel with superuser permissions enabled</em> <span class="cite"><a href="#ref-2">2</a></span>. He calls this the most important thing to remember while working through the steps in the book <span class="cite"><a href="#ref-2">2</a></span>.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Siêu người dùng (<span lang="en">superuser</span>, <code>root</code>).</b> Tài khoản không bị ràng buộc bởi quyền hạn tệp tin. Sách chia rạch ròi: tải mã nguồn, giải nén, cấu hình, biên dịch — làm với tài khoản thường; chỉ hai hoặc ba lệnh để <em>cài</em> nhân mới là cần quyền root <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only"><b><code>root</code> là gì.</b> Là tài khoản được phép làm mọi thứ, kể cả thứ gây hỏng. Sách nói: tải, giải nén, chỉnh, biên dịch thì dùng tài khoản thường; chỉ lúc cài mới cần root <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: chỉ mượn quyền lớn vào phút chót.</p>
+      <p class="en-only" lang="en"><b>Superuser (<code>root</code>).</b> The account unbound by file permissions. The book draws a clean line: downloading the source, uncompressing it, configuring and building it — all as a normal user; only the two or three commands it takes to install a new kernel should be done as the superuser <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">tải · giải nén · cấu hình · dựng → user thường<br>cài đặt (2–3 lệnh)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → root<br>thư mục làm việc → ~/linux/, KHÔNG /usr/src/</p>
+      <p class="easy-only">tải, giải nén, chỉnh, dựng → tài khoản thường<br>cài → quyền quản trị<br>chỗ làm → thư mục nhà của bạn</p>
+      <p class="en-only" lang="en">download · unpack · configure · build → normal user<br>install (2–3 commands)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → root<br>working dir → ~/linux/, NOT /usr/src/</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">never build as root</span>
+      <h3>
+        <span class="standard-copy">Đừng dựng bằng root — và lý do có thật đằng sau</span>
+        <span class="easy-only">Đừng dùng quyền quản trị để dựng</span>
+        <span class="en-only" lang="en">Never build as root — and the real reason behind it</span>
+      </h3>
+      <p class="standard-copy">Đây không phải lời khuyên vệ sinh chung chung. Ông kể một sự cố cụ thể: đã từng có lỗi trong quy trình dựng nhân khiến một số tệp đặc biệt trong thư mục <code>/dev</code> bị xóa nếu người dùng có quyền siêu người dùng lúc dựng <span class="cite"><a href="#ref-2">2</a></span>. Ngoài ra, giải nén mã nguồn với quyền root cũng gây rắc rối vì một số tệp không nhận đúng quyền hạn, dẫn tới lỗi biên dịch về sau <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Không phải lời khuyên suông đâu. Đã từng có lỗi làm mất mấy tệp quan trọng trong <code>/dev</code> nếu người dùng dựng nhân bằng quyền quản trị <span class="cite"><a href="#ref-2">2</a></span>. Giải nén bằng quyền đó cũng làm sai quyền tệp và gây lỗi sau này <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: một cú nhấp sai bằng quyền lớn thì hỏng thật.</p>
+      <p class="en-only" lang="en">This is not generic hygiene advice. He recounts a specific incident: there have been bugs in the kernel build process that deleted some special files in <code>/dev</code> if the user had superuser permissions while building <span class="cite"><a href="#ref-2">2</a></span>. Uncompressing the source as root causes its own trouble too, since some files end up without the proper permissions and cause build errors later <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Hướng dẫn dựng nhân hiện hành của kernel.org giữ nguyên ranh giới đó: mọi lệnh <code>git clone</code> và <code>make</code> chạy trong thư mục nhà, chỉ bước cài mới dùng <code>sudo make modules_install install</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Hướng dẫn mới nhất của kernel.org vẫn làm y hệt: dựng bằng tài khoản thường, chỉ bước cài mới thêm <code>sudo</code> <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: hai mươi năm sau, luật vẫn vậy.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Today's kernel.org build guide keeps the same boundary: every <code>git clone</code> and <code>make</code> runs in your home directory, and only the install step uses <code>sudo make modules_install install</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đoạn chú thích đáng đọc</h4>
+          <p>Ông kể thêm trong chú thích: lỗi đó mất khá lâu mới sửa được, vì không lập trình viên nhân chủ chốt nào dựng nhân bằng root nên họ không gặp nó; phải nhiều tuần sau mới xác định được chính việc dựng nhân là nguyên nhân. Một số người còn nửa đùa nửa thật đề nghị giữ lại lỗi này để ngăn người ta dựng nhân bằng root, nhưng phe điềm tĩnh đã thắng và lỗi được sửa <span class="cite"><a href="#ref-2">2</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao chi tiết này quan trọng</h4>
+          <p>Nó minh họa một đặc tính của phần mềm cộng tác: lỗi chỉ xuất hiện ở những đường đi mà người phát triển không dùng. Quy tắc “đừng dựng bằng root” vừa bảo vệ bạn, vừa giữ bạn ở trên con đường được thử nhiều nhất.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">where the source lives</span>
+      <h3>
+        <span class="standard-copy">Đặt mã nguồn ở đâu — tránh xa <code>/usr/src/linux/</code></span>
+        <span class="easy-only">Để mã nguồn trong thư mục nhà</span>
+        <span class="en-only" lang="en">Where the source lives — stay out of <code>/usr/src/linux/</code></span>
+      </h3>
+      <p class="standard-copy">Quy tắc thứ hai cũng dứt khoát: không bao giờ đặt mã nguồn nhân vào <code>/usr/src/linux/</code>, vì đó là vị trí của nhân mà các thư viện hệ thống đã được biên dịch dựa theo, chứ không phải nhân tùy biến mới của bạn <span class="cite"><a href="#ref-2">2</a></span>. Ông mở rộng ra cả cây: đừng làm bất cứ việc phát triển nhân nào dưới <code>/usr/src/</code>, hãy làm trong một thư mục người dùng nơi không có gì xấu xảy ra được với hệ thống <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Đừng để mã nguồn vào <code>/usr/src/linux/</code>. Chỗ đó dành cho nhân mà hệ thống dựa vào, không phải nhân mới của bạn <span class="cite"><a href="#ref-2">2</a></span>. Hãy làm trong thư mục riêng của bạn, nơi có lỡ sai cũng không hỏng máy <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: làm trong sân nhà mình.</p>
+      <p class="en-only" lang="en">The second rule is just as firm: the kernel source should never be placed in <code>/usr/src/linux/</code>, as that is the location of the kernel the system libraries were built against, not your new custom kernel <span class="cite"><a href="#ref-2">2</a></span>. He widens it to the whole tree: do no kernel development under <code>/usr/src/</code> at all, only in a local user directory where nothing bad can happen to the system <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Chương 3 của sách gợi ý tạo thư mục <code>~/linux</code> trong thư mục nhà để chứa các bản mã nguồn <span class="cite"><a href="#ref-9">9</a></span>; hướng dẫn hiện hành của kernel.org cũng dùng đúng <code>~/linux/</code> và ước tính cần khoảng 12 GB dung lượng <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Sách bảo tạo thư mục <code>~/linux</code> <span class="cite"><a href="#ref-9">9</a></span>; hướng dẫn mới của kernel.org cũng vậy, và nói cần chừng 12 GB trống <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: nhớ chừa đủ chỗ trống.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Chapter 3 suggests creating a <code>~/linux</code> directory in your home to hold the source trees <span class="cite"><a href="#ref-9">9</a></span>; today's kernel.org guide uses the same <code>~/linux/</code> and estimates roughly 12 GB of space is needed <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">scope of this book</span>
+      <h3>
+        <span class="standard-copy">Phạm vi sách — người dùng, không phải lập trình viên</span>
+        <span class="easy-only">Sách này dành cho ai</span>
+        <span class="en-only" lang="en">Scope — for users, not programmers</span>
+      </h3>
+      <p class="standard-copy">Quy tắc thứ ba là về kỳ vọng. Sách nhắm tới mọi thứ cần biết để dựng, tùy biến và cài nhân đúng cách; không cần kinh nghiệm lập trình, nhưng có mong đợi người đọc quen dùng Linux và dòng lệnh cơ bản <span class="cite"><a href="#ref-3">3</a></span>. Khía cạnh lập trình bên trong nhân được đẩy sang các sách khác liệt kê trong Phụ lục B <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Sách dạy cách lắp và chỉnh nhân, không dạy viết mã cho nhân. Không cần biết lập trình, nhưng cần biết dùng Linux và gõ lệnh cơ bản <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: biết mình đang đọc sách gì thì đỡ hụt hẫng.</p>
+      <p class="en-only" lang="en">The third rule is about expectations. The book aims to cover everything needed to properly build, customize and install the kernel; no programming experience is needed, though some familiarity with using Linux and basic command-line usage is expected <span class="cite"><a href="#ref-3">3</a></span>. Kernel programming itself is handed off to the other books listed in the Bibliography <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Toàn bộ cuốn sách được phát hành tự do theo giấy phép Creative Commons “Attribution-ShareAlike” phiên bản 2.5 và có bản trực tuyến tại trang của tác giả <span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-10">10</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Cả cuốn sách được cho miễn phí theo giấy phép Creative Commons 2.5 và đọc được trên mạng <span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-10">10</a></span>. Nhớ nhé: bạn được chia sẻ lại nó.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The whole book is freely available under the Creative Commons “Attribution-ShareAlike” licence, version 2.5, with an online edition on the author's own site <span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-10">10</a></span>.</p>
+      </div>
+    </li>
+  </ol>
+
+  <div class="trap-comparison deep-only">
+    <p class="eyebrow"><span class="vi-only">Ba hiểu lầm thường gặp</span><span class="en-only" lang="en">Three common misconceptions</span></p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Dựng nhân là việc của lập trình viên”</span><span class="en-only" lang="en">“Building a kernel is a programmer's job”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> phải biết C mới đụng được vào nhân. <span class="fact">Thực tế:</span> sách nói rõ không cần kinh nghiệm lập trình để hiểu và dùng nó <span class="cite"><a href="#ref-3">3</a></span>; cấu hình và dựng là việc của người dùng, và mục tiêu “thầm kín” của tác giả là kéo thêm người vào đội ngũ phát triển nhân qua chính cánh cửa này <span class="cite"><a href="#ref-11">11</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> you must know C to touch the kernel. <span class="fact">Fact:</span> the book states plainly that no programming experience is needed to understand and use it <span class="cite"><a href="#ref-3">3</a></span>; configuring and building is a user's task, and the author's stated “secret goal” is to bring more people into kernel development through exactly this door <span class="cite"><a href="#ref-11">11</a></span>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Nhân của bản phân phối là tệ”</span><span class="en-only" lang="en">“The distribution kernel is bad”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> tự dựng vì nhân dựng sẵn kém chất lượng. <span class="fact">Thực tế:</span> ông khen các bản phân phối hiện đại đã rất chiều người dùng, biên dịch sẵn hỗ trợ cho mọi thiết bị đã biết <span class="cite"><a href="#ref-1">1</a></span>. Vấn đề là chúng buộc phải tối ưu cho số đông <span class="cite"><a href="#ref-1">1</a></span>, chứ không phải chúng làm dở.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> you build your own because the stock kernel is poor. <span class="fact">Fact:</span> he praises modern distributions as very accommodating, compiling in support for every known device <span class="cite"><a href="#ref-1">1</a></span>. The issue is that they must optimise for the majority <span class="cite"><a href="#ref-1">1</a></span>, not that they do the job badly.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Cứ <code>sudo</code> cho chắc”</span><span class="en-only" lang="en">“Just run everything with <code>sudo</code>”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> quyền cao thì ít lỗi hơn. <span class="fact">Thực tế:</span> ngược lại — đã từng có lỗi xóa tệp trong <code>/dev</code> đúng vì người dùng có quyền siêu người dùng lúc dựng, và giải nén bằng root làm sai quyền tệp gây lỗi biên dịch về sau <span class="cite"><a href="#ref-2">2</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> more privilege means fewer errors. <span class="fact">Fact:</span> the reverse — bugs have deleted files in <code>/dev</code> precisely because the user held superuser permissions while building, and unpacking as root leaves files without proper permissions, causing build errors later <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </div>
+    </div>
+  </div>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Ba quy tắc trên là toàn bộ hành trang an toàn bạn cần trước khi chạm vào công cụ. Chương 2 bắt đầu từ công cụ: trình biên dịch, trình liên kết, và <code>make</code>.</p>
+    <p class="easy-only"><b>Nối sang chương sau.</b> Xong phần luật an toàn. Chương 2 nói về các công cụ cần cài. Nhớ nhé: biết luật trước, cầm dụng cụ sau.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> Those three rules are the whole of the safety kit you need before touching a tool. Chapter 2 starts with the tools: a compiler, a linker, and <code>make</code>.</p>
+  </aside>
+</section>
+
+<section class="section" id="tu-kiem" aria-labelledby="tu-kiem-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Tự kiểm</span><span class="en-only" lang="en">Self-check</span></p>
+    <h2 id="tu-kiem-title">
+      <span class="standard-copy">Tự kiểm trước khi sang chương 2</span>
+      <span class="easy-only">Tự hỏi mình vài câu</span>
+      <span class="en-only" lang="en">Self-check before Chapter 2</span>
+    </h2>
+  </div>
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Chương 1 không có lệnh nào để gõ. Nó chỉ yêu cầu bạn trả lời được mấy câu sau trước khi đi tiếp — nếu một câu còn mơ hồ, hãy đọc lại đoạn tương ứng phía trên.</p>
+      <p class="easy-only">Chương này chưa phải gõ lệnh nào. Chỉ cần trả lời được mấy câu dưới đây thôi. Nhớ nhé: câu nào chưa rõ thì quay lên đọc lại.</p>
+      <p class="en-only" lang="en">Chapter 1 has no commands to type. It only asks you to be able to answer the following before moving on — if any of them is still hazy, reread the matching passage above.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>Bạn nêu được lý do cụ thể nào để tự dựng nhân cho <em>chính máy của bạn</em> — phần cứng khác, muốn phiên bản mới, hay cần cắt bớt?
+        <p class="deep-only">Nếu chưa có lý do nào, đó cũng là một câu trả lời hợp lệ: lúc ấy hãy đọc sách như một bản đồ để dành, không phải một việc phải làm ngay.</p>
+      </li>
+      <li>Bạn phát biểu lại được vì sao nhân của bản phân phối không thể vừa khít, mà không biến nó thành lời chê bản phân phối?
+        <p class="deep-only">Mấu chốt: hàm mục tiêu khác nhau — “chạy trên nhiều máy nhất” khác với “chạy tốt nhất trên một máy”.</p>
+      </li>
+      <li>Bạn nói được chính xác bước nào trong quy trình cần quyền <code>root</code> và bước nào thì không?
+        <p class="deep-only">Đáp án của sách: chỉ hai hoặc ba lệnh để cài nhân mới cần root; tải, giải nén, cấu hình, dựng thì không <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </li>
+      <li>Bạn biết sẽ đặt cây mã nguồn ở đâu, và vì sao không phải <code>/usr/src/linux/</code>?</li>
+      <li>Bạn phân biệt được “dựng lại nhân” với “chỉnh tham số của nhân đang chạy”?</li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li>Máy của bạn có gì khác người khác, khiến bạn muốn tự làm nhân riêng?</li>
+      <li>Vì sao nhân có sẵn không vừa khít máy bạn?</li>
+      <li>Bước nào cần quyền quản trị, bước nào không?</li>
+      <li>Bạn sẽ để mã nguồn ở thư mục nào?</li>
+      <li>Nhớ nhé: trả lời được cả năm câu thì sang chương 2 được rồi.</li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>Can you name a concrete reason to build a kernel for <em>your own</em> machine — different hardware, a newer version, or trimming it down?</li>
+      <li>Can you restate why a distribution kernel cannot fit exactly, without turning it into a complaint about distributions?</li>
+      <li>Can you say precisely which steps need <code>root</code> and which do not?
+        <p class="deep-only" lang="en">The book's answer: only the two or three commands that install a new kernel; downloading, unpacking, configuring and building do not <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </li>
+      <li>Do you know where your source tree will live, and why not <code>/usr/src/linux/</code>?</li>
+      <li>Can you tell “rebuilding the kernel” apart from “tweaking the parameters of the one you are running”?</li>
+    </ol>
+  </div>
+</section>
+
+<section class="closing" id="dong-lai" aria-labelledby="dong-lai-title">
+  <p class="eyebrow" id="dong-lai-title"><span class="vi-only">Đọng lại</span><span class="en-only" lang="en">What remains</span></p>
+  <blockquote>
+    <p class="standard-copy">Nhân Linux lớn đến mức không ai đọc hết, nhưng <span class="closing-accent">không có bản phân phối nào cung cấp đúng cái nhân mà đa số người dùng của nó mong muốn</span> — và đó chính là chỗ trống dành cho bạn. Bước đầu tiên không phải là biên dịch, mà là <span class="closing-accent">đăng xuất khỏi quyền root</span>.</p>
+    <p class="easy-only">Nhân Linux rất to, nhưng <span class="closing-accent">không cái nào làm sẵn vừa khít máy bạn</span>. Việc đầu tiên không phải là gõ lệnh dựng, mà là <span class="closing-accent">nhớ dùng tài khoản thường</span>. Nhớ nhé: an toàn trước, tốc độ sau.</p>
+    <p class="en-only" lang="en">The Linux kernel is too large for anyone to read entire, yet <span class="closing-accent">no distribution provides the exact kernel most of its users want</span> — and that gap is the space left for you. The first step is not compiling; it is <span class="closing-accent">stepping back out of root</span>.</p>
+  </blockquote>
+</section>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="index.html">
+    <span class="nav-label">◀ <span class="vi-only">Mục lục</span><span class="en-only" lang="en">Contents</span></span>
+    <span class="nav-title"><span class="vi-only">Trang bìa · Linux Kernel in a Nutshell</span><span class="en-only" lang="en">Cover · Linux Kernel in a Nutshell</span></span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-2-requirements.html">
+    <span class="nav-label"><span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶</span>
+    <span class="nav-title"><span class="vi-only">Chương 2 · Yêu cầu để dựng và dùng nhân</span><span class="en-only" lang="en">Chapter 2 · Requirements for Building and Using the Kernel</span></span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chương 1, “Introduction”, và mục “Using This Book” (trang 3–4). Trang này là <b>người đồng hành diễn giải</b>, không phải bản dịch: nó tóm lược, sắp xếp lại và chú giải nội dung chương, không thay thế việc đọc sách gốc. Các ví dụ và phép so sánh ở mức đọc <i>Dễ hiểu</i> là minh họa do trang này thêm vào, không có trong sách. Sách xuất bản năm 2006 và viết cho dòng nhân 2.6; mọi ghi chú về tình hình hiện nay đều được dẫn nguồn riêng.</p>
+    <p class="en-only" lang="en"><b>Primary source.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chapter 1, “Introduction”, and its “Using This Book” section (pages 3–4). This page is an <b>interpretive study companion</b>, not a translation: it summarises, rearranges and annotates the chapter, and does not replace reading the book itself. Examples and analogies at the <i>Easy</i> reading level are illustrations added here, not the author's. The book was published in 2006 and targets the 2.6 kernel series; every note about the present day carries its own citation.</p>
+
+    <p class="footer-label vi-only">Tham chiếu</p>
+    <p class="footer-label en-only" lang="en">References</p>
+    <ol class="ref-list">
+      <li id="ref-1">Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006, Chapter 1 “Introduction”, p. 3. Bản trực tuyến miễn phí: <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-2">Sđd., Chapter 1, “Using This Book”, p. 4 (cảnh báo về quyền siêu người dùng, sự cố xóa tệp trong <code>/dev</code>, và quy tắc về <code>/usr/src/linux/</code>). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-3">Sđd., Preface, “Who This Book Is For” và “Online Version and License”, pp. x–xi. Giấy phép: <a href="https://creativecommons.org/licenses/by-sa/2.5/" target="_blank" rel="noopener noreferrer">Creative Commons Attribution-ShareAlike 2.5</a>.</li>
+      <li id="ref-4">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/quickly-build-trimmed-linux.html" target="_blank" rel="noopener noreferrer">“Quickly build a trimmed Linux kernel”</a>, docs.kernel.org (truy cập 22-09-2026).</li>
+      <li id="ref-5">Stackscale, <a href="https://www.stackscale.com/blog/linux-kernel-surpasses-40-million-lines-code/" target="_blank" rel="noopener noreferrer">“The Linux Kernel surpasses 40 million lines of code”</a>, 27-01-2025 — Linux 6.14-rc1 đạt 40.063.856 dòng; con số dẫn lại từ thống kê của Phoronix và thay đổi tùy cách đếm (chú thích, tài liệu, dòng trống).</li>
+      <li id="ref-6">Kroah-Hartman, sđd., Chapter 4 “Configuring and Building”, pp. 17–18 (bốn lựa chọn <code>y/n/m/?</code> và ghi nhận “gần hai nghìn tùy chọn cấu hình”). Tham khảo hiện hành: <a href="https://docs.kernel.org/kbuild/kconfig.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — Kconfig make config</a>.</li>
+      <li id="ref-7">Sđd., Preface, “How the Book Is Organized”, pp. x–xi; và trang giới thiệu sách của tác giả: <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-8">kernel.org, <a href="https://www.kernel.org/" target="_blank" rel="noopener noreferrer">trang phát hành chính thức</a> và <a href="https://www.kernel.org/category/releases.html" target="_blank" rel="noopener noreferrer">“Active kernel releases”</a> (mainline / stable / longterm; truy cập 22-09-2026).</li>
+      <li id="ref-9">Kroah-Hartman, sđd., Chapter 3 “Retrieving the Kernel Source”, “What to Do with the Source”, p. 15 (gợi ý tạo <code>~/linux</code>). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-10">Creative Commons, <a href="https://creativecommons.org/licenses/by-sa/2.5/" target="_blank" rel="noopener noreferrer">Attribution-ShareAlike 2.5 Generic</a> — giấy phép cuốn sách được phát hành tự do.</li>
+      <li id="ref-11">Kroah-Hartman, sđd., Preface, p. ix (“mục tiêu thầm kín” là đưa thêm người vào đội ngũ phát triển nhân Linux). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+    </ol>
+
+    <p class="footer-label vi-only">Trong loạt bài</p>
+    <p class="footer-label en-only" lang="en">In this series</p>
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <p class="vi-only"><a href="index.html">Trang bìa</a> · <span>Chương 1 · Nhập môn (trang này)</span> · <a href="chapter-2-requirements.html">Chương 2 · Yêu cầu để dựng và dùng nhân</a></p>
+    <p class="en-only" lang="en"><a href="index.html">Cover</a> · <span>Chapter 1 · Introduction (this page)</span> · <a href="chapter-2-requirements.html">Chapter 2 · Requirements for Building and Using the Kernel</a></p>
+    <!-- NAV:END -->
+  </div>
+  <div class="edition">LKN · CH 01 · VI/EN</div>
+</footer>
+
+</main>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  function sync() {
+    var mode = root.getAttribute("data-mode") || "standard";
+    var lang = root.getAttribute("data-lang") || "vi";
+    var dark = root.getAttribute("data-theme") === "dark";
+    document.querySelectorAll("[data-set-mode]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-mode") === mode));
+    });
+    document.querySelectorAll("[data-set-lang]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-lang") === lang));
+    });
+    document.querySelectorAll("[data-toggle-theme]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(dark));
+    });
+    root.setAttribute("lang", lang === "en" ? "en" : "vi");
+  }
+
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button.chip");
+    if (!b) return;
+    if (b.hasAttribute("data-set-mode")) {
+      root.setAttribute("data-mode", b.getAttribute("data-set-mode"));
+      store("lkn-reading-mode", b.getAttribute("data-set-mode"));
+    } else if (b.hasAttribute("data-set-lang")) {
+      root.setAttribute("data-lang", b.getAttribute("data-set-lang"));
+      store("lkn-lang", b.getAttribute("data-set-lang"));
+    } else if (b.hasAttribute("data-toggle-theme")) {
+      var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      store("lkn-theme", next);
+    }
+    sync();
+  });
+
+  sync();
+})();
+
+/* section-index rail: built at runtime from this page's own id'd sections */
+(function () {
+  var list = document.querySelector(".section-rail__list");
+  if (!list) return;
+  var sections = Array.prototype.slice.call(document.querySelectorAll("main section[id][aria-labelledby]"));
+  if (!sections.length) { var rail = document.querySelector(".section-rail"); if (rail) rail.remove(); return; }
+
+  /* headings carry all three reading levels + both languages as sibling spans,
+     so read only the ones actually visible under the current toggles */
+  function labelFor(sec) {
+    var head = document.getElementById(sec.getAttribute("aria-labelledby"));
+    if (!head) return sec.id;
+    var parts = [];
+    Array.prototype.forEach.call(head.children, function (el) {
+      if (el.offsetParent !== null || el.getClientRects().length) parts.push(el.textContent);
+    });
+    var label = (parts.length ? parts.join(" ") : head.textContent || "").replace(/\s+/g, " ").trim();
+    return label.length > 46 ? label.slice(0, 44) + "…" : label;
+  }
+
+  var links = sections.map(function (sec) {
+    var label = labelFor(sec);
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.href = "#" + sec.id;
+    var span = document.createElement("span");
+    span.className = "section-rail__label";
+    span.textContent = label;
+    a.appendChild(span);
+    li.appendChild(a);
+    list.appendChild(li);
+    return a;
+  });
+
+  function mark(id) {
+    links.forEach(function (a) {
+      if (a.getAttribute("href") === "#" + id) a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    });
+  }
+
+  if ("IntersectionObserver" in window) {
+    var seen = new Map();
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { seen.set(e.target.id, e.intersectionRatio); });
+      var best = null, bestR = 0;
+      seen.forEach(function (r, id) { if (r > bestR) { bestR = r; best = id; } });
+      if (best) mark(best);
+    }, { rootMargin: "-20% 0px -60% 0px", threshold: [0, .25, .5, 1] });
+    sections.forEach(function (s) { obs.observe(s); });
+  }
+
+  /* the rail labels change with the language toggle, so relabel on click */
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest("button.chip")) return;
+    sections.forEach(function (sec, i) {
+      links[i].firstChild.textContent = labelFor(sec);
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

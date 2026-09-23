@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="vi" data-mode="standard" data-lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 7 · Tùy biến nhân — Linux Kernel in a Nutshell</title>
+<meta name="description" content="Người đồng hành song ngữ Việt/Anh cho Chương 7 &quot;Customizing a Kernel&quot; của Linux Kernel in a Nutshell (Greg Kroah-Hartman, O'Reilly, 2006): cách hỏi chính hệ thống đang chạy xem nó cần driver nào — lần ngược sysfs, đọc modalias, và truy mã PCI/USB vào mã nguồn nhân.">
+<script>
+/* pre-hydration: đọc lựa chọn đã lưu trước khi vẽ, tránh nháy màn hình */
+(function () {
+  try {
+    var m = localStorage.getItem("lkn-reading-mode");
+    var l = localStorage.getItem("lkn-lang");
+    if (m === "standard" || m === "easy" || m === "deep") document.documentElement.setAttribute("data-mode", m);
+    if (l === "vi" || l === "en") document.documentElement.setAttribute("data-lang", l);
+    if (localStorage.getItem("lkn-theme") === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  } catch (e) {}
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --teal: #0f766e;
+  --blue: #1d4ed8;
+  --amber: #b45309;
+  --leaf: #4d7c0f;
+  --ink: #16202a;
+  --ink-soft: #4a5a68;
+  --ink-faint: #7c8b98;
+  --surface: #fbfaf7;
+  --surface-2: #ffffff;
+  --surface-3: #f2efe8;
+  --line: #ded8cd;
+  --line-soft: #ebe6dc;
+  --shadow: 0 1px 2px rgba(22, 32, 42, .05), 0 8px 24px rgba(22, 32, 42, .06);
+  --serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --measure: 34rem;
+}
+:root[data-theme="dark"] {
+  --teal: #5eead4;
+  --blue: #93b4ff;
+  --amber: #fbbf24;
+  --leaf: #a3e635;
+  --ink: #e8eef4;
+  --ink-soft: #a6b6c4;
+  --ink-faint: #74869a;
+  --surface: #11171d;
+  --surface-2: #171f27;
+  --surface-3: #1e2831;
+  --line: #2d3945;
+  --line-soft: #232e38;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --teal: #5eead4; --blue: #93b4ff; --amber: #fbbf24; --leaf: #a3e635;
+    --ink: #e8eef4; --ink-soft: #a6b6c4; --ink-faint: #74869a;
+    --surface: #11171d; --surface-2: #171f27; --surface-3: #1e2831;
+    --line: #2d3945; --line-soft: #232e38;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.72;
+  -webkit-font-smoothing: antialiased;
+}
+main { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem 4rem; }
+p { margin: 0 0 1.05rem; max-width: var(--measure); }
+a { color: var(--blue); }
+h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; line-height: 1.22; color: var(--ink); }
+code, kbd, samp { font-family: var(--mono); font-size: .88em; background: var(--surface-3); padding: .12em .38em; border-radius: 4px; }
+
+/* ---------- reading mode + bilingual visibility ---------- */
+.easy-only, .deep-only, .en-only { display: none; }
+:root[data-mode="standard"] .standard-copy,
+:root[data-mode="deep"] .standard-copy { display: revert; }
+:root[data-mode="deep"] .deep-only { display: revert; }
+:root[data-mode="easy"] .standard-copy { display: none; }
+:root[data-mode="easy"] .easy-only { display: revert; }
+:root[data-lang="vi"] .vi-only { display: revert; }
+:root[data-lang="en"] .vi-only,
+:root[data-lang="en"] .standard-copy,
+:root[data-lang="en"] .easy-only,
+:root[data-lang="en"] .deep-only { display: none; }
+:root[data-lang="en"] .en-only { display: revert; }
+:root[data-lang="en"] .mode-switch { opacity: .35; pointer-events: none; }
+
+/* ---------- topbar ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: .7rem 1.5rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.book-label { font-size: .78rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-right: auto; }
+.switch-group { display: flex; gap: .3rem; align-items: center; }
+.switch-group + .switch-group { margin-left: .35rem; }
+.switch-label { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin-right: .25rem; }
+button.chip {
+  font: inherit; font-size: .78rem; font-weight: 600;
+  padding: .3rem .72rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft);
+  transition: background .15s, color .15s, border-color .15s;
+}
+button.chip:hover { border-color: var(--teal); color: var(--teal); }
+button.chip[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: var(--surface); }
+:root[data-theme="dark"] button.chip[aria-pressed="true"] { color: #0b1116; }
+
+/* ---------- hero ---------- */
+.hero {
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  gap: 2.75rem; align-items: center;
+  padding: 3.75rem 0 3rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.hero::after {
+  content: "LKN / 07";
+  position: absolute; top: 1.15rem; right: 0;
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .22em;
+  color: var(--ink-faint);
+}
+.eyebrow { font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--teal); font-weight: 700; margin: 0 0 .85rem; }
+.hero h1 { font-size: clamp(2.05rem, 4.6vw, 3.1rem); margin: 0 0 1.15rem; letter-spacing: -.015em; }
+.hero p { font-size: 1.06rem; color: var(--ink-soft); }
+.thesis {
+  margin-top: 1.5rem; padding: 1.05rem 1.25rem 1.05rem 2.6rem;
+  position: relative; max-width: var(--measure);
+  background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--amber);
+  border-radius: 0 10px 10px 0; box-shadow: var(--shadow);
+}
+.thesis::before { content: "∴"; position: absolute; left: .95rem; top: .95rem; font-size: 1.15rem; color: var(--amber); }
+.thesis p { margin: 0; font-size: .97rem; color: var(--ink); }
+
+/* ---------- CSS diagrams ---------- */
+.system-map {
+  position: relative; display: grid; gap: .75rem;
+  padding: 1.5rem; border-radius: 16px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.system-map .core {
+  justify-self: center; text-align: center;
+  padding: .85rem 1.25rem; border-radius: 999px;
+  background: var(--teal); color: var(--surface); font-weight: 700; font-size: .9rem;
+  max-width: 100%;
+}
+:root[data-theme="dark"] .system-map .core { color: #0b1116; }
+.system-map .spokes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
+.system-map .node {
+  padding: .8rem .85rem; border-radius: 12px; text-align: center;
+  background: var(--surface-3); border: 1px solid var(--line-soft);
+}
+.system-map .node b { display: block; font-size: .82rem; color: var(--ink); margin-bottom: .3rem; }
+.system-map .node small { display: block; font-size: .73rem; line-height: 1.5; color: var(--ink-soft); }
+.loop-diagram { display: grid; gap: .55rem; padding: 1.25rem; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.loop-diagram .step { padding: .6rem .8rem; border-radius: 10px; background: var(--surface-3); border-left: 3px solid var(--blue); font-size: .82rem; }
+
+/* ---------- chapter path ---------- */
+.chapter-path {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem;
+  margin: 2.5rem 0 3rem;
+}
+.chapter-path a {
+  display: block; padding: .9rem 1rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+  transition: border-color .15s, transform .15s;
+}
+.chapter-path a:hover { border-color: var(--teal); transform: translateY(-2px); }
+.chapter-path span { display: block; font-size: .67rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.chapter-path b { display: block; font-family: var(--serif); font-size: .96rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- sections ---------- */
+.section { padding: 2.75rem 0; border-top: 1px solid var(--line-soft); }
+.section-heading h2 { font-size: clamp(1.5rem, 3vw, 2.05rem); margin: 0 0 .9rem; }
+.section-heading p { color: var(--ink-soft); }
+.surprise-lead {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem;
+  margin: 1.75rem 0 2rem;
+}
+.definition, .equation { padding: 1rem 1.15rem; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); font-size: .92rem; }
+.definition { border-left: 3px solid var(--blue); }
+.equation { border-left: 3px solid var(--leaf); font-family: var(--mono); font-size: .82rem; line-height: 1.7; }
+.definition p, .equation p { margin: 0; max-width: none; }
+
+.surprise-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.1rem; }
+.trap-grid { grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
+.surprise-grid > li {
+  padding: 1.25rem 1.35rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.english-term { display: inline-block; font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--amber); margin-bottom: .45rem; }
+.surprise-grid h3 { font-size: 1.05rem; margin: 0 0 .7rem; }
+.surprise-grid p { font-size: .93rem; max-width: none; }
+.opportunity {
+  margin-top: .9rem; padding: .75rem .9rem; border-radius: 10px;
+  background: var(--surface-3); border-left: 3px solid var(--leaf); font-size: .87rem;
+}
+.opportunity p { margin: 0; font-size: .87rem; }
+.mechanics { margin-top: .9rem; display: grid; gap: .7rem; }
+.info-block { padding: .75rem .9rem; border-radius: 10px; border: 1px dashed var(--line); background: var(--surface); }
+.info-block h4 { font-size: .85rem; margin: 0 0 .35rem; color: var(--teal); }
+.info-block p { margin: 0; font-size: .86rem; }
+.result { margin-top: .7rem; font-size: .86rem; color: var(--ink-soft); }
+
+.signal {
+  margin: 2rem 0 0; padding: 1.1rem 1.3rem; border-radius: 12px;
+  background: var(--surface-3); border: 1px solid var(--line-soft); border-top: 3px solid var(--blue);
+}
+.signal p { margin: 0 0 .6rem; font-size: .93rem; }
+.signal p:last-child { margin-bottom: 0; }
+
+/* ---------- misconceptions ---------- */
+.trap-comparison { margin: 2.5rem 0; }
+.comparison-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; margin-top: 1.25rem; }
+.comparison-card {
+  padding: 1.1rem 1.25rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); border-top: 3px solid var(--amber);
+}
+.comparison-card h3 { font-size: .98rem; margin: 0 0 .6rem; }
+.comparison-card p { font-size: .9rem; max-width: none; }
+.comparison-card .myth { color: var(--amber); font-weight: 600; }
+.comparison-card .fact { color: var(--teal); font-weight: 600; }
+
+/* ---------- diagnostic ---------- */
+.diagnostic { padding: 1.75rem; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.diagnostic-intro p { font-size: .97rem; }
+.question-list { counter-reset: q; list-style: none; margin: 1.25rem 0 0; padding: 0; display: grid; gap: .9rem; }
+.question-list > li { counter-increment: q; position: relative; padding-left: 2.4rem; font-size: .93rem; }
+.question-list > li::before {
+  content: counter(q, decimal-leading-zero);
+  position: absolute; left: 0; top: .05rem;
+  font-family: var(--mono); font-size: .78rem; font-weight: 600; color: var(--teal);
+  border: 1px solid var(--line); border-radius: 6px; padding: .05rem .38rem;
+}
+.question-list .deep-only { margin-top: .4rem; font-size: .87rem; color: var(--ink-soft); }
+
+/* ---------- closing ---------- */
+.closing { padding: 3rem 0 1rem; border-top: 1px solid var(--line-soft); }
+.closing blockquote {
+  margin: 0; padding: 1.5rem 0 0; max-width: 46rem;
+  font-family: var(--serif); font-size: clamp(1.15rem, 2.4vw, 1.55rem); line-height: 1.5; color: var(--ink);
+}
+.closing blockquote p { max-width: none; font-size: inherit; line-height: inherit; }
+.closing-accent { color: var(--teal); font-style: italic; }
+
+/* ---------- chapter nav ---------- */
+.chapter-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 3rem 0 0; }
+.nav-cell {
+  display: block; padding: 1rem 1.15rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); transition: border-color .15s, transform .15s;
+}
+a.nav-cell:hover { border-color: var(--teal); transform: translateY(-2px); }
+.nav-cell.disabled { opacity: .5; background: var(--surface-3); cursor: default; }
+.nav-next { text-align: right; }
+.nav-label { display: block; font-size: .68rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.nav-title { display: block; font-family: var(--serif); font-size: .95rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- footer + references ---------- */
+footer {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.5rem; align-items: start;
+  margin-top: 3rem; padding: 2rem 0 3rem; border-top: 1px solid var(--line);
+  font-size: .85rem; color: var(--ink-soft);
+}
+.footer-main p { max-width: 48rem; font-size: .85rem; }
+.footer-label { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; margin: 1.5rem 0 .6rem; }
+.ref-list { margin: 0; padding-left: 1.4rem; display: grid; gap: .5rem; }
+.ref-list li { font-size: .82rem; line-height: 1.6; }
+.edition { font-family: var(--mono); font-size: .7rem; letter-spacing: .12em; color: var(--ink-faint); white-space: nowrap; }
+.cite { font-size: .7em; vertical-align: super; line-height: 0; margin-left: .1em; }
+.cite a { text-decoration: none; padding: 0 .12em; }
+
+/* SECTION-RAIL:START */
+.section-rail {
+  position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+  z-index: 30; padding: .6rem .5rem; display: none;
+}
+.section-rail__list { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+.section-rail__list a {
+  display: flex; align-items: center; gap: .55rem;
+  text-decoration: none; color: var(--ink-faint); font-size: .74rem; line-height: 1.25;
+}
+.section-rail__list a::before {
+  content: ""; flex: 0 0 auto; width: 1.15rem; height: 2px; border-radius: 2px;
+  background: var(--line); transition: width .2s, background .2s;
+}
+.section-rail__label {
+  max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0;
+  transition: max-width .24s ease, opacity .18s ease;
+}
+.section-rail:hover .section-rail__label,
+.section-rail:focus-within .section-rail__label { max-width: 13rem; opacity: 1; }
+.section-rail:hover, .section-rail:focus-within {
+  background: color-mix(in srgb, var(--surface-2) 94%, transparent);
+  border: 1px solid var(--line-soft); border-left: 0; border-radius: 0 12px 12px 0; box-shadow: var(--shadow);
+}
+.section-rail__list a:hover,
+.section-rail__list a[aria-current="true"] { color: var(--teal); }
+.section-rail__list a[aria-current="true"]::before { width: 1.9rem; background: var(--teal); }
+@media (min-width: 1180px) { .section-rail { display: block; } }
+/* SECTION-RAIL:END */
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 2rem; padding-top: 2.5rem; }
+  .hero::after { position: static; display: block; margin-bottom: .75rem; }
+  .system-map .spokes { grid-template-columns: minmax(0, 1fr); }
+  footer { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 620px) {
+  body { font-size: 16px; }
+  main { padding: 0 1.1rem 3rem; }
+  .topbar { padding: .6rem 1.1rem; gap: .5rem; }
+  .book-label { width: 100%; margin-right: 0; }
+  .chapter-nav { grid-template-columns: minmax(0, 1fr); }
+  .nav-next { text-align: left; }
+  .diagnostic { padding: 1.25rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">Linux Kernel in a Nutshell · <span class="vi-only">Chương 7 · Tùy biến nhân</span><span class="en-only" lang="en">Chapter 7 · Customizing a Kernel</span></div>
+  <div class="switch-group mode-switch">
+    <span class="switch-label vi-only">Mức đọc</span><span class="switch-label en-only" lang="en">Level</span>
+    <button class="chip" type="button" data-set-mode="easy" aria-pressed="false"><span class="vi-only">Dễ hiểu</span><span class="en-only" lang="en">Easy</span></button>
+    <button class="chip" type="button" data-set-mode="standard" aria-pressed="true"><span class="vi-only">Tiêu chuẩn</span><span class="en-only" lang="en">Standard</span></button>
+    <button class="chip" type="button" data-set-mode="deep" aria-pressed="false"><span class="vi-only">Đầy đủ</span><span class="en-only" lang="en">Deep</span></button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-set-lang="vi" aria-pressed="true">VI</button>
+    <button class="chip" type="button" data-set-lang="en" aria-pressed="false">EN</button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-toggle-theme aria-pressed="false"><span class="vi-only">Tối</span><span class="en-only" lang="en">Dark</span></button>
+  </div>
+</header>
+
+<nav class="section-rail" aria-label="Mục lục trong trang"><ul class="section-rail__list"></ul></nav>
+
+<main>
+
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow"><span class="vi-only">Phần II · Tùy biến lớn · Chương 7</span><span class="en-only" lang="en">Part II · Major Customizations · Chapter 7</span></p>
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Hỏi chính cái máy xem nó cần driver nào</span>
+      <span class="easy-only">Để máy tự nói nó cần gì</span>
+      <span class="en-only" lang="en">Ask the machine which drivers it needs</span>
+    </h1>
+    <p class="standard-copy">Sáu chương đầu dạy bạn quy trình: lấy mã nguồn, cấu hình, dựng, cài, nâng cấp. Phần II của sách — gồm đúng hai chương 7 và 8 — chuyển sang câu hỏi khó hơn: cấu hình <em>cái gì</em> <span class="cite"><a href="#ref-16">16</a></span>. Kroah-Hartman mở chương bằng lời thú nhận thẳng thắn: một trong những phần khó nhất của việc tự dựng nhân là xác định chính xác driver và tùy chọn nào máy bạn cần để chạy đúng <span class="cite"><a href="#ref-1">1</a></span>. Cả chương là một câu trả lời duy nhất: đừng đoán — hãy đọc câu trả lời ra từ chính hệ thống đang chạy.</p>
+    <p class="easy-only">Sáu chương trước dạy cách làm. Từ chương 7 trở đi, sách hỏi: làm <em>cái gì</em>? Chương 7 và 8 là Phần II của sách <span class="cite"><a href="#ref-16">16</a></span>. Ông Greg nói phần khó nhất khi tự dựng nhân là biết máy mình cần những mảnh nào <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: đừng đoán, hãy hỏi chính chiếc máy.</p>
+    <p class="en-only" lang="en">The first six chapters teach you the procedure: fetch the source, configure, build, install, upgrade. Part II of the book — exactly Chapters 7 and 8 — turns to the harder question: configure <em>what</em> <span class="cite"><a href="#ref-16">16</a></span>. Kroah-Hartman opens the chapter with a plain admission: one of the hardest parts of building your own version of the Linux kernel is determining exactly which drivers and configuration options are needed for your machine to work properly <span class="cite"><a href="#ref-1">1</a></span>. The whole chapter is one answer: do not guess — read the answer off the running system.</p>
+    <p class="deep-only">Đây cũng là chương tác giả nói ông tâm đắc nhất, và lý do dễ hiểu: nó là chỗ duy nhất trong sách mà bạn không làm theo công thức, mà tự điều tra. Hai nửa của chương là hai chiều điều tra ngược nhau — nửa đầu đi <em>lùi</em> từ một thiết bị đang chạy tốt về tên module; nửa sau đi <em>tới</em> từ một con số nhận dạng phần cứng vào mã nguồn nhân <span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span>.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận điểm chương 7.</b> Hệ thống đang chạy đã chứa sẵn câu trả lời. Nếu một thiết bị đang hoạt động, nhân đã gắn đúng driver vào nó, và mối gắn kết ấy hiện ra thành các liên kết tượng trưng trong <code>sysfs</code> <span class="cite"><a href="#ref-1">1</a></span>. Việc của bạn chỉ là lần theo liên kết để lấy tên module, rồi lần ngược từ tên module về tùy chọn <code>CONFIG_</code> tương ứng <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only"><b>Ý chính.</b> Nếu một thiết bị trên máy bạn đang chạy được, nghĩa là nhân đã tìm ra đúng "mảnh ghép" cho nó rồi, và nó có ghi lại ở một chỗ tên là <code>sysfs</code> <span class="cite"><a href="#ref-1">1</a></span>. Bạn chỉ cần đi theo dấu vết đó để biết tên mảnh ghép, rồi tra ngược ra nút cần bật <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: câu trả lời đã có sẵn trong máy.</p>
+      <p class="en-only" lang="en"><b>Chapter 7 thesis.</b> The running system already holds the answer. If a device works, the kernel has already bound the right driver to it, and that binding surfaces as symlinks inside <code>sysfs</code> <span class="cite"><a href="#ref-1">1</a></span>. Your job is only to follow the links to the module name, then work backward from the module name to the matching <code>CONFIG_</code> option <span class="cite"><a href="#ref-3">3</a></span>.</p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: ba đường tìm ra module cần thiết — bắt đầu từ cấu hình của bản phân phối, lần ngược qua sysfs, hoặc truy từ mã nhận dạng phần cứng vào mã nguồn. Diagram: three routes to the module you need — start from the distribution config, walk backward through sysfs, or trace a hardware ID into the source.">
+    <div class="core"><span class="vi-only">Module nào cho máy này?</span><span class="en-only" lang="en">Which module for this machine?</span></div>
+    <div class="spokes">
+      <div class="node">
+        <b><span class="vi-only">Mượn cấu hình distro</span><span class="en-only" lang="en">Borrow the distro config</span></b>
+        <small class="standard-copy">Chắc chắn khởi động được, nhưng dựng gần như mọi module trong cây mã.</small>
+        <small class="easy-only">Chắc chạy được, nhưng lâu vì dựng quá nhiều.</small>
+        <small class="en-only" lang="en">Guaranteed to boot, but builds nearly every module in the tree.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Lần ngược sysfs</span><span class="en-only" lang="en">Walk sysfs backward</span></b>
+        <small class="standard-copy">Từ tên thiết bị → liên kết <code>driver</code> → liên kết <code>module</code> → tên module.</small>
+        <small class="easy-only">Đi theo các "lối tắt" trong <code>/sys</code> để ra tên mảnh ghép.</small>
+        <small class="en-only" lang="en">From a device name → the <code>driver</code> link → the <code>module</code> link → the module name.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Truy từ con số không</span><span class="en-only" lang="en">Trace from scratch</span></b>
+        <small class="standard-copy">Lấy mã nhà sản xuất và mã thiết bị, rồi tìm chúng trong mã nguồn driver.</small>
+        <small class="easy-only">Lấy hai con số nhận dạng rồi đi tìm trong mã nguồn.</small>
+        <small class="en-only" lang="en">Take the vendor and device IDs, then hunt for them in driver source.</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<nav class="chapter-path" aria-label="Lối đi trong chương">
+  <a href="#nhan-phan-phoi">
+    <span>01</span>
+    <b><span class="standard-copy">Mượn cấu hình của bản phân phối</span><span class="easy-only">Mượn cấu hình có sẵn</span><span class="en-only" lang="en">Borrowing the distribution config</span></b>
+  </a>
+  <a href="#lan-nguoc-sysfs">
+    <span>02</span>
+    <b><span class="standard-copy">Lần ngược qua sysfs về tên module</span><span class="easy-only">Đi theo dấu vết trong <code>/sys</code></span><span class="en-only" lang="en">Walking sysfs back to a module name</span></b>
+  </a>
+  <a href="#tu-con-so-khong">
+    <span>03</span>
+    <b><span class="standard-copy">Từ con số không: PCI và USB</span><span class="easy-only">Khi chưa có gì chạy được</span><span class="en-only" lang="en">From scratch: PCI and USB</span></b>
+  </a>
+  <a href="#he-thong-tep-goc">
+    <span>04</span>
+    <b><span class="standard-copy">Hệ thống tệp gốc — chỗ không được phép sai</span><span class="easy-only">Phần không được quên</span><span class="en-only" lang="en">The root filesystem — where you cannot be wrong</span></b>
+  </a>
+  <a href="#tu-kiem">
+    <span>05</span>
+    <b><span class="standard-copy">Tự kiểm trước khi sang chương 8</span><span class="easy-only">Tự hỏi mình vài câu</span><span class="en-only" lang="en">Self-check before Chapter 8</span></b>
+  </a>
+</nav>
+
+<section class="section" id="nhan-phan-phoi" aria-labelledby="nhan-phan-phoi-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 01 · “Using a Distribution Kernel”</span><span class="en-only" lang="en">Concept cluster 01 · “Using a Distribution Kernel”</span></p>
+    <h2 id="nhan-phan-phoi-title">
+      <span class="standard-copy">Mượn cấu hình của bản phân phối làm điểm xuất phát</span>
+      <span class="easy-only">Bắt đầu bằng cấu hình có sẵn</span>
+      <span class="en-only" lang="en">Borrowing the distribution config as a starting point</span>
+    </h2>
+    <p class="standard-copy">Cách dễ nhất để biết cần những module nào, theo ông, là bắt đầu từ chính cấu hình đi kèm gói nhân của bản phân phối <span class="cite"><a href="#ref-1">1</a></span>. Lý do sâu hơn là về trạng thái chứ không phải về tệp tin: việc xác định driver <em>dễ hơn nhiều</em> trên một hệ thống đang chạy, nơi driver đúng đã được gắn vào phần cứng <span class="cite"><a href="#ref-1">1</a></span>. Nếu máy đích chưa cài Linux, ông khuyên dùng một bản LiveCD để khởi động lên và quan sát <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    <p class="easy-only">Cách dễ nhất là chép lại cấu hình của bản Linux bạn đang dùng <span class="cite"><a href="#ref-1">1</a></span>. Vì khi máy đang chạy, mọi thứ đã được lắp đúng chỗ rồi <span class="cite"><a href="#ref-1">1</a></span>. Nếu máy đó chưa cài Linux, ông bảo hãy dùng đĩa LiveCD để khởi động thử <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: phải có một hệ đang chạy thì mới quan sát được.</p>
+    <p class="en-only" lang="en">The easiest way to determine which modules are necessary, he says, is to start with the kernel configuration that comes with your distribution's kernel package <span class="cite"><a href="#ref-1">1</a></span>. The deeper reason is about state, not files: it is much easier to determine which drivers are needed on a running system, where the proper drivers are already bound to the hardware <span class="cite"><a href="#ref-1">1</a></span>. If the target machine has no Linux installed, he suggests booting a LiveCD version of a distribution to observe it <span class="cite"><a href="#ref-1">1</a></span>.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Tệp cấu hình nhân (<code>.config</code>).</b> Danh sách phẳng mọi tùy chọn <code>CONFIG_</code> và trạng thái của chúng. Hầu hết bản phân phối đều đóng gói tệp này, thường nằm đâu đó dưới cây <code>/usr/src/linux/</code> <span class="cite"><a href="#ref-2">2</a></span>. Nếu khó tìm, hãy hỏi chính cái nhân đang chạy.</p>
+      <p class="easy-only"><b><code>.config</code> là gì.</b> Là bảng liệt kê mọi nút bật/tắt của nhân. Bản Linux nào cũng kèm theo tệp này, thường nằm dưới <code>/usr/src/linux/</code> <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: không thấy tệp thì hỏi thẳng cái nhân đang chạy.</p>
+      <p class="en-only" lang="en"><b>Kernel configuration file (<code>.config</code>).</b> A flat list of every <code>CONFIG_</code> option and its state. Almost all distributions ship it as part of the kernel package, usually somewhere below the <code>/usr/src/linux/</code> directory tree <span class="cite"><a href="#ref-2">2</a></span>. If it is hard to find, ask the running kernel itself.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">ls /proc/config.gz<br>cp /proc/config.gz ~/linux/<br>cd ~/linux &amp;&amp; gzip -dv config.gz<br>mv config .config<br>→ nền cấu hình chắc chắn khởi động được</p>
+      <p class="easy-only">có tệp /proc/config.gz không?<br>chép về thư mục nguồn<br>giải nén<br>đổi tên thành .config<br>→ nền an toàn để bắt đầu</p>
+      <p class="en-only" lang="en">ls /proc/config.gz<br>cp /proc/config.gz ~/linux/<br>cd ~/linux &amp;&amp; gzip -dv config.gz<br>mv config .config<br>→ a base config guaranteed to boot</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">/proc/config.gz</span>
+      <h3>
+        <span class="standard-copy"><code>/proc/config.gz</code> — cái nhân mang theo sơ đồ của chính nó</span>
+        <span class="easy-only">Cái nhân tự mang bản vẽ của nó</span>
+        <span class="en-only" lang="en"><code>/proc/config.gz</code> — the kernel carries its own blueprint</span>
+      </h3>
+      <p class="standard-copy">Phần lớn nhân của bản phân phối được dựng để nhúng luôn cấu hình vào trong hệ thống tệp <code>/proc</code>. Cách kiểm tra chỉ là một lệnh <code>ls /proc/config.gz</code>; nếu tệp có mặt, chép về thư mục mã nguồn và giải nén bằng <code>gzip -dv config.gz</code> — trong ví dụ của sách, tệp nén lại còn 74,9 % <span class="cite"><a href="#ref-2">2</a></span>. Đổi tên thành <code>.config</code> và dùng nó làm nền để dựng theo Chương 4 <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Nhiều bản Linux giấu sẵn bản vẽ cấu hình ngay trong máy. Gõ <code>ls /proc/config.gz</code> để xem có không; có thì chép về, giải nén, đổi tên thành <code>.config</code> <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: một lệnh là biết có hay không.</p>
+      <p class="en-only" lang="en">Most distribution kernels are built to include the configuration within the <code>/proc</code> filesystem. Checking is a single <code>ls /proc/config.gz</code>; if the file is there, copy it into your source directory and uncompress it with <code>gzip -dv config.gz</code> — in the book's example it reports 74.9 % <span class="cite"><a href="#ref-2">2</a></span>. Rename it to <code>.config</code> and use it as the basis for the build described in Chapter 4 <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Tệp ấy không tự nhiên có: nó đến từ tùy chọn <code>CONFIG_IKCONFIG</code> (“Kernel .config support”) cùng <code>CONFIG_IKCONFIG_PROC</code>, vốn mô tả đúng là “bật truy cập tệp cấu hình nhân qua <code>/proc/config.gz</code>” <span class="cite"><a href="#ref-12">12</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Tệp đó chỉ có khi người dựng nhân bật tùy chọn <code>IKCONFIG_PROC</code> <span class="cite"><a href="#ref-12">12</a></span>. Nhớ nhé: không thấy tệp không có nghĩa là bạn làm sai.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> That file does not appear by magic: it comes from the <code>CONFIG_IKCONFIG</code> option (“Kernel .config support”) together with <code>CONFIG_IKCONFIG_PROC</code>, described as enabling “access to the kernel configuration file through <code>/proc/config.gz</code>” <span class="cite"><a href="#ref-12">12</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Nếu không có tệp</h4>
+          <p>Cùng tùy chọn ấy cũng nhúng cấu hình vào chính ảnh nhân trên đĩa, và có thể moi ra bằng script <code>scripts/extract-ikconfig</code> trong cây mã nguồn <span class="cite"><a href="#ref-12">12</a></span>. Nghĩa là ngay cả khi <code>/proc/config.gz</code> vắng mặt, bản vẽ vẫn có thể còn nằm trong tệp nhân.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao nó luôn khởi động được</h4>
+          <p>Cấu hình distro là tập siêu — nó bật gần như mọi driver đã biết. Một tập siêu thì luôn chứa tập bạn cần, nên ông khẳng định dùng tệp này “sẽ luôn tạo ra một ảnh nhân chạy được cho máy bạn” <span class="cite"><a href="#ref-2">2</a></span>. Cái giá nằm ở thời gian biên dịch, không phải ở tính đúng đắn.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">cutting down</span>
+      <h3>
+        <span class="standard-copy">Cắt gọt — và quy tắc “chỉ tắt thứ bạn chắc chắn”</span>
+        <span class="easy-only">Bỏ bớt, nhưng đừng bỏ liều</span>
+        <span class="en-only" lang="en">Cutting down — and the “only what you are sure of” rule</span>
+      </h3>
+      <p class="standard-copy">Nhược điểm của cấu hình distro rất cụ thể: bạn sẽ dựng gần như mọi module và driver có trong cây mã nguồn, điều gần như không bao giờ cần cho một máy đơn lẻ <span class="cite"><a href="#ref-2">2</a></span>. Nên ông khuyên bắt đầu tắt dần các driver và tùy chọn không cần — kèm một mệnh đề phanh rất đáng nhớ: chỉ nên tắt những thứ bạn <em>chắc chắn</em> là không cần, vì có thể có phần nào đó của hệ thống đang dựa vào một tùy chọn cụ thể <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Dùng cấu hình có sẵn thì phải dựng gần như tất cả mọi thứ, rất lâu <span class="cite"><a href="#ref-2">2</a></span>. Vậy nên hãy tắt bớt — nhưng chỉ tắt cái bạn chắc chắn không dùng, vì có thứ khác có thể đang cần nó <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: tắt ít một, đừng tắt cả loạt.</p>
+      <p class="en-only" lang="en">The disadvantage of the distro config is concrete: you will have built almost every kernel module and driver present in the kernel source tree, which is almost never needed for a single machine <span class="cite"><a href="#ref-2">2</a></span>. So he advises starting to turn off drivers and options you do not need — with a memorable brake attached: disable only those options you are <em>sure</em> you do not need, as there might be parts of the system that rely on specific options being enabled <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Con đường tự động hóa việc cắt gọt này ngày nay mang tên <code>make localmodconfig</code>: nó lấy cấu hình của bản phân phối làm nền rồi tắt các module có vẻ thừa với máy bạn, và tài liệu nói cách này “giảm thời gian biên dịch một cách khổng lồ” <span class="cite"><a href="#ref-10">10</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Ngày nay có lệnh <code>make localmodconfig</code> làm việc cắt gọt ấy giúp bạn, nhanh hơn rất nhiều <span class="cite"><a href="#ref-10">10</a></span>. Nhớ nhé: máy làm hộ được phần lớn việc này.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Today that trimming has an automated route named <code>make localmodconfig</code>: it takes your distribution's kernel as a base, then disables modules apparently superfluous for your setup — documentation says it “will reduce the compile time enormously” <span class="cite"><a href="#ref-10">10</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ghi chú thời gian</h4>
+          <p><code>make localmodconfig</code> <em>không</em> có trong sách và không phải phát biểu của Kroah-Hartman — nó là mục tiêu <code>make</code> được tài liệu nhân hiện hành khuyến nghị <span class="cite"><a href="#ref-10">10</a></span>. Sách năm 2006 mô tả việc cắt gọt như một thao tác thủ công trong <code>menuconfig</code> <span class="cite"><a href="#ref-2">2</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Cái bẫy chung</h4>
+          <p>Tài liệu hiện hành cảnh báo đúng cái bẫy mà quy tắc “chỉ tắt thứ bạn chắc chắn” nhắm tới: <code>localmodconfig</code> “rất có khả năng tắt những tính năng bạn chưa dùng kể từ lúc khởi động” — ví dụ driver cho thiết bị ngoại vi hiện đang rút ra <span class="cite"><a href="#ref-10">10</a></span>. Hai mươi năm, cùng một cái bẫy.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Mượn được cấu hình rồi, câu hỏi kế tiếp là cắt cái gì. Muốn cắt an toàn, bạn phải biết <em>module nào đang thực sự điều khiển thiết bị nào</em> — và đó là nơi <code>sysfs</code> bước vào.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Có nền rồi, giờ phải biết mảnh nào đang chạy cho thiết bị nào. Nhớ nhé: chỗ để tra là thư mục <code>/sys</code>.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> With a config borrowed, the next question is what to cut. To cut safely you must know <em>which module actually drives which device</em> — and that is where <code>sysfs</code> enters.</p>
+  </aside>
+</section>
+
+<section class="section" id="lan-nguoc-sysfs" aria-labelledby="lan-nguoc-sysfs-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 02 · “Finding Which Module Is Needed”</span><span class="en-only" lang="en">Concept cluster 02 · “Finding Which Module Is Needed”</span></p>
+    <h2 id="lan-nguoc-sysfs-title">
+      <span class="standard-copy">Lần ngược qua <code>sysfs</code> về tên module</span>
+      <span class="easy-only">Đi theo dấu vết trong <code>/sys</code></span>
+      <span class="en-only" lang="en">Walking <code>sysfs</code> back to a module name</span>
+    </h2>
+    <p class="standard-copy">Sách gọi <code>sysfs</code> là vị trí quan trọng nhất trong số những nơi lưu thông tin về việc thiết bị nào gắn với driver nào trên một nhân đang chạy; nó phải luôn được gắn ở <code>/sys</code> bởi các script khởi tạo của bản phân phối <span class="cite"><a href="#ref-3">3</a></span>. Ông mô tả nó rất gợi hình: <code>sysfs</code> cho ta một cái nhìn thoáng qua vào cách các phần khác nhau của nhân móc nối với nhau, thông qua vô số liên kết tượng trưng trỏ khắp nơi trong hệ thống tệp <span class="cite"><a href="#ref-3">3</a></span>.</p>
+    <p class="easy-only">Trong máy có một thư mục đặc biệt tên là <code>/sys</code>. Nó không chứa tệp thật, mà chứa bản đồ: thiết bị nào đang được mảnh ghép nào điều khiển <span class="cite"><a href="#ref-3">3</a></span>. Bản đồ này làm bằng rất nhiều "lối tắt" trỏ qua trỏ lại <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: đi theo lối tắt là ra tên mảnh ghép.</p>
+    <p class="en-only" lang="en">The book calls <code>sysfs</code> the most important of the places that store information about which devices are bound to which drivers in a running kernel; it should always be mounted at <code>/sys</code> by your distribution's initialization scripts <span class="cite"><a href="#ref-3">3</a></span>. His description is vivid: <code>sysfs</code> provides a glimpse into how the different portions of the kernel are hooked together, with many different symlinks pointing all around the filesystem <span class="cite"><a href="#ref-3">3</a></span>.</p>
+    <p class="deep-only">Ông kèm ngay một lời rào đón mà hai mươi năm sau đọc lại thấy rất đúng: cấu trúc bên trong <code>sysfs</code> liên tục thay đổi, do các nhà phát triển nhân tổ chức lại thiết bị và nghĩ lại cách phơi bày cấu trúc nội bộ ra không gian người dùng; vì vậy theo thời gian, một số liên kết nói ở chương này có thể không còn — nhưng thông tin thì vẫn ở đó, chỉ dịch đi đôi chút <span class="cite"><a href="#ref-3">3</a></span>.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b><code>sysfs</code>.</b> Một hệ thống tệp ảo — không nằm trên đĩa — phơi bày cây thiết bị và cây driver của nhân dưới dạng thư mục và liên kết tượng trưng. Tài liệu nhân mô tả nó là cơ chế xuất cấu trúc dữ liệu nội bộ của nhân cùng thuộc tính của chúng ra không gian người dùng <span class="cite"><a href="#ref-15">15</a></span>.</p>
+      <p class="easy-only"><b><code>sysfs</code> là gì.</b> Là thư mục "giả" do nhân sinh ra ngay lúc chạy, không có trên ổ cứng. Nó bày ra danh sách thiết bị và driver dưới dạng thư mục <span class="cite"><a href="#ref-15">15</a></span>. Nhớ nhé: đọc nó là đọc trạng thái hiện tại của máy.</p>
+      <p class="en-only" lang="en"><b><code>sysfs</code>.</b> A virtual filesystem — nothing on disk — exposing the kernel's device tree and driver tree as directories and symlinks. Kernel documentation describes it as a mechanism for exporting kernel data structures and their attributes to userspace <span class="cite"><a href="#ref-15">15</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">basename `readlink \<br>&nbsp; /sys/class/net/eth0/device/driver/module`<br>→ e1000<br><br>find -type f -name Makefile | xargs grep e1000<br>→ obj-$(CONFIG_E1000) += e1000/</p>
+      <p class="easy-only">một lệnh → ra tên module: e1000<br>một lệnh nữa → ra nút cần bật: CONFIG_E1000</p>
+      <p class="en-only" lang="en">basename `readlink \<br>&nbsp; /sys/class/net/eth0/device/driver/module`<br>→ e1000<br><br>find -type f -name Makefile | xargs grep e1000<br>→ obj-$(CONFIG_E1000) += e1000/</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">one-line traversal</span>
+      <h3>
+        <span class="standard-copy">Một dòng lệnh — từ <code>eth0</code> đến <code>e1000</code></span>
+        <span class="easy-only">Một dòng lệnh ra ngay tên mảnh ghép</span>
+        <span class="en-only" lang="en">One line — from <code>eth0</code> to <code>e1000</code></span>
+      </h3>
+      <p class="standard-copy">Ví dụ chủ lực của chương là card mạng. Sau khi dùng <code>ls /sys/class/net/</code> và <code>ifconfig -a</code> để xác định <code>eth0</code> là giao diện đang hoạt động, toàn bộ phần còn lại gói gọn trong một dòng: <code>basename `readlink /sys/class/net/eth0/device/driver/module`</code>, cho ra <code>e1000</code> <span class="cite"><a href="#ref-3">3</a></span>. Ông tách dòng ấy thành bốn bước: theo liên kết <code>device</code> vào cây <code>/sys/devices/</code>; từ đó theo liên kết <code>driver</code>; từ đó theo liên kết <code>module</code>; rồi cắt lấy phần tên cuối cùng <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Ví dụ chính là card mạng. Xem <code>/sys/class/net/</code> để biết có những cổng nào, dùng <code>ifconfig -a</code> để biết cổng nào đang chạy, rồi một lệnh duy nhất cho ra tên mảnh ghép: <code>e1000</code> <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: ba lối tắt nối nhau — thiết bị → driver → module.</p>
+      <p class="en-only" lang="en">The chapter's lead example is the network card. After <code>ls /sys/class/net/</code> and <code>ifconfig -a</code> identify <code>eth0</code> as the live interface, everything else collapses into one line: <code>basename `readlink /sys/class/net/eth0/device/driver/module`</code>, which prints <code>e1000</code> <span class="cite"><a href="#ref-3">3</a></span>. He unpacks it into four steps: follow the <code>device</code> symlink into the <code>/sys/devices/</code> tree; from there follow the <code>driver</code> symlink; from there the <code>module</code> symlink; then strip the path down to the last name <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Cùng một dòng lệnh, đổi lớp thiết bị, là ra driver của thứ khác. Với bộ chuyển USB-sang-serial ở <code>/dev/ttyUSB0</code>, ông tra <code>/sys/class/tty/ttyUSB0/device/driver/module</code> và nhận được <code>pl2303</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Đổi <code>net</code> thành <code>tty</code> là tra được thiết bị khác: cáp USB-serial cho ra <code>pl2303</code> <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: cùng một công thức cho mọi loại thiết bị.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The same line with a different class gives you another driver. For a USB-to-serial converter on <code>/dev/ttyUSB0</code>, he reads <code>/sys/class/tty/ttyUSB0/device/driver/module</code> and gets <code>pl2303</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ghi chú thời gian: liên kết <code>device</code></h4>
+          <p>Lời rào đón của ông đã thành hiện thực ở đúng chỗ này. Tài liệu <span lang="en">“Rules on how to access information in sysfs”</span> hiện nay nói thẳng: đừng phụ thuộc vào liên kết <code>device</code>, nó là giải pháp chữa cháy cho bố cục cũ, và <em>“truy cập <code>/sys/class/net/eth0/device</code> là một lỗi của ứng dụng”</em> <span class="cite"><a href="#ref-6">6</a></span>. Dòng lệnh trong sách vẫn thường chạy được, nhưng nó không còn là giao diện được bảo đảm.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao vẫn nên hiểu nó</h4>
+          <p>Vì cấu trúc thì đổi, còn quan hệ thì không: một thiết bị vẫn luôn có một driver gắn vào, và driver vẫn luôn thuộc về một module. Tài liệu cùng trang cũng nhắc rằng nhân <em>không</em> cam kết một giao diện nhị phân ổn định cho <code>sysfs</code>, nên cách đúng là hiểu quan hệ rồi thích nghi, chứ không thuộc lòng đường dẫn <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">module → CONFIG_</span>
+      <h3>
+        <span class="standard-copy">Từ tên module về tùy chọn <code>CONFIG_</code></span>
+        <span class="easy-only">Từ tên mảnh ghép ra nút cần bật</span>
+        <span class="en-only" lang="en">From a module name to a <code>CONFIG_</code> option</span>
+      </h3>
+      <p class="standard-copy">Biết tên module mới xong một nửa; bạn còn cần tùy chọn cấu hình sinh ra nó. Ông tìm bằng cách lục các <code>Makefile</code> trong cây mã nguồn: <code>find -type f -name Makefile | xargs grep e1000</code>, và kết quả chứa dòng <code>obj-$(CONFIG_E1000) += e1000/</code> <span class="cite"><a href="#ref-3">3</a></span>. Điều cần nhìn là bất kỳ dòng nào có chuỗi <code>CONFIG_</code> — đó chính là tùy chọn phải bật <span class="cite"><a href="#ref-3">3</a></span>. Với ví dụ USB, cùng cách làm cho ra <code>CONFIG_USB_SERIAL_PL2303</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Biết tên mảnh ghép rồi thì tìm xem nút nào bật nó. Ông dùng lệnh <code>find … | xargs grep</code> để lục các tệp <code>Makefile</code>, và thấy dòng có chữ <code>CONFIG_E1000</code> <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: cứ thấy chữ <code>CONFIG_</code> là đúng nút cần tìm.</p>
+      <p class="en-only" lang="en">Knowing the module name is only half of it; you still need the configuration option that builds it. He finds it by searching the tree's Makefiles: <code>find -type f -name Makefile | xargs grep e1000</code>, whose output contains <code>obj-$(CONFIG_E1000) += e1000/</code> <span class="cite"><a href="#ref-3">3</a></span>. The thing to look for is any line carrying the term <code>CONFIG_</code> — that is the option the kernel needs enabled <span class="cite"><a href="#ref-3">3</a></span>. For the USB example the same method yields <code>CONFIG_USB_SERIAL_PL2303</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Bước cuối là <code>make menuconfig</code>, bấm phím <code>/</code> để mở ô tìm kiếm, rồi gõ tên tùy chọn <em>bỏ phần</em> <code>CONFIG_</code> <span class="cite"><a href="#ref-3">3</a></span>. Hệ thống cấu hình sẽ chỉ ra chính xác vị trí trong menu cần vào để bật nó <span class="cite"><a href="#ref-3">3</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Mở <code>make menuconfig</code>, bấm phím <code>/</code>, gõ tên nút (bỏ chữ <code>CONFIG_</code> ở đầu). Máy sẽ chỉ cho bạn nút đó nằm ở menu nào <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: không phải mò từng menu.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The last step is <code>make menuconfig</code>, pressing <code>/</code> to start a search, then typing the option name <em>minus</em> the <code>CONFIG_</code> prefix <span class="cite"><a href="#ref-3">3</a></span>. The configuration system then tells you exactly where in the menus to select it <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Tìm kiếm trong <code>menuconfig</code> hôm nay</h4>
+          <p>Cơ chế ấy còn nguyên. Tài liệu <code>kconfig</code> hiện hành mô tả chức năng tìm kiếm là tìm theo <em>tên ký hiệu cấu hình</em>, nên bạn phải biết đại khái mình tìm gì, và nói rõ có thể dùng cả biểu thức chính quy trong chuỗi tìm kiếm <span class="cite"><a href="#ref-11">11</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Ví dụ trong sách là của năm 2006</h4>
+          <p>Cây mã nguồn ông dùng là <code>linux-2.6.17.8</code> và kết quả chỉ ra tùy chọn <span lang="en">“Intel(R) PRO/1000 Gigabit Ethernet support”</span> nằm dưới <span lang="en">Device Drivers → Network device support → Ethernet (1000 Mbit)</span> <span class="cite"><a href="#ref-3">3</a></span>. Đường đi trong menu đã đổi nhiều lần từ đó; cái không đổi là <em>thao tác</em> tìm kiếm.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">modalias</span>
+      <h3>
+        <span class="standard-copy"><code>modalias</code> — để chính cái nhân đọc danh sách ra cho bạn</span>
+        <span class="easy-only">Bảo máy tự đọc cả danh sách</span>
+        <span class="en-only" lang="en"><code>modalias</code> — let the kernel read the list out for you</span>
+      </h3>
+      <p class="standard-copy">Sau khi đi bộ qua từng liên kết, ông đưa ra một script rất ngắn làm toàn bộ việc ấy theo một cách khác, gọi là <code>find_all_modules.sh</code> <span class="cite"><a href="#ref-3">3</a></span>. Nó duyệt <code>sysfs</code> tìm mọi tệp tên <code>modalias</code> — tệp này chứa <em>bí danh module</em>, thứ nói cho <code>modprobe</code> biết cần nạp module nào để điều khiển thiết bị; bí danh được ghép từ nhà sản xuất, mã định danh, loại lớp và các định danh riêng khác của thiết bị <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Ông cho một đoạn script ngắn làm hộ tất cả <span class="cite"><a href="#ref-3">3</a></span>. Nó đi khắp <code>/sys</code> nhặt các tệp tên <code>modalias</code> — mỗi tệp là một "mã vạch" của thiết bị, nói cho máy biết cần mảnh ghép nào <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: một lệnh là ra cả danh sách, không phải tra từng cái.</p>
+      <p class="en-only" lang="en">After walking the links by hand, he offers a very short script that does all of that work a different way, called <code>find_all_modules.sh</code> <span class="cite"><a href="#ref-3">3</a></span>. It goes through <code>sysfs</code> finding every file called <code>modalias</code> — that file holds the <em>module alias</em> that tells <code>modprobe</code> which module should be loaded to control the device, made up of a combination of manufacturer, ID, class type and other unique identifiers <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Mọi module driver đều mang sẵn một danh sách nội bộ các thiết bị nó hỗ trợ, sinh tự động từ chính khai báo của driver; <code>modprobe</code> dò danh sách ấy để khớp với bí danh, và nếu khớp thì nạp module — đó chính là cách nạp driver tự động của Linux vận hành <span class="cite"><a href="#ref-3">3</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Mỗi mảnh ghép đều mang danh sách các thiết bị nó biết điều khiển; máy so mã vạch với danh sách đó rồi tự nạp đúng mảnh <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: đó là lý do cắm vào là chạy.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Every driver module carries an internal list of devices it supports, generated automatically from what the driver tells the kernel; <code>modprobe</code> searches that list for a match with the alias and loads the module if it finds one — that is exactly how automatic driver loading in Linux works <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Script, đúng như in trong sách</h4>
+          <p><code>#!/bin/bash</code><br><code>#</code><br><code># find_all_modules.sh</code><br><code>#</code><br><code>for i in `find /sys/ -name modalias -exec cat {} \;`; do</code><br><code>&nbsp;&nbsp;/sbin/modprobe --config /dev/null --show-depends $i ;</code><br><code>done | rev | cut -f 1 -d '/' | rev | sort -u</code> <span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao nó không nạp gì cả</h4>
+          <p>Hai cờ làm nên sự an toàn. <code>--show-depends</code> chỉ <em>liệt kê</em> các phụ thuộc của một module (hoặc một bí danh), kể cả chính module đó, thay vì nạp — đúng cách các bản phân phối dùng để biết nên đưa module nào vào <span lang="en">initrd</span> <span class="cite"><a href="#ref-7">7</a></span>. Còn <code>--config /dev/null</code> ép dùng một thư mục cấu hình rỗng, gạt mọi quy tắc <code>install</code>/<code>remove</code> riêng của máy ra khỏi kết quả <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Các dòng FATAL không phải là lỗi của bạn</h4>
+          <p>Script sẽ in ra vài dòng kiểu <code>FATAL: Module pci:v00008086d00002592… not found.</code> hoặc <code>FATAL: Module serio:ty01pr00id00ex00 not found.</code> — nghĩa là không tìm được module nào điều khiển được thiết bị đó. Ông bảo đừng bận tâm: có những thiết bị đơn giản là chưa có driver trong nhân <span class="cite"><a href="#ref-3">3</a></span>.</p>
+        </div>
+      </div>
+      <p class="result standard-copy"><span class="vi-only">Kết quả là một danh sách phẳng kiểu <code>8139too.ko</code>, <code>ehci-hcd.ko</code>, <code>snd-hda-intel.ko</code>, <code>usbcore.ko</code> — toàn bộ module cần để điều khiển phần cứng của máy <span class="cite"><a href="#ref-3">3</a></span>.</span></p>
+      <p class="result en-only" lang="en">The output is a flat list like <code>8139too.ko</code>, <code>ehci-hcd.ko</code>, <code>snd-hda-intel.ko</code>, <code>usbcore.ko</code> — all of the modules needed to control the hardware in the machine <span class="cite"><a href="#ref-3">3</a></span>.</p>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Cả phần trên giả định một điều kiện: thiết bị <em>đang chạy được</em>. Nếu nó chưa chạy — phần cứng mới cắm vào, hoặc nhân hiện tại không nhận — thì không có liên kết nào để lần theo. Nửa sau của chương làm việc trong đúng hoàn cảnh ấy.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Cách trên chỉ dùng được khi thiết bị đang chạy. Nếu nó chưa chạy thì sao? Nhớ nhé: lúc đó phải đi đường khác, từ hai con số nhận dạng.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> All of the above assumes one condition: the device <em>already works</em>. If it does not — new hardware, or a kernel that does not recognise it — there are no links to follow. The second half of the chapter works in exactly that situation.</p>
+  </aside>
+</section>
+
+<section class="section" id="tu-con-so-khong" aria-labelledby="tu-con-so-khong-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 03 · “Determining the Correct Module from Scratch”</span><span class="en-only" lang="en">Concept cluster 03 · “Determining the Correct Module from Scratch”</span></p>
+    <h2 id="tu-con-so-khong-title">
+      <span class="standard-copy">Từ con số không: truy mã nhận dạng vào mã nguồn</span>
+      <span class="easy-only">Khi chưa có gì chạy được</span>
+      <span class="en-only" lang="en">From scratch: tracing an ID into the source</span>
+    </h2>
+    <p class="standard-copy">Đôi khi bạn không có sẵn một nhân distro đang chạy để quan sát, hoặc bạn vừa cắm thêm phần cứng mới và cần biết phải bật tùy chọn nào <span class="cite"><a href="#ref-4">4</a></span>. Ông đưa ra một lối tắt trước đã: cách dễ nhất là dựng <em>toàn bộ</em> driver cùng loại thành module, rồi để tiến trình khởi động <code>udev</code> tự khớp driver với thiết bị; khi nó khớp xong, bạn quay lại dùng các bước ở nửa đầu chương để tìm tên driver, rồi chỉ bật đúng driver đó <span class="cite"><a href="#ref-4">4</a></span>.</p>
+    <p class="easy-only">Có khi máy chưa chạy được Linux, hoặc bạn vừa cắm thiết bị mới mà nó không nhận <span class="cite"><a href="#ref-4">4</a></span>. Mẹo đầu tiên: cứ dựng hết mọi mảnh ghép cùng loại, để máy tự tìm ra mảnh đúng, rồi quay lại tra như ở phần trước <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: để máy thử giúp trước khi tự mò.</p>
+    <p class="en-only" lang="en">Sometimes you have no distribution kernel running to observe, or you have just added new hardware and need to know which option to enable <span class="cite"><a href="#ref-4">4</a></span>. He offers a shortcut first: the easiest way is to build <em>all</em> drivers of that type as modules and let the <code>udev</code> startup process match the driver to the device; once that happens you work backward with the steps above to find the driver, then go back and enable just that one <span class="cite"><a href="#ref-4">4</a></span>.</p>
+    <p class="deep-only">Nếu lối tắt không dùng được, ông cảnh báo trước rằng phần sau phức tạp và có lúc phải đào vào mã nguồn nhân — rồi thêm một câu rất đặc trưng giọng ông: đừng ngại, nó chỉ giúp bạn hiểu phần cứng của mình và mã nguồn nhân rõ hơn mà thôi <span class="cite"><a href="#ref-4">4</a></span>. Đây là chỗ cuốn sách “dành cho người dùng, không cần biết lập trình” nhẹ nhàng đẩy người đọc qua ranh giới sang phía mã nguồn.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Mã nhà sản xuất và mã thiết bị (<span lang="en">vendor / device ID</span>).</b> Cặp số hệ mười sáu mà phần cứng tự khai. Thiết bị PCI được phân biệt bằng cặp này, và mỗi tổ hợp có thể cần một driver riêng <span class="cite"><a href="#ref-4">4</a></span>. Driver khai báo ngược lại những cặp nào nó hỗ trợ, để nhân biết cách gắn đúng <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only"><b>Hai con số nhận dạng.</b> Mỗi thiết bị tự khai hai con số: ai làm ra nó, và nó là model nào <span class="cite"><a href="#ref-4">4</a></span>. Mảnh ghép nào biết cặp số đó thì nhận việc <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: hai con số này là chìa khóa của cả phần này.</p>
+      <p class="en-only" lang="en"><b>Vendor and device ID.</b> The pair of hexadecimal numbers the hardware announces about itself. PCI devices are distinguished by vendor ID and device ID, and each combination could require a unique driver <span class="cite"><a href="#ref-4">4</a></span>. Drivers declare in return which pairs they support, so the kernel knows how to bind them <span class="cite"><a href="#ref-4">4</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">PCI: lspci → 06:04.0<br>&nbsp;&nbsp;/sys/bus/pci/devices/0000:06:04.0/vendor → 0x10ec<br>&nbsp;&nbsp;…/device → 0x8139<br>&nbsp;&nbsp;grep trong include/linux/pci_ids.h<br>&nbsp;&nbsp;→ struct pci_device_id trong drivers/net/8139cp.c<br><br>USB: lsusb → 157e:300d<br>&nbsp;&nbsp;grep -i -R -l 157e drivers/*<br>&nbsp;&nbsp;→ struct usb_device_id trong zd_usb.c</p>
+      <p class="easy-only">PCI: lspci → lấy số hiệu<br>→ đọc hai con số trong /sys<br>→ tìm hai con số đó trong mã nguồn<br><br>USB: lsusb → hai con số<br>→ tìm thẳng trong mã nguồn</p>
+      <p class="en-only" lang="en">PCI: lspci → 06:04.0<br>&nbsp;&nbsp;/sys/bus/pci/devices/0000:06:04.0/vendor → 0x10ec<br>&nbsp;&nbsp;…/device → 0x8139<br>&nbsp;&nbsp;grep in include/linux/pci_ids.h<br>&nbsp;&nbsp;→ struct pci_device_id in drivers/net/8139cp.c<br><br>USB: lsusb → 157e:300d<br>&nbsp;&nbsp;grep -i -R -l 157e drivers/*<br>&nbsp;&nbsp;→ struct usb_device_id in zd_usb.c</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">PCI device</span>
+      <h3>
+        <span class="standard-copy">Thiết bị PCI — bảy bước từ <code>lspci</code> đến <code>CONFIG_</code></span>
+        <span class="easy-only">Thiết bị cắm trong máy</span>
+        <span class="en-only" lang="en">A PCI device — seven steps from <code>lspci</code> to <code>CONFIG_</code></span>
+      </h3>
+      <p class="standard-copy">Ví dụ của ông là một card mạng PCI không chạy với nhân hiện tại. <code>lspci | grep -i ethernet</code> cho ra dòng <code>06:04.0 Ethernet controller: Realtek Semiconductor Co., Ltd. RTL-8139/8139C/8139C+ (rev 10)</code> <span class="cite"><a href="#ref-4">4</a></span>. Vào <code>/sys/bus/pci/devices/</code> — nhớ thêm tiền tố <code>0000:</code> mà nhân dùng nhưng <code>lspci</code> không in ra — rồi đọc hai tệp <code>vendor</code> và <code>device</code>: <code>0x10ec</code> và <code>0x8139</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only">Ví dụ là một card mạng cắm trong máy nhưng chưa chạy. Lệnh <code>lspci</code> cho biết nó nằm ở vị trí <code>06:04.0</code> <span class="cite"><a href="#ref-4">4</a></span>. Vào thư mục tương ứng trong <code>/sys</code> (nhớ thêm <code>0000:</code> ở đầu) rồi đọc hai con số: <code>0x10ec</code> và <code>0x8139</code> <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: hai con số này là thứ cần mang đi tìm.</p>
+      <p class="en-only" lang="en">His example is a PCI network card that does not work with the running kernel. <code>lspci | grep -i ethernet</code> prints <code>06:04.0 Ethernet controller: Realtek Semiconductor Co., Ltd. RTL-8139/8139C/8139C+ (rev 10)</code> <span class="cite"><a href="#ref-4">4</a></span>. Go into <code>/sys/bus/pci/devices/</code> — remembering the leading <code>0000:</code> the kernel uses but <code>lspci</code> does not print — and read the <code>vendor</code> and <code>device</code> files: <code>0x10ec</code> and <code>0x8139</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Với PCI, nhân gom sẵn phần lớn mã nhận dạng vào một tệp: <code>include/linux/pci_ids.h</code>. <code>grep -i 0x10ec</code> cho ra <code>PCI_VENDOR_ID_REALTEK</code>, và <code>grep -i 0x8139</code> cho ra <code>PCI_DEVICE_ID_REALTEK_8139</code> <span class="cite"><a href="#ref-4">4</a></span> — hai cái tên mà driver sẽ dùng thay cho số trần.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Trong mã nguồn có một tệp gom sẵn tên gọi cho các con số đó; tra vào là ra <code>PCI_VENDOR_ID_REALTEK</code> và <code>PCI_DEVICE_ID_REALTEK_8139</code> <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: đi tìm cái tên dễ hơn đi tìm con số.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> For PCI the kernel collects most IDs in one file: <code>include/linux/pci_ids.h</code>. <code>grep -i 0x10ec</code> yields <code>PCI_VENDOR_ID_REALTEK</code> and <code>grep -i 0x8139</code> yields <code>PCI_DEVICE_ID_REALTEK_8139</code> <span class="cite"><a href="#ref-4">4</a></span> — the two names a driver will use instead of bare numbers.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đọc bảng để loại trừ</h4>
+          <p><code>grep -Rl PCI_VENDOR_ID_REALTEK *</code> cho ba ứng viên: <code>r8169.c</code>, <code>8139too.c</code>, <code>8139cp.c</code> <span class="cite"><a href="#ref-4">4</a></span>. Mọi driver PCI đều mang danh sách thiết bị hỗ trợ trong một cấu trúc <code>struct pci_device_id</code> — đó là chỗ phải nhìn <span class="cite"><a href="#ref-4">4</a></span>. Bảng của <code>r8169.c</code> khai <code>0x8169</code> và <code>0x8129</code>, không có <code>0x8139</code>, nên nó bị loại <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Khi driver tự chỉ sang driver khác</h4>
+          <p><code>8139too.c</code> không có cặp cần tìm trong bảng, nhưng lại chứa một đoạn mã in ra lời nhắn <span lang="en">“Use the 8139cp driver for improved performance and stability.”</span> khi gặp đúng chip ấy <span class="cite"><a href="#ref-4">4</a></span>. Và <code>8139cp.c</code> quả nhiên khai cả <code>PCI_VENDOR_ID_REALTEK</code> lẫn <code>PCI_DEVICE_ID_REALTEK_8139</code>, kèm <code>MODULE_DEVICE_TABLE(pci, cp_pci_tbl)</code> — đây là driver cần <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Cơ chế phía sau, theo tài liệu hiện hành</h4>
+          <p>Tài liệu PCI của nhân xác nhận đúng cơ chế ấy: driver trỏ <code>id_table</code> tới bảng <code>struct pci_device_id</code>, và “phần lớn driver nên xuất bảng này bằng <code>MODULE_DEVICE_TABLE(pci,...)</code>” — chính là thứ sinh ra các <code>modalias</code> mà <code>modprobe</code> dò tìm <span class="cite"><a href="#ref-14">14</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">USB device</span>
+      <h3>
+        <span class="standard-copy">Thiết bị USB — rút ra, cắm vào, và so hai danh sách</span>
+        <span class="easy-only">Thiết bị cắm ngoài</span>
+        <span class="en-only" lang="en">A USB device — unplug, replug, diff the lists</span>
+      </h3>
+      <p class="standard-copy">Với USB, cách tìm gần như giống hệt, chỉ khác ở chỗ lấy mã <span class="cite"><a href="#ref-4">4</a></span>. Dùng <code>lsusb</code> (thuộc gói <span lang="en">usbutils</span>) để liệt kê <span class="cite"><a href="#ref-9">9</a></span>; bỏ qua các dòng <code>ID 0000:0000</code> vì đó là bộ điều khiển chủ của chính bus <span class="cite"><a href="#ref-4">4</a></span>. Rồi ông dùng một mẹo rất vật lý: rút thiết bị ra, chạy lại <code>lsusb</code>, và dòng biến mất chính là thiết bị cần tìm — trong ví dụ là <code>157e:300d</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only">Với thiết bị cắm ngoài, cách làm dễ hơn. Chạy <code>lsusb</code> xem danh sách, rồi <em>rút thiết bị ra</em> và chạy lại. Dòng nào biến mất chính là nó <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: rút ra cắm vào là cách nhận diện đơn giản nhất.</p>
+      <p class="en-only" lang="en">For USB the method is nearly identical, differing only in how you get the IDs <span class="cite"><a href="#ref-4">4</a></span>. Use <code>lsusb</code> (from the <span lang="en">usbutils</span> package) to list them <span class="cite"><a href="#ref-9">9</a></span>; ignore lines showing <code>ID 0000:0000</code>, which are the USB host controllers driving the bus itself <span class="cite"><a href="#ref-4">4</a></span>. Then he uses a very physical trick: unplug the device, run <code>lsusb</code> again, and the line that vanished is your device — here <code>157e:300d</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Cắm lại, số thiết bị đã đổi — vì số thiết bị USB không cố định, chúng đổi mỗi lần cắm; thứ ổn định là cặp mã nhà sản xuất và mã sản phẩm, hai số bốn chữ số ngăn bởi dấu hai chấm <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Cắm lại thì số thứ tự đổi, nhưng hai con số nhận dạng thì không đổi <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: nhớ hai con số, đừng nhớ số thứ tự.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Plug it back in and the device number has changed — USB device numbers are not unique and change every time a device is plugged in; what is stable is the vendor and product ID pair, two four-digit values separated by a colon <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Không có <code>usb_ids.h</code></h4>
+          <p>Khác PCI, không tệp đơn lẻ nào gom hết mã nhà sản xuất USB, nên phải quét cả cây: <code>grep -i -R -l 157e drivers/*</code> <span class="cite"><a href="#ref-4">4</a></span>. Kết quả lẫn cả tệp dữ liệu của <span lang="en">atm</span> và <span lang="en">scsi</span> — ông loại chúng bằng hiểu biết về loại thiết bị, còn lại <code>drivers/net/wireless/zd1211rw/zd_usb.c</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Bảng <code>struct usb_device_id</code></h4>
+          <p>Trong tệp ấy, <code>157e</code> xuất hiện trong một mảng <code>usb_ids[]</code>, nơi dòng <code>{ USB_DEVICE(0x157e, 0x300d), .driver_info = DEVICE_ZD1211B }</code> khớp đúng cặp cần tìm <span class="cite"><a href="#ref-4">4</a></span>. Như driver PCI, driver USB khai báo thiết bị nó hỗ trợ bằng một biến <code>struct usb_device_id</code> để nhân biết đường gắn <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Mẹo hiện đại cho cùng việc ấy</h4>
+          <p>Ngày nay không cần rút dây cũng lấy được cặp số: <code>lspci -n</code> in mã nhà sản xuất và mã thiết bị dưới dạng số thay vì tra tên, <code>-nn</code> in cả hai dạng, còn <code>-k</code> cho biết luôn driver nào đang xử lý thiết bị và module nào có khả năng xử lý nó <span class="cite"><a href="#ref-8">8</a></span>. Cờ <code>-k</code> là lối tắt gộp cả nửa đầu chương vào một lệnh — nhưng nó không nói cho bạn biết <code>CONFIG_</code> nào, nên bước tra <code>Makefile</code> vẫn còn nguyên. Và tiến trình <code>udev</code> mà sách nhắc tới <span class="cite"><a href="#ref-4">4</a></span> nay thường là <code>systemd-udevd</code>, trình nền “lắng nghe các sự kiện <span lang="en">uevent</span> từ nhân” rồi áp quy tắc udev cho từng sự kiện <span class="cite"><a href="#ref-17">17</a></span>.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Bốn bước cuối của cả hai lối — PCI và USB — trùng nhau: tìm cặp mã trong một bảng <code>*_device_id</code>, lục <code>Makefile</code> lấy <code>CONFIG_</code>, rồi tra trong hệ thống cấu hình <span class="cite"><a href="#ref-4">4</a></span>. Nhưng có một nhóm driver mà sai là máy không khởi động nổi để bạn sửa.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Hai cách trên kết thúc giống nhau. Nhưng có một nhóm thiết bị mà nếu quên thì máy không bật lên được. Nhớ nhé: đó là ổ chứa hệ điều hành.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> The last four steps of both routes — PCI and USB — coincide: find the ID pair in a <code>*_device_id</code> table, grep the Makefiles for <code>CONFIG_</code>, then look it up in the configuration system <span class="cite"><a href="#ref-4">4</a></span>. But one group of drivers, if you get it wrong, leaves you with a machine that will not boot far enough to fix it.</p>
+  </aside>
+</section>
+
+<section class="section" id="he-thong-tep-goc" aria-labelledby="he-thong-tep-goc-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 04 · “Root Filesystem”</span><span class="en-only" lang="en">Concept cluster 04 · “Root Filesystem”</span></p>
+    <h2 id="he-thong-tep-goc-title">
+      <span class="standard-copy">Hệ thống tệp gốc — chỗ không được phép sai</span>
+      <span class="easy-only">Phần không được phép quên</span>
+      <span class="en-only" lang="en">The root filesystem — where you cannot afford to be wrong</span>
+    </h2>
+    <p class="standard-copy">Hệ thống tệp gốc là nơi phần chính của hệ thống khởi động lên: nó chứa mọi chương trình khởi đầu của bản phân phối và thường chứa toàn bộ cấu hình của máy <span class="cite"><a href="#ref-5">5</a></span>. Ông tóm gọn: nó rất quan trọng, và nhân <em>phải</em> tìm được nó lúc khởi động thì mọi thứ mới chạy đúng <span class="cite"><a href="#ref-5">5</a></span>. Triệu chứng khi sai rất dễ nhận: nhân dừng lại với <code>VFS: Cannot open root device</code>, <code>Please append a correct "root=" boot option</code>, rồi <code>Kernel panic</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+    <p class="easy-only">Hệ thống tệp gốc là ổ chứa chính hệ điều hành. Nhân phải tìm thấy nó lúc bật máy, nếu không thì dừng luôn <span class="cite"><a href="#ref-5">5</a></span>. Khi sai, màn hình hiện dòng <code>Cannot open root device</code> rồi <code>Kernel panic</code> <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: thấy dòng đó là biết quên driver cho ổ đĩa.</p>
+    <p class="en-only" lang="en">The root filesystem is where the main portion of the running system boots from: it contains all the initial programs that start the distro and usually the entire system configuration <span class="cite"><a href="#ref-5">5</a></span>. He sums it up: it is very important, and the kernel <em>must</em> be able to find it at boot time for things to work properly <span class="cite"><a href="#ref-5">5</a></span>. The symptom when it is wrong is unmistakable: the kernel stops with <code>VFS: Cannot open root device</code>, <code>Please append a correct "root=" boot option</code>, then <code>Kernel panic</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+    <p class="deep-only">Đây là lý do duy nhất trong chương khiến ông khuyên đi ngược lại tinh thần “dựng thành module cho gọn”. Nếu bạn <em>không</em> dùng ảnh <span lang="en">ramdisk</span> lúc khởi động, thường nên dựng thẳng vào nhân cả hệ thống tệp của phân vùng gốc lẫn bộ điều khiển đĩa của nó, thay vì để làm module; còn nếu có dùng ramdisk thì để làm module vẫn an toàn <span class="cite"><a href="#ref-5">5</a></span>. Cách phân biệt của ông cũng rất thực dụng: nếu bạn cài nhân bằng script của bản phân phối thì nhiều khả năng đang dùng ramdisk; nếu tự tay cài thì nhiều khả năng là không <span class="cite"><a href="#ref-5">5</a></span>.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Ba thứ phải có mặt.</b> Để khởi động được, nhân cần đồng thời: <em>loại hệ thống tệp</em> của phân vùng gốc, <em>driver đĩa</em> ở tầng khối, và <em>driver bộ điều khiển</em> của phần cứng nối tới đĩa. Trong ví dụ của sách, ba thứ đó là <code>ext3</code>, <code>sd</code> và <code>ata_piix</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      <p class="easy-only"><b>Ba mảnh phải có.</b> Kiểu định dạng của ổ, mảnh đọc ổ đĩa, và mảnh điều khiển mạch nối tới ổ. Ví dụ trong sách: <code>ext3</code>, <code>sd</code>, <code>ata_piix</code> <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: thiếu một trong ba là không bật được máy.</p>
+      <p class="en-only" lang="en"><b>Three things must be present.</b> To boot, the kernel needs all of: the root partition's <em>filesystem type</em>, the <em>disk driver</em> at the block layer, and the <em>controller driver</em> for the hardware the disk hangs off. In the book's example those are <code>ext3</code>, <code>sd</code> and <code>ata_piix</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">mount | grep " / "<br>→ /dev/sda2 on / type ext3 (rw,noatime)<br><br>loại tệp → ext3<br>thiết bị&nbsp; → sda2 ⇒ phải cấu hình cả sda<br>ls -l /sys/block/sda → …/driver → sd<br>lên tiếp một bậc&nbsp;&nbsp;&nbsp;&nbsp; → ata_piix</p>
+      <p class="easy-only">mount | grep " / "<br>→ ổ nào, định dạng gì<br>rồi đi ngược trong /sys để tìm<br>mảnh điều khiển ổ đó</p>
+      <p class="en-only" lang="en">mount | grep " / "<br>→ /dev/sda2 on / type ext3 (rw,noatime)<br><br>fs type → ext3<br>device&nbsp; → sda2 ⇒ configure the whole sda<br>ls -l /sys/block/sda → …/driver → sd<br>one level up&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → ata_piix</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">walking up the chain</span>
+      <h3>
+        <span class="standard-copy">Đi ngược lên cây thiết bị cho đến khi gặp <code>driver</code></span>
+        <span class="easy-only">Leo ngược lên từng bậc</span>
+        <span class="en-only" lang="en">Walking up the device chain until a <code>driver</code> appears</span>
+      </h3>
+      <p class="standard-copy">Bắt đầu bằng <code>mount | grep " / "</code> để lấy cả hai dữ kiện cùng lúc: phân vùng gốc là <code>/dev/sda2</code> và loại tệp là <code>ext3</code> <span class="cite"><a href="#ref-5">5</a></span>. Vì <code>sda2</code> là một phân vùng — phân vùng thì có số, thiết bị khối chính thì không — nên phải cấu hình cho cả thiết bị <code>sda</code>, bởi không có thiết bị chính thì không có đường truy cập các phân vùng trên nó <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      <p class="easy-only">Gõ <code>mount | grep " / "</code> là biết ngay hai điều: ổ gốc là <code>/dev/sda2</code>, định dạng là <code>ext3</code> <span class="cite"><a href="#ref-5">5</a></span>. Số 2 nghĩa là phân vùng; phải lo cho cả ổ <code>sda</code> chứ không chỉ phân vùng ấy <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: lo cho cả ổ, không chỉ một phần của ổ.</p>
+      <p class="en-only" lang="en">Start with <code>mount | grep " / "</code>, which gives both facts at once: the root partition is <code>/dev/sda2</code> and the type is <code>ext3</code> <span class="cite"><a href="#ref-5">5</a></span>. Because <code>sda2</code> is a partition — partitions are numbered, main block devices are not — the whole <code>sda</code> device must be configured, since without the main block device there is no way to reach its individual partitions <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Từ <code>/sys/block/sda</code>, liên kết <code>device</code> dẫn xuống sâu trong <code>/sys/devices/pci0000:00/0000:00:1f.2/host0/…</code>, nơi có liên kết <code>driver</code> trỏ tới <code>sd</code> — driver đĩa SCSI <span class="cite"><a href="#ref-5">5</a></span>. Đi tiếp lên hai bậc nữa mới gặp liên kết <code>driver</code> thứ hai: <code>ata_piix</code>, chính là bộ điều khiển đĩa <span class="cite"><a href="#ref-5">5</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Từ ổ <code>sda</code> đi theo lối tắt vào sâu, gặp mảnh <code>sd</code>; leo ngược lên vài bậc nữa, gặp mảnh <code>ata_piix</code> <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: chưa thấy chữ <code>driver</code> thì leo tiếp một bậc.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> From <code>/sys/block/sda</code>, the <code>device</code> link leads deep into <code>/sys/devices/pci0000:00/0000:00:1f.2/host0/…</code>, where a <code>driver</code> link points at <code>sd</code> — the SCSI disk driver <span class="cite"><a href="#ref-5">5</a></span>. Two more levels up the chain sits the second <code>driver</code> link: <code>ata_piix</code>, the disk controller <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao phải leo nhiều bậc</h4>
+          <p>Vì không phải thư mục nào trong chuỗi cũng có liên kết <code>driver</code>. Ông thử ở <code>target0:0:0</code> — không có; lên <code>host0</code> — cũng không; lên một bậc nữa mới thấy <span class="cite"><a href="#ref-5">5</a></span>. Tài liệu hiện hành nói đúng điều đó ở dạng quy tắc: <em>“thiết bị nào không có liên kết <code>driver</code> thì đơn giản là không có”</em> <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Hai nơi cho thiết bị khối</h4>
+          <p>Ông ghi chú rằng thiết bị khối hiện ra ở <code>/sys/block</code> hoặc <code>/sys/class/block</code>, tùy phiên bản nhân <span class="cite"><a href="#ref-5">5</a></span>. Tài liệu hiện hành xác nhận cả hai tồn tại và cảnh báo ngược lại: <em>giả định rằng <code>/sys/block</code> và <code>/sys/class/block</code> thay thế được cho nhau là một lỗi của ứng dụng</em> <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">get-driver.sh</span>
+      <h3>
+        <span class="standard-copy"><code>get-driver.sh</code> — script viết để sống sót qua các phiên bản</span>
+        <span class="easy-only">Một script làm hộ cả việc leo</span>
+        <span class="en-only" lang="en"><code>get-driver.sh</code> — a script built to survive version churn</span>
+      </h3>
+      <p class="standard-copy">Chương khép lại bằng một script tiện dụng để tìm driver và tên module cho bất kỳ nút thiết bị nào trong hệ thống. Ông nói rõ xuất xứ của nó: được phát triển cùng các nhà phát triển nhân phụ trách <code>sysfs</code>, và <em>sẽ chạy được trên mọi phiên bản tương lai của nhân 2.6</em> <span class="cite"><a href="#ref-5">5</a></span>. Đó là câu trả lời trực tiếp cho lời rào đón ở đầu chương về việc <code>sysfs</code> liên tục đổi chỗ <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Cuối chương có một script làm hộ toàn bộ việc leo ngược ấy. Ông nói nó được làm cùng những người viết <code>sysfs</code>, nên chạy được với mọi bản nhân 2.6 về sau <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: gõ một lệnh, máy leo hộ bạn.</p>
+        <p class="en-only" lang="en">The chapter closes with a handy script for finding the driver and module name for any device node on the system. He states its provenance: it was developed with the kernel developers responsible for <code>sysfs</code>, and <em>should successfully work on all future versions of the 2.6 kernel</em> <span class="cite"><a href="#ref-5">5</a></span>. That is a direct answer to the caveat at the top of the chapter about <code>sysfs</code> constantly moving around <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Với ví dụ vừa làm bằng tay, <code>get-driver.sh sda</code> in ra đúng hai dòng <code>found driver: sd</code> và <code>found driver: ata_piix</code> <span class="cite"><a href="#ref-5">5</a></span>. Với <code>ttyUSB0</code> nó lần ra cả chuỗi: <code>pl2303</code>, rồi <code>usb</code> từ module <code>usbcore</code>, rồi <code>uhci_hcd</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Gõ <code>get-driver.sh sda</code> là ra ngay <code>sd</code> và <code>ata_piix</code> <span class="cite"><a href="#ref-5">5</a></span>. Với cáp USB thì ra cả chuỗi mảnh ghép <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: một lệnh thay cho mười phút mò mẫm.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> For the example just done by hand, <code>get-driver.sh sda</code> prints exactly two lines, <code>found driver: sd</code> and <code>found driver: ata_piix</code> <span class="cite"><a href="#ref-5">5</a></span>. For <code>ttyUSB0</code> it traces the whole chain: <code>pl2303</code>, then <code>usb</code> from module <code>usbcore</code>, then <code>uhci_hcd</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Script làm gì, theo đúng thứ tự</h4>
+          <p>Nó nhận một tên lớp thiết bị, tìm thư mục <code>sysfs</code> tương ứng bằng cách dò lần lượt <code>/sys/class</code>, <code>/sys/block</code>, <code>/sys/bus</code>; giải liên kết bằng <code>readlink -f</code>; gỡ liên kết <code>device</code> kiểu cũ về thiết bị cha; rồi lặp <code>while test "$DEVPATH" != "/"</code>, mỗi vòng thử đọc <code>$DEVPATH/driver</code> và <code>$DRIVERPATH/module</code> trước khi <code>dirname</code> lên một bậc <span class="cite"><a href="#ref-5">5</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao nó bền hơn dòng lệnh một dòng</h4>
+          <p>Vì nó <em>không</em> cố định đường dẫn. Ba lần <code>find</code> thay cho một đường dẫn cứng, và vòng lặp leo lên thay cho số bậc đếm sẵn — đúng tinh thần mà tài liệu <code>sysfs</code> hiện hành đòi hỏi: đừng bao giờ dùng một đường dẫn như một phần tử cố định, hãy giải liên kết rồi đi tiếp <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Hai script đều tải được</h4>
+          <p>Cả <code>find_all_modules.sh</code> lẫn <code>get-driver.sh</code> đều được sách nói là tải được từ trang web của cuốn sách, ghi trong mục <span lang="en">“How to Contact Us”</span> của Lời nói đầu <span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-5">5</a></span>. Bản trực tuyến miễn phí của sách nằm ở trang riêng của tác giả <span class="cite"><a href="#ref-13">13</a></span>.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <div class="trap-comparison deep-only">
+    <p class="eyebrow"><span class="vi-only">Ba hiểu lầm thường gặp</span><span class="en-only" lang="en">Three common misconceptions</span></p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Cứ tắt hết cho nhẹ”</span><span class="en-only" lang="en">“Just switch everything off to make it light”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> tắt càng nhiều càng tốt. <span class="fact">Thực tế:</span> ông khuyên ngược lại — chỉ tắt những tùy chọn bạn <em>chắc chắn</em> không cần, vì có thể có phần nào đó của hệ thống đang dựa vào một tùy chọn cụ thể <span class="cite"><a href="#ref-2">2</a></span>. Và với hệ thống tệp gốc, lời khuyên còn ngược hẳn: dựng <em>thẳng vào nhân</em> nếu bạn không dùng ramdisk <span class="cite"><a href="#ref-5">5</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> the more you disable, the better. <span class="fact">Fact:</span> he advises the opposite — disable only options you are <em>sure</em> you do not need, since parts of the system may rely on a specific one <span class="cite"><a href="#ref-2">2</a></span>. And for the root filesystem the advice inverts entirely: build it <em>into</em> the kernel if you are not using a ramdisk <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Đường dẫn trong sách là chuẩn cố định”</span><span class="en-only" lang="en">“The paths in the book are a fixed standard”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> cứ gõ y nguyên đường dẫn là ra. <span class="fact">Thực tế:</span> chính ông đã cảnh báo cấu trúc <code>sysfs</code> liên tục thay đổi và một số liên kết nói trong chương có thể không còn <span class="cite"><a href="#ref-3">3</a></span>. Hai mươi năm sau, tài liệu nhân nói thẳng rằng truy cập <code>/sys/class/net/eth0/device</code> là một lỗi của ứng dụng <span class="cite"><a href="#ref-6">6</a></span>. Hãy học <em>quan hệ</em>, đừng học thuộc <em>đường đi</em>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> type the paths verbatim and they will work. <span class="fact">Fact:</span> he warned himself that the internal structure of <code>sysfs</code> constantly changes and some symlinks mentioned in the chapter might not be present <span class="cite"><a href="#ref-3">3</a></span>. Twenty years on, kernel documentation states flatly that accessing <code>/sys/class/net/eth0/device</code> is a bug in the application <span class="cite"><a href="#ref-6">6</a></span>. Learn the <em>relationships</em>, not the <em>paths</em>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Nhân đoán ra driver bằng tên thiết bị”</span><span class="en-only" lang="en">“The kernel guesses the driver from the device name”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> nhân nhìn tên thiết bị rồi chọn driver. <span class="fact">Thực tế:</span> nó khớp <em>bí danh</em> sinh từ mã phần cứng với danh sách nội bộ mà mỗi driver khai báo <span class="cite"><a href="#ref-3">3</a></span>; với PCI, danh sách ấy là bảng <code>struct pci_device_id</code> được xuất qua <code>MODULE_DEVICE_TABLE</code> <span class="cite"><a href="#ref-14">14</a></span>. Tên <code>eth0</code> là hệ quả, không phải nguyên nhân.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> the kernel looks at a device name and picks a driver. <span class="fact">Fact:</span> it matches an <em>alias</em> derived from hardware IDs against the internal list each driver declares <span class="cite"><a href="#ref-3">3</a></span>; for PCI that list is the <code>struct pci_device_id</code> table exported via <code>MODULE_DEVICE_TABLE</code> <span class="cite"><a href="#ref-14">14</a></span>. The name <code>eth0</code> is a consequence, not a cause.</p>
+      </div>
+    </div>
+  </div>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Hết chương 7 bạn có một <em>phương pháp</em>: hỏi máy, lần liên kết, tra <code>CONFIG_</code>. Chương 8 đổi sang thể loại khác — không phải phương pháp mà là <em>công thức</em> sẵn cho các cấu hình thường gặp <span class="cite"><a href="#ref-16">16</a></span>.</p>
+    <p class="easy-only"><b>Nối sang chương sau.</b> Chương 7 dạy cách tự tìm. Chương 8 cho sẵn các công thức hay dùng <span class="cite"><a href="#ref-16">16</a></span>. Nhớ nhé: biết cách tìm rồi thì đọc công thức sẽ nhanh hơn.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> Leaving Chapter 7 you hold a <em>method</em>: ask the machine, follow the links, look up the <code>CONFIG_</code>. Chapter 8 switches genre — not method but ready-made <em>recipes</em> for common configurations <span class="cite"><a href="#ref-16">16</a></span>.</p>
+  </aside>
+</section>
+
+<section class="section" id="tu-kiem" aria-labelledby="tu-kiem-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Tự kiểm</span><span class="en-only" lang="en">Self-check</span></p>
+    <h2 id="tu-kiem-title">
+      <span class="standard-copy">Tự kiểm trước khi sang chương 8</span>
+      <span class="easy-only">Tự hỏi mình vài câu</span>
+      <span class="en-only" lang="en">Self-check before Chapter 8</span>
+    </h2>
+  </div>
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Chương này có lệnh để gõ, và cách kiểm tra tốt nhất là gõ chúng trên chính máy bạn. Các câu dưới đây đo xem bạn đã nắm <em>quan hệ</em> hay mới thuộc <em>đường dẫn</em>.</p>
+      <p class="easy-only">Chương này có lệnh để gõ thật. Cách kiểm tra tốt nhất là mở máy ra gõ thử. Nhớ nhé: gõ được trên máy mình mới là hiểu.</p>
+      <p class="en-only" lang="en">This chapter has commands to type, and the best check is typing them on your own machine. The questions below measure whether you hold the <em>relationships</em> or merely memorised the <em>paths</em>.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>Bạn kiểm tra được máy mình có <code>/proc/config.gz</code> hay không, và nói được vì sao một số máy không có?
+        <p class="deep-only">Câu trả lời nằm ở tùy chọn <code>CONFIG_IKCONFIG_PROC</code> của người dựng nhân, không ở thao tác của bạn <span class="cite"><a href="#ref-12">12</a></span>.</p>
+      </li>
+      <li>Bạn mô tả lại được chuỗi ba liên kết đưa từ một tên thiết bị đến tên module, và nói được mỗi liên kết trỏ tới cái gì?
+        <p class="deep-only">thiết bị → <code>device</code> → <code>driver</code> → <code>module</code>; <code>readlink</code> lấy đích, <code>basename</code> cắt lấy tên cuối <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      </li>
+      <li>Cho một tên module bất kỳ, bạn tìm ra tùy chọn <code>CONFIG_</code> tương ứng bằng mấy lệnh?
+        <p class="deep-only">Một lệnh <code>find … | xargs grep &lt;tên module&gt;</code>, rồi nhìn dòng có chuỗi <code>CONFIG_</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      </li>
+      <li>Bạn phân biệt được hai tình huống: thiết bị đang chạy tốt, và thiết bị chưa được nhận? Mỗi tình huống dùng lối nào?</li>
+      <li>Với máy của bạn, ba driver nào phải có mặt để khởi động được — loại hệ thống tệp, driver đĩa, và bộ điều khiển?
+        <p class="deep-only">Bắt đầu bằng <code>mount | grep " / "</code>, rồi leo ngược trong <code>sysfs</code> cho tới khi gặp liên kết <code>driver</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      </li>
+      <li>Bạn giải thích được vì sao <code>find_all_modules.sh</code> không nạp module nào dù có gọi <code>modprobe</code>?
+        <p class="deep-only">Vì <code>--show-depends</code> chỉ liệt kê phụ thuộc thay vì nạp, còn <code>--config /dev/null</code> gạt cấu hình riêng của máy ra <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li>Máy bạn có tệp <code>/proc/config.gz</code> không? Gõ thử <code>ls /proc/config.gz</code> xem sao.</li>
+      <li>Bạn chỉ ra được ba "lối tắt" nối từ tên thiết bị tới tên mảnh ghép không?</li>
+      <li>Có tên mảnh ghép rồi, bạn tìm nút cần bật bằng cách nào?</li>
+      <li>Thiết bị đang chạy và thiết bị chưa chạy — hai trường hợp dùng cách khác nhau thế nào?</li>
+      <li>Ổ chứa hệ điều hành của bạn tên gì, định dạng gì? Gõ <code>mount | grep " / "</code> là biết.</li>
+      <li>Nhớ nhé: trả lời được cả năm câu thì sang chương 8 được rồi.</li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>Can you check whether your machine has <code>/proc/config.gz</code>, and say why some machines do not?
+        <p class="deep-only" lang="en">The answer lies in whoever built the kernel setting <code>CONFIG_IKCONFIG_PROC</code>, not in anything you did <span class="cite"><a href="#ref-12">12</a></span>.</p>
+      </li>
+      <li>Can you describe the chain of three symlinks from a device name to a module name, and say what each points at?
+        <p class="deep-only" lang="en">device → <code>device</code> → <code>driver</code> → <code>module</code>; <code>readlink</code> takes the target, <code>basename</code> keeps the last name <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      </li>
+      <li>Given any module name, how many commands does it take you to find its <code>CONFIG_</code> option?
+        <p class="deep-only" lang="en">One: <code>find … | xargs grep &lt;module&gt;</code>, then look for the line containing <code>CONFIG_</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      </li>
+      <li>Can you tell the two situations apart — a device that already works versus one the kernel does not recognise — and name the route each takes?</li>
+      <li>For your own machine, which three drivers must be present to boot: filesystem type, disk driver, and controller?</li>
+      <li>Can you explain why <code>find_all_modules.sh</code> loads nothing even though it calls <code>modprobe</code>?
+        <p class="deep-only" lang="en">Because <code>--show-depends</code> only lists dependencies instead of inserting, and <code>--config /dev/null</code> shuts out the machine's own configuration <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section class="closing" id="dong-lai" aria-labelledby="dong-lai-title">
+  <p class="eyebrow" id="dong-lai-title"><span class="vi-only">Đọng lại</span><span class="en-only" lang="en">What remains</span></p>
+  <blockquote>
+    <p class="standard-copy">Phần khó nhất của việc tự dựng nhân không phải là biên dịch, mà là <span class="closing-accent">biết chính xác driver nào máy bạn cần</span>. Và câu trả lời không nằm trong tài liệu — nó nằm trong <span class="closing-accent">chính cái máy đang chạy trước mặt bạn</span>, viết bằng những liên kết tượng trưng dưới <code>/sys</code>.</p>
+    <p class="easy-only">Việc khó nhất không phải là gõ lệnh dựng, mà là <span class="closing-accent">biết máy mình cần mảnh nào</span>. Mà câu trả lời thì <span class="closing-accent">đã nằm sẵn trong máy</span> rồi. Nhớ nhé: hỏi máy trước khi tra sách.</p>
+    <p class="en-only" lang="en">The hardest part of building your own kernel is not compiling; it is <span class="closing-accent">knowing exactly which drivers your machine needs</span>. And the answer is not in the documentation — it is in <span class="closing-accent">the running machine in front of you</span>, written in symlinks under <code>/sys</code>.</p>
+  </blockquote>
+</section>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-6-upgrading.html">
+    <span class="nav-label">◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span></span>
+    <span class="nav-title"><span class="vi-only">Chương 6 · Nâng cấp nhân</span><span class="en-only" lang="en">Chapter 6 · Upgrading a Kernel</span></span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-8-configuration-recipes.html">
+    <span class="nav-label"><span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶</span>
+    <span class="nav-title"><span class="vi-only">Chương 8 · Công thức cấu hình nhân</span><span class="en-only" lang="en">Chapter 8 · Kernel Configuration Recipes</span></span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chương 7, “Customizing a Kernel” (trang 45–62), mở đầu Phần II “Major Customizations”. Trang này là <b>người đồng hành diễn giải</b>, không phải bản dịch: nó tóm lược, sắp xếp lại và chú giải nội dung chương, không thay thế việc đọc sách gốc. Các ví dụ và phép so sánh ở mức đọc <i>Dễ hiểu</i> là minh họa do trang này thêm vào, không có trong sách. Sách xuất bản năm 2006 và viết cho dòng nhân 2.6 — mọi đường dẫn <code>sysfs</code>, tên driver và phiên bản mã nguồn (<code>linux-2.6.17.8</code>) trong chương đều mang dấu thời gian đó; mọi ghi chú về tình hình hiện nay đều được dẫn nguồn riêng.</p>
+    <p class="en-only" lang="en"><b>Primary source.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chapter 7, “Customizing a Kernel” (pages 45–62), which opens Part II, “Major Customizations”. This page is an <b>interpretive study companion</b>, not a translation: it summarises, rearranges and annotates the chapter, and does not replace reading the book itself. Examples and analogies at the <i>Easy</i> reading level are illustrations added here, not the author's. The book was published in 2006 and targets the 2.6 kernel series — every <code>sysfs</code> path, driver name and source version (<code>linux-2.6.17.8</code>) in the chapter carries that timestamp; every note about the present day carries its own citation.</p>
+
+    <p class="footer-label vi-only">Tham chiếu</p>
+    <p class="footer-label en-only" lang="en">References</p>
+    <ol class="ref-list">
+      <li id="ref-1">Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006, Chapter 7 “Customizing a Kernel”, p. 45 (câu mở đầu về phần khó nhất; “Using a Distribution Kernel”; gợi ý LiveCD). Bản trực tuyến miễn phí: <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-2">Sđd., Chapter 7, “Where Is the Kernel Configuration?”, pp. 45–46 (<code>/usr/src/linux/</code>, <code>ls /proc/config.gz</code>, <code>gzip -dv config.gz</code> → 74.9 %, đổi tên thành <code>.config</code>, và quy tắc “chỉ tắt thứ bạn chắc chắn không cần”). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-3">Sđd., Chapter 7, “Finding Which Module Is Needed”, pp. 46–52 (sysfs và cảnh báo về sự thay đổi cấu trúc; ví dụ <code>eth0</code> → <code>e1000</code> và <code>ttyUSB0</code> → <code>pl2303</code>; <code>find … | xargs grep</code>; tìm kiếm bằng phím <code>/</code> trong <code>menuconfig</code>; script <code>find_all_modules.sh</code>, <code>modalias</code>, và các dòng <code>FATAL</code>). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-4">Sđd., Chapter 7, “Determining the Correct Module from Scratch”, pp. 52–59 (lối tắt dựng hết driver + <code>udev</code>; PCI: <code>lspci</code>, <code>0000:06:04.0</code>, <code>0x10ec</code>/<code>0x8139</code>, <code>include/linux/pci_ids.h</code>, <code>struct pci_device_id</code> trong <code>8139cp.c</code>; USB: <code>lsusb</code>, <code>157e:300d</code>, <code>struct usb_device_id</code> trong <code>zd_usb.c</code>). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-5">Sđd., Chapter 7, “Root Filesystem” và “Helper Script”, pp. 59–62 (thông điệp <code>VFS: Cannot open root device</code>; ramdisk và việc dựng thẳng vào nhân; <code>mount | grep " / "</code> → <code>/dev/sda2</code>, <code>ext3</code>; chuỗi <code>sd</code> → <code>ata_piix</code>; script <code>get-driver.sh</code>). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-6">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/sysfs-rules.html" target="_blank" rel="noopener noreferrer">“Rules on how to access information in sysfs”</a>, docs.kernel.org (truy cập 22-09-2026) — không có giao diện nhị phân ổn định cho <code>sysfs</code>; “đừng bao giờ phụ thuộc vào liên kết <code>device</code>”; “truy cập <code>/sys/class/net/eth0/device</code> là một lỗi của ứng dụng”; <code>/sys/block</code> và <code>/sys/class/block</code> không thay thế được cho nhau.</li>
+      <li id="ref-7">man7.org, <a href="https://man7.org/linux/man-pages/man8/modprobe.8.html" target="_blank" rel="noopener noreferrer"><code>modprobe(8)</code></a> — <code>--show-depends</code> chỉ liệt kê phụ thuộc thay vì nạp; <code>-C, --config</code> ghi đè thư mục cấu hình mặc định (truy cập 22-09-2026).</li>
+      <li id="ref-8">man7.org, <a href="https://man7.org/linux/man-pages/man8/lspci.8.html" target="_blank" rel="noopener noreferrer"><code>lspci(8)</code></a> — <code>-n</code> in mã dạng số, <code>-nn</code> in cả số lẫn tên, <code>-k</code> hiện driver đang xử lý và module có khả năng xử lý thiết bị (truy cập 22-09-2026).</li>
+      <li id="ref-9">man7.org, <a href="https://man7.org/linux/man-pages/man8/lsusb.8.html" target="_blank" rel="noopener noreferrer"><code>lsusb(8)</code></a> — công cụ liệt kê thiết bị USB thuộc gói <span lang="en">usbutils</span> (truy cập 22-09-2026).</li>
+      <li id="ref-10">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/quickly-build-trimmed-linux.html" target="_blank" rel="noopener noreferrer">“Quickly build a trimmed Linux kernel”</a>, docs.kernel.org (truy cập 22-09-2026) — <code>make localmodconfig</code> “sẽ giảm thời gian biên dịch một cách khổng lồ”, kèm cảnh báo nó có thể tắt tính năng chưa dùng từ lúc khởi động. Mục tiêu <code>make</code> này <b>không</b> có trong sách 2006.</li>
+      <li id="ref-11">The Linux Kernel documentation, <a href="https://docs.kernel.org/kbuild/kconfig.html" target="_blank" rel="noopener noreferrer">“Kconfig make config”</a>, docs.kernel.org (truy cập 22-09-2026) — chức năng tìm kiếm trong <code>menuconfig</code> tìm theo tên ký hiệu cấu hình và chấp nhận biểu thức chính quy.</li>
+      <li id="ref-12">Linux kernel source, <a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/init/Kconfig" target="_blank" rel="noopener noreferrer"><code>init/Kconfig</code></a>, git.kernel.org (truy cập 22-09-2026) — <code>config IKCONFIG</code> “Kernel .config support” (moi ra bằng <code>scripts/extract-ikconfig</code>) và <code>config IKCONFIG_PROC</code> “Enable access to .config through /proc/config.gz”.</li>
+      <li id="ref-13">Greg Kroah-Hartman, <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">trang giới thiệu <i>Linux Kernel in a Nutshell</i></a> — bản trực tuyến miễn phí và các tệp đi kèm sách (truy cập 22-09-2026).</li>
+      <li id="ref-14">The Linux Kernel documentation, <a href="https://docs.kernel.org/PCI/pci.html" target="_blank" rel="noopener noreferrer">“How To Write Linux PCI Drivers”</a>, docs.kernel.org (truy cập 22-09-2026) — <code>id_table</code> trỏ tới bảng <code>struct pci_device_id</code>, và “phần lớn driver nên xuất bảng này bằng <code>MODULE_DEVICE_TABLE(pci,...)</code>”.</li>
+      <li id="ref-15">The Linux Kernel documentation, <a href="https://docs.kernel.org/filesystems/sysfs.html" target="_blank" rel="noopener noreferrer">“sysfs — The filesystem for exporting kernel objects”</a>, docs.kernel.org (truy cập 22-09-2026).</li>
+      <li id="ref-16">Kroah-Hartman, sđd., Preface, “How the Book Is Organized”, p. x — “Part II, <i>Major Customizations</i>, consists of Chapters 7 and 8”; Chương 7 bàn về tùy biến theo phần cứng có mặt, Chương 8 cung cấp các “công thức” cấu hình thường gặp. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-17">freedesktop.org, <a href="https://www.freedesktop.org/software/systemd/man/latest/systemd-udevd.service.html" target="_blank" rel="noopener noreferrer"><code>systemd-udevd.service(8)</code></a> — trình nền quản lý sự kiện thiết bị: “<span lang="en">systemd-udevd listens to kernel uevents</span>”; đây là hậu thân của tiến trình <code>udev</code> mà sách 2006 nhắc tới (truy cập 22-09-2026).</li>
+    </ol>
+
+    <p class="footer-label vi-only">Trong loạt bài</p>
+    <p class="footer-label en-only" lang="en">In this series</p>
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <p class="vi-only"><a href="index.html">Trang bìa</a> · <a href="chapter-6-upgrading.html">Chương 6 · Nâng cấp nhân</a> · <span>Chương 7 · Tùy biến nhân (trang này)</span> · <a href="chapter-8-configuration-recipes.html">Chương 8 · Công thức cấu hình nhân</a></p>
+    <p class="en-only" lang="en"><a href="index.html">Cover</a> · <a href="chapter-6-upgrading.html">Chapter 6 · Upgrading a Kernel</a> · <span>Chapter 7 · Customizing a Kernel (this page)</span> · <a href="chapter-8-configuration-recipes.html">Chapter 8 · Kernel Configuration Recipes</a></p>
+    <!-- NAV:END -->
+  </div>
+  <div class="edition">LKN · CH 07 · VI/EN</div>
+</footer>
+
+</main>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  function sync() {
+    var mode = root.getAttribute("data-mode") || "standard";
+    var lang = root.getAttribute("data-lang") || "vi";
+    var dark = root.getAttribute("data-theme") === "dark";
+    document.querySelectorAll("[data-set-mode]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-mode") === mode));
+    });
+    document.querySelectorAll("[data-set-lang]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-lang") === lang));
+    });
+    document.querySelectorAll("[data-toggle-theme]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(dark));
+    });
+    root.setAttribute("lang", lang === "en" ? "en" : "vi");
+  }
+
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button.chip");
+    if (!b) return;
+    if (b.hasAttribute("data-set-mode")) {
+      root.setAttribute("data-mode", b.getAttribute("data-set-mode"));
+      store("lkn-reading-mode", b.getAttribute("data-set-mode"));
+    } else if (b.hasAttribute("data-set-lang")) {
+      root.setAttribute("data-lang", b.getAttribute("data-set-lang"));
+      store("lkn-lang", b.getAttribute("data-set-lang"));
+    } else if (b.hasAttribute("data-toggle-theme")) {
+      var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      store("lkn-theme", next);
+    }
+    sync();
+  });
+
+  sync();
+})();
+
+/* section-index rail: built at runtime from this page's own id'd sections */
+(function () {
+  var list = document.querySelector(".section-rail__list");
+  if (!list) return;
+  var sections = Array.prototype.slice.call(document.querySelectorAll("main section[id][aria-labelledby]"));
+  if (!sections.length) { var rail = document.querySelector(".section-rail"); if (rail) rail.remove(); return; }
+
+  /* headings carry all three reading levels + both languages as sibling spans,
+     so read only the ones actually visible under the current toggles */
+  function labelFor(sec) {
+    var head = document.getElementById(sec.getAttribute("aria-labelledby"));
+    if (!head) return sec.id;
+    var parts = [];
+    Array.prototype.forEach.call(head.children, function (el) {
+      if (el.offsetParent !== null || el.getClientRects().length) parts.push(el.textContent);
+    });
+    var label = (parts.length ? parts.join(" ") : head.textContent || "").replace(/\s+/g, " ").trim();
+    return label.length > 46 ? label.slice(0, 44) + "…" : label;
+  }
+
+  var links = sections.map(function (sec) {
+    var label = labelFor(sec);
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.href = "#" + sec.id;
+    var span = document.createElement("span");
+    span.className = "section-rail__label";
+    span.textContent = label;
+    a.appendChild(span);
+    li.appendChild(a);
+    list.appendChild(li);
+    return a;
+  });
+
+  function mark(id) {
+    links.forEach(function (a) {
+      if (a.getAttribute("href") === "#" + id) a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    });
+  }
+
+  if ("IntersectionObserver" in window) {
+    var seen = new Map();
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { seen.set(e.target.id, e.intersectionRatio); });
+      var best = null, bestR = 0;
+      seen.forEach(function (r, id) { if (r > bestR) { bestR = r; best = id; } });
+      if (best) mark(best);
+    }, { rootMargin: "-20% 0px -60% 0px", threshold: [0, .25, .5, 1] });
+    sections.forEach(function (s) { obs.observe(s); });
+  }
+
+  /* the rail labels change with the language toggle, so relabel on click */
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest("button.chip")) return;
+    sections.forEach(function (sec, i) {
+      links[i].firstChild.textContent = labelFor(sec);
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

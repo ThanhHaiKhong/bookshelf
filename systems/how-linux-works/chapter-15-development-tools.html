@@ -1,0 +1,1557 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 15 · Công cụ phát triển — How Linux Works</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 15 “Development Tools” trong How Linux Works (Brian Ward, No Starch Press, 3rd ed., 2021): trình biên dịch C, object file và linker, thư viện tĩnh và thư viện chia sẻ, ldd và ld.so, make và Makefile, Lex/Yacc, ngôn ngữ kịch bản và Java.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('hlw-reading-mode'),
+l=localStorage.getItem('hlw-lang'),
+t=localStorage.getItem('hlw-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"HOW LINUX WORKS / 15";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    How Linux Works
+    <span>Chương 15 · Development Tools</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 15 · Công cụ phát triển</span>
+      <span class="en-only" lang="en">Chapter 15 · Development Tools</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Mọi chương trình trên máy bạn đều có một tiểu sử: mã nguồn, object file, rồi một lần liên kết</span>
+      <span class="easy-only">Chương trình không mọc ra từ hư không — có người viết, rồi máy dịch</span>
+      <span class="en-only" lang="en">Every program on your machine has a life story: source code, object files, then one act of linking</span>
+    </h1>
+
+    <p class="standard-copy">Brian Ward mở chương bằng một nhận xét nghe có vẻ lạ với người quản trị: trên một máy Linux, <b>bạn không cần là lập trình viên</b> mới cần tới công cụ phát triển.<span class="cite"><a href="#ref-1">1</a></span> Lý do là các công cụ này đóng vai trò lớn hơn trong việc quản trị Linux so với ở các hệ điều hành khác; tối thiểu, bạn nên nhận ra được đâu là một tiện ích phát triển và mường tượng được cách chạy nó.<span class="cite"><a href="#ref-1">1</a></span> Ông cũng nói thẳng rằng chương này nhồi rất nhiều thông tin vào một không gian nhỏ, nhưng bạn không cần thành thạo mọi thứ ở đây.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Bạn không cần biết lập trình mới đọc được chương này. Nhưng nếu bạn dùng máy Linux, bạn sẽ liên tục gặp những cái tên như <code>gcc</code>, <code>make</code>, <code>.so</code>. Biết chúng là gì giúp bạn đỡ hoảng khi một chương trình báo lỗi thiếu thư viện. <b>Nhớ nhé: chương trình nào cũng từng là chữ do người viết ra.</b></p>
+    <p class="en-only" lang="en">Brian Ward opens the chapter with a claim that sounds odd to an administrator: on a Linux machine, <b>you don't have to be a programmer</b> to take advantage of development tools.<span class="cite"><a href="#ref-1">1</a></span> They play a larger role in managing Linux systems than in other operating systems; at the very least, you should be able to identify development utilities and have some idea of how to run them.<span class="cite"><a href="#ref-1">1</a></span> He is also candid that the chapter packs a lot of information into a small space, but that you don't need to master everything in it.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Ward tự xếp hạng nội dung chương giúp bạn: phần bàn về <b>thư viện chia sẻ</b> (<span lang="en">shared libraries</span>) có lẽ là điều quan trọng nhất bạn cần biết ở đây — nhưng để hiểu thư viện chia sẻ đến từ đâu, trước hết bạn cần chút nền tảng về cách dựng chương trình.<span class="cite"><a href="#ref-1">1</a></span> Trang này giữ nguyên thứ tự đó: trình biên dịch trước, thư viện sau, rồi mới tới <code>make</code>.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> chương trình C đi theo một quy trình phát triển truyền thống — bạn viết, bạn biên dịch, rồi chúng chạy; mã người đọc được phải được dịch sang dạng nhị phân mức thấp mà bộ xử lý hiểu.<span class="cite"><a href="#ref-1">1</a></span> Hiểu ba mốc của hành trình đó — <b>biên dịch</b>, <b>liên kết lúc dựng</b>, <b>liên kết lúc chạy</b> — là đủ để giải mã phần lớn thông báo lỗi bạn gặp khi cài phần mềm.</p>
+      <p class="easy-only"><b>Ý chính:</b> chữ người viết → máy dịch thành mảnh nhị phân → ghép các mảnh lại thành chương trình chạy được. Ba bước. <b>Nhớ nhé: viết, dịch, ghép.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> C programs follow a traditional development process — you write them, you compile them, and they run; human-readable code must be compiled into a binary low-level form that the processor understands.<span class="cite"><a href="#ref-1">1</a></span> Grasping the three milestones of that journey — <b>compiling</b>, <b>link time</b>, and <b>run time</b> — is enough to decode most of the error messages you meet while installing software.</p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: mã nguồn C đi qua trình biên dịch thành object file, qua trình liên kết thành chương trình chạy được, và tới lúc chạy thì ld.so nạp các thư viện chia sẻ. Diagram: C source passes through the compiler into object files, through the linker into an executable, and at run time ld.so loads the shared libraries.">
+    <div class="core">
+      <b>Source → Binary</b>
+      <small class="standard-copy">Viết · biên dịch · liên kết · chạy</small>
+      <small class="easy-only">Viết · dịch · ghép · chạy</small>
+      <small class="en-only" lang="en">Write · compile · link · run</small>
+    </div>
+
+    <div class="node">
+      <b>cc / gcc</b>
+      <small class="standard-copy">Biên dịch <code>.c</code> thành object file <code>.o</code> bằng <code>-c</code>; <code>-o</code> đặt tên đầu ra</small>
+      <small class="easy-only">Dịch từng tệp chữ thành một mảnh nhị phân</small>
+      <small class="en-only" lang="en">Compiles <code>.c</code> into a <code>.o</code> object file with <code>-c</code>; <code>-o</code> names the output</small>
+    </div>
+
+    <div class="node">
+      <b>ld</b>
+      <small class="standard-copy">Trình liên kết: ghép object file với thư viện thành chương trình hoàn chỉnh (<span lang="en">link time</span>)</small>
+      <small class="easy-only">Ghép các mảnh lại thành một chương trình</small>
+      <small class="en-only" lang="en">The linker: joins object files and libraries into a complete program (link time)</small>
+    </div>
+
+    <div class="node">
+      <b>ld.so</b>
+      <small class="standard-copy">Trình liên kết/nạp động lúc chạy: tìm và nạp các <code>.so</code> mà chương trình cần (<span lang="en">run time</span>)</small>
+      <small class="easy-only">Lúc chạy mới đi tìm các thư viện dùng chung</small>
+      <small class="en-only" lang="en">The runtime dynamic linker/loader: finds and loads the <code>.so</code> files a program needs (run time)</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#trinh-bien-dich-c">
+    <span>01</span>
+    <b class="standard-copy">Trình biên dịch C và trình liên kết</b>
+    <b class="easy-only">Dịch chữ thành chương trình</b>
+    <b class="en-only" lang="en">The C compiler and the linker</b>
+  </a>
+  <a href="#thu-vien-chia-se">
+    <span>02</span>
+    <b class="standard-copy">Thư viện chia sẻ và ld.so</b>
+    <b class="easy-only">Thư viện dùng chung</b>
+    <b class="en-only" lang="en">Shared libraries and ld.so</b>
+  </a>
+  <a href="#tu-dong-hoa-make">
+    <span>03</span>
+    <b class="standard-copy">make: mục tiêu, phụ thuộc, quy tắc</b>
+    <b class="easy-only">make làm hộ việc lặp đi lặp lại</b>
+    <b class="en-only" lang="en">make: targets, dependencies, rules</b>
+  </a>
+  <a href="#kich-ban-va-java">
+    <span>04</span>
+    <b class="standard-copy">Lex, Yacc, ngôn ngữ kịch bản và Java</b>
+    <b class="easy-only">Những ngôn ngữ khác bạn sẽ gặp</b>
+    <b class="en-only" lang="en">Lex, Yacc, scripting languages and Java</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>05</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="trinh-bien-dich-c" aria-labelledby="trinh-bien-dich-c-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="trinh-bien-dich-c-title">
+      <span class="standard-copy">Trình biên dịch C: từ một tệp chữ tới một chương trình chạy được</span>
+      <span class="easy-only">Máy dịch chữ thành chương trình như thế nào</span>
+      <span class="en-only" lang="en">The C compiler: from a text file to a running program</span>
+    </h2>
+    <p class="standard-copy">Ward nói rằng biết dùng trình biên dịch C cho bạn rất nhiều hiểu biết về <i>nguồn gốc</i> của các chương trình bạn thấy trên hệ thống, bởi phần lớn tiện ích Linux và nhiều ứng dụng được viết bằng C hoặc C++.<span class="cite"><a href="#ref-1">1</a></span> Trên đa số hệ Unix, trình biên dịch C là <b>GNU C compiler</b> — <code>gcc</code>, thường được gọi theo tên truyền thống <code>cc</code> — dù <code>clang</code> mới hơn từ dự án LLVM đang phổ biến dần.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-26">26</a></span></p>
+    <p class="easy-only">Máy tính không đọc được chữ bạn viết. Có một chương trình chuyên đi dịch, tên là <code>gcc</code> (hay <code>cc</code>). Bạn đưa cho nó một tệp chữ, nó trả lại một tệp máy chạy được. <b>Nhớ nhé: gcc là người phiên dịch giữa bạn và máy.</b></p>
+    <p class="en-only" lang="en">Ward says that knowing how to use the C compiler gives you a great deal of insight into the <i>origin</i> of the programs on your system, because most Linux utilities and many applications are written in C or C++.<span class="cite"><a href="#ref-1">1</a></span> On most Unix systems the C compiler is the <b>GNU C compiler</b> — <code>gcc</code>, often referred to by the traditional name <code>cc</code> — though the newer <code>clang</code> from the LLVM project is gaining popularity.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-26">26</a></span></p>
+    <p class="deep-only"><b>Một lưu ý thực tế mà Ward đặt ngay đầu chương.</b> Phần lớn bản phân phối <i>không</i> cài sẵn công cụ biên dịch C. Nếu thiếu, ông chỉ cách cài gói <code>build-essential</code> trên Debian/Ubuntu, hoặc <code>yum groupinstall</code> nhóm “Development Tools” trên Fedora/CentOS; không được nữa thì tìm gói theo từ khoá “gcc” hoặc “C compiler”.<span class="cite"><a href="#ref-1">1</a></span> Đây là chi tiết hay bị bỏ qua nhưng lại là nguyên nhân số một khiến người mới nghĩ rằng “máy mình hỏng”.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Mã nguồn</i> (<span lang="en">source code</span>) là đoạn mã bạn viết ra, và nó có thể trải trên nhiều tệp.<span class="cite"><a href="#ref-1">1</a></span> Tệp mã nguồn C kết thúc bằng <code>.c</code>.<span class="cite"><a href="#ref-1">1</a></span> Ward đối chiếu điều này với các ngôn ngữ kịch bản bàn ở cuối chương, nơi bạn không phải biên dịch gì cả.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Mã nguồn là tệp chữ bạn gõ ra, đuôi <code>.c</code>. Một chương trình lớn thì có nhiều tệp như vậy. <b>Nhớ nhé: đuôi .c là chữ của người, không phải của máy.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <i>Source code</i> is the code you write, and it can encompass many files.<span class="cite"><a href="#ref-1">1</a></span> C source files end in <code>.c</code>.<span class="cite"><a href="#ref-1">1</a></span> Ward contrasts this with the scripting languages discussed later in the chapter, where you don't need to compile anything.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">$ cc hello.c<br>&nbsp;&nbsp;→ a.out<br><br>$ cc -o hello hello.c<br>&nbsp;&nbsp;→ hello<br><br>$ cc -c main.c<br>&nbsp;&nbsp;→ main.o</p>
+      <p class="easy-only">cc hello.c → a.out<br>cc -o hello hello.c → hello<br>cc -c main.c → main.o</p>
+      <p class="en-only" lang="en">$ cc hello.c<br>&nbsp;&nbsp;→ a.out<br><br>$ cc -o hello hello.c<br>&nbsp;&nbsp;→ hello<br><br>$ cc -c main.c<br>&nbsp;&nbsp;→ main.o</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">object file</span>
+      <h3>
+        <span class="standard-copy">Object file — mảnh nhị phân còn dang dở</span>
+        <span class="easy-only">Object file — mảnh ghép chưa hoàn chỉnh</span>
+        <span class="en-only" lang="en">Object file — a binary that is almost finished</span>
+      </h3>
+      <p class="standard-copy">Phần lớn chương trình C quá lớn để nhét vừa một tệp: tệp khổng lồ trở nên lộn xộn với lập trình viên, và đôi khi chính trình biên dịch cũng chật vật xử lý.<span class="cite"><a href="#ref-1">1</a></span> Vì thế người ta tách mã nguồn thành từng mảnh, mỗi mảnh một tệp, rồi dùng tuỳ chọn <code>-c</code> trên từng tệp để tạo <b>object file</b> chứa mã nhị phân sẽ đi vào chương trình cuối cùng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Một chương trình lớn không viết trong một tệp — sẽ rối lắm. Người ta chia ra nhiều tệp, dịch riêng từng tệp thành một mảnh nhị phân gọi là object file (đuôi <code>.o</code>). <b>Nhớ nhé: mỗi tệp chữ cho ra một mảnh ghép.</b></p>
+      <p class="en-only" lang="en">Most C programs are too large to fit reasonably in a single file: mammoth files become disorganized for the programmer, and compilers sometimes have trouble processing them.<span class="cite"><a href="#ref-1">1</a></span> So developers split the source into pieces, one file each, and use the compiler's <code>-c</code> option on each file to create <b>object files</b> containing the binary object code that will eventually go into the final executable.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi bạn chạy <code>make</code> trên một gói phần mềm và thấy hàng chục dòng <code>cc -c ...</code> lướt qua, đó chính là giai đoạn này.</span>
+        <span class="easy-only">Khi màn hình chạy một loạt dòng chữ lúc cài phần mềm.</span>
+        <span class="en-only" lang="en">Every time you run <code>make</code> on a package and dozens of <code>cc -c ...</code> lines scroll past, that is this stage.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao “còn dang dở”</h4>
+          <p>Ward định nghĩa object file là tệp nhị phân mà bộ xử lý <i>gần như</i> hiểu được, trừ vài đầu mối còn lỏng: thứ nhất, hệ điều hành không biết cách khởi động một object file; thứ hai, bạn thường cần ghép vài object file cùng một số thư viện hệ thống mới thành chương trình hoàn chỉnh.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ví dụ hai tệp của tác giả</h4>
+          <p>Ông dùng đúng hai tệp: <code>main.c</code> (khởi động chương trình) và <code>aux.c</code> (làm việc thật). Hai lệnh <code>cc -c main.c</code> và <code>cc -c aux.c</code> làm phần lớn công việc dựng chương trình, cho ra <code>main.o</code> và <code>aux.o</code>.<span class="cite"><a href="#ref-1">1</a></span> Cặp tệp này sẽ quay lại làm ví dụ Makefile ở mục 15.2.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+      <p class="result standard-copy">Mặc định, <code>cc</code> đặt tên tệp object theo tên nguồn với đuôi <code>.o</code>; nếu bạn không dùng <code>-o</code> khi tạo chương trình, kết quả là một tệp tên <code>a.out</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="result en-only" lang="en">By default <code>cc</code> names the object file after the source with a <code>.o</code> suffix; if you don't pass <code>-o</code> when building a program, the result is a file called <code>a.out</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    </li>
+
+    <li>
+      <span class="english-term">linker (ld)</span>
+      <h3>
+        <span class="standard-copy">Trình liên kết — người ghép các mảnh lại</span>
+        <span class="easy-only">Trình liên kết — người dán các mảnh</span>
+        <span class="en-only" lang="en">The linker — the one who joins the pieces</span>
+      </h3>
+      <p class="standard-copy">Để dựng một chương trình chạy được từ một hoặc nhiều object file, bạn phải chạy <b>trình liên kết</b>, lệnh <code>ld</code> trong Unix.<span class="cite"><a href="#ref-1">1</a></span> Tuy nhiên lập trình viên hiếm khi gọi <code>ld</code> trực tiếp trên dòng lệnh, vì trình biên dịch C đã biết cách chạy nó giúp: <code>cc -o myprog main.o aux.o</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Có các mảnh rồi thì cần người dán chúng lại. Người đó tên là <code>ld</code>. Nhưng bạn không phải gọi nó — <code>cc</code> tự gọi hộ. <b>Nhớ nhé: cc vừa dịch vừa gọi thợ dán.</b></p>
+      <p class="en-only" lang="en">To build a fully functioning executable from one or more object files, you must run the <b>linker</b>, the <code>ld</code> command in Unix.<span class="cite"><a href="#ref-1">1</a></span> Programmers rarely use <code>ld</code> on the command line, though, because the C compiler knows how to run the linker for them: <code>cc -o myprog main.o aux.o</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đây là chỗ bạn dễ gặp vấn đề nhất khi dựng phần mềm: Ward nói rõ rằng thư viện chủ yếu vào cuộc ở <b>link time</b>, khi <code>ld</code> tạo chương trình từ các object file.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Lỗi cài phần mềm hay xảy ra đúng ở bước dán này.</span>
+        <span class="en-only" lang="en">This is where you're most likely to have a problem: Ward notes that libraries come into play primarily at <b>link time</b>, when <code>ld</code> creates the executable from object files.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đọc một lỗi “undefined reference”</h4>
+          <p>Ward đưa nguyên văn thông báo lỗi khi bạn quên liên kết với thư viện <span lang="en">curses</span>: <code>badobject.o(.text+0x28): undefined reference to 'initscr'</code>.<span class="cite"><a href="#ref-1">1</a></span> Hai phần quan trọng nhất là tên tệp object và tên hàm: khi trình liên kết xem <code>badobject.o</code>, nó không tìm thấy hàm đó nên không tạo được chương trình.<span class="cite"><a href="#ref-1">1</a></span> Mẹo của ông: tra tên hàm trên web, gần như lúc nào bạn cũng tìm ra trang man hoặc tài liệu chỉ đúng thư viện chứa nó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Nhưng đừng vội đổ cho thư viện</h4>
+          <p>Ward cảnh báo: tham chiếu chưa định nghĩa <i>không phải lúc nào</i> cũng nghĩa là bạn thiếu thư viện — có thể chỉ là một object file của chính chương trình bị bỏ sót trong lệnh liên kết.<span class="cite"><a href="#ref-1">1</a></span> Thường thì dễ phân biệt, vì bạn nhận ra những hàm do chính mình viết.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">-l and -L</span>
+      <h3>
+        <span class="standard-copy">Thư viện C — một bó object file đã dịch sẵn</span>
+        <span class="easy-only">Thư viện — hộp đồ dùng chung</span>
+        <span class="en-only" lang="en">A C library — a bundle of precompiled object files</span>
+      </h3>
+      <p class="standard-copy">Chạy trình biên dịch trên mã nguồn thường không cho đủ mã object để tự nó thành một chương trình hữu ích; bạn cần <b>thư viện</b>.<span class="cite"><a href="#ref-1">1</a></span> Ward định nghĩa gọn: thư viện C là tập hợp các thành phần dùng chung đã biên dịch sẵn, thực chất không hơn một bó object file kèm vài tệp header.<span class="cite"><a href="#ref-1">1</a></span> Ví dụ quen thuộc là thư viện toán chuẩn, nơi nhiều chương trình lấy các hàm lượng giác.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Không ai tự làm lại mọi thứ. Có sẵn những hộp đồ dùng chung — gọi là thư viện — chứa các mảnh đã dịch sẵn, ai cần thì lấy ra ghép vào. <b>Nhớ nhé: thư viện là hộp đồ nghề đi mượn.</b></p>
+      <p class="en-only" lang="en">Running the compiler on source code usually doesn't produce enough object code to make a useful executable on its own; you need <b>libraries</b>.<span class="cite"><a href="#ref-1">1</a></span> Ward's definition is compact: a C library is a collection of common precompiled components, really not much more than a bundle of object files along with some header files.<span class="cite"><a href="#ref-1">1</a></span> The familiar example is the standard math library, which many executables draw on for trigonometric functions.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Với thư viện <span lang="en">curses</span>, tệp cơ bản là <code>libcurses.a</code>, nên tên thư viện là <code>curses</code> và bạn liên kết bằng <code>cc -o badobject badobject.o -lcurses</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span>
+        <span class="easy-only">Tên tệp là <code>libcurses.a</code> thì cờ để gọi nó là <code>-lcurses</code>.</span>
+        <span class="en-only" lang="en">For the curses library the basic file is <code>libcurses.a</code>, so the library name is <code>curses</code> and you link with <code>cc -o badobject badobject.o -lcurses</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Khi thư viện không nằm chỗ mặc định</h4>
+          <p>Thư viện rải rác khắp hệ thống, phần lớn nằm trong một thư mục con tên <code>lib</code>, với <code>/usr/lib</code> là vị trí mặc định của hệ thống.<span class="cite"><a href="#ref-1">1</a></span> Với đường dẫn khác thường, bạn phải báo cho trình liên kết bằng tham số <code>-L</code>: ví dụ của Ward là <code>cc -o badobject badobject.o -lcurses -L/usr/junk/lib -lcrud</code> khi cần <code>libcrud.a</code> trong <code>/usr/junk/lib</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tìm một hàm nằm trong thư viện nào</h4>
+          <p>Ward gợi ý dùng <code>nm</code> với bộ lọc ký hiệu <code>--defined-only</code> — ví dụ <code>nm --defined-only libcurses.a</code> — và dặn trước rằng đầu ra sẽ rất dài.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Ông cũng lưu ý nhiều bản phân phối nay đặt thư viện trong thư mục con theo kiến trúc bên dưới <code>/usr/lib</code>, chẳng hạn <code>/usr/lib/x86_64-linux-gnu/</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+      <p class="result standard-copy">Có một thư viện luôn được gộp vào trừ khi bạn cố tình loại ra: <b>thư viện chuẩn C</b>, tệp cơ bản là <code>libc.a</code>.<span class="cite"><a href="#ref-1">1</a></span> Nhưng hầu hết chương trình trên máy bạn dùng bản <i>chia sẻ</i> của nó — đó là cầu nối sang mục sau.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="result en-only" lang="en">One library is always included unless you specifically exclude it: the <b>C standard library</b>, whose basic file is <code>libc.a</code>.<span class="cite"><a href="#ref-1">1</a></span> But most programs on your system use its <i>shared</i> version — which is the bridge to the next section.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </li>
+
+    <li>
+      <span class="english-term">header files &amp; cpp</span>
+      <h3>
+        <span class="standard-copy">Tệp header và bộ tiền xử lý C</span>
+        <span class="easy-only">Tệp khai báo và người dọn đường</span>
+        <span class="en-only" lang="en">Header files and the C preprocessor</span>
+      </h3>
+      <p class="standard-copy">Header C là các tệp mã nguồn bổ sung, thường chứa khai báo kiểu và khai báo hàm thư viện — <code>stdio.h</code> trong chương trình mẫu là một ví dụ.<span class="cite"><a href="#ref-1">1</a></span> Ward nói thẳng: <b>rất nhiều</b> vấn đề biên dịch liên quan tới header, phần lớn xảy ra khi trình biên dịch không tìm thấy header hoặc thư viện.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ngoài tệp chữ chính, còn có những tệp nhỏ chuyên đi khai báo trước: “có hàm tên này, nhận tham số kiểu kia”. Chúng đuôi <code>.h</code>. Máy không tìm thấy chúng là báo lỗi ngay. <b>Nhớ nhé: đuôi .h là tờ khai, đuôi .c là việc làm thật.</b></p>
+      <p class="en-only" lang="en">C header files are additional source files that usually contain type and library function declarations — <code>stdio.h</code> in the sample program is one.<span class="cite"><a href="#ref-1">1</a></span> Ward is blunt: a great number of compilation problems are related to header files, most of them occurring when the compiler can't find headers or libraries.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lỗi điển hình có dạng <code>badinclude.c:1:22: fatal error: notfound.h: No such file or directory</code>; cách sửa là chỉ thêm thư mục bằng <code>-I</code>, chẳng hạn <code>cc -c -I/usr/junk/include badinclude.c</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+        <span class="easy-only">Thấy dòng “No such file or directory” kèm tên tệp <code>.h</code> là máy đang than không tìm ra tờ khai.</span>
+        <span class="en-only" lang="en">The typical error reads <code>badinclude.c:1:22: fatal error: notfound.h: No such file or directory</code>; the fix is to add the directory with <code>-I</code>, e.g. <code>cc -c -I/usr/junk/include badinclude.c</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ngoặc nhọn hay ngoặc kép</h4>
+          <p>Thư mục include mặc định trong Unix là <code>/usr/include</code>, và trình biên dịch luôn tìm ở đó trừ khi bạn bảo nó đừng.<span class="cite"><a href="#ref-1">1</a></span> Ward dặn để ý các <code>#include</code> dùng ngoặc kép <code>" "</code> thay vì ngoặc nhọn <code>&lt; &gt;</code>: ngoặc kép nghĩa là header <i>không</i> nằm trong thư mục include hệ thống, thường là cùng thư mục với tệp nguồn — gặp trục trặc với dạng này thì nhiều khả năng bạn đang biên dịch mã nguồn không đầy đủ.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ba loại chỉ thị tiền xử lý</h4>
+          <p>Việc đi tìm header không phải do trình biên dịch làm, mà do <b>bộ tiền xử lý C</b>, một chương trình chạy trên mã nguồn trước khi trình biên dịch phân tích chương trình thật.<span class="cite"><a href="#ref-1">1</a></span> Chỉ thị bắt đầu bằng <code>#</code> và có ba loại cơ bản: <i>include</i> (<code>#include</code> chèn nguyên một tệp), <i>định nghĩa macro</i> (<code>#define BLAH something</code> thay mọi chỗ xuất hiện <code>BLAH</code>), và <i>điều kiện</i> (<code>#ifdef</code>, <code>#if</code>, <code>#endif</code>).<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Định nghĩa macro từ dòng lệnh</h4>
+          <p>Thay vì viết <code>#define</code> trong mã nguồn, bạn có thể truyền tham số cho trình biên dịch: <code>-DBLAH=something</code> hoạt động giống hệt chỉ thị <code>#define</code> tương ứng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Trên Unix, bộ tiền xử lý tên là <code>cpp</code>, và bạn cũng chạy được nó bằng <code>gcc -E</code> — dù hiếm khi cần chạy riêng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+      </div>
+      <p class="result standard-copy">Ward khép lại phần này bằng một lời nhắc đáng nhớ: bộ tiền xử lý C không biết gì về cú pháp C, biến, hàm hay các thành phần khác — nó chỉ hiểu macro và chỉ thị của chính nó.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="result en-only" lang="en">Ward closes the section with a line worth remembering: the C preprocessor knows nothing about C syntax, variables, functions or other elements — it understands only its own macros and directives.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đến đây bạn đã có đủ nền để hỏi câu mà Ward coi là quan trọng nhất chương: nếu <code>libc.a</code> được sao chép vào từng chương trình, thì hàng nghìn chương trình trên máy sẽ chứa hàng nghìn bản sao của cùng một mã. Có cách nào tốt hơn không? Câu trả lời là <b>thư viện chia sẻ</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Nếu mỗi chương trình đều tự ôm một bản sao của cùng một hộp đồ, thì máy sẽ đầy những bản sao giống hệt nhau. Có cách khác: để chung một chỗ, ai cần thì mượn. <b>Nhớ nhé: dùng chung thì đỡ tốn.</b></p>
+    <p class="en-only" lang="en">You now have enough background for the question Ward treats as the most important in the chapter: if <code>libc.a</code> were copied into every program, thousands of programs would carry thousands of copies of the same code. Is there a better way? The answer is <b>shared libraries</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="thu-vien-chia-se" aria-labelledby="thu-vien-chia-se-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="thu-vien-chia-se-title">
+      <span class="standard-copy">Thư viện chia sẻ: thứ quan trọng nhất trong chương này</span>
+      <span class="easy-only">Thư viện dùng chung và người đi tìm chúng</span>
+      <span class="en-only" lang="en">Shared libraries: the most important thing in this chapter</span>
+    </h2>
+    <p class="standard-copy">Ward tự xếp hạng: phần bàn về thư viện chia sẻ có lẽ là điều quan trọng nhất bạn cần biết trong chương.<span class="cite"><a href="#ref-1">1</a></span> Ông cũng khẳng định bạn có thể kiểm soát được chúng nếu nắm bốn điều: cách liệt kê thư viện chia sẻ mà một chương trình cần; cách một chương trình đi tìm thư viện chia sẻ; cách liên kết chương trình với thư viện chia sẻ; và cách tránh những cạm bẫy thường gặp.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Đây là phần quan trọng nhất chương. Bốn câu hỏi thôi: chương trình cần những hộp đồ nào? Nó tìm chúng ở đâu? Làm sao nối nó với hộp đồ? Và tránh hỏng bằng cách nào? <b>Nhớ nhé: cần gì, tìm ở đâu, nối thế nào, tránh hỏng ra sao.</b></p>
+    <p class="en-only" lang="en">Ward ranks it himself: the discussion of shared libraries is likely the most important thing you need to know in the chapter.<span class="cite"><a href="#ref-1">1</a></span> He also insists you can bring them under control if you know four things: how to list the shared libraries an executable needs; how an executable looks for shared libraries; how to link a program against one; and how to avoid the common pitfalls.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only"><b>Nếu bạn muốn đi sâu hơn chương này.</b> Ward giới thiệu ba nguồn đọc thêm: quyển <i>Linkers and Loaders</i> của John R. Levine (Morgan Kaufmann, 1999); bài “The Inside Story on Shared Libraries and Dynamic Loading” của David M. Beazley, Brian D. Ward và Ian R. Cooke (<i>Computing in Science &amp; Engineering</i>, số tháng 9–10 năm 2001); và các tài nguyên trực tuyến như <i>Program Library HOWTO</i>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span> Ông nói thêm rằng trang man <code>ld.so(8)</code> cũng đáng đọc.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa đối lập.</b> Tệp thư viện kết thúc bằng <code>.a</code> (như <code>libcurses.a</code>) gọi là <b>thư viện tĩnh</b>: khi liên kết, trình liên kết <i>sao chép</i> mã máy cần thiết từ tệp thư viện vào chương trình của bạn.<span class="cite"><a href="#ref-1">1</a></span> Thư viện chia sẻ có đuôi chứa <code>.so</code> (<span lang="en">shared object</span>), như <code>libc-2.15.so</code> hoặc <code>libc.so.6</code>: liên kết với nó <i>không</i> sao mã vào chương trình, mà chỉ thêm tham chiếu tới tên trong mã của tệp thư viện.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Hai kiểu.</b> Kiểu <code>.a</code>: chép hẳn đồ vào ba lô của mình, nặng nhưng độc lập. Kiểu <code>.so</code>: chỉ ghi lại địa chỉ kho, lúc cần mới tới mượn. <b>Nhớ nhé: .a là chép, .so là mượn.</b></p>
+      <p class="en-only" lang="en"><b>A definition by contrast.</b> A library file ending in <code>.a</code> (like <code>libcurses.a</code>) is a <b>static library</b>: at link time the linker <i>copies</i> the necessary machine code from the library file into your executable.<span class="cite"><a href="#ref-1">1</a></span> A shared library has a suffix containing <code>.so</code> (shared object), as in <code>libc-2.15.so</code> or <code>libc.so.6</code>: linking against it does <i>not</i> copy the code into the executable, it just adds references to names in the library file's code.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">.a&nbsp;&nbsp;→ chép vào chương trình<br>.so → chỉ ghi tham chiếu<br><br>link time&nbsp;&nbsp;→ ld<br>run&nbsp; time&nbsp;&nbsp;→ ld.so<br><br>$ ldd /bin/bash</p>
+      <p class="easy-only">.a&nbsp;&nbsp;→ chép<br>.so → mượn<br>ld&nbsp;&nbsp;&nbsp;→ lúc dựng<br>ld.so → lúc chạy</p>
+      <p class="en-only" lang="en">.a&nbsp;&nbsp;→ copied in<br>.so → referenced only<br><br>link time → ld<br>run&nbsp; time → ld.so<br><br>$ ldd /bin/bash</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">static library</span>
+      <h3>
+        <span class="standard-copy">Thư viện tĩnh — độc lập nhưng đông cứng</span>
+        <span class="easy-only">Chép hẳn vào — chắc chắn nhưng nặng</span>
+        <span class="en-only" lang="en">Static libraries — self-contained but frozen</span>
+      </h3>
+      <p class="standard-copy">Khi đã sao mã vào, chương trình cuối cùng không còn cần tệp thư viện gốc lúc chạy nữa, và hành vi của nó không đổi ngay cả khi tệp <code>.a</code> thay đổi.<span class="cite"><a href="#ref-1">1</a></span> Đó là ưu điểm — và cũng chính là nhược điểm.</p>
+      <p class="easy-only">Chép hẳn vào ba lô thì đi đâu cũng dùng được, không sợ kho đóng cửa. Nhưng ba lô nặng, và nếu kho sửa lại món đồ thì ba lô của bạn vẫn giữ món cũ. <b>Nhớ nhé: chép vào thì an toàn nhưng không cập nhật được.</b></p>
+      <p class="en-only" lang="en">Once the code is copied in, the final executable no longer needs the original library file when it runs, and its behaviour is not subject to change if the <code>.a</code> file changes.<span class="cite"><a href="#ref-1">1</a></span> That is the advantage — and equally the drawback.</p>
+      <div class="opportunity">
+        <b><span class="vi-only">Cái giá phải trả</span><span class="en-only" lang="en">The price</span></b>
+        <span class="standard-copy">Kích thước thư viện luôn tăng, số thư viện dùng cũng tăng, khiến thư viện tĩnh lãng phí cả dung lượng đĩa lẫn bộ nhớ.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Càng nhiều chương trình chép vào thì càng tốn chỗ.</span>
+        <span class="en-only" lang="en">Library sizes keep increasing, as does the number of libraries in use, which makes static libraries wasteful of both disk space and memory.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vấn đề an ninh nghiêm trọng hơn</h4>
+          <p>Ward nêu một hệ quả ít người nghĩ tới: nếu về sau người ta phát hiện một thư viện tĩnh là thiếu sót hoặc không an toàn, thì <i>không có cách nào</i> thay đổi các chương trình đã liên kết với nó, ngoài việc đi tìm và biên dịch lại từng chương trình một.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Nhưng đôi khi tĩnh vẫn là lời giải</h4>
+          <p>Ở cuối mục về cạm bẫy, chính Ward đề xuất dùng bản <i>tĩnh</i> của các thư viện ít tên tuổi như một trong hai giải pháp phòng ngừa, khi API của thư viện có thể đổi nhẹ giữa các phiên bản phụ và làm hỏng phần mềm đã cài.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">ldd</span>
+      <h3>
+        <span class="standard-copy">ldd — liệt kê thư viện mà một chương trình cần</span>
+        <span class="easy-only">ldd — hỏi xem chương trình cần mượn gì</span>
+        <span class="en-only" lang="en">ldd — listing what a program needs</span>
+      </h3>
+      <p class="standard-copy">Để xem một chương trình dùng những thư viện chia sẻ nào, chạy <code>ldd prog</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> Ward lấy chính <span lang="en">shell</span> làm ví dụ, <code>ldd /bin/bash</code>, và đọc kết quả rất rõ ràng: phía <i>trái</i> dấu <code>=&gt;</code> là tên thư viện — thứ mà chương trình biết; phía <i>phải</i> là nơi <code>ld.so</code> tìm thấy thư viện đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Gõ <code>ldd</code> rồi tên chương trình, máy sẽ liệt kê nó cần mượn những gì và mượn ở đâu. <b>Nhớ nhé: ldd là bảng kê đồ đi mượn.</b></p>
+      <p class="en-only" lang="en">To see which shared libraries a program uses, run <code>ldd prog</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> Ward uses the shell itself, <code>ldd /bin/bash</code>, and reads the output plainly: the <i>left</i> of the <code>=&gt;</code> is the library name — what the executable knows; the <i>right</i> is where <code>ld.so</code> found it.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Điều bất ngờ trong đầu ra</span><span class="en-only" lang="en">The surprise in the output</span></b>
+        <span class="standard-copy">Vì hiệu năng và tính linh hoạt, bản thân chương trình chạy thường <b>không biết</b> vị trí thư viện chia sẻ của nó; nó chỉ biết <i>tên</i> thư viện, và có lẽ một gợi ý nhỏ về chỗ tìm.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Chương trình chỉ nhớ tên món đồ, chứ không nhớ kho nào có.</span>
+        <span class="en-only" lang="en">For performance and flexibility, executables usually <b>don't know</b> the locations of their shared libraries; they know only the library <i>names</i>, and perhaps a small hint about where to find them.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Thư viện nằm ở đâu</h4>
+          <p>Tệp thư viện chia sẻ thường ở cùng những chỗ với thư viện tĩnh. Hai thư mục thư viện chuẩn trên hệ Linux là <code>/lib</code> và <code>/usr/lib</code>, dù còn nhiều chỗ khác rải rác — và Ward nhấn mạnh <code>/lib</code> <i>không nên</i> chứa thư viện tĩnh.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Dòng cuối của ldd</h4>
+          <p>Dòng cuối trong đầu ra <code>ldd</code> cho thấy vị trí thật của chính <code>ld.so</code>.<span class="cite"><a href="#ref-1">1</a></span> Trong sách, đoạn văn ghi vị trí đó là <code>/lib/ld-linux.so.2</code>, trong khi đầu ra mẫu ngay phía trên lại in <code>/lib64/ld-linux-x86-64.so.2</code> — khác biệt phản ánh kiến trúc 32-bit hay 64-bit của máy, không phải mâu thuẫn.<span class="cite"><a href="#ref-1">1</a></span> Trang <code>ld.so(8)</code> xác nhận trên một số kiến trúc 64-bit, đường dẫn mặc định là <code>/lib64</code> rồi <code>/usr/lib64</code>.<span class="cite"><a href="#ref-9">9</a></span></p>
+        </div>
+      </div>
+      <p class="result standard-copy">Một chương trình nhỏ tên <code>ld.so</code> — <b>trình liên kết/nạp động lúc chạy</b> — mới là bên tìm và nạp thư viện chia sẻ cho chương trình tại thời điểm chạy.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="result en-only" lang="en">A small program named <code>ld.so</code> — the <b>runtime dynamic linker/loader</b> — is what actually finds and loads shared libraries for a program at run time.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </li>
+
+    <li>
+      <span class="english-term">ld.so search path</span>
+      <h3>
+        <span class="standard-copy">ld.so tìm thư viện theo thứ tự nào</span>
+        <span class="easy-only">Máy đi tìm hộp đồ ở đâu trước</span>
+        <span class="en-only" lang="en">The order in which ld.so searches</span>
+      </h3>
+      <p class="standard-copy">Ward nói đây là một trong những điểm rắc rối phổ biến nhất: trình liên kết động không tìm ra thư viện.<span class="cite"><a href="#ref-1">1</a></span> Theo cách trình bày của ông, chỗ đầu tiên nó nên tìm là <b>đường dẫn tìm kiếm thư viện lúc chạy</b> (<span lang="en">rpath</span>) được cấu hình sẵn trong chương trình, nếu có; kế đó là bộ nhớ đệm hệ thống <code>/etc/ld.so.cache</code>; và còn một chỗ nữa là biến môi trường <code>LD_LIBRARY_PATH</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Khi chạy, máy phải đi tìm các hộp đồ dùng chung. Nó tìm theo thứ tự: chỗ ghi sẵn trong chương trình trước, rồi tới sổ tay tra nhanh của hệ thống. <b>Nhớ nhé: có thứ tự tìm, và thứ tự đó quyết định bạn lấy trúng bản nào.</b></p>
+      <p class="en-only" lang="en">Ward calls this one of the common trouble points: the dynamic linker being unable to find a library.<span class="cite"><a href="#ref-1">1</a></span> In his account, the first place it should normally look is the executable's preconfigured <b>runtime library search path</b> (rpath), if it exists; next a system cache, <code>/etc/ld.so.cache</code>; and there is one more place, the environment variable <code>LD_LIBRARY_PATH</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bộ nhớ đệm đến từ đâu</span><span class="en-only" lang="en">Where the cache comes from</span></b>
+        <span class="standard-copy"><code>/etc/ld.so.cache</code> là bộ đệm nhanh chứa tên các tệp thư viện tìm thấy trong những thư mục liệt kê ở tệp cấu hình <code>/etc/ld.so.conf</code>; hai thư mục chuẩn <code>/lib</code> và <code>/usr/lib</code> là ngầm định nên không cần liệt kê.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span>
+        <span class="easy-only">Sổ tay tra nhanh được dựng từ danh sách thư mục ghi trong <code>/etc/ld.so.conf</code>.</span>
+        <span class="en-only" lang="en"><code>/etc/ld.so.cache</code> is a fast cache of the names of library files found in the directories listed in the configuration file <code>/etc/ld.so.conf</code>; the standard directories <code>/lib</code> and <code>/usr/lib</code> are implicit and need not be listed.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Dựng lại bộ đệm bằng tay</h4>
+          <p>Nếu bạn sửa <code>ld.so.conf</code> hoặc thay đổi một trong các thư mục thư viện chia sẻ, bạn phải dựng lại tệp <code>/etc/ld.so.cache</code> bằng tay với lệnh <code>ldconfig -v</code>; tuỳ chọn <code>-v</code> cho thông tin chi tiết về các thư viện được thêm vào bộ đệm và những thay đổi nó phát hiện.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span> Ward cũng lưu ý rằng <code>ld.so.conf</code> có thể lần lượt nạp thêm nhiều tệp từ một thư mục như <code>/etc/ld.so.conf.d</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Lời khuyên bị bỏ qua nhiều nhất</h4>
+          <p>“Đừng tập thói quen nhét thêm thứ vào <code>/etc/ld.so.conf</code>” — Ward viết rằng bạn nên biết rõ những thư viện chia sẻ nào đang nằm trong bộ đệm hệ thống; nếu tống mọi thư mục thư viện kỳ quặc vào đó, bạn chuốc lấy rủi ro xung đột và một hệ thống cực kỳ mất tổ chức.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Bản thứ tự chính xác của ld.so(8) — và vì sao nó khác</h4>
+          <p>Cách kể của sách gộp <code>LD_LIBRARY_PATH</code> vào cuối như “một chỗ nữa”, rồi ở mục sau lại nói biến này khiến <code>ld.so</code> tìm các thư mục được chỉ định <i>trước mọi thứ khác</i>.<span class="cite"><a href="#ref-1">1</a></span> Trang man <code>ld.so(8)</code> cho thứ tự chuẩn xác gồm năm bước, áp dụng khi tên phụ thuộc không chứa dấu gạch chéo: (1) các thư mục trong thuộc tính <code>DT_RPATH</code> nếu có và <i>không</i> có <code>DT_RUNPATH</code>; (2) biến <code>LD_LIBRARY_PATH</code>, trừ khi chương trình chạy ở chế độ thực thi an toàn; (3) các thư mục trong <code>DT_RUNPATH</code>; (4) bộ đệm <code>/etc/ld.so.cache</code>; (5) đường dẫn mặc định <code>/lib</code> rồi <code>/usr/lib</code>.<span class="cite"><a href="#ref-9">9</a></span> Trang này theo cách trình bày của sách ở phần thân và ghi lại biến thể chính xác ở đây, thay vì lặng lẽ chọn một bên.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">-Wl,-rpath</span>
+      <h3>
+        <span class="standard-copy">rpath và cạm bẫy mang tên LD_LIBRARY_PATH</span>
+        <span class="easy-only">Cách làm đúng và cách làm sai</span>
+        <span class="en-only" lang="en">rpath, and the trap called LD_LIBRARY_PATH</span>
+      </h3>
+      <p class="standard-copy">Khi bạn biên dịch phần mềm cần một đường dẫn thư viện ít gặp, Ward khuyên cấp cho chương trình một đường dẫn tìm kiếm thư viện lúc chạy dựng sẵn bên trong.<span class="cite"><a href="#ref-1">1</a></span> Ví dụ của ông: với <code>libweird.so.1</code> nằm trong <code>/opt/obscure/lib</code>, hãy liên kết bằng <code>cc -o myprog myprog.o -Wl,-rpath=/opt/obscure/lib -L/opt/obscure/lib -lweird</code> — và ông nhấn mạnh rằng dù đã dùng <code>-Wl,-rpath</code>, bạn <i>vẫn</i> cần cờ <code>-L</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <p class="easy-only">Nếu hộp đồ để ở chỗ lạ, cách đúng là ghi luôn địa chỉ đó vào trong chương trình lúc dựng. Cách sai là mỗi lần chạy lại hô to “tìm ở đây này!”. <b>Nhớ nhé: ghi địa chỉ vào chương trình, đừng hô mỗi lần chạy.</b></p>
+      <p class="en-only" lang="en">When you compile software that needs an obscure library path, Ward advises giving the executable a built-in runtime library search path.<span class="cite"><a href="#ref-1">1</a></span> His example: for <code>libweird.so.1</code> in <code>/opt/obscure/lib</code>, link with <code>cc -o myprog myprog.o -Wl,-rpath=/opt/obscure/lib -L/opt/obscure/lib -lweird</code> — and he stresses that even when you use <code>-Wl,-rpath</code>, you still need the <code>-L</code> flag.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Ba điều tệ có thể xảy ra</span><span class="en-only" lang="en">Three bad things</span></b>
+        <span class="standard-copy">Ward liệt kê ba hậu quả khi lạm dụng thư viện chia sẻ: <b>thiếu thư viện</b>, <b>hiệu năng tệ hại</b>, và <b>thư viện không khớp</b>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Ba kiểu hỏng: thiếu đồ, chậm, và lấy nhầm bản.</span>
+        <span class="en-only" lang="en">Ward lists three consequences of abusing shared libraries: <b>missing libraries</b>, <b>terrible performance</b>, and <b>mismatched libraries</b>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Nguyên nhân số một</h4>
+          <p>Ward gọi tên thủ phạm không úp mở: nguyên nhân số một của mọi vấn đề thư viện chia sẻ là biến môi trường <code>LD_LIBRARY_PATH</code>.<span class="cite"><a href="#ref-1">1</a></span> Đặt biến này thành một tập thư mục ngăn cách bằng dấu hai chấm khiến <code>ld.so</code> tìm trong các thư mục đó trước mọi thứ khác.<span class="cite"><a href="#ref-1">1</a></span> Đó là cách rẻ tiền để chữa cháy khi bạn di chuyển thư viện, không có mã nguồn, không dùng được <code>patchelf</code>, hoặc đơn giản là lười biên dịch lại — và theo lời ông, “tiền nào của nấy”.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đừng bao giờ đặt nó ở đâu</h4>
+          <p>Lời khuyên dứt khoát: <i>không bao giờ</i> đặt <code>LD_LIBRARY_PATH</code> trong các tệp khởi động shell hay khi biên dịch phần mềm.<span class="cite"><a href="#ref-1">1</a></span> Khi gặp biến này, trình liên kết động thường phải quét toàn bộ nội dung từng thư mục được chỉ định nhiều lần hơn bạn muốn biết; điều đó gây sụt hiệu năng lớn, nhưng quan trọng hơn là gây xung đột và thư viện không khớp, vì trình liên kết tìm trong các thư mục ấy cho <i>mọi</i> chương trình.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Nếu buộc phải dùng: kịch bản bao</h4>
+          <p>Với một chương trình tồi mà bạn không có mã nguồn — hoặc một ứng dụng bạn không muốn biên dịch lại — Ward chỉ cách gói nó trong một <b>kịch bản bao</b> (<span lang="en">wrapper script</span>): một tệp <code>#!/bin/sh</code> đặt <code>LD_LIBRARY_PATH</code>, <code>export</code> nó, rồi <code>exec</code> tệp nhị phân thật.<span class="cite"><a href="#ref-1">1</a></span> Như vậy biến chỉ sống trong một tiến trình, không lan ra cả hệ thống.</p>
+        </div>
+        <div class="info-block">
+          <h4>Sửa rpath của tệp nhị phân đã có</h4>
+          <p>Nếu cần đổi đường dẫn tìm kiếm thư viện lúc chạy của một tệp nhị phân sẵn có, bạn dùng được chương trình <code>patchelf</code>, nhưng nhìn chung nên làm việc này lúc biên dịch thì hơn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span> Nhân tiện, Ward định nghĩa luôn: <b>ELF</b> — <span lang="en">Executable and Linkable Format</span> — là định dạng chuẩn dùng cho tệp thực thi và thư viện trên hệ Linux.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+        </div>
+      </div>
+      <p class="result standard-copy">Hai giải pháp phòng ngừa tốt nhất, theo Ward: hoặc dùng một phương pháp nhất quán để cài thư viện chia sẻ kèm <code>-Wl,-rpath</code> tạo đường dẫn liên kết lúc chạy, hoặc đơn giản là dùng bản tĩnh của những thư viện ít tên tuổi.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="result en-only" lang="en">The two best preventive solutions, per Ward: either use a consistent methodology to install shared libraries with <code>-Wl,-rpath</code> to create a runtime link path, or simply use the static versions of obscure libraries.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Ngay sau ví dụ hai tệp ở mục 15.1.1, Ward đã cảnh báo trước điều mà mục này làm rõ: dù bạn <i>có thể</i> biên dịch từng tệp nguồn bằng một lệnh riêng, việc theo dõi tất cả chúng trong quá trình biên dịch là rất khó — và càng nhiều tệp nguồn thì càng tệ.<span class="cite"><a href="#ref-1">1</a></span> Công cụ truyền thống của Unix để quản lý và tự động hoá việc biên dịch là <code>make</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Gõ tay từng lệnh dịch cho hai tệp thì được. Hai trăm tệp thì không ai gõ nổi. Vì thế người ta có một công cụ làm hộ, tên là <code>make</code>. <b>Nhớ nhé: việc lặp lại thì để máy làm.</b></p>
+    <p class="en-only" lang="en">Right after the two-file example in 15.1.1, Ward warns of exactly what this section makes concrete: although you <i>can</i> compile each source file with a separate command, it is hard to keep track of them all during the compiling process — and the challenge gets much worse as the number of source files multiplies.<span class="cite"><a href="#ref-1">1</a></span> The traditional Unix standard for managing and automating compiles is <code>make</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="tu-dong-hoa-make" aria-labelledby="tu-dong-hoa-make-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="tu-dong-hoa-make-title">
+      <span class="standard-copy">make: mục tiêu, phụ thuộc, quy tắc — và một ký tự tab</span>
+      <span class="easy-only">make: bảo máy tự làm phần việc lặp lại</span>
+      <span class="en-only" lang="en">make: targets, dependencies, rules — and one tab character</span>
+    </h2>
+    <p class="standard-copy">Một chương trình có nhiều hơn một tệp mã nguồn, hoặc đòi hỏi những tuỳ chọn biên dịch kỳ lạ, thì quá cồng kềnh để biên dịch bằng tay.<span class="cite"><a href="#ref-1">1</a></span> Ward nói bạn nên biết chút ít về <code>make</code> nếu đang chạy một hệ Unix, vì đôi khi chính các tiện ích hệ thống dựa vào nó để hoạt động; khi bạn thấy một tệp tên <code>Makefile</code> hoặc <code>makefile</code>, bạn biết mình đang làm việc với <code>make</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Khi chương trình có nhiều tệp, gõ tay từng lệnh dịch rất mệt và dễ sai. <code>make</code> đọc một tờ hướng dẫn tên <code>Makefile</code> rồi làm thay bạn. <b>Nhớ nhé: thấy tệp tên Makefile là biết có thể gõ make.</b></p>
+    <p class="en-only" lang="en">A program with more than one source file, or one that requires strange compiler options, is too cumbersome to compile by hand.<span class="cite"><a href="#ref-1">1</a></span> Ward says you should know a little about <code>make</code> if you run a Unix system, because system utilities sometimes rely on it to operate; when you see a file named <code>Makefile</code> or <code>makefile</code>, you know you're dealing with <code>make</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only"><b>Phạm vi của chương này, theo lời tác giả.</b> Ward nói rõ chương này chỉ là phần nổi của tảng băng: có hẳn những quyển sách viết riêng về <code>make</code>, chẳng hạn <i>Managing Projects with GNU Make</i>, tái bản lần thứ 3, của Robert Mecklenburg (O’Reilly, 2005).<span class="cite"><a href="#ref-1">1</a></span> Ngoài ra, phần lớn gói phần mềm Linux được dựng bằng một lớp bổ sung nằm trên <code>make</code> hoặc một công cụ tương tự; sách sẽ xem xét một lớp như vậy — <span lang="en">autotools</span> — ở Chương 16.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Ba danh từ.</b> Ý tưởng cơ bản của <code>make</code> là <b>mục tiêu</b> (<span lang="en">target</span>) — một cái đích bạn muốn đạt tới, có thể là một tệp (<code>.o</code>, một chương trình chạy được…) hoặc một nhãn.<span class="cite"><a href="#ref-1">1</a></span> Một số mục tiêu cần mục tiêu khác trước: những yêu cầu đó gọi là <b>phụ thuộc</b> (<span lang="en">dependencies</span>).<span class="cite"><a href="#ref-1">1</a></span> Để dựng một mục tiêu, <code>make</code> đi theo một <b>quy tắc</b> (<span lang="en">rule</span>), chẳng hạn quy tắc đi từ tệp nguồn <code>.c</code> sang tệp object <code>.o</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ba từ thôi.</b> Đích cần đạt, những thứ phải có trước, và cách làm. <b>Nhớ nhé: đích — cần gì trước — làm thế nào.</b></p>
+      <p class="en-only" lang="en"><b>Three nouns.</b> The basic idea behind <code>make</code> is the <b>target</b> — a goal you want to achieve, which can be a file (a <code>.o</code>, an executable, and so on) or a label.<span class="cite"><a href="#ref-1">1</a></span> Some targets depend on other targets; those requirements are called <b>dependencies</b>.<span class="cite"><a href="#ref-1">1</a></span> To build a target, <code>make</code> follows a <b>rule</b>, such as one specifying how to go from a <code>.c</code> source file to a <code>.o</code> object file.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy"># object files<br>OBJS=aux.o main.o<br><br>all: myprog<br><br>myprog: $(OBJS)<br>→&nbsp;&nbsp;$(CC) -o myprog $(OBJS)<br><br><small>→ = một ký tự tab</small></p>
+      <p class="easy-only">all: myprog<br>myprog: aux.o main.o<br>→&nbsp;&nbsp;cc -o myprog ...<br><br><small>→ phải là tab</small></p>
+      <p class="en-only" lang="en"># object files<br>OBJS=aux.o main.o<br><br>all: myprog<br><br>myprog: $(OBJS)<br>→&nbsp;&nbsp;$(CC) -o myprog $(OBJS)<br><br><small>→ = one tab character</small></p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">a sample Makefile</span>
+      <h3>
+        <span class="standard-copy">Đọc một Makefile năm dòng</span>
+        <span class="easy-only">Tờ hướng dẫn ngắn nhất có thể</span>
+        <span class="en-only" lang="en">Reading a five-line Makefile</span>
+      </h3>
+      <p class="standard-copy">Ward dựng tiếp ví dụ <code>aux.c</code> + <code>main.c</code> ở mục 15.1.1 thành một Makefile rất đơn giản tạo ra chương trình <code>myprog</code>.<span class="cite"><a href="#ref-1">1</a></span> Dấu <code>#</code> ở dòng đầu là chú thích; dòng kế là định nghĩa macro đặt biến <code>OBJS</code> thành hai tên tệp object, và bạn tham chiếu lại nó bằng cú pháp <code>$(OBJS)</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Tờ hướng dẫn chỉ có vài dòng: dòng đầu là ghi chú, dòng sau đặt tên tắt cho danh sách tệp, rồi tới các đích cần làm. <b>Nhớ nhé: Makefile chỉ là tờ ghi “muốn gì, cần gì, làm sao”.</b></p>
+      <p class="en-only" lang="en">Ward builds the <code>aux.c</code> + <code>main.c</code> example from 15.1.1 into a very simple Makefile that produces the program <code>myprog</code>.<span class="cite"><a href="#ref-1">1</a></span> The <code>#</code> on the first line denotes a comment; the next line is a macro definition setting <code>OBJS</code> to two object filenames, which you reference later as <code>$(OBJS)</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Mục tiêu đầu tiên là mặc định</span><span class="en-only" lang="en">The first target is the default</span></b>
+        <span class="standard-copy">Mục tiêu đầu tiên trong tệp — ở đây là <code>all</code> — luôn là mặc định, tức mục tiêu <code>make</code> muốn dựng khi bạn chỉ gõ <code>make</code> trần trụi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span></span>
+        <span class="easy-only">Gõ <code>make</code> không kèm gì thì nó làm đích đầu tiên trong tờ hướng dẫn.</span>
+        <span class="en-only" lang="en">The first target in the file — here <code>all</code> — is always the default, the one <code>make</code> wants to build when you run <code>make</code> by itself.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đọc dây chuyền phụ thuộc</h4>
+          <p>Quy tắc dựng một mục tiêu nằm sau dấu hai chấm. Với <code>all</code>, Makefile nói rằng bạn cần thoả mãn thứ gọi là <code>myprog</code> — phụ thuộc đầu tiên trong tệp.<span class="cite"><a href="#ref-1">1</a></span> Ward lưu ý <code>myprog</code> có thể là một tệp thật <i>hoặc</i> mục tiêu của một quy tắc khác; ở đây nó là cả hai.<span class="cite"><a href="#ref-1">1</a></span> Còn <code>$(OBJS)</code> nở ra thành <code>aux.o</code> và <code>main.o</code>, và chúng buộc phải là tệp thật vì không có mục tiêu nào mang tên đó trong Makefile.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đầu ra khi chạy</h4>
+          <p>Chạy <code>make</code> trên Makefile này in ra đúng những lệnh nó đang chạy: <code>cc -c -o aux.o aux.c</code>, <code>cc -c -o main.o main.c</code>, rồi <code>cc -o myprog aux.o main.o</code>.<span class="cite"><a href="#ref-1">1</a></span> Ward kèm theo một sơ đồ (Hình 15-1) vẽ <code>myprog</code> ở trên, <code>main.o</code> và <code>aux.o</code> ở giữa, <code>main.c</code> và <code>aux.c</code> ở dưới.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">built-in rules</span>
+      <h3>
+        <span class="standard-copy">Quy tắc dựng sẵn — và ký tự tab khét tiếng</span>
+        <span class="easy-only">make đã biết sẵn vài việc</span>
+        <span class="en-only" lang="en">Built-in rules — and the notorious tab</span>
+      </h3>
+      <p class="standard-copy">Làm sao <code>make</code> biết cách đi từ <code>aux.c</code> sang <code>aux.o</code>, khi <code>aux.c</code> thậm chí không xuất hiện trong Makefile? Câu trả lời là <code>make</code> có sẵn một số <b>quy tắc dựng sẵn</b>: nó biết đi tìm tệp <code>.c</code> khi bạn muốn một tệp <code>.o</code>, và biết chạy <code>cc -c</code> trên tệp <code>.c</code> đó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+      <p class="easy-only"><code>make</code> đã học thuộc vài việc thường làm, nên bạn không phải dặn. Muốn tệp <code>.o</code> à? Nó tự đi tìm tệp <code>.c</code> cùng tên. <b>Nhớ nhé: có những việc make tự biết, bạn không cần viết ra.</b></p>
+      <p class="en-only" lang="en">How does <code>make</code> know how to get from <code>aux.c</code> to <code>aux.o</code>, when <code>aux.c</code> isn't even in the Makefile? Because <code>make</code> has <b>built-in rules</b>: it knows to look for a <code>.c</code> file when you want a <code>.o</code> file, and knows to run <code>cc -c</code> on that <code>.c</code> file.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Lỗi kinh điển</span><span class="en-only" lang="en">The classic error</span></b>
+        <span class="standard-copy">Khoảng trắng trước <code>$(CC)</code> là một <b>ký tự tab</b>, và <code>make</code> rất nghiêm khắc với tab: bạn phải chèn tab trước mọi lệnh hệ thống nằm trên dòng riêng của nó.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Đầu dòng lệnh phải là phím Tab, không phải dấu cách.</span>
+        <span class="en-only" lang="en">The whitespace before <code>$(CC)</code> is a <b>tab character</b>, and <code>make</code> is very strict about tabs: you must insert a tab before any system command on its own line.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Thông báo lỗi nếu bạn dùng dấu cách</h4>
+          <p>Ward đưa nguyên văn dòng lỗi bạn sẽ gặp: <code>Makefile:7: *** missing separator. &nbsp;Stop.</code><span class="cite"><a href="#ref-1">1</a></span> Lỗi kiểu này nghĩa là Makefile hỏng — tab chính là dấu phân tách, và nếu không có dấu phân tách hoặc có thứ gì khác chen vào, bạn sẽ thấy đúng thông báo đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Bước liên kết cuối cùng</h4>
+          <p>Bước cuối để có <code>myprog</code> hơi rối nhưng ý tưởng thì rõ: sau khi đã có hai tệp object trong <code>$(OBJS)</code>, bạn chạy trình biên dịch C theo dòng <code>$(CC) -o myprog $(OBJS)</code>, trong đó <code>$(CC)</code> nở ra thành tên trình biên dịch.<span class="cite"><a href="#ref-1">1</a></span> Trong bộ quy tắc mặc định của <code>make</code>, <code>CC</code> chính là trình biên dịch C và mặc định là <code>cc</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">dependency updates</span>
+      <h3>
+        <span class="standard-copy">Cập nhật theo phụ thuộc — phản ứng dây chuyền</span>
+        <span class="easy-only">Chỉ làm lại phần nào đã đổi</span>
+        <span class="en-only" lang="en">Dependency updates — the chain reaction</span>
+      </h3>
+      <p class="standard-copy">Nguyên tắc cuối cùng cần nắm: mục đích của <code>make</code> nói chung là đưa các mục tiêu về trạng thái cập nhật so với phụ thuộc của chúng, và nó được thiết kế để chỉ làm <b>số bước tối thiểu</b> cần thiết — điều có thể tiết kiệm rất nhiều thời gian.<span class="cite"><a href="#ref-1">1</a></span> Gõ <code>make</code> hai lần liên tiếp, lần thứ hai bạn nhận được: <code>make: Nothing to be done for 'all'.</code><span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nếu không có gì đổi, <code>make</code> sẽ không làm lại. Nó chỉ làm lại đúng phần nào có tệp mới hơn. <b>Nhớ nhé: đổi tới đâu, làm lại tới đó thôi.</b></p>
+      <p class="en-only" lang="en">The last fundamental: in general <code>make</code>'s goal is to bring targets up to date with their dependencies, and it is designed to take only the <b>minimum steps</b> necessary — which can mean considerable time savings.<span class="cite"><a href="#ref-1">1</a></span> Type <code>make</code> twice in a row and the second run prints <code>make: Nothing to be done for 'all'.</code><span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Thí nghiệm ba bước của tác giả</span><span class="en-only" lang="en">The author's three-step experiment</span></b>
+        <span class="standard-copy">Chạy <code>touch aux.c</code>; chạy lại <code>make</code>: nó xác định <code>aux.c</code> mới hơn <code>aux.o</code> nên biên dịch lại <code>aux.o</code>; và vì <code>myprog</code> phụ thuộc <code>aux.o</code>, mà <code>aux.o</code> giờ mới hơn <code>myprog</code>, nên <code>make</code> phải tạo lại <code>myprog</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Chạm vào một tệp cho nó “mới hơn”, thế là cả dây chuyền làm lại.</span>
+        <span class="en-only" lang="en">Run <code>touch aux.c</code>; run <code>make</code> again: it determines <code>aux.c</code> is newer than <code>aux.o</code> so it recompiles <code>aux.o</code>; and since <code>myprog</code> depends on <code>aux.o</code>, which is now newer than <code>myprog</code>, <code>make</code> must create <code>myprog</code> again.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Chỉ định một mục tiêu, hoặc một macro</h4>
+          <p>Một trong những tuỳ chọn hữu ích nhất là nêu đúng một mục tiêu trên dòng lệnh: với Makefile ở trên, <code>make aux.o</code> nếu bạn chỉ muốn tệp <code>aux.o</code>.<span class="cite"><a href="#ref-1">1</a></span> Bạn cũng định nghĩa được macro ngay trên dòng lệnh — ví dụ <code>make CC=clang</code> để dùng trình biên dịch <code>clang</code> thay cho mặc định <code>cc</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span> Ward nói macro dòng lệnh rất tiện khi thử nghiệm định nghĩa tiền xử lý và thư viện, nhất là với <code>CFLAGS</code> và <code>LDFLAGS</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Chạy make mà không cần Makefile</h4>
+          <p>Nếu quy tắc dựng sẵn khớp với một mục tiêu, bạn có thể nhờ <code>make</code> tạo mục tiêu đó mà không cần Makefile nào: với mã nguồn <code>blah.c</code>, thử <code>make blah</code>.<span class="cite"><a href="#ref-1">1</a></span> Cách này chỉ hợp với chương trình C sơ đẳng nhất; nó hữu dụng nhất khi bạn đụng tới thứ như Fortran, Lex hay Yacc và chưa biết trình biên dịch hoặc tiện ích đó hoạt động ra sao — kể cả khi thất bại, <code>make</code> thường vẫn gợi ý khá tốt về cách dùng công cụ.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hai tuỳ chọn nổi bật</h4>
+          <p>Ward tách riêng hai tuỳ chọn: <code>-n</code> in ra những lệnh cần cho một lần dựng nhưng ngăn <code>make</code> thực sự chạy lệnh nào; và <code>-f file</code> bảo <code>make</code> đọc từ <i>file</i> thay vì <code>Makefile</code> hay <code>makefile</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span><span class="cite"><a href="#ref-15">15</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">macros, variables, targets</span>
+      <h3>
+        <span class="standard-copy">Macro, biến và các mục tiêu quy ước</span>
+        <span class="easy-only">Những cái tên bạn sẽ gặp đi gặp lại</span>
+        <span class="en-only" lang="en">Macros, variables and conventional targets</span>
+      </h3>
+      <p class="standard-copy">Ward phân biệt: <b>macro</b> là thứ thường không đổi sau khi <code>make</code> bắt đầu dựng mục tiêu, còn <b>biến</b> thì thay đổi trong lúc dựng và bắt đầu bằng dấu <code>$</code>.<span class="cite"><a href="#ref-1">1</a></span> Các macro phổ biến nhất: <code>CFLAGS</code> (tuỳ chọn trình biên dịch C), <code>LDFLAGS</code> (tuỳ chọn cho trình liên kết), <code>LDLIBS</code> (tên thư viện, khi bạn không muốn gộp chung với đường dẫn tìm kiếm trong <code>LDFLAGS</code>), <code>CC</code> (trình biên dịch C, mặc định <code>cc</code>), <code>CPPFLAGS</code> (tuỳ chọn tiền xử lý C) và <code>CXXFLAGS</code> (GNU make dùng cho cờ trình biên dịch C++).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+      <p class="easy-only">Trong Makefile có những cái tên viết hoa hay gặp: <code>CC</code> là trình dịch, <code>CFLAGS</code> là các tuỳ chọn cho nó. Biết vài cái tên này là đọc được phần lớn Makefile. <b>Nhớ nhé: chữ hoa là chỗ để chỉnh, không phải chỗ để sợ.</b></p>
+      <p class="en-only" lang="en">Ward draws the line this way: a <b>macro</b> usually doesn't change after <code>make</code> starts building targets, while a <b>variable</b> changes as you build and begins with a dollar sign.<span class="cite"><a href="#ref-1">1</a></span> The most common macros: <code>CFLAGS</code> (C compiler options), <code>LDFLAGS</code> (options for the linker), <code>LDLIBS</code> (library-name options, when you don't want to combine them with the search path in <code>LDFLAGS</code>), <code>CC</code> (the C compiler, default <code>cc</code>), <code>CPPFLAGS</code> (C preprocessor options) and <code>CXXFLAGS</code> (GNU make uses this for C++ compiler flags).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Ba biến tự động</span><span class="en-only" lang="en">Three automatic variables</span></b>
+        <span class="standard-copy"><code>$@</code> nở ra thành mục tiêu hiện tại; <code>$&lt;</code> thành phụ thuộc đầu tiên của mục tiêu; <code>$*</code> thành phần gốc của tên mục tiêu — nếu bạn đang dựng <code>blah.o</code> thì <code>$*</code> là <code>blah</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span></span>
+        <span class="easy-only">Ba ký hiệu tắt: đích đang làm, thứ đầu tiên nó cần, và phần tên không có đuôi.</span>
+        <span class="en-only" lang="en"><code>$@</code> expands to the current target; <code>$&lt;</code> to the target's first dependency; <code>$*</code> to the basename or stem of the current target — building <code>blah.o</code>, <code>$*</code> is <code>blah</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Sáu mục tiêu quy ước</h4>
+          <p>Hầu hết nhà phát triển thêm vài mục tiêu chung vào Makefile của họ.<span class="cite"><a href="#ref-1">1</a></span> <code>clean</code> gần như luôn có mặt: <code>make clean</code> thường bảo <code>make</code> xoá mọi tệp object và chương trình để bạn khởi đầu lại từ đầu hoặc đóng gói phần mềm.<span class="cite"><a href="#ref-1">1</a></span> <code>distclean</code> — luôn có trong Makefile do <span lang="en">autotools</span> sinh ra — xoá mọi thứ không thuộc bản phân phối gốc, kể cả chính Makefile.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span> <code>install</code> chép tệp và chương trình đã biên dịch tới nơi Makefile cho là đúng chỗ trên hệ thống — việc này có thể nguy hiểm, nên Ward dặn <i>luôn</i> chạy <code>make -n install</code> trước để xem điều gì sẽ xảy ra.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ba mục tiêu còn lại</h4>
+          <p><code>test</code> hoặc <code>check</code> được một số nhà phát triển cung cấp để chắc rằng mọi thứ hoạt động sau khi dựng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span> <code>depend</code> tạo các phụ thuộc bằng cách gọi trình biên dịch với <code>-M</code> để xem xét mã nguồn — một mục tiêu trông lạ vì nó thường sửa chính Makefile; Ward nói cách làm này không còn phổ biến, nhưng nếu gặp hướng dẫn bảo dùng thì hãy dùng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Còn <code>all</code> thường là mục tiêu đầu tiên trong Makefile, và bạn sẽ thấy người ta tham chiếu tới nó thay vì tới một tệp thực thi cụ thể.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tổ chức một Makefile</h4>
+          <p>Ward đưa vài quy tắc ngón tay cái: ở phần đầu Makefile, trong các định nghĩa macro, thư viện và include nên được nhóm theo gói; mỗi loại cờ biên dịch và cờ liên kết thường có macro riêng; và tệp object thường được nhóm theo tệp thực thi.<span class="cite"><a href="#ref-1">1</a></span> Ông cảnh báo không nên gộp hai mục tiêu thực thi vào một quy tắc: ngoài chuyện khó tách rời về sau, phụ thuộc sẽ <i>sai</i> — chương trình này sẽ phụ thuộc vào mã nguồn của chương trình kia, và <code>make</code> sẽ luôn dựng lại cả hai mỗi khi bạn sửa một trong hai tệp nguồn.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một quy ước về vị trí</h4>
+          <p>Nếu bạn cần định nghĩa quy tắc riêng cho một tệp object, Ward khuyên đặt quy tắc đó ngay <i>trên</i> quy tắc dựng tệp thực thi; nếu nhiều tệp thực thi cùng dùng một tệp object, hãy đặt quy tắc cho object đó phía trên tất cả các quy tắc thực thi.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+      <p class="result standard-copy">Ward khép mục bằng một cảnh báo về tính di động: GNU make có nhiều phần mở rộng, quy tắc dựng sẵn và tính năng mà các biến thể khác không có — ổn khi bạn chạy Linux, nhưng bước sang một máy Solaris hay BSD thì bạn có thể bất ngờ; đó chính là bài toán mà một hệ thống dựng đa nền tảng như GNU <span lang="en">autotools</span> sinh ra để giải.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="result en-only" lang="en">Ward closes the section with a portability warning: GNU make has many extensions, built-in rules and features other variants lack — fine while you're on Linux, but step onto a Solaris or BSD machine and you may be in for a surprise; that is exactly the problem a multiplatform build system such as GNU autotools is designed to solve.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đến đây chương đã đi hết trục “biên dịch – liên kết – tự động hoá” của C. Phần còn lại mở rộng tầm nhìn: những công cụ dựng nên <i>chính</i> ngôn ngữ lập trình (Lex và Yacc), những ngôn ngữ không cần biên dịch (kịch bản), và một ngôn ngữ biên dịch ra thứ khác hẳn mã máy (Java).<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Xong phần C rồi. Giờ tới các công cụ và ngôn ngữ khác mà bạn sẽ gặp trên máy Linux. <b>Nhớ nhé: không phải ngôn ngữ nào cũng cần dịch trước khi chạy.</b></p>
+    <p class="en-only" lang="en">The chapter has now covered the compile–link–automate axis of C. What remains widens the view: the tools that build programming languages themselves (Lex and Yacc), the languages that need no compiling (scripting), and one that compiles to something other than machine code (Java).<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="kich-ban-va-java" aria-labelledby="kich-ban-va-java-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="kich-ban-va-java-title">
+      <span class="standard-copy">Lex, Yacc, ngôn ngữ kịch bản và Java</span>
+      <span class="easy-only">Những công cụ và ngôn ngữ khác trên máy</span>
+      <span class="en-only" lang="en">Lex, Yacc, scripting languages and Java</span>
+    </h2>
+    <p class="standard-copy">Ba mục cuối của chương ngắn hơn nhưng không kém hữu dụng: chúng giúp bạn nhận diện những thứ sẽ hiện ra trong quá trình biên dịch gói phần mềm, hoặc trong các tệp thực thi bạn mở ra xem.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Ba phần cuối ngắn thôi: hai công cụ để làm ra ngôn ngữ, một nhóm ngôn ngữ chạy thẳng không cần dịch, và Java. <b>Nhớ nhé: biết mặt là đủ, chưa cần biết dùng.</b></p>
+    <p class="en-only" lang="en">The chapter's last three sections are shorter but no less useful: they help you recognise things that turn up while compiling packages, or inside executables you open to inspect.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Dòng đầu tiên nói lên tất cả.</b> Điều đầu tiên cần biết về bất kỳ ngôn ngữ kịch bản nào là dòng đầu của một kịch bản trông giống <span lang="en">shebang</span> của kịch bản Bourne shell.<span class="cite"><a href="#ref-1">1</a></span> Một kịch bản Python bắt đầu bằng <code>#!/usr/bin/python</code>, hoặc bản <code>#!/usr/bin/env python</code> chạy phiên bản Python đầu tiên tìm thấy trong đường dẫn lệnh thay vì luôn vào <code>/usr/bin</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nhìn dòng đầu là biết.</b> Kịch bản nào cũng mở đầu bằng <code>#!</code> rồi tên chương trình sẽ chạy nó. <b>Nhớ nhé: dòng #! là tấm biển chỉ “ai sẽ đọc tệp này”.</b></p>
+      <p class="en-only" lang="en"><b>The first line says it all.</b> The first thing to know about any scripting language is that a script's first line looks like the shebang of a Bourne shell script.<span class="cite"><a href="#ref-1">1</a></span> A Python script starts with <code>#!/usr/bin/python</code>, or the variant <code>#!/usr/bin/env python</code>, which runs the first Python in the command path instead of always going to <code>/usr/bin</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#!/usr/bin/python<br>#!/usr/bin/env python<br><br>$ java file.class<br>$ java -jar file.jar<br>$ javac file.java</p>
+      <p class="easy-only">#!/usr/bin/python<br>java file.class<br>javac file.java</p>
+      <p class="en-only" lang="en">#!/usr/bin/python<br>#!/usr/bin/env python<br><br>$ java file.class<br>$ java -jar file.jar<br>$ javac file.java</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">Lex and Yacc</span>
+      <h3>
+        <span class="standard-copy">Lex và Yacc — những viên gạch dựng nên ngôn ngữ</span>
+        <span class="easy-only">Hai công cụ để chế ra ngôn ngữ</span>
+        <span class="en-only" lang="en">Lex and Yacc — building blocks for languages</span>
+      </h3>
+      <p class="standard-copy">Bạn có thể gặp Lex và Yacc khi biên dịch các chương trình đọc tệp cấu hình hoặc đọc lệnh; Ward gọi chúng là những viên gạch xây nên ngôn ngữ lập trình.<span class="cite"><a href="#ref-1">1</a></span> <b>Lex</b> là bộ tách token, biến văn bản thành các thẻ được đánh số kèm nhãn; bản GNU/Linux tên là <code>flex</code>, và bạn có thể cần cờ liên kết <code>-ll</code> hoặc <code>-lfl</code> đi kèm.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span></p>
+      <p class="easy-only">Hai công cụ này dùng để làm ra ngôn ngữ mới. Một cái cắt văn bản thành từng từ, cái kia xem các từ đó ghép lại có đúng ngữ pháp không. <b>Nhớ nhé: một cái cắt từ, một cái soát ngữ pháp.</b></p>
+      <p class="en-only" lang="en">You might encounter Lex and Yacc while compiling programs that read configuration files or commands; Ward calls them building blocks for programming languages.<span class="cite"><a href="#ref-1">1</a></span> <b>Lex</b> is a tokenizer that transforms text into numbered tags with labels; the GNU/Linux version is named <code>flex</code>, and you may need a <code>-ll</code> or <code>-lfl</code> linker flag alongside it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Yacc và bison</span><span class="en-only" lang="en">Yacc and bison</span></b>
+        <span class="standard-copy"><b>Yacc</b> là bộ phân tích cú pháp, cố đọc các token theo một văn phạm; bộ phân tích của GNU là <code>bison</code>, và để có tính tương thích Yacc thì chạy <code>bison -y</code>. Bạn có thể cần cờ liên kết <code>-ly</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span><span class="cite"><a href="#ref-20">20</a></span></span>
+        <span class="easy-only">Bản GNU của Yacc tên là <code>bison</code>; thêm <code>-y</code> để nó cư xử như Yacc cũ.</span>
+        <span class="en-only" lang="en"><b>Yacc</b> is a parser that attempts to read tokens according to a grammar; the GNU parser is <code>bison</code>, and for Yacc compatibility you run <code>bison -y</code>. You may need the <code>-ly</code> linker flag.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span><span class="cite"><a href="#ref-20">20</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao lại cần một cờ thư viện lạ</h4>
+          <p>Sách chỉ nói bạn “có thể cần” các cờ đó mà không giải thích. Tài liệu flex cho biết lý do: bạn phải cung cấp hàm <code>yywrap()</code> của riêng mình, hoặc liên kết với <code>libfl.a</code> (thư viện này cung cấp sẵn một bản), hoặc dùng <code>%option noyywrap</code> trong mã nguồn để nói rằng bạn không cần hàm đó.<span class="cite"><a href="#ref-19">19</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Thứ tự của hai cờ có ý nghĩa</h4>
+          <p>Chuẩn POSIX nêu một chi tiết đáng nhớ: cả thư viện lex lẫn thư viện yacc đều chứa hàm <code>main()</code>, nên khi dùng cả hai, thứ tự <code>-l y -l l</code> bảo đảm thư viện yacc được tìm trước và <code>main()</code> của nó được dùng.<span class="cite"><a href="#ref-20">20</a></span> Đây là kiểu chi tiết khiến một lỗi liên kết trông khó hiểu bỗng trở nên hiển nhiên.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">scripting languages</span>
+      <h3>
+        <span class="standard-copy">Ngôn ngữ kịch bản — chạy thẳng, không qua biên dịch</span>
+        <span class="easy-only">Ngôn ngữ chạy thẳng</span>
+        <span class="en-only" lang="en">Scripting languages — run directly, no compiling</span>
+      </h3>
+      <p class="standard-copy">Đã có thời người quản trị Unix trung bình không phải bận tâm gì ngoài Bourne shell và <code>awk</code>; kịch bản shell vẫn là phần quan trọng của Unix, nhưng <code>awk</code> đã phai nhạt phần nào, trong khi nhiều hậu duệ mạnh mẽ nổi lên — thậm chí nhiều chương trình hệ thống đã chuyển từ C sang ngôn ngữ kịch bản.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Có những ngôn ngữ không cần dịch trước: bạn viết xong là chạy được luôn. Python và Perl là hai cái tên quen nhất. <b>Nhớ nhé: viết xong chạy ngay, không qua bước dịch.</b></p>
+      <p class="en-only" lang="en">There was a time when the average Unix systems manager didn't have to worry about much beyond the Bourne shell and <code>awk</code>; shell scripts remain an important part of Unix, but <code>awk</code> has faded somewhat, while many powerful successors have emerged — and many system programs have actually switched from C to scripting languages.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Hai ngôn ngữ Ward dành hẳn một mục</span><span class="en-only" lang="en">The two that get their own sections</span></b>
+        <span class="standard-copy"><b>Python</b> có lượng người dùng đông đảo và nhiều tính năng mạnh — xử lý văn bản, truy cập cơ sở dữ liệu, mạng, đa luồng — cùng chế độ tương tác mạnh và mô hình đối tượng rất có tổ chức; tệp thực thi của nó là <code>python</code>, thường nằm trong <code>/usr/bin</code>.<span class="cite"><a href="#ref-1">1</a></span> <b>Perl</b> là một trong những ngôn ngữ kịch bản Unix bên thứ ba lâu đời nhất, “cưa xích đa năng” của giới lập trình; dù đã mất khá nhiều chỗ đứng vào tay Python những năm gần đây, nó vẫn xuất sắc ở xử lý văn bản, chuyển đổi và thao tác tệp.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Python thì hiện đại và dễ học; Perl thì cũ hơn nhưng rất giỏi cắt gọt văn bản.</span>
+        <span class="en-only" lang="en"><b>Python</b> has a strong following and an array of powerful features — text processing, database access, networking, multithreading — plus a powerful interactive mode and a very organized object model; its executable is <code>python</code>, usually in <code>/usr/bin</code>.<span class="cite"><a href="#ref-1">1</a></span> <b>Perl</b> is one of the older third-party Unix scripting languages, the original "Swiss army chainsaw" of programming tools; although it has lost ground to Python in recent years, it still excels at text processing, conversion and file manipulation.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cơ chế phía sau dòng #!</h4>
+          <p>Một tệp văn bản thực thi bắt đầu bằng <code>#!</code> là một kịch bản; đường dẫn theo sau tiền tố đó là tệp thực thi của trình thông dịch.<span class="cite"><a href="#ref-1">1</a></span> Khi Unix cố chạy một tệp thực thi bắt đầu bằng <code>#!</code>, nó chạy chương trình đứng sau <code>#!</code> với phần còn lại của tệp làm đầu vào chuẩn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-22">22</a></span> Ward minh hoạ bằng một kịch bản chỉ có <code>#!/usr/bin/tail -2</code> ở dòng đầu — và nó vẫn là một kịch bản hợp lệ.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Lỗi cơ bản hay gặp nhất</h4>
+          <p>Dòng đầu của một kịch bản shell thường chứa một trong những lỗi cơ bản phổ biến nhất: đường dẫn tới trình thông dịch không hợp lệ.<span class="cite"><a href="#ref-1">1</a></span> Ward đưa nguyên văn thông báo: <code>bash: ./myscript: /usr/bin/tail: bad interpreter: No such file or directory</code>.<span class="cite"><a href="#ref-1">1</a></span> Ông cũng dặn đừng trông đợi nhiều hơn một tham số ở dòng đầu hoạt động đúng: <code>-2</code> có thể chạy được, nhưng thêm một tham số nữa thì hệ thống có thể gộp cả hai thành một tham số lớn, kể cả khoảng trắng — điều này khác nhau giữa các hệ thống.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-22">22</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Danh sách “bạn có thể gặp”</h4>
+          <p>Ward liệt kê thêm: <b>PHP</b> (xử lý siêu văn bản, thường thấy trong kịch bản web động), <b>Ruby</b>, <b>JavaScript</b> (trong đó bản cài đặt <span lang="en">Node.js</span> ngày càng phổ biến ở lập trình phía máy chủ, tên tệp thực thi là <code>node</code>), <b>Emacs Lisp</b>, <b>MATLAB</b> và <b>Octave</b>, <b>R</b>, <b>Mathematica</b>, <b>m4</b> (ngôn ngữ xử lý macro, thường chỉ gặp trong GNU autotools) và <b>Tcl</b> — ngôn ngữ đơn giản thường đi cùng bộ công cụ giao diện Tk và tiện ích tự động hoá Expect.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-25">25</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">Java bytecode</span>
+      <h3>
+        <span class="standard-copy">Java — biên dịch, nhưng không ra mã máy</span>
+        <span class="easy-only">Java — dịch ra một thứ ở giữa</span>
+        <span class="en-only" lang="en">Java — compiled, but not to machine code</span>
+      </h3>
+      <p class="standard-copy">Java là ngôn ngữ biên dịch như C, với cú pháp đơn giản hơn và hỗ trợ mạnh cho lập trình hướng đối tượng; nó có vài chỗ đứng riêng trên hệ Unix — thường làm môi trường ứng dụng web, và ứng dụng Android thường được viết bằng Java.<span class="cite"><a href="#ref-1">1</a></span> Có <b>hai loại trình biên dịch Java</b>: trình biên dịch bản địa sinh mã máy cho hệ thống của bạn (như trình biên dịch C), và trình biên dịch <span lang="en">bytecode</span> dành cho một trình thông dịch bytecode — và trên Linux bạn gần như luôn gặp bytecode.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Java cũng phải dịch, nhưng không dịch thẳng ra tiếng của máy. Nó dịch ra một thứ ở giữa, rồi một chương trình khác đọc thứ ở giữa đó mà chạy. <b>Nhớ nhé: Java dịch ra “tiếng trung gian”, chạy được trên nhiều loại máy.</b></p>
+      <p class="en-only" lang="en">Java is a compiled language like C, with simpler syntax and powerful support for object-oriented programming; it has a few niches on Unix systems — often as a web application environment, and Android applications are usually written in Java.<span class="cite"><a href="#ref-1">1</a></span> There are <b>two kinds of Java compiler</b>: native compilers producing machine code for your system (like a C compiler), and bytecode compilers for use by a bytecode interpreter — and on Linux you'll practically always encounter bytecode.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bốn lệnh cần nhớ</span><span class="en-only" lang="en">Four commands to remember</span></b>
+        <span class="standard-copy">Tệp bytecode Java kết thúc bằng <code>.class</code>, và <span lang="en">Java Runtime Environment</span> (JRE) chứa mọi chương trình cần để chạy chúng: <code>java file.class</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span> Với tệp <code>.jar</code> — vốn là tập hợp các tệp <code>.class</code> được lưu trữ — cú pháp là <code>java -jar file.jar</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span> Muốn biên dịch <code>.java</code> thành bytecode, bạn cần <span lang="en">Java Development Kit</span> (JDK) và chạy <code>javac file.java</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-24">24</a></span></span>
+        <span class="easy-only"><code>java</code> để chạy, <code>javac</code> để dịch, <code>-jar</code> để chạy cả gói.</span>
+        <span class="en-only" lang="en">Java bytecode files end in <code>.class</code>, and the Java Runtime Environment (JRE) contains everything needed to run them: <code>java file.class</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span> For <code>.jar</code> files — collections of archived <code>.class</code> files — the syntax is <code>java -jar file.jar</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span> To compile <code>.java</code> into bytecode you need the Java Development Kit (JDK) and run <code>javac file.java</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-24">24</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hai biến môi trường</h4>
+          <p>Đôi khi bạn cần đặt biến <code>JAVA_HOME</code> trỏ tới tiền tố cài đặt Java.<span class="cite"><a href="#ref-1">1</a></span> Nếu thật sự xui, bạn có thể phải dùng <code>CLASSPATH</code> để bao gồm các thư mục chứa lớp mà chương trình của bạn cần — đây là một tập thư mục ngăn cách bằng dấu hai chấm, giống biến <code>PATH</code> thông thường cho tệp thực thi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>jar làm việc như tar</h4>
+          <p>JDK cũng đi kèm <code>jar</code>, một chương trình tạo và tháo rời tệp <code>.jar</code>; Ward nói ngắn gọn rằng nó hoạt động giống <code>tar</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-24">24</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một phân biệt dễ nhầm</h4>
+          <p>Trình thông dịch bytecode đôi khi được gọi là <b>máy ảo</b> (<span lang="en">virtual machine</span>) — và Ward dặn rõ rằng đây <i>không</i> phải loại máy ảo do một <span lang="en">hypervisor</span> cung cấp như mô tả ở Chương 17.<span class="cite"><a href="#ref-1">1</a></span> Hai khái niệm trùng tên nhưng ở hai tầng hoàn toàn khác nhau.</p>
+        </div>
+      </div>
+      <p class="result standard-copy">Ward kết chương bằng cái nhìn tới trước: thế giới trình biên dịch và ngôn ngữ kịch bản rất rộng và không ngừng mở rộng; tại thời điểm ông viết, các ngôn ngữ biên dịch mới như Go (<span lang="en">golang</span>) và Rust đang phổ biến dần, còn bộ hạ tầng trình biên dịch LLVM đã giúp việc phát triển trình biên dịch dễ đi đáng kể.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-26">26</a></span></p>
+      <p class="result en-only" lang="en">Ward ends the chapter looking forward: the world of compilers and scripting languages is vast and constantly expanding; as of his writing, newer compiled languages such as Go (golang) and Rust were gaining popularity, while the LLVM compiler infrastructure has significantly eased compiler development.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-26">26</a></span></p>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Và đó chính là cầu nối sang chương sau. Ward viết rằng giờ khi bạn đã biết những điều cơ bản về công cụ lập trình trên hệ thống, bạn đã sẵn sàng xem chúng làm được gì — chương kế tiếp nói về cách dựng gói phần mềm trên Linux từ mã nguồn.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Biết mặt công cụ rồi thì bước tiếp theo là dùng chúng để cài phần mềm từ mã nguồn. <b>Nhớ nhé: chương sau là lúc đem đồ nghề ra dùng thật.</b></p>
+    <p class="en-only" lang="en">And that is the bridge to the next chapter. Ward writes that now you know the basics of the programming tools on the system, you're ready to see what they can do — the next chapter is all about building packages on Linux from source code.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== MISCONCEPTIONS ===================== -->
+<section class="section" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Đính chính</span>
+      <span class="en-only" lang="en">Corrections</span>
+    </p>
+    <h2 id="ngo-nhan-title">
+      <span class="standard-copy">Ba ngộ nhận mà người đọc lần đầu hay mắc</span>
+      <span class="easy-only">Ba chỗ hay hiểu nhầm</span>
+      <span class="en-only" lang="en">Three misconceptions first readers hit</span>
+    </h2>
+    <p class="standard-copy">Phần này thuộc mức đọc <b>Đầy đủ</b>: nó đối chiếu điều người đọc thường nghĩ với điều bản văn thật sự nói.</p>
+    <p class="easy-only">Phần này hơi khó, bạn có thể bỏ qua và quay lại sau. <b>Nhớ nhé: hiểu chậm mà chắc vẫn hơn.</b></p>
+    <p class="en-only" lang="en">This block belongs to the <b>Đầy đủ</b> (full) reading level: it sets what readers usually assume against what the text actually says.</p>
+  </div>
+
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Tệp thực thi biết thư viện của nó nằm ở đâu”</span>
+          <span class="en-only" lang="en">"An executable knows where its libraries live"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> đường dẫn tuyệt đối tới từng <code>.so</code> được ghi sẵn trong chương trình lúc biên dịch.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> vì hiệu năng và tính linh hoạt, tệp thực thi thường <i>không</i> biết vị trí thư viện chia sẻ của nó — nó chỉ biết <i>tên</i> thư viện, và có lẽ một gợi ý nhỏ về chỗ tìm; chính <code>ld.so</code> mới đi tìm và nạp lúc chạy.<span class="cite"><a href="#ref-1">1</a></span> Đó cũng là lý do đầu ra <code>ldd</code> có hai phía: tên ở bên trái, nơi tìm thấy ở bên phải.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> the absolute path to each <code>.so</code> is baked into the program at compile time.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> for performance and flexibility, executables usually do <i>not</i> know the locations of their shared libraries — they know only the library <i>names</i>, and perhaps a small hint about where to look; it is <code>ld.so</code> that finds and loads them at run time.<span class="cite"><a href="#ref-1">1</a></span> That is also why <code>ldd</code> output has two sides: the name on the left, where it was found on the right.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Thiếu thư viện thì cứ đặt LD_LIBRARY_PATH là xong”</span>
+          <span class="en-only" lang="en">"Missing a library? Just set LD_LIBRARY_PATH"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> thêm một dòng <code>export LD_LIBRARY_PATH=...</code> vào tệp khởi động shell là cách sửa hợp lệ.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> biến môi trường này là <b>nguyên nhân số một</b> của mọi vấn đề thư viện chia sẻ, và Ward nói thẳng: <i>không bao giờ</i> đặt nó trong tệp khởi động shell hay khi biên dịch phần mềm.<span class="cite"><a href="#ref-1">1</a></span> Lý do: trình liên kết động thường phải quét toàn bộ nội dung mỗi thư mục nhiều lần, gây sụt hiệu năng lớn, và quan trọng hơn là gây xung đột cùng thư viện không khớp vì nó tìm trong các thư mục đó cho <i>mọi</i> chương trình.<span class="cite"><a href="#ref-1">1</a></span> Nếu buộc phải dùng, hãy giới hạn nó trong một kịch bản bao.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> adding an <code>export LD_LIBRARY_PATH=...</code> line to a shell startup file is a legitimate fix.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> this environment variable is the <b>number one cause</b> of all shared library problems, and Ward is explicit: <i>never</i> set it in shell startup files or when compiling software.<span class="cite"><a href="#ref-1">1</a></span> The reason: the dynamic linker often must search the entire contents of each specified directory many times over, causing a big performance hit, and more importantly conflicts and mismatched libraries, because it looks in those directories for <i>every</i> program.<span class="cite"><a href="#ref-1">1</a></span> If you must use it, confine it to a wrapper script.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Khoảng trắng nào ở đầu dòng lệnh cũng được”</span>
+          <span class="en-only" lang="en">"Any whitespace at the start of a command line will do"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> Makefile chỉ cần thụt đầu dòng cho đẹp, dùng dấu cách hay tab đều như nhau.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> khoảng trắng trước <code>$(CC)</code> là một <b>tab</b>, và <code>make</code> rất nghiêm khắc với tab; bạn phải chèn tab trước mọi lệnh hệ thống trên dòng riêng của nó.<span class="cite"><a href="#ref-1">1</a></span> Dùng dấu cách, bạn nhận đúng dòng lỗi <code>Makefile:7: *** missing separator. &nbsp;Stop.</code> — tab chính là dấu phân tách.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> the indent in a Makefile is cosmetic, so spaces and tabs are interchangeable.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> the whitespace before <code>$(CC)</code> is a <b>tab</b>, and <code>make</code> is very strict about tabs; you must insert a tab before any system command on its own line.<span class="cite"><a href="#ref-1">1</a></span> Use spaces and you get exactly the error <code>Makefile:7: *** missing separator. &nbsp;Stop.</code> — the tab <i>is</i> the separator.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="tu-kiem-tra" aria-labelledby="tu-kiem-tra-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm tra</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="tu-kiem-tra-title">
+      <span class="standard-copy">Bạn đã nắm hành trình từ mã nguồn tới chương trình chưa?</span>
+      <span class="easy-only">Thử trả lời xem nào</span>
+      <span class="en-only" lang="en">Do you have the source-to-program journey yet?</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Trả lời bằng lời của bạn, không tra sách. Nếu một câu khiến bạn ngập ngừng, đó chính là mục bạn nên đọc lại.</p>
+      <p class="easy-only">Thử trả lời miệng thôi, không cần giở lại. Câu nào bí thì quay lại đọc phần đó nhé. <b>Nhớ nhé: chỗ bí chính là chỗ cần học.</b></p>
+      <p class="en-only" lang="en">Answer in your own words, without looking back. Whichever question makes you hesitate points at the section you should reread.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Tuỳ chọn <code>-c</code> khác tuỳ chọn <code>-o</code> ở chỗ nào, và mỗi cái cho ra loại tệp gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: nếu bạn không dùng <code>-o</code> khi dựng chương trình thì tệp kết quả tên là gì?</p>
+      </li>
+      <li>
+        <p>Vì sao một object file chưa phải là chương trình chạy được? Kể hai lý do Ward nêu.</p>
+        <p class="deep-only">Gợi ý sâu hơn: ai là bên ghép chúng lại, và bạn thường gọi bên đó qua chương trình nào?</p>
+      </li>
+      <li>
+        <p>Khác biệt cốt lõi giữa một tệp <code>.a</code> và một tệp <code>.so</code> là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: nếu một thư viện bị phát hiện không an toàn, kiểu nào sửa được mà không phải biên dịch lại?</p>
+      </li>
+      <li>
+        <p>Trong đầu ra của <code>ldd</code>, phía trái và phía phải dấu <code>=&gt;</code> nói lên điều gì khác nhau?</p>
+        <p class="deep-only">Gợi ý sâu hơn: chương trình biết gì và không biết gì về thư viện của chính nó?</p>
+      </li>
+      <li>
+        <p><code>ld.so</code> tìm thư viện chia sẻ ở những chỗ nào, và vì sao Ward gọi <code>LD_LIBRARY_PATH</code> là nguyên nhân số một của rắc rối?</p>
+        <p class="deep-only">Gợi ý sâu hơn: cách làm đúng khi thư viện nằm ở đường dẫn lạ là gì, và bạn vẫn cần thêm cờ nào bên cạnh <code>-Wl,-rpath</code>?</p>
+      </li>
+      <li>
+        <p>Ba danh từ nền tảng của <code>make</code> là gì, và cái nào là mặc định khi bạn chỉ gõ <code>make</code>?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao <code>make</code> biết cách tạo <code>aux.o</code> dù <code>aux.c</code> không có trong Makefile?</p>
+      </li>
+      <li>
+        <p>Dòng lỗi <code>missing separator</code> nghĩa là gì, và bạn sửa nó bằng cách nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: thử nói xem vì sao ký tự đó lại được chọn làm dấu phân tách trong Makefile.</p>
+      </li>
+      <li>
+        <p>Trước khi chạy <code>make install</code>, Ward khuyên bạn làm gì và vì sao?</p>
+        <p class="deep-only">Gợi ý sâu hơn: cùng tuỳ chọn đó còn giúp bạn hiểu một Makefile lạ như thế nào?</p>
+      </li>
+      <li>
+        <p>Một kịch bản Python và một chương trình C khác nhau thế nào ở khâu “chuẩn bị để chạy”?</p>
+        <p class="deep-only">Gợi ý sâu hơn: dòng <code>#!</code> làm gì, và lỗi <code>bad interpreter</code> nói lên điều gì?</p>
+      </li>
+      <li>
+        <p>Vì sao trên Linux bạn gần như luôn gặp bytecode Java thay vì mã máy bản địa?</p>
+        <p class="deep-only">Gợi ý sâu hơn: <code>java</code>, <code>javac</code> và <code>jar</code> mỗi lệnh làm gì?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Máy có đọc được tệp <code>.c</code> không? Phải làm gì trước đã?</p></li>
+      <li><p>Object file là gì? Vì sao chưa chạy được ngay?</p></li>
+      <li><p>Thư viện là gì? Hai kiểu <code>.a</code> và <code>.so</code> khác nhau ra sao?</p></li>
+      <li><p>Muốn biết một chương trình cần mượn những gì, bạn gõ lệnh nào?</p></li>
+      <li><p><code>make</code> dùng để làm gì? Nó đọc tệp tên gì?</p></li>
+      <li><p>Trong Makefile, đầu dòng lệnh phải gõ phím nào?</p></li>
+      <li><p>Kịch bản là gì? Dòng đầu tiên của nó trông thế nào?</p></li>
+      <li><p>Kể tên hai ngôn ngữ kịch bản mà sách nói tới.</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>
+        <p>How does the <code>-c</code> option differ from <code>-o</code>, and what kind of file does each produce?</p>
+      </li>
+      <li>
+        <p>Why isn't an object file a runnable program yet? Give the two reasons Ward states.</p>
+      </li>
+      <li>
+        <p>What is the core difference between a <code>.a</code> file and a <code>.so</code> file?</p>
+      </li>
+      <li>
+        <p>In <code>ldd</code> output, what do the left and the right of the <code>=&gt;</code> each tell you?</p>
+      </li>
+      <li>
+        <p>Where does <code>ld.so</code> look for shared libraries, and why does Ward call <code>LD_LIBRARY_PATH</code> the number one cause of trouble?</p>
+      </li>
+      <li>
+        <p>What are <code>make</code>'s three foundational nouns, and which target is the default when you type <code>make</code> alone?</p>
+      </li>
+      <li>
+        <p>What does a <code>missing separator</code> error mean, and how do you fix it?</p>
+      </li>
+      <li>
+        <p>What does Ward advise you to do before running <code>make install</code>, and why?</p>
+      </li>
+      <li>
+        <p>How do a Python script and a C program differ in what must happen before they run?</p>
+      </li>
+      <li>
+        <p>Why do you practically always meet Java bytecode on Linux rather than native machine code?</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Chương này nhồi rất nhiều thông tin vào một không gian nhỏ, nhưng <span class="closing-accent">bạn không cần thành thạo mọi thứ ở đây</span>.<span class="cite"><a href="#ref-1">1</a></span> Nếu chỉ giữ lại một điều, hãy giữ điều Ward tự xếp hạng: <span class="closing-accent">phần về thư viện chia sẻ là thứ quan trọng nhất bạn cần biết</span> — và để hiểu chúng đến từ đâu, trước hết bạn cần chút nền tảng về cách dựng chương trình.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Chương này nhiều chữ, nhưng <span class="closing-accent">bạn không cần nhớ hết</span>. Nhớ một điều thôi cũng được: <span class="closing-accent">thư viện dùng chung là phần quan trọng nhất</span>. <b>Nhớ nhé: nhớ ít mà đúng còn hơn nhớ nhiều mà loạn.</b></p>
+    <p class="en-only" lang="en">This chapter packs a lot of information into a small space, but <span class="closing-accent">you don't need to master everything here</span>.<span class="cite"><a href="#ref-1">1</a></span> If you keep only one thing, keep the one Ward ranks himself: <span class="closing-accent">the discussion of shared libraries is the most important thing you need to know</span> — and to understand where they come from, you first need some background on how to build programs.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START -->
+<!-- Region owned by book-cover-curator; body authored by book-chapter-author.
+     Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-14-desktop-printing.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 14 · Desktop và in ấn</span>
+    <span class="nav-title en-only" lang="en">Chapter 14 · A Brief Survey of the Linux Desktop and Printing</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-16-compiling-c-source.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 16 · Biên dịch phần mềm từ mã nguồn C</span>
+    <span class="nav-title en-only" lang="en">Chapter 16 · Introduction to Compiling Software from C Source Code</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, tái bản lần thứ 3, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chương 15, “Development Tools”, trang 363–383.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd edition, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chapter 15, "Development Tools", pp. 363–383.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd ed., No Starch Press, 2021, ch. 15 “Development Tools”, pp. 363–383. — <a href="https://openlibrary.org/books/OL29462444M" target="_blank" rel="noopener noreferrer">openlibrary.org/books/OL29462444M</a></li>
+      <li id="ref-2">“Options Controlling the Kind of Output” (<code>-c</code>, <code>-o</code>, <code>-E</code>, <code>a.out</code>) — GCC manual. <a href="https://gcc.gnu.org/onlinedocs/gcc/Overall-Options.html" target="_blank" rel="noopener noreferrer">gcc.gnu.org/onlinedocs/gcc/Overall-Options.html</a></li>
+      <li id="ref-3">“Options for Linking” (<code>-l</code>, <code>-Wl,option</code>) — GCC manual. <a href="https://gcc.gnu.org/onlinedocs/gcc/Link-Options.html" target="_blank" rel="noopener noreferrer">gcc.gnu.org/onlinedocs/gcc/Link-Options.html</a></li>
+      <li id="ref-4">“Options for Directory Search” (<code>-I</code>, <code>-L</code>) — GCC manual. <a href="https://gcc.gnu.org/onlinedocs/gcc/Directory-Options.html" target="_blank" rel="noopener noreferrer">gcc.gnu.org/onlinedocs/gcc/Directory-Options.html</a></li>
+      <li id="ref-5">“Options Controlling the Preprocessor” (<code>-D</code>, <code>-M</code>) — GCC manual. <a href="https://gcc.gnu.org/onlinedocs/gcc/Preprocessor-Options.html" target="_blank" rel="noopener noreferrer">gcc.gnu.org/onlinedocs/gcc/Preprocessor-Options.html</a></li>
+      <li id="ref-6">“Command-line Options” (<code>-rpath=dir</code>) — GNU <code>ld</code>, GNU Binutils documentation, Sourceware. <a href="https://sourceware.org/binutils/docs/ld/Options.html" target="_blank" rel="noopener noreferrer">sourceware.org/binutils/docs/ld/Options.html</a></li>
+      <li id="ref-7"><code>nm</code> (<code>-U</code>, <code>--defined-only</code>) — GNU Binutils documentation, Sourceware. <a href="https://sourceware.org/binutils/docs/binutils/nm.html" target="_blank" rel="noopener noreferrer">sourceware.org/binutils/docs/binutils/nm.html</a></li>
+      <li id="ref-8"><code>ldd(1)</code> — print shared object dependencies, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/ldd.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/ldd.1.html</a></li>
+      <li id="ref-9"><code>ld.so(8)</code> — dynamic linker/loader, including the shared-object search order, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man8/ld.so.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/ld.so.8.html</a></li>
+      <li id="ref-10"><code>ld.so.conf(5)</code> — configuration for the dynamic linker, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man5/ld.so.conf.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/ld.so.conf.5.html</a></li>
+      <li id="ref-11"><code>ldconfig(8)</code> — configure dynamic linker run-time bindings, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man8/ldconfig.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/ldconfig.8.html</a></li>
+      <li id="ref-12"><code>elf(5)</code> — format of Executable and Linking Format (ELF) files, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man5/elf.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/elf.5.html</a></li>
+      <li id="ref-13"><code>patchelf</code> — modify the dynamic linker and RPATH of ELF executables, NixOS project. <a href="https://github.com/NixOS/patchelf" target="_blank" rel="noopener noreferrer">github.com/NixOS/patchelf</a></li>
+      <li id="ref-14">David A. Wheeler, <i>Program Library HOWTO</i> — The Linux Documentation Project; one of the online resources Ward recommends. <a href="https://tldp.org/HOWTO/Program-Library-HOWTO/" target="_blank" rel="noopener noreferrer">tldp.org/HOWTO/Program-Library-HOWTO</a></li>
+      <li id="ref-15"><code>make</code> — POSIX.1-2017 (IEEE Std 1003.1-2017) utility specification: default target, internal macros <code>$@</code>/<code>$&lt;</code>/<code>$*</code>, <code>CC</code>/<code>CFLAGS</code>/<code>LDFLAGS</code>, <code>-n</code> and <code>-f</code>. The Open Group. <a href="https://pubs.opengroup.org/onlinepubs/9699919799/utilities/make.html" target="_blank" rel="noopener noreferrer">pubs.opengroup.org/onlinepubs/9699919799/utilities/make.html</a></li>
+      <li id="ref-16">“Using Implicit Rules” — GNU Make manual (archived 3.79.1 edition, ftp.gnu.org): built-in C rule <code>$(CC) -c $(CPPFLAGS) $(CFLAGS)</code>, plus <code>CXXFLAGS</code>, <code>LDLIBS</code>. <a href="https://ftp.gnu.org/old-gnu/Manuals/make-3.79.1/html_chapter/make_10.html" target="_blank" rel="noopener noreferrer">ftp.gnu.org/old-gnu/Manuals/make-3.79.1/html_chapter/make_10.html</a></li>
+      <li id="ref-17">“Makefile Conventions — Standard Targets for Users” (<code>all</code>, <code>install</code>, <code>clean</code>, <code>distclean</code>, <code>check</code>) — GNU Make manual (archived 3.79.1 edition, ftp.gnu.org). <a href="https://ftp.gnu.org/old-gnu/Manuals/make-3.79.1/html_chapter/make_14.html" target="_blank" rel="noopener noreferrer">ftp.gnu.org/old-gnu/Manuals/make-3.79.1/html_chapter/make_14.html</a></li>
+      <li id="ref-18"><code>make(1)</code> — GNU make manual page (<code>-n</code>/<code>--just-print</code>, <code>-f</code>/<code>--file</code>), Debian Manpages. <a href="https://manpages.debian.org/bookworm/make/make.1.en.html" target="_blank" rel="noopener noreferrer">manpages.debian.org/bookworm/make/make.1.en.html</a></li>
+      <li id="ref-19"><i>Lexical Analysis With Flex</i> — “I get an error about undefined yywrap()” (<code>libfl.a</code>, <code>%option noyywrap</code>), flex project manual. <a href="https://westes.github.io/flex/manual/" target="_blank" rel="noopener noreferrer">westes.github.io/flex/manual</a></li>
+      <li id="ref-20"><code>yacc</code> — POSIX.1-2017 utility specification, including the <code>-l y</code> / <code>-l l</code> library search operands and their ordering. The Open Group. <a href="https://pubs.opengroup.org/onlinepubs/9699919799/utilities/yacc.html" target="_blank" rel="noopener noreferrer">pubs.opengroup.org/onlinepubs/9699919799/utilities/yacc.html</a></li>
+      <li id="ref-21"><code>bison(1)</code> — GNU Bison manual page (<code>-y</code>, <code>--yacc</code>: emulate POSIX Yacc), Debian Manpages. <a href="https://manpages.debian.org/bookworm/bison/bison.1.en.html" target="_blank" rel="noopener noreferrer">manpages.debian.org/bookworm/bison/bison.1.en.html</a></li>
+      <li id="ref-22"><code>execve(2)</code> — “Interpreter scripts”: how the kernel handles a file beginning with <code>#!</code>, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man2/execve.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/execve.2.html</a></li>
+      <li id="ref-23"><code>java</code> — launch a Java application (<code>-jar</code>, class path, <code>CLASSPATH</code>), JDK 17 tool specification, Oracle. <a href="https://docs.oracle.com/en/java/javase/17/docs/specs/man/java.html" target="_blank" rel="noopener noreferrer">docs.oracle.com/en/java/javase/17/docs/specs/man/java.html</a></li>
+      <li id="ref-24"><code>javac</code> and <code>jar</code> — JDK 17 tool specifications, Oracle. <a href="https://docs.oracle.com/en/java/javase/17/docs/specs/man/javac.html" target="_blank" rel="noopener noreferrer">javac</a> · <a href="https://docs.oracle.com/en/java/javase/17/docs/specs/man/jar.html" target="_blank" rel="noopener noreferrer">jar</a></li>
+      <li id="ref-25">Project sites for the scripting languages Ward lists in §15.4.3: <a href="https://www.php.net/" target="_blank" rel="noopener noreferrer">PHP</a> · <a href="https://www.ruby-lang.org/" target="_blank" rel="noopener noreferrer">Ruby</a> · <a href="https://nodejs.org/" target="_blank" rel="noopener noreferrer">Node.js</a> · <a href="https://www.r-project.org/" target="_blank" rel="noopener noreferrer">R</a> · <a href="https://www.tcl-lang.org/" target="_blank" rel="noopener noreferrer">Tcl/Tk</a> · <a href="https://octave.org/" target="_blank" rel="noopener noreferrer">GNU Octave</a></li>
+      <li id="ref-26">The LLVM Compiler Infrastructure — home of the <code>clang</code> C compiler Ward mentions alongside <code>gcc</code>. <a href="https://llvm.org/" target="_blank" rel="noopener noreferrer">llvm.org</a></li>
+    </ol>
+
+    <!-- NAV:START -->
+    <!-- Footer neighbour row — owned by book-cover-curator, body authored by
+         book-chapter-author. Absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-14-desktop-printing.html">chapter 14</a>
+      <a href="chapter-16-compiling-c-source.html">chapter 16</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('hlw-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('hlw-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('hlw-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

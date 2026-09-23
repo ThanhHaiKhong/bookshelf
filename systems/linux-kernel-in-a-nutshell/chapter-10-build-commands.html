@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="vi" data-mode="standard" data-lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 10 · Tham chiếu lệnh dựng nhân — Linux Kernel in a Nutshell</title>
+<meta name="description" content="Người đồng hành song ngữ Việt/Anh cho Chương 10 &quot;Kernel Build Command-Line Reference&quot; của Linux Kernel in a Nutshell (Greg Kroah-Hartman, O'Reilly, 2006): toàn bộ danh mục đích make — thông tin, dọn dẹp, cấu hình, dựng, đóng gói, tài liệu, theo kiến trúc và phân tích — kèm ghi chú về những gì đã đổi kể từ nhân 2.6.">
+<script>
+/* pre-hydration: đọc lựa chọn đã lưu trước khi vẽ, tránh nháy màn hình */
+(function () {
+  try {
+    var m = localStorage.getItem("lkn-reading-mode");
+    var l = localStorage.getItem("lkn-lang");
+    if (m === "standard" || m === "easy" || m === "deep") document.documentElement.setAttribute("data-mode", m);
+    if (l === "vi" || l === "en") document.documentElement.setAttribute("data-lang", l);
+    if (localStorage.getItem("lkn-theme") === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  } catch (e) {}
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --teal: #0f766e;
+  --blue: #1d4ed8;
+  --amber: #b45309;
+  --leaf: #4d7c0f;
+  --ink: #16202a;
+  --ink-soft: #4a5a68;
+  --ink-faint: #7c8b98;
+  --surface: #fbfaf7;
+  --surface-2: #ffffff;
+  --surface-3: #f2efe8;
+  --line: #ded8cd;
+  --line-soft: #ebe6dc;
+  --shadow: 0 1px 2px rgba(22, 32, 42, .05), 0 8px 24px rgba(22, 32, 42, .06);
+  --serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --measure: 34rem;
+}
+:root[data-theme="dark"] {
+  --teal: #5eead4;
+  --blue: #93b4ff;
+  --amber: #fbbf24;
+  --leaf: #a3e635;
+  --ink: #e8eef4;
+  --ink-soft: #a6b6c4;
+  --ink-faint: #74869a;
+  --surface: #11171d;
+  --surface-2: #171f27;
+  --surface-3: #1e2831;
+  --line: #2d3945;
+  --line-soft: #232e38;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --teal: #5eead4; --blue: #93b4ff; --amber: #fbbf24; --leaf: #a3e635;
+    --ink: #e8eef4; --ink-soft: #a6b6c4; --ink-faint: #74869a;
+    --surface: #11171d; --surface-2: #171f27; --surface-3: #1e2831;
+    --line: #2d3945; --line-soft: #232e38;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.72;
+  -webkit-font-smoothing: antialiased;
+}
+main { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem 4rem; }
+p { margin: 0 0 1.05rem; max-width: var(--measure); }
+a { color: var(--blue); }
+h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; line-height: 1.22; color: var(--ink); }
+code, kbd, samp { font-family: var(--mono); font-size: .88em; background: var(--surface-3); padding: .12em .38em; border-radius: 4px; }
+
+/* ---------- reading mode + bilingual visibility ---------- */
+.easy-only, .deep-only, .en-only { display: none; }
+:root[data-mode="standard"] .standard-copy,
+:root[data-mode="deep"] .standard-copy { display: revert; }
+:root[data-mode="deep"] .deep-only { display: revert; }
+:root[data-mode="easy"] .standard-copy { display: none; }
+:root[data-mode="easy"] .easy-only { display: revert; }
+:root[data-lang="vi"] .vi-only { display: revert; }
+:root[data-lang="en"] .vi-only,
+:root[data-lang="en"] .standard-copy,
+:root[data-lang="en"] .easy-only,
+:root[data-lang="en"] .deep-only { display: none; }
+:root[data-lang="en"] .en-only { display: revert; }
+:root[data-lang="en"] .mode-switch { opacity: .35; pointer-events: none; }
+
+/* ---------- topbar ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: .7rem 1.5rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.book-label { font-size: .78rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-right: auto; }
+.switch-group { display: flex; gap: .3rem; align-items: center; }
+.switch-group + .switch-group { margin-left: .35rem; }
+.switch-label { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin-right: .25rem; }
+button.chip {
+  font: inherit; font-size: .78rem; font-weight: 600;
+  padding: .3rem .72rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft);
+  transition: background .15s, color .15s, border-color .15s;
+}
+button.chip:hover { border-color: var(--teal); color: var(--teal); }
+button.chip[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: var(--surface); }
+:root[data-theme="dark"] button.chip[aria-pressed="true"] { color: #0b1116; }
+
+/* ---------- hero ---------- */
+.hero {
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  gap: 2.75rem; align-items: center;
+  padding: 3.75rem 0 3rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.hero::after {
+  content: "LKN / 10";
+  position: absolute; top: 1.15rem; right: 0;
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .22em;
+  color: var(--ink-faint);
+}
+.eyebrow { font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--teal); font-weight: 700; margin: 0 0 .85rem; }
+.hero h1 { font-size: clamp(2.05rem, 4.6vw, 3.1rem); margin: 0 0 1.15rem; letter-spacing: -.015em; }
+.hero p { font-size: 1.06rem; color: var(--ink-soft); }
+.thesis {
+  margin-top: 1.5rem; padding: 1.05rem 1.25rem 1.05rem 2.6rem;
+  position: relative; max-width: var(--measure);
+  background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--amber);
+  border-radius: 0 10px 10px 0; box-shadow: var(--shadow);
+}
+.thesis::before { content: "∴"; position: absolute; left: .95rem; top: .95rem; font-size: 1.15rem; color: var(--amber); }
+.thesis p { margin: 0; font-size: .97rem; color: var(--ink); }
+
+/* ---------- CSS diagrams ---------- */
+.system-map {
+  position: relative; display: grid; gap: .75rem;
+  padding: 1.5rem; border-radius: 16px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.system-map .core {
+  justify-self: center; text-align: center;
+  padding: .85rem 1.25rem; border-radius: 999px;
+  background: var(--teal); color: var(--surface); font-weight: 700; font-size: .9rem;
+  max-width: 100%;
+}
+:root[data-theme="dark"] .system-map .core { color: #0b1116; }
+.system-map .spokes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
+.system-map .node {
+  padding: .8rem .85rem; border-radius: 12px; text-align: center;
+  background: var(--surface-3); border: 1px solid var(--line-soft);
+}
+.system-map .node b { display: block; font-size: .82rem; color: var(--ink); margin-bottom: .3rem; }
+.system-map .node small { display: block; font-size: .73rem; line-height: 1.5; color: var(--ink-soft); }
+.loop-diagram { display: grid; gap: .55rem; padding: 1.25rem; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.loop-diagram .step { padding: .6rem .8rem; border-radius: 10px; background: var(--surface-3); border-left: 3px solid var(--blue); font-size: .82rem; }
+
+/* ---------- chapter path ---------- */
+.chapter-path {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem;
+  margin: 2.5rem 0 3rem;
+}
+.chapter-path a {
+  display: block; padding: .9rem 1rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+  transition: border-color .15s, transform .15s;
+}
+.chapter-path a:hover { border-color: var(--teal); transform: translateY(-2px); }
+.chapter-path span { display: block; font-size: .67rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.chapter-path b { display: block; font-family: var(--serif); font-size: .96rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- sections ---------- */
+.section { padding: 2.75rem 0; border-top: 1px solid var(--line-soft); }
+.section-heading h2 { font-size: clamp(1.5rem, 3vw, 2.05rem); margin: 0 0 .9rem; }
+.section-heading p { color: var(--ink-soft); }
+.surprise-lead {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem;
+  margin: 1.75rem 0 2rem;
+}
+.definition, .equation { padding: 1rem 1.15rem; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); font-size: .92rem; }
+.definition { border-left: 3px solid var(--blue); }
+.equation { border-left: 3px solid var(--leaf); font-family: var(--mono); font-size: .82rem; line-height: 1.7; }
+.definition p, .equation p { margin: 0; max-width: none; }
+
+.surprise-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.1rem; }
+.trap-grid { grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
+.surprise-grid > li {
+  padding: 1.25rem 1.35rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.english-term { display: inline-block; font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--amber); margin-bottom: .45rem; }
+.surprise-grid h3 { font-size: 1.05rem; margin: 0 0 .7rem; }
+.surprise-grid p { font-size: .93rem; max-width: none; }
+.opportunity {
+  margin-top: .9rem; padding: .75rem .9rem; border-radius: 10px;
+  background: var(--surface-3); border-left: 3px solid var(--leaf); font-size: .87rem;
+}
+.opportunity p { margin: 0; font-size: .87rem; }
+.mechanics { margin-top: .9rem; display: grid; gap: .7rem; }
+.info-block { padding: .75rem .9rem; border-radius: 10px; border: 1px dashed var(--line); background: var(--surface); }
+.info-block h4 { font-size: .85rem; margin: 0 0 .35rem; color: var(--teal); }
+.info-block p { margin: 0; font-size: .86rem; }
+.result { margin-top: .7rem; font-size: .86rem; color: var(--ink-soft); }
+
+.signal {
+  margin: 2rem 0 0; padding: 1.1rem 1.3rem; border-radius: 12px;
+  background: var(--surface-3); border: 1px solid var(--line-soft); border-top: 3px solid var(--blue);
+}
+.signal p { margin: 0 0 .6rem; font-size: .93rem; }
+.signal p:last-child { margin-bottom: 0; }
+
+/* ---------- misconceptions ---------- */
+.trap-comparison { margin: 2.5rem 0; }
+.comparison-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; margin-top: 1.25rem; }
+.comparison-card {
+  padding: 1.1rem 1.25rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); border-top: 3px solid var(--amber);
+}
+.comparison-card h3 { font-size: .98rem; margin: 0 0 .6rem; }
+.comparison-card p { font-size: .9rem; max-width: none; }
+.comparison-card .myth { color: var(--amber); font-weight: 600; }
+.comparison-card .fact { color: var(--teal); font-weight: 600; }
+
+/* ---------- diagnostic ---------- */
+.diagnostic { padding: 1.75rem; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.diagnostic-intro p { font-size: .97rem; }
+.question-list { counter-reset: q; list-style: none; margin: 1.25rem 0 0; padding: 0; display: grid; gap: .9rem; }
+.question-list > li { counter-increment: q; position: relative; padding-left: 2.4rem; font-size: .93rem; }
+.question-list > li::before {
+  content: counter(q, decimal-leading-zero);
+  position: absolute; left: 0; top: .05rem;
+  font-family: var(--mono); font-size: .78rem; font-weight: 600; color: var(--teal);
+  border: 1px solid var(--line); border-radius: 6px; padding: .05rem .38rem;
+}
+.question-list .deep-only { margin-top: .4rem; font-size: .87rem; color: var(--ink-soft); }
+
+/* ---------- closing ---------- */
+.closing { padding: 3rem 0 1rem; border-top: 1px solid var(--line-soft); }
+.closing blockquote {
+  margin: 0; padding: 1.5rem 0 0; max-width: 46rem;
+  font-family: var(--serif); font-size: clamp(1.15rem, 2.4vw, 1.55rem); line-height: 1.5; color: var(--ink);
+}
+.closing blockquote p { max-width: none; font-size: inherit; line-height: inherit; }
+.closing-accent { color: var(--teal); font-style: italic; }
+
+/* ---------- chapter nav ---------- */
+.chapter-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 3rem 0 0; }
+.nav-cell {
+  display: block; padding: 1rem 1.15rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); transition: border-color .15s, transform .15s;
+}
+a.nav-cell:hover { border-color: var(--teal); transform: translateY(-2px); }
+.nav-cell.disabled { opacity: .5; background: var(--surface-3); cursor: default; }
+.nav-next { text-align: right; }
+.nav-label { display: block; font-size: .68rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.nav-title { display: block; font-family: var(--serif); font-size: .95rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- footer + references ---------- */
+footer {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.5rem; align-items: start;
+  margin-top: 3rem; padding: 2rem 0 3rem; border-top: 1px solid var(--line);
+  font-size: .85rem; color: var(--ink-soft);
+}
+.footer-main p { max-width: 48rem; font-size: .85rem; }
+.footer-label { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; margin: 1.5rem 0 .6rem; }
+.ref-list { margin: 0; padding-left: 1.4rem; display: grid; gap: .5rem; }
+.ref-list li { font-size: .82rem; line-height: 1.6; }
+.edition { font-family: var(--mono); font-size: .7rem; letter-spacing: .12em; color: var(--ink-faint); white-space: nowrap; }
+.cite { font-size: .7em; vertical-align: super; line-height: 0; margin-left: .1em; }
+.cite a { text-decoration: none; padding: 0 .12em; }
+
+/* SECTION-RAIL:START */
+.section-rail {
+  position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+  z-index: 30; padding: .6rem .5rem; display: none;
+}
+.section-rail__list { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+.section-rail__list a {
+  display: flex; align-items: center; gap: .55rem;
+  text-decoration: none; color: var(--ink-faint); font-size: .74rem; line-height: 1.25;
+}
+.section-rail__list a::before {
+  content: ""; flex: 0 0 auto; width: 1.15rem; height: 2px; border-radius: 2px;
+  background: var(--line); transition: width .2s, background .2s;
+}
+.section-rail__label {
+  max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0;
+  transition: max-width .24s ease, opacity .18s ease;
+}
+.section-rail:hover .section-rail__label,
+.section-rail:focus-within .section-rail__label { max-width: 13rem; opacity: 1; }
+.section-rail:hover, .section-rail:focus-within {
+  background: color-mix(in srgb, var(--surface-2) 94%, transparent);
+  border: 1px solid var(--line-soft); border-left: 0; border-radius: 0 12px 12px 0; box-shadow: var(--shadow);
+}
+.section-rail__list a:hover,
+.section-rail__list a[aria-current="true"] { color: var(--teal); }
+.section-rail__list a[aria-current="true"]::before { width: 1.9rem; background: var(--teal); }
+@media (min-width: 1180px) { .section-rail { display: block; } }
+/* SECTION-RAIL:END */
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 2rem; padding-top: 2.5rem; }
+  .hero::after { position: static; display: block; margin-bottom: .75rem; }
+  .system-map .spokes { grid-template-columns: minmax(0, 1fr); }
+  footer { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 620px) {
+  body { font-size: 16px; }
+  main { padding: 0 1.1rem 3rem; }
+  .topbar { padding: .6rem 1.1rem; gap: .5rem; }
+  .book-label { width: 100%; margin-right: 0; }
+  .chapter-nav { grid-template-columns: minmax(0, 1fr); }
+  .nav-next { text-align: left; }
+  .diagnostic { padding: 1.25rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">Linux Kernel in a Nutshell · <span class="vi-only">Chương 10 · Tham chiếu lệnh dựng nhân</span><span class="en-only" lang="en">Chapter 10 · Kernel Build Command-Line Reference</span></div>
+  <div class="switch-group mode-switch">
+    <span class="switch-label vi-only">Mức đọc</span><span class="switch-label en-only" lang="en">Level</span>
+    <button class="chip" type="button" data-set-mode="easy" aria-pressed="false"><span class="vi-only">Dễ hiểu</span><span class="en-only" lang="en">Easy</span></button>
+    <button class="chip" type="button" data-set-mode="standard" aria-pressed="true"><span class="vi-only">Tiêu chuẩn</span><span class="en-only" lang="en">Standard</span></button>
+    <button class="chip" type="button" data-set-mode="deep" aria-pressed="false"><span class="vi-only">Đầy đủ</span><span class="en-only" lang="en">Deep</span></button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-set-lang="vi" aria-pressed="true">VI</button>
+    <button class="chip" type="button" data-set-lang="en" aria-pressed="false">EN</button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-toggle-theme aria-pressed="false"><span class="vi-only">Tối</span><span class="en-only" lang="en">Dark</span></button>
+  </div>
+</header>
+
+<nav class="section-rail" aria-label="Mục lục trong trang"><ul class="section-rail__list"></ul></nav>
+
+<main>
+
+<section class="hero" id="tong-quan" aria-labelledby="tong-quan-title">
+  <div>
+    <p class="eyebrow"><span class="vi-only">Phần III · Tham chiếu nhân · Chương 10</span><span class="en-only" lang="en">Part III · Kernel Reference · Chapter 10</span></p>
+    <h1 id="tong-quan-title">
+      <span class="standard-copy">Toàn bộ danh mục đích <code>make</code> của hệ dựng nhân</span>
+      <span class="easy-only">Danh sách đầy đủ các “lệnh con” của <code>make</code></span>
+      <span class="en-only" lang="en">The complete catalogue of kernel build targets</span>
+    </h1>
+    <p class="standard-copy">Chương 4 đã dạy bạn những đích <code>make</code> tối thiểu để dựng được một cái nhân. Chương 10 mở rộng ra toàn bộ: Kroah-Hartman viết rằng công cụ buộc mọi thứ lại với nhau trong việc dựng nhân là chương trình <code>make</code>, và bạn truyền cho nó một <em><span lang="en">target</span></em> — một <b>đích</b> — nói rõ bạn muốn dựng cái gì <span class="cite"><a href="#ref-1">1</a></span>. Hệ dựng nhân còn có “một dải rộng các đích khác”, và chương này liệt kê chúng cùng công dụng của từng cái <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    <p class="easy-only">Khi dựng nhân, bạn gõ lệnh <code>make</code> kèm theo một từ khóa cho biết bạn muốn làm gì. Từ khóa ấy gọi là “đích” <span class="cite"><a href="#ref-1">1</a></span>. Chương 4 mới dạy vài cái cơ bản; chương 10 này kể ra gần như tất cả <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: một lệnh <code>make</code>, rất nhiều từ khóa đi kèm.</p>
+    <p class="en-only" lang="en">Chapter 4 taught you the minimum set of <code>make</code> targets needed to build a kernel properly. Chapter 10 opens the whole catalogue: Kroah-Hartman writes that the tool that ties together kernel builds is the <code>make</code> program, to which you pass a <em>target</em> specifying what you want to build <span class="cite"><a href="#ref-1">1</a></span>. The kernel build system also has “a wide range of other targets”, and this chapter details them and what they can be used for <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    <p class="deep-only">Đây là một chương tham chiếu, không phải chương lập luận — chỉ năm trang, chín bảng. Vì thế trang đồng hành này có thể làm điều hiếm hoi: phủ <em>trọn vẹn</em> mọi đích mà sách liệt kê, không bỏ sót cái nào. Đổi lại, người đọc năm 2026 phải mang theo một chiếc kính lọc thời gian: sách viết cho dòng nhân 2.6 năm 2006, nên mỗi đích ở đây cần được đối chiếu với danh sách <code>make help</code> hiện hành <span class="cite"><a href="#ref-9">9</a></span>. Phần lớn còn nguyên; một số đã đổi tên, đổi cơ chế, hoặc biến mất.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận điểm chương 10.</b> Mọi đích đều được truyền cho <code>make</code> trên dòng lệnh, và có thể <b>gộp nhiều đích trong một lệnh</b> nếu muốn — ví dụ của ông là <code>make mrproper xconfig</code> <span class="cite"><a href="#ref-1">1</a></span>. Bạn không cần nhớ hết: chạy <code>make help</code> ngay trong thư mục dựng sẽ in ra phần lớn các đích được mô tả trong chương <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="easy-only"><b>Ý chính.</b> Tất cả từ khóa đều viết sau chữ <code>make</code>, và bạn được viết nhiều từ khóa một lúc, như <code>make mrproper xconfig</code> <span class="cite"><a href="#ref-1">1</a></span>. Quên thì gõ <code>make help</code>, máy sẽ tự kể ra <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: không cần học thuộc, chỉ cần biết chỗ hỏi.</p>
+      <p class="en-only" lang="en"><b>Chapter 10 thesis.</b> All of these targets are passed to <code>make</code> on the command line, and a number of them can be <b>grouped together</b> if desired — his example is <code>make mrproper xconfig</code> <span class="cite"><a href="#ref-1">1</a></span>. You do not have to memorise them: running <code>make help</code> inside the build directory prints out most of the common targets described in the chapter <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: chương trình make ở trung tâm, ba nhóm đích lớn — dọn dẹp và cấu hình, dựng và đóng gói, tài liệu và phân tích. Diagram: the make program at the centre, with three major target families — cleaning and configuring, building and packaging, documenting and analysing.">
+    <div class="core"><span class="vi-only">make &lt;đích&gt;</span><span class="en-only" lang="en">make &lt;target&gt;</span></div>
+    <div class="spokes">
+      <div class="node">
+        <b><span class="vi-only">Hỏi · Dọn · Cấu hình</span><span class="en-only" lang="en">Ask · Clean · Configure</span></b>
+        <small class="standard-copy"><code>kernelrelease</code>, <code>clean</code>, <code>mrproper</code>, <code>menuconfig</code>, <code>oldconfig</code>…</small>
+        <small class="easy-only">Hỏi phiên bản, xóa đồ cũ, chọn tùy chọn.</small>
+        <small class="en-only" lang="en"><code>kernelrelease</code>, <code>clean</code>, <code>mrproper</code>, <code>menuconfig</code>, <code>oldconfig</code>…</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Dựng · Đóng gói</span><span class="en-only" lang="en">Build · Package</span></b>
+        <small class="standard-copy"><code>all</code>, <code>vmlinux</code>, <code>modules</code>, <code>modules_install</code>, <code>deb-pkg</code>…</small>
+        <small class="easy-only">Biên dịch nhân, rồi gói lại để đem đi cài.</small>
+        <small class="en-only" lang="en"><code>all</code>, <code>vmlinux</code>, <code>modules</code>, <code>modules_install</code>, <code>deb-pkg</code>…</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Tài liệu · Phân tích</span><span class="en-only" lang="en">Document · Analyse</span></b>
+        <small class="standard-copy"><code>htmldocs</code>, <code>bzImage</code>, <code>install</code>, <code>checkstack</code>…</small>
+        <small class="easy-only">In tài liệu, tạo ảnh khởi động, soi lỗi.</small>
+        <small class="en-only" lang="en"><code>htmldocs</code>, <code>bzImage</code>, <code>install</code>, <code>checkstack</code>…</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<nav class="chapter-path" aria-label="Lối đi trong chương">
+  <a href="#thong-tin-va-don-dep">
+    <span>01</span>
+    <b><span class="standard-copy">Đích thông tin và đích dọn dẹp</span><span class="easy-only">Hỏi phiên bản, xóa đồ cũ</span><span class="en-only" lang="en">Informational and cleaning targets</span></b>
+  </a>
+  <a href="#cau-hinh">
+    <span>02</span>
+    <b><span class="standard-copy">Đích cấu hình — mười một cách chọn tùy chọn</span><span class="easy-only">Mười một cách chọn tùy chọn</span><span class="en-only" lang="en">Configuration targets — eleven ways to choose</span></b>
+  </a>
+  <a href="#dung-va-dong-goi">
+    <span>03</span>
+    <b><span class="standard-copy">Đích dựng, biến môi trường và đóng gói</span><span class="easy-only">Dựng nhân rồi gói lại</span><span class="en-only" lang="en">Build targets, variables and packaging</span></b>
+  </a>
+  <a href="#tai-lieu-kien-truc-phan-tich">
+    <span>04</span>
+    <b><span class="standard-copy">Tài liệu, kiến trúc và phân tích</span><span class="easy-only">Tài liệu, ảnh khởi động, soi lỗi</span><span class="en-only" lang="en">Documentation, architecture and analysis</span></b>
+  </a>
+  <a href="#tu-kiem">
+    <span>05</span>
+    <b><span class="standard-copy">Tự kiểm trước khi sang chương 11</span><span class="easy-only">Tự hỏi mình vài câu</span><span class="en-only" lang="en">Self-check before Chapter 11</span></b>
+  </a>
+</nav>
+
+<section class="section" id="thong-tin-va-don-dep" aria-labelledby="thong-tin-va-don-dep-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 01</span><span class="en-only" lang="en">Concept cluster 01</span></p>
+    <h2 id="thong-tin-va-don-dep-title">
+      <span class="standard-copy">Hỏi trước, dọn sau: đích thông tin và đích dọn dẹp</span>
+      <span class="easy-only">Hỏi phiên bản, rồi xóa đồ cũ</span>
+      <span class="en-only" lang="en">Ask first, clean second: informational and cleaning targets</span>
+    </h2>
+    <p class="standard-copy">Hai nhóm đích mở đầu chương là hai nhóm ít ai gõ bằng tay nhất — và cũng là hai nhóm dễ gây tai nạn nhất nếu chọn sai. Nhóm thứ nhất chỉ <em>in ra</em> phiên bản nhân, và ông ghi nhận chúng “thường được các kịch bản dùng để xác định phiên bản của nhân đang được dựng” <span class="cite"><a href="#ref-1">1</a></span>. Nhóm thứ hai <em>xóa</em> tệp: ông khuyến nghị dùng chúng “rất mạnh mẽ” để chắc chắn bạn không làm nhiễm bẩn bản dựng mới bằng tệp sót lại từ bản dựng cũ với tùy chọn khác <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    <p class="easy-only">Nhóm đầu tiên chỉ hỏi máy: “nhân này là phiên bản mấy?” — các kịch bản tự động hay dùng <span class="cite"><a href="#ref-1">1</a></span>. Nhóm thứ hai thì dọn rác: xóa các tệp còn sót từ lần dựng trước, để lần này không bị lẫn lộn <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: hỏi thì vô hại, dọn thì phải nhìn kỹ mình xóa đến đâu.</p>
+    <p class="en-only" lang="en">The two families that open the chapter are the ones you type by hand least often — and the ones most likely to bite if you pick the wrong member. The first merely <em>prints</em> a kernel version, and he notes they “are commonly used by scripts to determine the version of the kernel being built” <span class="cite"><a href="#ref-1">1</a></span>. The second <em>deletes</em> files: their use is “highly recommended” to make sure you don't contaminate new builds with leftover files that may have been built with different options <span class="cite"><a href="#ref-2">2</a></span>.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Đích (<span lang="en">target</span>).</b> Một từ khóa bạn viết sau <code>make</code> để nói rõ bạn muốn hệ dựng làm gì. Sách chia chúng thành các loại khác nhau theo từng mục <span class="cite"><a href="#ref-1">1</a></span>; cách chia ấy — thông tin, dọn dẹp, cấu hình, dựng, đóng gói, tài liệu, theo kiến trúc, phân tích — vẫn là cách <code>make help</code> nhóm chúng cho tới ngày nay <span class="cite"><a href="#ref-9">9</a></span>.</p>
+      <p class="easy-only"><b>“Đích” là gì.</b> Là từ khóa viết sau chữ <code>make</code> để bảo máy làm việc gì. Sách xếp chúng thành từng nhóm <span class="cite"><a href="#ref-1">1</a></span>, và cách xếp nhóm đó đến giờ vẫn còn dùng <span class="cite"><a href="#ref-9">9</a></span>. Nhớ nhé: đích là “việc cần làm”, không phải “tệp cần tạo”.</p>
+      <p class="en-only" lang="en"><b>Target.</b> A keyword you type after <code>make</code> to say what you want the build system to do. The book breaks the targets down into different types by section <span class="cite"><a href="#ref-1">1</a></span>; that same grouping — informational, cleaning, configuration, build, packaging, documentation, architecture-specific, analysis — is still how <code>make help</code> organises them today <span class="cite"><a href="#ref-9">9</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">make kernelrelease   → in phiên bản đầy đủ<br>make kernelversion   → in phiên bản Makefile<br>make clean&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ giữ .config<br>make mrproper&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ xóa cả .config<br>make distclean&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ mrproper + tệp sao lưu</p>
+      <p class="easy-only">hỏi phiên bản → kernelrelease<br>dọn nhẹ&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ clean<br>dọn sạch&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ mrproper<br>dọn sạch hơn → distclean</p>
+      <p class="en-only" lang="en">make kernelrelease   → full version string<br>make kernelversion   → Makefile version<br>make clean&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ keeps .config<br>make mrproper&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ removes .config too<br>make distclean&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ mrproper + backup files</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">informational targets</span>
+      <h3>
+        <span class="standard-copy"><code>kernelrelease</code> và <code>kernelversion</code> — hai câu trả lời khác nhau</span>
+        <span class="easy-only">Hai cách hỏi “phiên bản mấy?”</span>
+        <span class="en-only" lang="en"><code>kernelrelease</code> and <code>kernelversion</code> — two different answers</span>
+      </h3>
+      <p class="standard-copy">Bảng 10-1 của sách chỉ có hai dòng. <code>kernelrelease</code> hiển thị phiên bản nhân hiện tại “như hệ dựng xác định”; <code>kernelversion</code> hiển thị phiên bản “như Makefile chính cho biết”, và khác ở chỗ nó <em>không</em> dùng bất kỳ thông tin phiên bản bổ sung nào dựa trên tùy chọn cấu hình hay các tệp <code>localversion</code> <span class="cite"><a href="#ref-1">1</a></span>. Nói cách khác: cái sau là con số thô, cái trước là con số bạn sẽ thấy trong <code>uname -r</code>.</p>
+      <p class="easy-only">Có hai cách hỏi phiên bản. <code>kernelversion</code> cho con số gốc ghi trong tệp Makefile. <code>kernelrelease</code> cho con số đầy đủ, có thêm phần đuôi do cấu hình và tệp <code>localversion</code> thêm vào <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: một cái là số gốc, một cái là số thật khi chạy.</p>
+      <p class="en-only" lang="en">Table 10-1 in the book has just two rows. <code>kernelrelease</code> displays the current kernel version “as determined by the build system”; <code>kernelversion</code> displays it “as told by the main Makefile”, differing in that it doesn't use any additional version information based on configuration options or <code>localversion</code> files <span class="cite"><a href="#ref-1">1</a></span>. In other words: the latter is the raw number, the former is the number you will read back from <code>uname -r</code>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Mọi kịch bản đóng gói nhân đều gọi <code>kernelrelease</code> để đặt tên tệp. Danh sách <code>make help</code> hiện hành vẫn giữ cả hai, kèm lời khuyên dùng với cờ <code>-s</code> cho gọn, và bổ sung một đích thứ ba là <code>image_name</code> <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Các kịch bản tự động dùng nó để đặt tên tệp nhân. Ngày nay vẫn còn cả hai, và có thêm <code>image_name</code> <span class="cite"><a href="#ref-9">9</a></span>. Nhớ nhé: thêm <code>-s</code> để máy chỉ in kết quả, không in gì khác.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Every kernel packaging script calls <code>kernelrelease</code> to name its files. The current <code>make help</code> listing still carries both, advises using them with <code>-s</code>, and adds a third informational target, <code>image_name</code> <span class="cite"><a href="#ref-9">9</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao có hai con số</h4>
+          <p>Nhân cho phép bạn dán một hậu tố riêng vào phiên bản — qua tùy chọn cấu hình hoặc một tệp <code>localversion</code> trong cây mã. Chính hậu tố ấy tạo ra khoảng cách giữa hai đích: <code>kernelversion</code> cố tình bỏ qua nó, <code>kernelrelease</code> cố tình mang nó theo <span class="cite"><a href="#ref-1">1</a></span>. Khi hai bản nhân cùng phiên bản gốc nhưng khác cấu hình cùng nằm trên một máy, hậu tố này là thứ duy nhất phân biệt được chúng.</p>
+        </div>
+        <div class="info-block">
+          <h4>Ranh giới 2006 / hôm nay</h4>
+          <p>Hai đích này là phần <em>ổn định nhất</em> của cả chương: hai mươi năm sau chúng vẫn nằm nguyên trong mục “Other generic targets” của <code>make help</code> với đúng vai trò cũ <span class="cite"><a href="#ref-9">9</a></span>. Nếu bạn cần một ví dụ về việc giao diện dòng lệnh của nhân bền đến mức nào, đây là ví dụ ấy.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">cleaning targets</span>
+      <h3>
+        <span class="standard-copy">Ba mức dọn: <code>clean</code> → <code>mrproper</code> → <code>distclean</code></span>
+        <span class="easy-only">Ba mức dọn, từ nhẹ tới sạch bong</span>
+        <span class="en-only" lang="en">Three depths of clean: <code>clean</code> → <code>mrproper</code> → <code>distclean</code></span>
+      </h3>
+      <p class="standard-copy">Ba đích này khác nhau ở chỗ chúng xóa <em>bao nhiêu</em>, và ông nói rõ lý do có ba mức: “đôi khi bạn muốn giữ lại những tệp mình đã thay đổi” <span class="cite"><a href="#ref-2">2</a></span>. <code>clean</code> xóa phần lớn tệp do hệ dựng sinh ra <b>nhưng giữ cấu hình nhân</b>. <code>mrproper</code> xóa <em>tất cả</em> tệp sinh ra, <b>kể cả cấu hình</b> và một số tệp sao lưu. <code>distclean</code> làm mọi thứ <code>mrproper</code> làm, cộng thêm việc xóa một số tệp sao lưu của trình soạn thảo và tệp thừa do vá để lại <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Ba nút dọn, mạnh dần. <code>clean</code>: xóa đồ biên dịch, <b>giữ</b> phần bạn đã chọn cấu hình. <code>mrproper</code>: xóa hết, <b>mất luôn</b> cấu hình. <code>distclean</code>: xóa hết, thêm cả tệp sao lưu của trình soạn thảo <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: gõ <code>mrproper</code> là mất tệp <code>.config</code> — sao lưu nó trước đã.</p>
+      <p class="en-only" lang="en">The three differ in <em>how much</em> they remove, and he states the reason there are three: “sometimes you want to keep around files you've changed” <span class="cite"><a href="#ref-2">2</a></span>. <code>clean</code> removes most of the files generated by the build system <b>but keeps the kernel configuration</b>. <code>mrproper</code> removes <em>all</em> generated files, <b>including the configuration</b> and various backup files. <code>distclean</code> does everything <code>mrproper</code> does and also removes editor backup and patch leftover files <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Ví dụ gộp đích của chính ông — <code>make mrproper xconfig</code> — là mẫu quen thuộc khi bắt đầu một cấu hình hoàn toàn mới <span class="cite"><a href="#ref-1">1</a></span>: xóa sạch trước, rồi mở giao diện chọn lại từ đầu.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Câu lệnh mẫu của sách là <code>make mrproper xconfig</code> — dọn sạch rồi mở bảng chọn <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: đây là cách bắt đầu lại từ số không.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> His own grouping example — <code>make mrproper xconfig</code> — is the familiar pattern for starting a configuration from scratch <span class="cite"><a href="#ref-1">1</a></span>: wipe everything, then open the editor and choose again.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cùng ba đích, mô tả đã tinh hơn</h4>
+          <p>Danh sách <code>make help</code> hiện hành vẫn đúng ba đích ấy theo đúng thứ tự, nhưng mô tả <code>clean</code> đã cụ thể hơn: nó giữ lại cấu hình <em>và đủ hạ tầng dựng để còn dựng được module ngoài cây</em> <span class="cite"><a href="#ref-9">9</a></span>. Chi tiết này quan trọng với người dựng driver riêng — sách 2006 chưa nêu.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao tên là “mrproper”</h4>
+          <p>Sách không giải thích cái tên; nó là một quy ước lâu đời của cây mã nhân. Điều đáng nhớ không phải từ nguyên mà là hệ quả: đây là đích duy nhất trong nhóm khiến bạn mất công lao cấu hình. Thói quen an toàn là <code>cp .config ~/config-backup</code> trước khi gõ nó — một bước phòng xa do trang này thêm vào, không có trong sách.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Dọn xong thì phải chọn lại. Và nhóm đích lớn nhất, rối nhất của cả chương chính là nhóm cấu hình — mười một đích trong một bảng duy nhất, cộng một biến môi trường có sức mạnh ghi đè tất cả.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Dọn rồi thì đến lúc chọn tùy chọn. Đây là nhóm đông nhất trong chương. Nhớ nhé: nhiều cách chọn, nhưng chỉ có một tệp <code>.config</code> ở cuối.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> Once you have cleaned, you must choose again. And the largest, busiest family in the chapter is the configuration group — eleven targets in a single table, plus one environment variable powerful enough to override them all.</p>
+  </aside>
+</section>
+
+<section class="section" id="cau-hinh" aria-labelledby="cau-hinh-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 02</span><span class="en-only" lang="en">Concept cluster 02</span></p>
+    <h2 id="cau-hinh-title">
+      <span class="standard-copy">Đích cấu hình: mười một lối vào cùng một tệp <code>.config</code></span>
+      <span class="easy-only">Mười một cách chọn tùy chọn</span>
+      <span class="en-only" lang="en">Configuration targets: eleven doors into one <code>.config</code></span>
+    </h2>
+    <p class="standard-copy">Bảng 10-3 là bảng dài nhất của chương. Ông giới thiệu nó bằng một câu rất gọn: đây là các đích “cho phép nhân được cấu hình theo rất nhiều cách khác nhau” <span class="cite"><a href="#ref-2">2</a></span>. Đọc kỹ sẽ thấy mười một đích ấy tách làm ba họ có tính chất khác hẳn nhau: họ <b>hỏi bạn</b> (bốn giao diện tương tác), họ <b>kế thừa</b> (dựa trên <code>.config</code> sẵn có), và họ <b>sinh tự động</b> (máy tự trả lời hết).</p>
+    <p class="easy-only">Bảng này dài nhất chương. Ông nói đây là các cách “cấu hình nhân theo rất nhiều kiểu khác nhau” <span class="cite"><a href="#ref-2">2</a></span>. Có thể chia làm ba loại: loại hỏi bạn từng câu, loại lấy lựa chọn cũ làm nền, và loại máy tự điền hết. Nhớ nhé: ba loại, nhưng kết quả đều là một tệp <code>.config</code>.</p>
+    <p class="en-only" lang="en">Table 10-3 is the longest table in the chapter. He introduces it in one tight sentence: these are the targets “that allow the kernel to be configured in a wide range of different ways” <span class="cite"><a href="#ref-2">2</a></span>. Read closely, the eleven split into three families of quite different character: those that <b>ask you</b> (four interactive front-ends), those that <b>inherit</b> (working from an existing <code>.config</code>), and those that <b>generate</b> (the machine answers everything itself).</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b><code>.config</code>.</b> Tệp văn bản duy nhất ở gốc thư mục dựng, ghi lại câu trả lời cho mọi tùy chọn. Mười một đích trong bảng 10-3 khác nhau ở <em>cách</em> chúng sinh ra hoặc cập nhật tệp này <span class="cite"><a href="#ref-2">2</a></span> — chứ không khác nhau ở kết quả cuối.</p>
+      <p class="easy-only"><b><code>.config</code> là gì.</b> Là tệp ghi lại toàn bộ lựa chọn của bạn. Mười một đích chỉ khác nhau ở cách tạo ra tệp đó <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: mọi con đường đều dẫn về một tệp.</p>
+      <p class="en-only" lang="en"><b><code>.config</code>.</b> The single text file at the root of the build directory recording the answer to every option. The eleven targets in Table 10-3 differ in <em>how</em> they produce or update that file <span class="cite"><a href="#ref-2">2</a></span> — not in what they ultimately produce.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">hỏi bạn&nbsp;&nbsp;&nbsp; : config menuconfig<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; xconfig gconfig<br>kế thừa&nbsp;&nbsp;&nbsp; : oldconfig silentoldconfig<br>sinh tự động: randconfig defconfig<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; allmodconfig<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; allyesconfig allnoconfig</p>
+      <p class="easy-only">hỏi bạn : config, menuconfig,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; xconfig, gconfig<br>dựa cũ&nbsp; : oldconfig<br>tự điền : defconfig, allnoconfig…</p>
+      <p class="en-only" lang="en">they ask&nbsp; : config menuconfig<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; xconfig gconfig<br>they inherit: oldconfig silentoldconfig<br>they generate: randconfig defconfig<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; allmodconfig<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; allyesconfig allnoconfig</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">interactive configurators</span>
+      <h3>
+        <span class="standard-copy">Bốn giao diện: <code>config</code>, <code>menuconfig</code>, <code>xconfig</code>, <code>gconfig</code></span>
+        <span class="easy-only">Bốn kiểu bảng chọn</span>
+        <span class="en-only" lang="en">Four front-ends: <code>config</code>, <code>menuconfig</code>, <code>xconfig</code>, <code>gconfig</code></span>
+      </h3>
+      <p class="standard-copy">Bốn đích này cùng làm một việc — “cập nhật cấu hình nhân hiện tại” — và chỉ khác ở lớp vỏ. <code>config</code> dùng một chương trình <em>theo dòng</em>; <code>menuconfig</code> dùng một chương trình menu <em>nền văn bản</em>; <code>xconfig</code> dùng một chương trình đồ họa <em>nền QT</em>; <code>gconfig</code> dùng một chương trình đồ họa <em>nền GTK+</em> <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Bốn cái này đều để chọn tùy chọn, chỉ khác cái “mặt tiền”: một cái hỏi từng dòng, một cái hiện menu chữ, hai cái còn lại là cửa sổ đồ họa <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: chọn cái nào cũng được, miễn bạn thấy dễ nhìn.</p>
+      <p class="en-only" lang="en">All four do the same job — “updates the current kernel configuration” — and differ only in their shell. <code>config</code> uses a <em>line-oriented</em> program; <code>menuconfig</code> a <em>text-based menu</em> program; <code>xconfig</code> a <em>QT-based graphical</em> program; <code>gconfig</code> a <em>GTK+-based graphical</em> program <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Cả bốn vẫn còn, và đã có thêm người thứ năm: <code>nconfig</code>, một trình cấu hình nền <span lang="en">ncurses</span>, hiện được <code>make help</code> liệt kê ngay cạnh <code>menuconfig</code> <span class="cite"><a href="#ref-9">9</a></span>. Tài liệu hiện hành cũng nói rõ tên chương trình chạy bên dưới: <code>qconf</code> cho <code>xconfig</code>, <code>mconf</code> cho <code>menuconfig</code>, <code>nconf</code> cho <code>nconfig</code>, <code>gconf</code> cho <code>gconfig</code> <span class="cite"><a href="#ref-11">11</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Bốn cái đó vẫn còn dùng được, và nay có thêm <code>nconfig</code> <span class="cite"><a href="#ref-9">9</a></span>. Nhớ nhé: <code>menuconfig</code> là lựa chọn an toàn nhất cho người mới.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> All four survive, and a fifth has joined them: <code>nconfig</code>, an ncurses-menu-based configurator now listed by <code>make help</code> right beside <code>menuconfig</code> <span class="cite"><a href="#ref-9">9</a></span>. Current documentation also names the programs underneath: <code>qconf</code> for <code>xconfig</code>, <code>mconf</code> for <code>menuconfig</code>, <code>nconf</code> for <code>nconfig</code>, <code>gconf</code> for <code>gconfig</code> <span class="cite"><a href="#ref-11">11</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>“QT” của 2006, Qt của hôm nay</h4>
+          <p>Sách viết “QT-based graphical program” <span class="cite"><a href="#ref-2">2</a></span>; danh sách <code>make help</code> hiện hành viết “a Qt based front-end” <span class="cite"><a href="#ref-9">9</a></span>. Bộ công cụ vẫn là Qt, chỉ có cách viết hoa và số phiên bản thay đổi theo thời gian. Ý nghĩa thực dụng với bạn: <code>xconfig</code> cần các gói phát triển Qt, <code>gconfig</code> cần GTK+ — đó là lý do phổ biến nhất khiến hai đích này báo lỗi trên máy mới cài.</p>
+        </div>
+        <div class="info-block">
+          <h4>Tìm kiếm — thứ sách không nói</h4>
+          <p>Với gần hai nghìn tùy chọn, năng lực <em>tìm</em> quan trọng hơn năng lực <em>duyệt</em>. Tài liệu hiện hành mô tả: <code>menuconfig</code> tìm bằng phím <code>/</code> và hỗ trợ biểu thức chính quy; <code>nconfig</code> tìm bằng <code>/</code> (không regex) và có <span lang="en">SymSearch</span> ở phím F8; <code>xconfig</code> tìm bằng Ctrl-F; còn <code>gconfig</code> thì <em>không có</em> lệnh tìm kiếm <span class="cite"><a href="#ref-11">11</a></span>. Riêng điểm cuối đủ để loại <code>gconfig</code> khỏi danh sách của người mới.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">oldconfig / silentoldconfig</span>
+      <h3>
+        <span class="standard-copy">Họ kế thừa: <code>oldconfig</code> và <code>silentoldconfig</code></span>
+        <span class="easy-only">Giữ lựa chọn cũ, chỉ hỏi cái mới</span>
+        <span class="en-only" lang="en">The inheriting family: <code>oldconfig</code> and <code>silentoldconfig</code></span>
+      </h3>
+      <p class="standard-copy"><code>oldconfig</code> cập nhật cấu hình bằng cách dùng chính tệp <code>.config</code> hiện có và <b>chỉ hỏi bạn về những tùy chọn mới</b> vừa được thêm vào nhân <span class="cite"><a href="#ref-2">2</a></span>. <code>silentoldconfig</code> giống hệt, nhưng “không in gì ra màn hình ngoại trừ khi có một câu hỏi cần được trả lời” <span class="cite"><a href="#ref-2">2</a></span>. Đây là đích bạn sẽ gõ nhiều nhất trong đời nâng cấp nhân: nó là cây cầu đưa lựa chọn cũ sang phiên bản mới.</p>
+      <p class="easy-only"><code>oldconfig</code> giữ nguyên mọi thứ bạn đã chọn lần trước, chỉ hỏi thêm về những tùy chọn <em>mới xuất hiện</em> <span class="cite"><a href="#ref-2">2</a></span>. <code>silentoldconfig</code> cũng vậy nhưng im lặng hơn <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: nâng cấp nhân thì dùng <code>oldconfig</code>, đừng chọn lại từ đầu.</p>
+      <p class="en-only" lang="en"><code>oldconfig</code> updates the configuration by using the current <code>.config</code> file and <b>prompting only for new options</b> that have been added to the kernel <span class="cite"><a href="#ref-2">2</a></span>. <code>silentoldconfig</code> is “just like oldconfig, but prints nothing to the screen except when a question needs to be answered” <span class="cite"><a href="#ref-2">2</a></span>. This is the target you will type most often across a life of kernel upgrades: it is the bridge that carries your old answers into a new version.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Cảnh báo thời gian.</b> <code>oldconfig</code> còn nguyên, nhưng <code>silentoldconfig</code> <b>đã biến mất khỏi giao diện người dùng</b>. Năm 2018 nó được đổi tên thành <code>syncconfig</code> vì cái tên cũ là một nhầm lẫn lịch sử, bị hạ xuống thành chi tiết cài đặt nội bộ, và bản vá có ghi chú rằng tên cũ sẽ bị gỡ sau Linux 4.19 <span class="cite"><a href="#ref-12">12</a></span>. Danh sách <code>make help</code> hiện hành không còn nhắc tới nó <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        <p class="easy-only"><b>Đã đổi.</b> <code>oldconfig</code> vẫn dùng được. Còn <code>silentoldconfig</code> thì không: từ năm 2018 nó đổi tên thành <code>syncconfig</code> và trở thành việc nội bộ của máy <span class="cite"><a href="#ref-12">12</a></span>. Nhớ nhé: thấy lệnh này trong hướng dẫn cũ thì bỏ qua, dùng <code>oldconfig</code>.</p>
+        <p class="en-only" lang="en"><b>Time-bound warning.</b> <code>oldconfig</code> is intact, but <code>silentoldconfig</code> <b>has disappeared from the user-facing interface</b>. In 2018 it was renamed <code>syncconfig</code> because the old name was a historical misnomer, demoted to an internal implementation detail, and the patch noted the old name would be removed after Linux 4.19 <span class="cite"><a href="#ref-12">12</a></span>. The current <code>make help</code> listing no longer mentions it <span class="cite"><a href="#ref-9">9</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Những người kế nhiệm</h4>
+          <p>Chỗ trống mà <code>silentoldconfig</code> để lại đã được lấp bằng các đích rõ ràng hơn trong <code>make help</code> hôm nay: <code>olddefconfig</code> — “giống <code>oldconfig</code> nhưng đặt các ký hiệu mới về giá trị mặc định mà không hỏi”; <code>listnewconfig</code> — chỉ liệt kê tùy chọn mới; và <code>helpnewconfig</code> — liệt kê kèm phần trợ giúp <span class="cite"><a href="#ref-9">9</a></span>. Ba cái này là thứ mà kịch bản tự động ngày nay thực sự dùng.</p>
+        </div>
+        <div class="info-block">
+          <h4>Hai đích chương 1 đã nhắc</h4>
+          <p><code>localmodconfig</code> và <code>localyesconfig</code> — cập nhật cấu hình bằng cách tắt các module không được nạp, trừ những cái được giữ lại qua biến <code>LMC_KEEP</code> — <b>không</b> có trong bảng 10-3 của sách <span class="cite"><a href="#ref-2">2</a></span>, nhưng có trong <code>make help</code> hiện hành <span class="cite"><a href="#ref-9">9</a></span> và được tài liệu nhân khuyến nghị cho người muốn cắt gọt nhanh <span class="cite"><a href="#ref-10">10</a></span>. Đây là bổ sung rõ rệt nhất vào họ cấu hình kể từ 2006.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">generated configurations</span>
+      <h3>
+        <span class="standard-copy">Họ sinh tự động: <code>defconfig</code>, <code>randconfig</code>, và ba đích “all”</span>
+        <span class="easy-only">Để máy tự điền hết</span>
+        <span class="en-only" lang="en">The generating family: <code>defconfig</code>, <code>randconfig</code> and the three “all” targets</span>
+      </h3>
+      <p class="standard-copy">Năm đích này không hỏi bạn câu nào. <code>defconfig</code> sinh cấu hình mới với câu trả lời mặc định cho mọi tùy chọn, lấy từ tệp <code>arch/$ARCH/defconfig</code>, trong đó <code>$ARCH</code> là kiến trúc đang dựng <span class="cite"><a href="#ref-2">2</a></span>. <code>randconfig</code> sinh cấu hình với câu trả lời <em>ngẫu nhiên</em> cho tất cả <span class="cite"><a href="#ref-2">2</a></span>. Ba đích còn lại đi theo cực trị: <code>allmodconfig</code> bật module bất cứ khi nào có thể, <code>allyesconfig</code> đặt mọi tùy chọn thành “có”, <code>allnoconfig</code> đặt mọi tùy chọn thành “không” <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Năm đích này máy tự trả lời hết, không hỏi bạn. <code>defconfig</code>: lấy mặc định. <code>randconfig</code>: trả lời bừa. <code>allyesconfig</code>: bật tất. <code>allnoconfig</code>: tắt tất. <code>allmodconfig</code>: cái nào làm module được thì làm <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: mấy cái “all” không dành để chạy máy thật, mà để thử.</p>
+      <p class="en-only" lang="en">These five ask you nothing. <code>defconfig</code> generates a new configuration with the default answer for all options, taken from the <code>arch/$ARCH/defconfig</code> file, where <code>$ARCH</code> is the architecture being built for <span class="cite"><a href="#ref-2">2</a></span>. <code>randconfig</code> generates one with <em>random</em> answers to all of the options <span class="cite"><a href="#ref-2">2</a></span>. The remaining three go to the extremes: <code>allmodconfig</code> enables modules wherever possible, <code>allyesconfig</code> sets all options to yes, <code>allnoconfig</code> sets all options to no <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Đây là nhóm đích của <em>máy kiểm thử</em>, không phải của máy để bàn. <code>allyesconfig</code> và <code>randconfig</code> là công cụ chính của các hệ thống dựng tự động đi săn lỗi biên dịch. Cả năm vẫn còn trong <code>make help</code> hôm nay, cùng với các bổ sung như <code>alldefconfig</code>, <code>tinyconfig</code> — “cấu hình cái nhân nhỏ nhất có thể” — và <code>savedefconfig</code> <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Các máy chủ kiểm thử tự động hay dùng chúng để tìm lỗi biên dịch. Ngày nay có thêm <code>tinyconfig</code> để làm nhân nhỏ nhất có thể <span class="cite"><a href="#ref-9">9</a></span>. Nhớ nhé: nhóm này để thử nghiệm, không để dùng hằng ngày.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> This is the family of <em>test machines</em>, not desktops. <code>allyesconfig</code> and <code>randconfig</code> are staple tools of automated build systems hunting compile errors. All five survive in today's <code>make help</code>, alongside additions such as <code>alldefconfig</code>, <code>tinyconfig</code> — “configure the tiniest possible kernel” — and <code>savedefconfig</code> <span class="cite"><a href="#ref-9">9</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đường dẫn defconfig đã đổi chỗ</h4>
+          <p>Sách chỉ đích danh tệp <code>arch/$ARCH/defconfig</code> <span class="cite"><a href="#ref-2">2</a></span>. Mô tả hiện hành trong <code>make help</code> thận trọng hơn và không nêu đường dẫn, chỉ nói “cấu hình mới với mặc định do kiến trúc cung cấp”, đồng thời liệt kê các defconfig riêng theo kiến trúc như <code>i386_defconfig</code> và <code>x86_64_defconfig</code> <span class="cite"><a href="#ref-9">9</a></span>. Nếu bạn làm theo sách mà không thấy tệp ở đúng chỗ, đây là lý do.</p>
+        </div>
+        <div class="info-block">
+          <h4>“Có / không / module” — nhắc lại từ chương 4</h4>
+          <p>Ba đích “all” chỉ có nghĩa nếu bạn nhớ mô hình ba trạng thái của một tùy chọn: <code>y</code> dựng thẳng vào nhân, <code>m</code> dựng thành module, <code>n</code> loại bỏ. <code>allyesconfig</code> đẩy tất cả về <code>y</code>, <code>allnoconfig</code> về <code>n</code>, <code>allmodconfig</code> về <code>m</code> khi có thể <span class="cite"><a href="#ref-2">2</a></span>. Hôm nay còn có cả nhóm đích chuyển đổi giữa ba trạng thái: <code>yes2modconfig</code>, <code>mod2yesconfig</code>, <code>mod2noconfig</code> <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">KCONFIG_ALLCONFIG</span>
+      <h3>
+        <span class="standard-copy">Biến ghi đè: giữ một nền cấu hình “luôn đúng”</span>
+        <span class="easy-only">Một tệp nhỏ ép giữ vài lựa chọn</span>
+        <span class="en-only" lang="en">The override variable: keeping a known-good base</span>
+      </h3>
+      <p class="standard-copy">Đây là mẹo hay nhất của cả chương, và nó nằm ngoài bảng. Bốn đích <code>allyesconfig</code>, <code>allmodconfig</code>, <code>allnoconfig</code> và <code>randconfig</code> đều tận dụng biến môi trường <code>KCONFIG_ALLCONFIG</code>: nếu biến ấy trỏ tới một tệp, tệp đó sẽ được dùng làm danh sách các giá trị cấu hình mà bạn <em>yêu cầu</em> phải được đặt cụ thể — nói cách khác, tệp đó <b>ghi đè hành vi bình thường</b> của các đích <span class="cite"><a href="#ref-3">3</a></span>. Ví dụ của ông: một tệp chứa <code>CONFIG_SWAP=y</code> và <code>CONFIG_DEBUG_FS=y</code>, chạy <code>KCONFIG_ALLCONFIG=../must_be_set make allnoconfig</code>, và kết quả vẫn có <code>CONFIG_DEBUG_FS=y</code> — thứ lẽ ra không bao giờ được bật bởi <code>allnoconfig</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Bạn có thể viết một tệp nhỏ liệt kê vài lựa chọn <em>bắt buộc phải giữ</em>, rồi chỉ cho <code>make</code> biết tệp đó. Kể cả khi bạn bảo “tắt hết”, những dòng trong tệp ấy vẫn được bật <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: đây là cách giữ lại vài thứ sống còn khi dọn sạch mọi thứ khác.</p>
+      <p class="en-only" lang="en">This is the chapter's best trick, and it lives outside the table. The <code>allyesconfig</code>, <code>allmodconfig</code>, <code>allnoconfig</code> and <code>randconfig</code> targets all take advantage of the <code>KCONFIG_ALLCONFIG</code> environment variable: if it points at a file, that file is used as a list of configuration values you require to be set to a specific value — in other words, the file <b>overrides the normal behavior</b> of the make targets <span class="cite"><a href="#ref-3">3</a></span>. His worked example: a file holding <code>CONFIG_SWAP=y</code> and <code>CONFIG_DEBUG_FS=y</code>, run as <code>KCONFIG_ALLCONFIG=../must_be_set make allnoconfig</code>, yields a <code>.config</code> that still contains <code>CONFIG_DEBUG_FS=y</code> — a variable that “would not have normally been set to y otherwise” <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Nếu biến không được đặt, hệ dựng tự tìm trong thư mục dựng gốc các tệp tên <code>allmod.config</code>, <code>allno.config</code>, <code>allrandom.config</code>, <code>allyes.config</code>; không thấy cái nào thì cuối cùng nó tìm tệp <code>all.config</code> <span class="cite"><a href="#ref-3">3</a></span>. Ông gợi ý dùng cơ chế này để “dựng sẵn một nền cấu hình tốt đã biết, luôn chạy được”, rồi dùng các đích khác để sinh ra những cấu hình thử nghiệm khác nhau <span class="cite"><a href="#ref-3">3</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Không cần đặt biến cũng được: cứ để tệp tên <code>all.config</code> ở thư mục gốc là máy tự tìm thấy <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: giữ một “nền an toàn”, rồi thử nghiệm thoải mái bên trên.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> If the variable is not set, the build system checks the top-level build directory for files named <code>allmod.config</code>, <code>allno.config</code>, <code>allrandom.config</code>, <code>allyes.config</code>; failing those, it finally looks for <code>all.config</code> <span class="cite"><a href="#ref-3">3</a></span>. He suggests using this to “set up a known good base configuration that will always work”, then using the other targets to generate different testing configurations <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cơ chế còn nguyên, danh sách dài thêm</h4>
+          <p>Tài liệu Kconfig hiện hành mô tả đúng cơ chế ấy, chỉ mở rộng: biến nay áp dụng cho cả <code>alldefconfig</code>, và có thể đặt rỗng hoặc bằng <code>1</code> để hệ dựng tự tìm tệp <code>all{yes,mod,no,def,random}.config</code> tương ứng với đích bạn gọi, rồi mới quay về <code>all.config</code> <span class="cite"><a href="#ref-11">11</a></span>. Tên gọi hiện hành cho tệp nhỏ này là <span lang="en">miniconfig</span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Một hạn chế sách không nêu</h4>
+          <p>Tài liệu hiện hành nói rõ điều mà sách để ngỏ: các ký hiệu bạn ép đặt sẵn “vẫn chịu kiểm tra phụ thuộc bình thường” <span class="cite"><a href="#ref-11">11</a></span>. Nghĩa là viết <code>CONFIG_X=y</code> vào tệp không bảo đảm <code>CONFIG_X</code> sẽ bật — nếu điều kiện tiên quyết của nó không thỏa, nó vẫn bị tắt. “Yêu cầu” ở đây là yêu cầu có điều kiện.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <div class="trap-comparison deep-only">
+    <p class="eyebrow"><span class="vi-only">Ba hiểu lầm thường gặp</span><span class="en-only" lang="en">Three common misconceptions</span></p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Danh sách trong sách là danh sách hiện hành”</span><span class="en-only" lang="en">“The book's list is the current list”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> chép bảng trong sách ra là có bộ đích đầy đủ. <span class="fact">Thực tế:</span> sách viết năm 2006 cho dòng nhân 2.6. Danh sách <code>make help</code> hôm nay dài hơn nhiều, có cả những mục chưa từng tồn tại khi đó — đích Rust, đích <span lang="en">kselftest</span>, đích <code>sbom</code> <span class="cite"><a href="#ref-9">9</a></span>. Nguồn đúng đắn duy nhất là <code>make help</code> chạy trong chính cây mã bạn đang dựng, điều mà chính ông đã dặn <span class="cite"><a href="#ref-1">1</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> copy out the book's tables and you have the full target set. <span class="fact">Fact:</span> the book was written in 2006 for the 2.6 series. Today's <code>make help</code> listing is far longer, carrying entries that did not exist then — Rust targets, kselftest targets, an <code>sbom</code> target <span class="cite"><a href="#ref-9">9</a></span>. The only authoritative source is <code>make help</code> run in the very tree you are building, which is what he told you to do in the first place <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“<code>clean</code> và <code>mrproper</code> chỉ khác nhau về mức độ”</span><span class="en-only" lang="en">“<code>clean</code> and <code>mrproper</code> differ only in degree”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> cứ dùng cái mạnh hơn cho chắc. <span class="fact">Thực tế:</span> khác nhau về <em>chất</em>. <code>clean</code> giữ cấu hình nhân; <code>mrproper</code> xóa cả cấu hình <span class="cite"><a href="#ref-2">2</a></span>. Với một tệp <code>.config</code> phải mất hàng giờ dò từng tùy chọn, đó là khác biệt giữa “dọn bàn” và “đốt bản thảo”.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> use the stronger one to be safe. <span class="fact">Fact:</span> they differ in <em>kind</em>. <code>clean</code> keeps the kernel configuration; <code>mrproper</code> removes it <span class="cite"><a href="#ref-2">2</a></span>. For a <code>.config</code> that took hours of option-by-option work, that is the difference between clearing the desk and burning the manuscript.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“<code>allyesconfig</code> cho cái nhân mạnh nhất”</span><span class="en-only" lang="en">“<code>allyesconfig</code> gives the most capable kernel”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> bật hết thì được nhiều tính năng nhất. <span class="fact">Thực tế:</span> đây là đích của máy kiểm thử. Nó đặt <em>mọi</em> tùy chọn thành “có” <span class="cite"><a href="#ref-2">2</a></span>, kể cả các tùy chọn gỡ lỗi và các driver xung đột nhau — kết quả là một cái nhân khổng lồ, chậm, và thường không khởi động nổi trên máy thật. Nó tồn tại để <em>biên dịch</em> mọi dòng mã, không phải để <em>chạy</em>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> turning everything on gives you the most features. <span class="fact">Fact:</span> this is a test-machine target. It sets <em>all</em> options to yes <span class="cite"><a href="#ref-2">2</a></span>, including debugging options and mutually hostile drivers — the result is an enormous, slow kernel that often will not boot on real hardware. It exists to <em>compile</em> every line of code, not to <em>run</em>.</p>
+      </div>
+    </div>
+  </div>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Có <code>.config</code> rồi thì mới tới phần thực sự tốn thời gian: biên dịch. Nhóm đích tiếp theo trả lời ba câu hỏi — dựng <em>cái gì</em>, dựng <em>như thế nào</em>, và dựng xong thì <em>gói lại ra sao</em>.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Chọn xong rồi thì đến lúc biên dịch, và sau đó là đóng gói. Nhớ nhé: chọn nhanh, dựng lâu.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> With a <code>.config</code> in hand comes the part that actually takes time: compiling. The next family answers three questions — <em>what</em> to build, <em>how</em> to build it, and how to <em>package</em> the result.</p>
+  </aside>
+</section>
+
+<section class="section" id="dung-va-dong-goi" aria-labelledby="dung-va-dong-goi-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 03</span><span class="en-only" lang="en">Concept cluster 03</span></p>
+    <h2 id="dung-va-dong-goi-title">
+      <span class="standard-copy">Dựng cái gì, dựng thế nào, rồi gói lại</span>
+      <span class="easy-only">Biên dịch, rồi đóng gói</span>
+      <span class="en-only" lang="en">What to build, how to build it, how to package it</span>
+    </h2>
+    <p class="standard-copy">Ba bảng liên tiếp — 10-4, 10-5 và 10-6 — tạo thành trung tâm thực dụng của chương. Bảng đầu là các đích “dựng chính cái nhân theo nhiều cách khác nhau” <span class="cite"><a href="#ref-4">4</a></span>; bảng giữa là các <em>biến môi trường</em> mà ông nói có thể truyền cho <code>make</code> để thay đổi bản dựng, và “có thể chỉ định cho gần như mọi đích” <span class="cite"><a href="#ref-4">4</a></span>; bảng cuối là các đích “đóng gói một cái nhân đã dựng thành một gói độc lập, cài được trên nhiều loại máy khác nhau” <span class="cite"><a href="#ref-5">5</a></span>.</p>
+    <p class="easy-only">Ba bảng liền nhau: dựng cái gì, chỉnh cách dựng, rồi gói lại để đem đi cài <span class="cite"><a href="#ref-4">4</a></span><span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: đây là phần bạn sẽ dùng nhiều nhất trong thực tế.</p>
+    <p class="en-only" lang="en">Three consecutive tables — 10-4, 10-5 and 10-6 — form the practical heart of the chapter. The first holds the targets that “build the kernel itself in a variety of ways” <span class="cite"><a href="#ref-4">4</a></span>; the middle one holds the <em>environment variables</em> he says you can pass to <code>make</code> to change the build, and which “can be specified for almost any target” <span class="cite"><a href="#ref-4">4</a></span>; the last holds targets that “package up a built kernel into a standalone package that can be installed on a wide range of different machines” <span class="cite"><a href="#ref-5">5</a></span>.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Đích mặc định.</b> Khi bạn gõ <code>make</code> không kèm gì, hệ dựng chạy đích <code>all</code> — đích “dựng tất cả các đích khác nhau cần thiết để cái nhân này dùng được”, bao gồm <em>cả</em> module lẫn phần tĩnh của nhân <span class="cite"><a href="#ref-4">4</a></span>. Mọi đích khác trong bảng 10-4 đều là cách dựng <em>một phần</em>.</p>
+      <p class="easy-only"><b>Gõ <code>make</code> suông thì sao?</b> Máy chạy đích <code>all</code>: dựng đủ mọi thứ cần thiết, cả phần lõi lẫn các module <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: <code>make</code> suông là “làm hết”.</p>
+      <p class="en-only" lang="en"><b>The default target.</b> Type bare <code>make</code> and the build system runs <code>all</code> — the target that “builds all of the different targets needed for this kernel to be able to be used”, including <em>both</em> the modules and the static portion of the kernel <span class="cite"><a href="#ref-4">4</a></span>. Every other target in Table 10-4 is a way of building only a part.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">make&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → all<br>make vmlinux&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → chỉ phần tĩnh<br>make modules&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → chỉ module<br>make drivers/usb/&nbsp;&nbsp; → cả thư mục<br>make drivers/x.ko&nbsp;&nbsp; → một module<br>make V=1 O=../build → chỉnh cách dựng</p>
+      <p class="easy-only">make&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → làm hết<br>make vmlinux&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → chỉ phần lõi<br>make modules&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → chỉ module<br>make V=1&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → in rõ từng lệnh</p>
+      <p class="en-only" lang="en">make&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → all<br>make vmlinux&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → static part only<br>make modules&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → modules only<br>make drivers/usb/&nbsp;&nbsp; → a whole directory<br>make drivers/x.ko&nbsp;&nbsp; → one module<br>make V=1 O=../build → change how it builds</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">build targets</span>
+      <h3>
+        <span class="standard-copy">Bốn đích lớn: <code>all</code>, <code>vmlinux</code>, <code>modules</code>, <code>modules_install</code></span>
+        <span class="easy-only">Bốn đích chính khi biên dịch</span>
+        <span class="en-only" lang="en">The four big ones: <code>all</code>, <code>vmlinux</code>, <code>modules</code>, <code>modules_install</code></span>
+      </h3>
+      <p class="standard-copy">Bảng 10-4 mở đầu bằng bốn đích bạn sẽ gõ suốt đời. <code>all</code> dựng mọi thứ cần thiết <span class="cite"><a href="#ref-4">4</a></span>. <code>vmlinux</code> dựng <em>chỉ</em> phần tĩnh của nhân, không dựng module nạp được nào <span class="cite"><a href="#ref-4">4</a></span>. <code>modules</code> dựng tất cả module nạp được cho cấu hình này <span class="cite"><a href="#ref-4">4</a></span>. <code>modules_install</code> cài mọi module vào vị trí chỉ định; nếu không chỉ định vị trí nào qua biến môi trường — sách viết là <code>INSTALL_MODULE_PATH</code> — chúng được cài vào thư mục gốc mặc định của máy <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only">Bốn lệnh chính: <code>all</code> làm hết; <code>vmlinux</code> chỉ làm phần lõi; <code>modules</code> chỉ làm các module rời; <code>modules_install</code> chép các module ấy vào máy <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: làm xong module thì phải “install” nó mới vào đúng chỗ.</p>
+      <p class="en-only" lang="en">Table 10-4 opens with the four targets you will type for the rest of your life. <code>all</code> builds everything needed <span class="cite"><a href="#ref-4">4</a></span>. <code>vmlinux</code> builds <em>just</em> the static portion of the kernel, not any loadable modules <span class="cite"><a href="#ref-4">4</a></span>. <code>modules</code> builds all the loadable modules for this configuration <span class="cite"><a href="#ref-4">4</a></span>. <code>modules_install</code> installs them into the specified location; if none is given through the environment variable — the book prints it as <code>INSTALL_MODULE_PATH</code> — they go into the machine's default root directory <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Cảnh báo tên biến.</b> Tên đúng của biến ấy trong hệ dựng là <code>INSTALL_MOD_PATH</code>, không phải <code>INSTALL_MODULE_PATH</code>: tài liệu hiện hành mô tả <code>INSTALL_MOD_PATH</code> như tiền tố thêm vào <code>MODLIB</code> khi cần dời vị trí cài, và <code>make help</code> ghi <code>modules_install</code> là “cài mọi module vào <code>INSTALL_MOD_PATH</code>, mặc định <code>/</code>” <span class="cite"><a href="#ref-9">9</a></span><span class="cite"><a href="#ref-10">10</a></span>. Nếu gõ theo sách, biến sẽ bị lờ đi trong im lặng.</p>
+        <p class="easy-only"><b>Chú ý.</b> Sách ghi tên biến hơi khác so với tên thật ngày nay: phải là <code>INSTALL_MOD_PATH</code> <span class="cite"><a href="#ref-9">9</a></span>. Nhớ nhé: gõ sai tên biến thì máy không báo lỗi, chỉ lặng lẽ bỏ qua.</p>
+        <p class="en-only" lang="en"><b>Variable-name warning.</b> The build system's actual name for it is <code>INSTALL_MOD_PATH</code>, not <code>INSTALL_MODULE_PATH</code>: current documentation describes <code>INSTALL_MOD_PATH</code> as a prefix prepended to <code>MODLIB</code> for build-root relocation, and <code>make help</code> records <code>modules_install</code> as “Install all modules to INSTALL_MOD_PATH (default: /)” <span class="cite"><a href="#ref-9">9</a></span><span class="cite"><a href="#ref-10">10</a></span>. Typed as the book prints it, the variable is silently ignored.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao <code>vmlinux</code> đứng riêng</h4>
+          <p><code>vmlinux</code> là cái nhân trần, chưa nén, chưa gói thành ảnh khởi động. Phân biệt nó với <code>bzImage</code> ở mục kiến trúc phía dưới là chìa khóa để đọc hiểu quy trình: <code>vmlinux</code> là đầu ra của khâu liên kết, <code>bzImage</code> là ảnh nén để bộ nạp khởi động đọc <span class="cite"><a href="#ref-4">4</a></span><span class="cite"><a href="#ref-7">7</a></span>. Gõ <code>make vmlinux</code> khi bạn chỉ muốn biết mã có liên kết được không.</p>
+        </div>
+        <div class="info-block">
+          <h4>Bổ sung từ sau 2006</h4>
+          <p><code>make help</code> hiện hành thêm vài đích cùng họ mà sách chưa có: <code>modules_prepare</code> — chuẩn bị cây mã để dựng module ngoài cây; <code>vdso_install</code>; <code>headers</code> và <code>headers_install</code> để cài các tệp tiêu đề UAPI cho không gian người dùng <span class="cite"><a href="#ref-9">9</a></span>. Nhóm <code>headers*</code> là thứ các bản phân phối dùng để đóng gói <code>linux-libc-dev</code>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">partial builds &amp; tags</span>
+      <h3>
+        <span class="standard-copy">Dựng một phần, và ba đích cho trình soạn thảo</span>
+        <span class="easy-only">Dựng một mẩu, và giúp trình soạn thảo tìm mã</span>
+        <span class="en-only" lang="en">Partial builds, and three targets for your editor</span>
+      </h3>
+      <p class="standard-copy">Bạn không phải lúc nào cũng dựng cả cây. Sách cho ba dạng đích “đường dẫn”: <code>dir/</code> dựng mọi tệp trong thư mục đó và mọi thư mục con bên dưới; <code>dir/file.[o|i|s]</code> dựng <em>chỉ</em> tệp được chỉ định; <code>dir/file.ko</code> dựng mọi tệp cần thiết rồi liên kết chúng lại thành module ấy <span class="cite"><a href="#ref-4">4</a></span>. Kèm theo là ba đích phục vụ việc đọc mã: <code>tags</code> và <code>TAGS</code> dựng các tệp thẻ mà hầu hết trình soạn thảo thông dụng dùng được khi bạn đang sửa mã nguồn, còn <code>cscope</code> dựng một ảnh <span lang="en">cscope</span> hữu ích cho việc tìm kiếm trong cây mã — và chỉ cho kiến trúc được chỉ định bởi tệp cấu hình, không phải toàn bộ tệp mã nguồn nhân <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only">Không cần dựng cả cây: bạn có thể bảo máy dựng một thư mục, một tệp, hay đúng một module <span class="cite"><a href="#ref-4">4</a></span>. Ngoài ra có ba đích tạo “bản đồ mã nguồn” cho trình soạn thảo nhảy tới định nghĩa hàm <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: sửa một chỗ thì dựng một chỗ, nhanh hơn nhiều.</p>
+      <p class="en-only" lang="en">You do not always have to build the whole tree. The book gives three path-shaped targets: <code>dir/</code> builds all of the files in that directory and in all subdirectories below it; <code>dir/file.[o|i|s]</code> builds <em>only</em> the specified file; <code>dir/file.ko</code> builds all the needed files and links them together to form the specified module <span class="cite"><a href="#ref-4">4</a></span>. Alongside sit three reading aids: <code>tags</code> and <code>TAGS</code> build the tag files most common text editors can use while editing the source, and <code>cscope</code> builds a cscope image, useful in source tree searches, of the source tree for the architecture specified by the configuration file — not all of the kernel source files <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Cả sáu vẫn còn trong <code>make help</code> hôm nay, và danh sách đã dài ra: có thêm <code>dir/file.ll</code> cho tệp hợp ngữ LLVM, <code>dir/file.lst</code> cho tệp trộn mã nguồn với hợp ngữ, và <code>gtags</code> tạo chỉ mục GNU GLOBAL <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Các đích này vẫn dùng được, và nay còn nhiều hơn trước <span class="cite"><a href="#ref-9">9</a></span>. Nhớ nhé: <code>make tags</code> một lần là trình soạn thảo của bạn thông minh hẳn lên.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> All six survive in today's <code>make help</code>, and the list has grown: there is now <code>dir/file.ll</code> for LLVM assembly, <code>dir/file.lst</code> for mixed source/assembly output, and <code>gtags</code> for a GNU GLOBAL index <span class="cite"><a href="#ref-9">9</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Một lỗi in trong chính bảng</h4>
+          <p>Bảng 10-4 kéo sang trang 120 và dòng đầu của phần tiếp là một bản sao: mô tả của <code>TAGS</code> lặp lại nguyên văn mô tả của <code>tags</code> ở trang trước <span class="cite"><a href="#ref-4">4</a></span>. Thực tế hai đích khác nhau ở định dạng tệp thẻ — <code>tags</code> cho họ <span lang="en">vi</span>, <code>TAGS</code> cho họ <span lang="en">Emacs</span> — nhưng sách không nói ra. Đây là một chỗ trống, không phải một sai sót nghiêm trọng.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao <code>cscope</code> chỉ lấy một kiến trúc</h4>
+          <p>Chi tiết “chỉ cho kiến trúc được chỉ định bởi tệp cấu hình” <span class="cite"><a href="#ref-4">4</a></span> là một quyết định thiết kế có chủ ý: cây mã chứa hàng chục kiến trúc, và một chỉ mục gộp tất cả sẽ đầy các định nghĩa trùng tên không bao giờ cùng được biên dịch. Tài liệu hiện hành cho phép mở rộng lại phạm vi ấy bằng biến <code>ALLSOURCE_ARCHS</code>, và loại trừ thư mục bằng <code>IGNORE_DIRS</code> <span class="cite"><a href="#ref-10">10</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">environment variables</span>
+      <h3>
+        <span class="standard-copy">Ba biến đổi cách dựng: <code>V</code>, <code>O</code>, <code>C</code></span>
+        <span class="easy-only">Ba nút chỉnh cách biên dịch</span>
+        <span class="en-only" lang="en">Three variables that change the build: <code>V</code>, <code>O</code>, <code>C</code></span>
+      </h3>
+      <p class="standard-copy">Bảng 10-5 nhỏ nhưng hữu dụng bậc nhất. <code>V=0</code> bảo hệ dựng chạy <em>yên lặng</em>, chỉ hiện tệp đang được dựng chứ không hiện toàn bộ câu lệnh — và đây là mặc định; <code>V=1</code> bảo nó chạy <em>chi tiết</em>, hiện đầy đủ câu lệnh sinh ra từng tệp <span class="cite"><a href="#ref-4">4</a></span>. <code>O=dir</code> đặt <em>mọi</em> tệp đầu ra, kể cả tệp cấu hình, vào thư mục <code>dir</code> — điều này cho phép dựng nhân từ một hệ tệp chỉ-đọc và để đầu ra ở nơi khác <span class="cite"><a href="#ref-4">4</a></span>. <code>C=1</code> kiểm tra mọi tệp C sắp được dựng bằng công cụ <span lang="en">sparse</span>, thứ phát hiện các lỗi lập trình thường gặp trong mã nguồn nhân; <code>C=2</code> ép kiểm tra <em>mọi</em> tệp C, kể cả tệp không cần dựng lại <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only">Ba nút nhỏ mà rất tiện. <code>V=1</code>: hiện đầy đủ câu lệnh máy đang chạy — cực kỳ hữu ích khi có lỗi. <code>O=thư-mục</code>: để mọi tệp kết quả sang chỗ khác, giữ cây mã sạch. <code>C=1</code>: nhờ công cụ <span lang="en">sparse</span> soi lỗi giúp <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: dựng lỗi mà không hiểu vì sao thì thêm <code>V=1</code>.</p>
+      <p class="en-only" lang="en">Table 10-5 is small and among the most useful in the book. <code>V=0</code> tells the build system to run <em>quietly</em>, showing only the file currently being built rather than the entire command — and this is the default; <code>V=1</code> tells it to operate <em>verbosely</em>, showing the full command used to generate each file <span class="cite"><a href="#ref-4">4</a></span>. <code>O=dir</code> places <em>all</em> output files, including the kernel configuration files, in <code>dir</code> — which allows the kernel to be built from a read-only filesystem with the output placed elsewhere <span class="cite"><a href="#ref-4">4</a></span>. <code>C=1</code> checks all C files about to be built with the sparse tool, which detects common programming errors in kernel source; <code>C=2</code> forces all C files to be checked, even ones that did not need to be built <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Cả ba còn nguyên ý nghĩa, và <code>V</code> đã có thêm mức: <code>V=2</code> nêu <em>lý do</em> một đích phải dựng lại, và hai mức có thể gộp thành <code>V=12</code> <span class="cite"><a href="#ref-9">9</a></span>. Danh sách hiện hành cũng bổ sung <code>W=n</code> để bật các cảnh báo biên dịch bổ sung, <code>M=</code> cho module ngoài cây, và <code>LLVM=1</code> để dựng bằng Clang/LLVM thay cho GCC <span class="cite"><a href="#ref-9">9</a></span><span class="cite"><a href="#ref-10">10</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Ba biến này vẫn dùng được y như cũ, và nay có thêm <code>V=2</code>, <code>W=1</code>, và <code>LLVM=1</code> <span class="cite"><a href="#ref-9">9</a></span>. Nhớ nhé: các biến viết <em>trước</em> tên đích cũng được, viết sau cũng được.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> All three keep their meaning, and <code>V</code> has gained a level: <code>V=2</code> gives the <em>reason</em> a target is being rebuilt, and the two can be combined as <code>V=12</code> <span class="cite"><a href="#ref-9">9</a></span>. The current listing also adds <code>W=n</code> for extra build checks, <code>M=</code> for external modules, and <code>LLVM=1</code> to build with Clang/LLVM instead of GCC <span class="cite"><a href="#ref-9">9</a></span><span class="cite"><a href="#ref-10">10</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Địa chỉ của sparse đã đổi</h4>
+          <p>Sách chỉ cho bạn tải <span lang="en">sparse</span> qua <span lang="en">git</span> từ <code>git://git.kernel.org/pub/scm/devel/sparse/sparse.git</code>, kèm ảnh chụp hằng đêm ở <code>codemonkey.org.uk</code>, và bảo đọc tệp <code>Documentation/sparse.txt</code> trong cây mã <span class="cite"><a href="#ref-4">4</a></span>. Kho git vẫn còn; nhưng tài liệu đã dời — bản hiện hành nằm trong bộ tài liệu <span lang="en">dev-tools</span> của <code>docs.kernel.org</code>, không còn là tệp <code>.txt</code> rời <span class="cite"><a href="#ref-13">13</a></span>. Đây là một trong những đường dẫn “chết” rõ nhất của chương.</p>
+        </div>
+        <div class="info-block">
+          <h4><code>O=</code> — thói quen đáng tập</h4>
+          <p>Dựng ngoài cây với <code>O=</code> đáng tập thành phản xạ ngay cả khi hệ tệp của bạn ghi được: nó giữ cây mã sạch tuyệt đối, cho phép dựng nhiều cấu hình song song từ cùng một cây, và khiến <code>git status</code> trở lại hữu dụng. Tài liệu hiện hành mô tả biến tương đương ở dạng môi trường là <code>KBUILD_OUTPUT</code> <span class="cite"><a href="#ref-10">10</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">packaging targets</span>
+      <h3>
+        <span class="standard-copy">Bảy đích đóng gói: RPM, Debian, và ba loại tarball</span>
+        <span class="easy-only">Gói cái nhân lại để đem đi cài</span>
+        <span class="en-only" lang="en">Seven packaging targets: RPM, Debian and three tarballs</span>
+      </h3>
+      <p class="standard-copy">Bảng 10-6 liệt kê bảy đích. <code>rpm</code> dựng nhân trước rồi đóng gói thành một gói RPM cài được. <code>rpm-pkg</code> dựng một gói RPM <em>mã nguồn</em> chứa nhân nền. <code>binrpm-pkg</code> dựng một gói RPM chứa nhân đã biên dịch và các module. <code>deb-pkg</code> dựng một gói Debian chứa nhân đã biên dịch và module. <code>tar-pkg</code>, <code>targz-pkg</code>, <code>tarbz2-pkg</code> dựng tarball — lần lượt là không nén, nén gzip, nén bzip2 — chứa nhân đã biên dịch và các module <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      <p class="easy-only">Bảy cách gói cái nhân vừa dựng xong: hai kiểu cho hệ dùng RPM, một kiểu cho Debian, và ba kiểu tarball nén khác nhau <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: gói lại thì đem sang máy khác cài được, không phải dựng lại từ đầu.</p>
+      <p class="en-only" lang="en">Table 10-6 lists seven. <code>rpm</code> builds the kernel first and then packages it as an installable RPM. <code>rpm-pkg</code> builds a <em>source</em> RPM containing the base kernel. <code>binrpm-pkg</code> builds an RPM containing a compiled kernel and modules. <code>deb-pkg</code> builds a Debian package containing the compiled kernel and modules. <code>tar-pkg</code>, <code>targz-pkg</code> and <code>tarbz2-pkg</code> build tarballs — uncompressed, gzip-compressed and bzip2-compressed respectively — containing the compiled kernel and modules <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Cảnh báo thời gian.</b> Họ này đã nở ra nhiều nhất kể từ 2006 và <em>đổi cả ngữ nghĩa</em>. Trong <code>make help</code> hiện hành, <code>rpm-pkg</code> dựng <b>cả</b> gói mã nguồn lẫn gói nhị phân — không còn chỉ là gói mã nguồn như sách viết; gói mã nguồn riêng nay là <code>srcrpm-pkg</code> <span class="cite"><a href="#ref-9">9</a></span>. Đích <code>rpm</code> trần không còn được liệt kê. Phía Debian tách thành <code>deb-pkg</code>, <code>srcdeb-pkg</code>, <code>bindeb-pkg</code>; và danh sách có thêm <code>snap-pkg</code>, <code>pacman-pkg</code>, <code>dir-pkg</code>, <code>tarxz-pkg</code>, <code>tarzst-pkg</code> <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        <p class="easy-only"><b>Đã đổi nhiều.</b> Nhóm này thay đổi nhiều nhất. Ví dụ <code>rpm-pkg</code> nay làm cả gói mã nguồn lẫn gói cài, khác với mô tả trong sách <span class="cite"><a href="#ref-9">9</a></span>. Nhớ nhé: với nhóm này, hãy tin <code>make help</code> chứ đừng tin sách.</p>
+        <p class="en-only" lang="en"><b>Time-bound warning.</b> This family has grown the most since 2006 and has <em>changed meaning</em>. In the current <code>make help</code>, <code>rpm-pkg</code> builds <b>both</b> source and binary RPM packages — no longer the source-only package the book describes; the source-only package is now <code>srcrpm-pkg</code> <span class="cite"><a href="#ref-9">9</a></span>. The bare <code>rpm</code> target is no longer listed. The Debian side has split into <code>deb-pkg</code>, <code>srcdeb-pkg</code> and <code>bindeb-pkg</code>; and the list has gained <code>snap-pkg</code>, <code>pacman-pkg</code>, <code>dir-pkg</code>, <code>tarxz-pkg</code> and <code>tarzst-pkg</code> <span class="cite"><a href="#ref-9">9</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao nên đóng gói thay vì <code>make install</code></h4>
+          <p>Một gói do <code>deb-pkg</code> hay <code>binrpm-pkg</code> sinh ra đi qua trình quản lý gói của bản phân phối, nên nó có thể được <em>gỡ</em> sạch sẽ, được ghi vào cơ sở dữ liệu gói, và được đem sang máy khác. Cài thẳng bằng <code>install</code> thì không có tính chất nào trong ba tính chất ấy. Với người quản trị nhiều máy giống nhau, đây là khác biệt quyết định.</p>
+        </div>
+        <div class="info-block">
+          <h4>Một biến hữu ích sách chưa có</h4>
+          <p>Tài liệu hiện hành mô tả <code>KBUILD_DEBARCH</code>, cho phép ghi đè phỏng đoán kiến trúc mà <code>deb-pkg</code> thường suy ra từ <code>UTS_MACHINE</code> và, trên một số kiến trúc, từ chính cấu hình nhân — với lưu ý rằng giá trị bạn đưa vào được <em>giả định</em> là một kiến trúc Debian hợp lệ chứ không được kiểm tra <span class="cite"><a href="#ref-10">10</a></span>. Đây là biến bạn cần khi dựng chéo kiến trúc.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Nhân đã dựng, đã gói. Còn lại ba nhóm nhỏ ở trang cuối chương — và đó cũng là ba nhóm đã thay đổi nhiều nhất trong hai mươi năm: tài liệu, kiến trúc, và phân tích.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Dựng xong, gói xong. Ba nhóm cuối là tài liệu, ảnh khởi động, và công cụ soi lỗi. Nhớ nhé: đây là phần cũ nhất của chương.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> The kernel is built and packaged. Three small families remain on the chapter's last page — and they are the three that have changed most in twenty years: documentation, architecture, and analysis.</p>
+  </aside>
+</section>
+
+<section class="section" id="tai-lieu-kien-truc-phan-tich" aria-labelledby="tai-lieu-kien-truc-phan-tich-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 04</span><span class="en-only" lang="en">Concept cluster 04</span></p>
+    <h2 id="tai-lieu-kien-truc-phan-tich-title">
+      <span class="standard-copy">Trang cuối: tài liệu, kiến trúc, và phân tích</span>
+      <span class="easy-only">Tài liệu, ảnh khởi động, và soi lỗi</span>
+      <span class="en-only" lang="en">The last page: documentation, architecture, analysis</span>
+    </h2>
+    <p class="standard-copy">Ba bảng cuối cùng gọn đến mức gần như là phụ lục — nhưng chính chúng cho thấy rõ nhất khoảng cách giữa 2006 và hôm nay. Bảng 10-7 là các đích dựng tài liệu nội bộ của nhân “ở nhiều định dạng khác nhau” <span class="cite"><a href="#ref-6">6</a></span>. Bảng 10-8 là các đích riêng của kiến trúc Intel 32-bit, và ông nói rõ mỗi kiến trúc nhân đều có một tập đích riêng của nó <span class="cite"><a href="#ref-7">7</a></span>. Bảng 10-9 là các đích “tốt cho việc tìm mã có vấn đề trong nhân” <span class="cite"><a href="#ref-8">8</a></span>.</p>
+    <p class="easy-only">Ba bảng cuối rất ngắn: một bảng để in tài liệu, một bảng riêng cho máy Intel 32-bit, một bảng để soi mã có vấn đề <span class="cite"><a href="#ref-6">6</a></span><span class="cite"><a href="#ref-7">7</a></span><span class="cite"><a href="#ref-8">8</a></span>. Nhớ nhé: đây là ba nhóm đã thay đổi nhiều nhất từ 2006 tới nay.</p>
+    <p class="en-only" lang="en">The last three tables are so compact they read almost as an appendix — yet they show the gap between 2006 and today most clearly. Table 10-7 holds the targets that build the internal kernel documentation “in a variety of different formats” <span class="cite"><a href="#ref-6">6</a></span>. Table 10-8 holds the targets specific to the 32-bit Intel architecture, and he states plainly that each kernel architecture has a set of targets unique to it <span class="cite"><a href="#ref-7">7</a></span>. Table 10-9 holds targets that are “good for trying to find problem code in the kernel” <span class="cite"><a href="#ref-8">8</a></span>.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Đích theo kiến trúc.</b> Không phải đích nào cũng tồn tại ở mọi nơi. Tập đích của <code>arch/x86</code> khác tập đích của <code>arch/arm64</code>, và <code>make help</code> hiện hành in ra riêng một mục “Architecture-specific targets” đúng cho kiến trúc bạn đang dựng <span class="cite"><a href="#ref-9">9</a></span> — đúng như nguyên tắc ông nêu năm 2006 <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      <p class="easy-only"><b>Đích riêng của từng loại máy.</b> Mỗi kiến trúc phần cứng có bộ đích riêng <span class="cite"><a href="#ref-7">7</a></span>, và <code>make help</code> chỉ in ra bộ đúng với máy bạn <span class="cite"><a href="#ref-9">9</a></span>. Nhớ nhé: đích của máy này chưa chắc có ở máy kia.</p>
+      <p class="en-only" lang="en"><b>Architecture-specific target.</b> Not every target exists everywhere. The target set of <code>arch/x86</code> differs from that of <code>arch/arm64</code>, and today's <code>make help</code> prints a separate “Architecture-specific targets” section for whichever architecture you are building <span class="cite"><a href="#ref-9">9</a></span> — exactly the principle he stated in 2006 <span class="cite"><a href="#ref-7">7</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">2006: xmldocs psdocs pdfdocs<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; htmldocs mandocs<br>nay : htmldocs pdfdocs epubdocs<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; latexdocs texinfodocs<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; mandocs xmldocs …<br>mất : psdocs</p>
+      <p class="easy-only">2006: xmldocs psdocs pdfdocs<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; htmldocs mandocs<br>nay : htmldocs pdfdocs epubdocs …<br>mất : psdocs</p>
+      <p class="en-only" lang="en">2006: xmldocs psdocs pdfdocs<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; htmldocs mandocs<br>now : htmldocs pdfdocs epubdocs<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; latexdocs texinfodocs<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; mandocs xmldocs …<br>gone: psdocs</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">documentation targets</span>
+      <h3>
+        <span class="standard-copy">Tài liệu: năm đích của DocBook, và thứ đã thay thế chúng</span>
+        <span class="easy-only">In tài liệu nhân ra nhiều định dạng</span>
+        <span class="en-only" lang="en">Documentation: five DocBook targets, and what replaced them</span>
+      </h3>
+      <p class="standard-copy">Bảng 10-7 có năm dòng: <code>xmldocs</code> dựng tài liệu nhân thành tệp <b>XML DocBook</b>; <code>psdocs</code> thành tệp PostScript; <code>pdfdocs</code> thành tệp PDF; <code>htmldocs</code> thành tệp HTML; <code>mandocs</code> thành một bộ trang <span lang="en">man</span>, sau đó có thể cài bằng đích <code>installmandocs</code> <span class="cite"><a href="#ref-6">6</a></span>. Chữ “DocBook” ở dòng đầu chính là dấu niên đại của cả bảng.</p>
+      <p class="easy-only">Năm lệnh để in tài liệu bên trong nhân ra năm định dạng: XML, PostScript, PDF, HTML, và trang <span lang="en">man</span> <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: tài liệu nhân nằm sẵn trong mã nguồn, chỉ cần một lệnh để đọc được.</p>
+      <p class="en-only" lang="en">Table 10-7 has five rows: <code>xmldocs</code> builds the kernel documentation as <b>XML DocBook</b> files; <code>psdocs</code> as PostScript; <code>pdfdocs</code> as PDF; <code>htmldocs</code> as HTML; <code>mandocs</code> as a set of manpages, which can then be installed with the <code>installmandocs</code> target <span class="cite"><a href="#ref-6">6</a></span>. The word “DocBook” in that first row is the date stamp on the whole table.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Cảnh báo thời gian.</b> Bộ công cụ DocBook đã bị gỡ khỏi nhân trong loạt vá “Get rid of Docbook” của Mauro Carvalho Chehab, hợp nhất vào Linux 4.14; từ đó tài liệu được viết bằng <span lang="en">reStructuredText</span> và dựng bằng <span lang="en">Sphinx</span> <span class="cite"><a href="#ref-14">14</a></span>. Tài liệu hiện hành hướng dẫn gõ <code>make htmldocs</code> hoặc <code>make pdfdocs</code>, kết quả nằm ở <code>Documentation/output</code> <span class="cite"><a href="#ref-15">15</a></span>. Ba trong năm đích của sách còn tên: <code>htmldocs</code>, <code>pdfdocs</code>, <code>mandocs</code>, <code>xmldocs</code> vẫn được liệt kê — nhưng nay sinh ra từ ReST, không từ DocBook; <code>psdocs</code> thì đã biến mất <span class="cite"><a href="#ref-9">9</a></span><span class="cite"><a href="#ref-14">14</a></span>.</p>
+        <p class="easy-only"><b>Đã đổi.</b> Bộ công cụ cũ (DocBook) đã bị bỏ từ nhân 4.14; nay tài liệu dùng Sphinx <span class="cite"><a href="#ref-14">14</a></span>. Lệnh thông dụng nhất bây giờ là <code>make htmldocs</code> <span class="cite"><a href="#ref-15">15</a></span>. Nhớ nhé: tên lệnh giống, máy bên dưới đã khác hẳn.</p>
+        <p class="en-only" lang="en"><b>Time-bound warning.</b> The DocBook toolchain was removed from the kernel by Mauro Carvalho Chehab's “Get rid of Docbook” series, merged for Linux 4.14; since then documentation is written in reStructuredText and built with Sphinx <span class="cite"><a href="#ref-14">14</a></span>. Current documentation tells you to run <code>make htmldocs</code> or <code>make pdfdocs</code>, with output in <code>Documentation/output</code> <span class="cite"><a href="#ref-15">15</a></span>. Four of the book's five names survive — <code>htmldocs</code>, <code>pdfdocs</code>, <code>mandocs</code> and <code>xmldocs</code> are still listed — but they now come from ReST, not DocBook; <code>psdocs</code> is gone <span class="cite"><a href="#ref-9">9</a></span><span class="cite"><a href="#ref-14">14</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Những đích tài liệu mới</h4>
+          <p>Mục tài liệu trong <code>make help</code> hiện hành dài gấp đôi bảng 10-7: ngoài các tên cũ còn có <code>epubdocs</code>, <code>latexdocs</code>, <code>texinfodocs</code>, <code>infodocs</code>, <code>linkcheckdocs</code> kiểm tra liên kết ngoài bị hỏng, <code>refcheckdocs</code> kiểm tra tham chiếu tới tệp không tồn tại, và <code>cleandocs</code> <span class="cite"><a href="#ref-9">9</a></span>. Có cả biến <code>SPHINXDIRS</code> để chỉ dựng tài liệu của một thư mục con — hữu ích khi bạn chỉ quan tâm một hệ con.</p>
+        </div>
+        <div class="info-block">
+          <h4><code>installmandocs</code> — dấu vết còn lại</h4>
+          <p>Đích <code>installmandocs</code> mà sách nhắc tới <span class="cite"><a href="#ref-6">6</a></span> là một phần của cỗ máy DocBook cũ: <code>mandocs</code> sinh trang <span lang="en">man</span>, <code>installmandocs</code> cài chúng vào <code>INSTALL_MAN_PATH</code>. Nó không còn nằm trong mục tài liệu của <code>make help</code> hiện hành <span class="cite"><a href="#ref-9">9</a></span>. Đây là ví dụ điển hình của một đích “2006-only”: tên vẫn có thể xuất hiện trong hướng dẫn cũ trên mạng, nhưng gõ vào cây mã hôm nay thì không còn đúng.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">architecture-specific targets</span>
+      <h3>
+        <span class="standard-copy">Kiến trúc Intel 32-bit: <code>bzImage</code>, <code>install</code>, và ba ảnh khởi động</span>
+        <span class="easy-only">Tạo ảnh khởi động cho máy Intel</span>
+        <span class="en-only" lang="en">32-bit Intel: <code>bzImage</code>, <code>install</code> and three boot images</span>
+      </h3>
+      <p class="standard-copy">Bảng 10-8 có năm dòng. <code>bzImage</code> tạo một ảnh nhân đã nén và đặt vào tệp <code>arch/i386/boot/bzImage</code>; ông ghi rõ đây là <b>đích mặc định</b> cho bản dựng nhân i386 <span class="cite"><a href="#ref-7">7</a></span>. <code>install</code> cài ảnh nhân bằng chương trình <code>/sbin/installkernel</code> riêng của từng bản phân phối — và ông cảnh báo rằng nó <em>không</em> cài các module nhân; việc đó phải làm bằng đích <code>modules_install</code> <span class="cite"><a href="#ref-7">7</a></span>. <code>bzdisk</code> tạo ảnh đĩa mềm khởi động và ghi thẳng ra thiết bị <code>/dev/fd0</code>. <code>fdimage</code> cũng tạo ảnh đĩa mềm nhưng đặt vào tệp, và cần gói <span lang="en">mtools</span> có sẵn trên máy. <code>isoimage</code> tạo ảnh khởi động CD-ROM và cần gói <span lang="en">syslinux</span> <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      <p class="easy-only">Năm lệnh dành riêng cho máy Intel 32-bit: tạo ảnh nhân nén, cài nhân vào máy, và ba cách làm ảnh khởi động (đĩa mềm ghi thẳng, đĩa mềm thành tệp, và ảnh CD) <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: <code>make install</code> <b>không</b> cài module — phải chạy <code>modules_install</code> nữa <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      <p class="en-only" lang="en">Table 10-8 has five rows. <code>bzImage</code> creates a compressed kernel image and places it in <code>arch/i386/boot/bzImage</code>; he notes this is the <b>default target</b> for the i386 kernel build <span class="cite"><a href="#ref-7">7</a></span>. <code>install</code> installs the kernel image using the distribution-specific <code>/sbin/installkernel</code> program — and he warns that this does <em>not</em> install the kernel modules; that must be done with <code>modules_install</code> <span class="cite"><a href="#ref-7">7</a></span>. <code>bzdisk</code> creates a boot floppy image and writes it to the <code>/dev/fd0</code> device. <code>fdimage</code> creates one but places it in a file, and requires the mtools package. <code>isoimage</code> creates a CD-ROM boot image and requires the syslinux package <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Cảnh báo thời gian.</b> Đường dẫn <code>arch/i386/</code> không còn tồn tại: hai cây <code>arch/i386</code> và <code>arch/x86_64</code> đã được Thomas Gleixner và Ingo Molnar hợp nhất thành <code>arch/x86</code> trong Linux 2.6.24, chỉ hơn một năm sau khi sách in <span class="cite"><a href="#ref-16">16</a></span>. <code>make help</code> hiện hành in đúng dòng ấy là “<code>bzImage</code> — Compressed kernel image (<code>arch/x86/boot/bzImage</code>)”, vẫn kèm dấu sao đánh dấu đích mặc định <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        <p class="easy-only"><b>Đã đổi.</b> Thư mục <code>arch/i386</code> không còn; từ nhân 2.6.24 nó đã gộp vào <code>arch/x86</code> <span class="cite"><a href="#ref-16">16</a></span>. Nhớ nhé: đường dẫn trong sách phải đổi <code>i386</code> thành <code>x86</code>.</p>
+        <p class="en-only" lang="en"><b>Time-bound warning.</b> The path <code>arch/i386/</code> no longer exists: the <code>arch/i386</code> and <code>arch/x86_64</code> trees were merged into <code>arch/x86</code> by Thomas Gleixner and Ingo Molnar in Linux 2.6.24, barely a year after the book went to press <span class="cite"><a href="#ref-16">16</a></span>. Today's <code>make help</code> prints that row as “<code>bzImage</code> — Compressed kernel image (<code>arch/x86/boot/bzImage</code>)”, still marked with the asterisk that denotes the default target <span class="cite"><a href="#ref-9">9</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Một lỗi in đáng nhớ</h4>
+          <p>Dòng <code>isoimage</code> của bảng 10-8 in đường dẫn là <code>arch/i396/boot/image.iso</code> <span class="cite"><a href="#ref-7">7</a></span> — “i396” là lỗi đánh máy của “i386”, và sách để nguyên như vậy. Nêu ra không phải để bắt lỗi mà để nhắc một nguyên tắc đọc sách tham chiếu: khi một đường dẫn không tồn tại, hãy nghi ngờ cả bản in lẫn thời gian, rồi đối chiếu với <code>make help</code> <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Họ ảnh khởi động đã nở ra</h4>
+          <p>Mục kiến trúc x86 trong <code>make help</code> hiện hành giữ <code>fdimage</code> và <code>isoimage</code>, thêm <code>fdimage144</code>, <code>fdimage288</code> và <code>hdimage</code> — ảnh đĩa cứng BIOS/EFI; <code>bzdisk</code> vẫn được nhắc tới trong dòng ghi chú về các tham số <code>FDARGS=</code> và <code>FDINITRD=</code> <span class="cite"><a href="#ref-9">9</a></span>. Đĩa mềm đã chết trong đời thực, nhưng các đích của nó thì chưa.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">analysis targets</span>
+      <h3>
+        <span class="standard-copy">Phân tích: <code>checkstack</code> còn, <code>namespacecheck</code> mất</span>
+        <span class="easy-only">Hai công cụ soi mã — một cái đã biến mất</span>
+        <span class="en-only" lang="en">Analysis: <code>checkstack</code> survives, <code>namespacecheck</code> does not</span>
+      </h3>
+      <p class="standard-copy">Bảng cuối cùng chỉ có hai dòng, nhưng ông viết hẳn một đoạn dẫn cho chúng: nên tạo một danh sách không gian ngăn xếp khi viết mã mới, để xác định rằng thay đổi của bạn không chiếm quá nhiều ngăn xếp nhân; còn <code>namespacecheck</code> thì hữu ích để xác định xem thay đổi của bạn có thể thêm ký hiệu vào không gian tên toàn cục của nhân một cách an toàn hay không <span class="cite"><a href="#ref-8">8</a></span>. <code>checkstack</code> sinh danh sách các hàm dùng nhiều không gian ngăn xếp nhất; <code>namespacecheck</code> sinh danh sách mọi ký hiệu nhân và không gian tên của chúng — và ông nói thẳng “đây sẽ là một danh sách lớn” <span class="cite"><a href="#ref-8">8</a></span>.</p>
+      <p class="easy-only">Hai công cụ cuối cùng để soi mã: một cái tìm hàm chiếm nhiều bộ nhớ ngăn xếp nhất, một cái liệt kê toàn bộ tên hàm và biến toàn cục <span class="cite"><a href="#ref-8">8</a></span>. Nhớ nhé: đây là công cụ của người viết mã nhân, không phải của người chỉ dựng nhân.</p>
+      <p class="en-only" lang="en">The last table has only two rows, but he writes a full paragraph to introduce them: it is a good idea to create a stack space list when writing new code, to determine that your changes are not taking up too much kernel stack space; and <code>namespacecheck</code> is useful for determining whether your changes can safely add symbols to the kernel's global namespace <span class="cite"><a href="#ref-8">8</a></span>. <code>checkstack</code> generates a list of the functions that use the most kernel stack space; <code>namespacecheck</code> generates a list of all kernel symbols and their namespaces — and he says plainly, “This will be a large list” <span class="cite"><a href="#ref-8">8</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Cảnh báo thời gian.</b> <code>checkstack</code> vẫn đứng đầu mục “Static analysers” của <code>make help</code>, nay kèm ngưỡng cấu hình được <code>MINSTACKSIZE</code>, mặc định 100 <span class="cite"><a href="#ref-9">9</a></span>. <code>namespacecheck</code> thì <b>không còn trong danh sách ấy</b> <span class="cite"><a href="#ref-9">9</a></span>; kịch bản <code>scripts/namespace.pl</code> đứng sau nó bị đề nghị gỡ năm 2020 vì sinh quá nhiều báo động giả — với <code>allmodconfig</code> nó báo 11.122 tên ký hiệu không có tham chiếu ngoài — và vì phần kiểm tra hữu ích nhất của nó đã trùng với việc trình liên kết làm sẵn <span class="cite"><a href="#ref-17">17</a></span>.</p>
+        <p class="easy-only"><b>Đã đổi.</b> <code>checkstack</code> vẫn còn <span class="cite"><a href="#ref-9">9</a></span>. Còn <code>namespacecheck</code> thì không còn nữa: nó báo sai quá nhiều nên bị loại <span class="cite"><a href="#ref-17">17</a></span>. Nhớ nhé: một công cụ báo 11 nghìn cảnh báo thì chẳng ai đọc.</p>
+        <p class="en-only" lang="en"><b>Time-bound warning.</b> <code>checkstack</code> still heads the “Static analysers” section of <code>make help</code>, now with a configurable <code>MINSTACKSIZE</code> threshold defaulting to 100 <span class="cite"><a href="#ref-9">9</a></span>. <code>namespacecheck</code> is <b>no longer in that list</b> <span class="cite"><a href="#ref-9">9</a></span>; the <code>scripts/namespace.pl</code> behind it was proposed for removal in 2020 because it produced too many false positives — under <code>allmodconfig</code> it reported 11,122 unique symbol names with no external reference — and because its most useful check duplicated what the linker already does <span class="cite"><a href="#ref-17">17</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Mục phân tích đã đông hơn nhiều</h4>
+          <p>Nơi sách có hai đích, <code>make help</code> hôm nay có tám: ngoài <code>checkstack</code> còn <code>versioncheck</code>, <code>includecheck</code>, <code>headerdep</code>, <code>coccicheck</code> — kiểm tra bằng Coccinelle, <code>kconfig-sym-check</code>, <code>clang-analyzer</code> và <code>clang-tidy</code> <span class="cite"><a href="#ref-9">9</a></span>. Phân tích tĩnh đã đi từ một tiện ích bên lề thành một phần chuẩn mực của quy trình phát triển nhân.</p>
+        </div>
+        <div class="info-block">
+          <h4>Đừng lẫn với “namespace” của module</h4>
+          <p>Nhân hiện đại có một khái niệm <span lang="en">namespace</span> hoàn toàn khác — <code>MODULE_IMPORT_NS</code>, tệp <code>modules.nsdeps</code>, và đích <code>make nsdeps</code> để “sinh các phụ thuộc không gian tên ký hiệu còn thiếu” <span class="cite"><a href="#ref-9">9</a></span>. Nó thuộc về <span lang="en">modpost</span> và không liên quan gì tới <code>namespacecheck</code> của năm 2006 <span class="cite"><a href="#ref-17">17</a></span>. Trùng chữ, khác việc.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Chương 10 khép lại phần tham chiếu về <em>lệnh</em>. Chương 11 chuyển sang tham chiếu về <em>tùy chọn</em>: không còn là bạn gõ gì trên dòng lệnh, mà là bạn bật tắt cái gì bên trong <code>.config</code>.</p>
+    <p class="easy-only"><b>Nối sang chương sau.</b> Xong phần các lệnh. Chương 11 nói về các tùy chọn bên trong cấu hình. Nhớ nhé: lệnh là cách làm, tùy chọn là cái được làm ra.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> Chapter 10 closes the reference on <em>commands</em>. Chapter 11 turns to the reference on <em>options</em>: no longer what you type on the command line, but what you switch on and off inside <code>.config</code>.</p>
+  </aside>
+</section>
+
+<section class="section" id="tu-kiem" aria-labelledby="tu-kiem-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Tự kiểm</span><span class="en-only" lang="en">Self-check</span></p>
+    <h2 id="tu-kiem-title">
+      <span class="standard-copy">Tự kiểm trước khi sang chương 11</span>
+      <span class="easy-only">Tự hỏi mình vài câu</span>
+      <span class="en-only" lang="en">Self-check before Chapter 11</span>
+    </h2>
+  </div>
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Chương tham chiếu không đòi bạn thuộc lòng. Nó đòi bạn biết <em>nhóm</em> nào chứa cái mình cần, và biết khi nào phải ngừng tin vào sách mà quay ra hỏi <code>make help</code>.</p>
+      <p class="easy-only">Không cần thuộc hết. Chỉ cần biết tìm ở nhóm nào, và biết khi nào nên hỏi lại máy. Nhớ nhé: nhớ cách tra quan trọng hơn nhớ nội dung.</p>
+      <p class="en-only" lang="en">A reference chapter does not ask you to memorise. It asks you to know which <em>family</em> holds what you need, and to know when to stop trusting the book and ask <code>make help</code> instead.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>Bạn nói được khác biệt giữa <code>clean</code>, <code>mrproper</code> và <code>distclean</code> theo đúng thứ tự mức độ — và biết cái nào làm mất <code>.config</code>?
+        <p class="deep-only">Đáp án: <code>clean</code> giữ cấu hình; <code>mrproper</code> xóa cấu hình; <code>distclean</code> làm tất cả những gì <code>mrproper</code> làm cộng thêm tệp sao lưu của trình soạn thảo và tệp thừa do vá <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </li>
+      <li>Trong mười một đích cấu hình, bạn xếp được cái nào <em>hỏi bạn</em>, cái nào <em>kế thừa</em> <code>.config</code> cũ, và cái nào <em>tự sinh</em>?
+        <p class="deep-only">Bốn giao diện tương tác, hai đích kế thừa, năm đích tự sinh <span class="cite"><a href="#ref-2">2</a></span> — và bạn biết rằng <code>silentoldconfig</code> nay đã thành <code>syncconfig</code>, một chi tiết nội bộ <span class="cite"><a href="#ref-12">12</a></span>.</p>
+      </li>
+      <li>Bạn giải thích được <code>KCONFIG_ALLCONFIG</code> dùng để làm gì, và vì sao một dòng <code>CONFIG_X=y</code> trong tệp đó vẫn có thể không có tác dụng?
+        <p class="deep-only">Vì các ký hiệu ép đặt “vẫn chịu kiểm tra phụ thuộc bình thường” <span class="cite"><a href="#ref-11">11</a></span>: nếu điều kiện tiên quyết không thỏa thì tùy chọn vẫn tắt.</p>
+      </li>
+      <li>Sau khi chạy <code>make install</code> trên máy Intel, còn đúng một lệnh nữa phải chạy — bạn nói được là lệnh nào và vì sao?
+        <p class="deep-only"><code>make modules_install</code>: ông cảnh báo rõ rằng <code>install</code> <em>không</em> cài module <span class="cite"><a href="#ref-7">7</a></span>. Đây là cái bẫy phổ biến nhất của cả chương.</p>
+      </li>
+      <li>Bạn kể được ít nhất ba chỗ trong chương này mà thông tin đã lỗi thời, và nói được cách kiểm chứng?
+        <p class="deep-only">Ví dụ: DocBook đã bị thay bằng Sphinx từ 4.14 <span class="cite"><a href="#ref-14">14</a></span>; <code>arch/i386</code> đã gộp vào <code>arch/x86</code> từ 2.6.24 <span class="cite"><a href="#ref-16">16</a></span>; <code>rpm-pkg</code> nay dựng cả gói mã nguồn lẫn gói nhị phân <span class="cite"><a href="#ref-9">9</a></span>. Cách kiểm chứng luôn giống nhau: chạy <code>make help</code> trong chính cây mã của bạn <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li>Lệnh dọn nào làm mất tệp cấu hình của bạn?</li>
+      <li>Muốn giữ lựa chọn cũ khi lên nhân mới thì gõ đích nào?</li>
+      <li>Sau <code>make install</code> còn phải gõ thêm lệnh gì nữa?</li>
+      <li>Khi không chắc một đích còn tồn tại không, bạn hỏi ai?</li>
+      <li>Nhớ nhé: trả lời được cả bốn câu thì sang chương 11 được rồi.</li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>Can you rank <code>clean</code>, <code>mrproper</code> and <code>distclean</code> by depth — and say which one loses your <code>.config</code>?</li>
+      <li>Among the eleven configuration targets, can you sort which ones <em>ask</em> you, which <em>inherit</em> an existing <code>.config</code>, and which <em>generate</em> one?
+        <p class="deep-only" lang="en">Four interactive front-ends, two inheriting targets, five generating ones <span class="cite"><a href="#ref-2">2</a></span> — and you know <code>silentoldconfig</code> has since become <code>syncconfig</code>, an internal detail <span class="cite"><a href="#ref-12">12</a></span>.</p>
+      </li>
+      <li>Can you explain what <code>KCONFIG_ALLCONFIG</code> is for, and why a <code>CONFIG_X=y</code> line in that file may still have no effect?</li>
+      <li>After <code>make install</code> on an Intel machine, exactly one more command is required — which one, and why?
+        <p class="deep-only" lang="en"><code>make modules_install</code>: he warns explicitly that <code>install</code> does <em>not</em> install the kernel modules <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </li>
+      <li>Can you name at least three places where this chapter is now out of date, and say how you would verify each?</li>
+    </ol>
+  </div>
+</section>
+
+<section class="closing" id="dong-lai" aria-labelledby="dong-lai-title">
+  <p class="eyebrow" id="dong-lai-title"><span class="vi-only">Đọng lại</span><span class="en-only" lang="en">What remains</span></p>
+  <blockquote>
+    <p class="standard-copy">Một chương tham chiếu năm trang dạy bạn hai điều cùng lúc: <span class="closing-accent">danh mục các đích <code>make</code></span>, và <span class="closing-accent">thói quen không tin vào bất kỳ danh mục in nào</span>. Lời dặn hữu ích nhất của cả chương không phải một cái tên đích, mà là câu ông viết ngay trang đầu — hãy chạy <code>make help</code> trong chính thư mục dựng của bạn.</p>
+    <p class="easy-only">Chương này cho bạn <span class="closing-accent">một danh sách các lệnh</span>, và dạy bạn <span class="closing-accent">đừng tin danh sách in sẵn</span>. Câu quan trọng nhất là câu đầu tiên: gõ <code>make help</code> để máy tự kể. Nhớ nhé: sách chỉ đường, máy nói sự thật.</p>
+    <p class="en-only" lang="en">A five-page reference chapter teaches two things at once: <span class="closing-accent">the catalogue of <code>make</code> targets</span>, and <span class="closing-accent">the habit of not trusting any printed catalogue</span>. The most useful instruction in the chapter is not the name of a target but the line on its first page — run <code>make help</code> inside your own build directory.</p>
+  </blockquote>
+</section>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-9-boot-parameters.html">
+    <span class="nav-label">◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span></span>
+    <span class="nav-title"><span class="vi-only">Chương 9 · Tham chiếu tham số khởi động</span><span class="en-only" lang="en">Chapter 9 · Kernel Boot Command-Line Parameter Reference</span></span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-11-configuration-options.html">
+    <span class="nav-label"><span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶</span>
+    <span class="nav-title"><span class="vi-only">Chương 11 · Tham chiếu tùy chọn cấu hình</span><span class="en-only" lang="en">Chapter 11 · Kernel Configuration Option Reference</span></span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chương 10, “Kernel Build Command-Line Reference”, trang 117–121 (bảng 10-1 đến 10-9). Trang này là <b>người đồng hành diễn giải</b>, không phải bản dịch: nó tóm lược, sắp xếp lại và chú giải nội dung chương, không thay thế việc đọc sách gốc. Các ví dụ và phép so sánh ở mức đọc <i>Dễ hiểu</i> là minh họa do trang này thêm vào, không có trong sách. Sách xuất bản năm 2006 và viết cho dòng nhân 2.6; mọi ghi chú về tình hình hiện nay — đích đã đổi tên, đổi ngữ nghĩa hoặc bị gỡ — đều được dẫn nguồn riêng, và nguồn có thẩm quyền nhất vẫn là <code>make help</code> chạy trong chính cây mã bạn đang dựng.</p>
+    <p class="en-only" lang="en"><b>Primary source.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chapter 10, “Kernel Build Command-Line Reference”, pages 117–121 (Tables 10-1 through 10-9). This page is an <b>interpretive study companion</b>, not a translation: it summarises, rearranges and annotates the chapter, and does not replace reading the book itself. Examples and analogies at the <i>Easy</i> reading level are illustrations added here, not the author's. The book was published in 2006 and targets the 2.6 kernel series; every note about the present day — targets renamed, redefined or removed — carries its own citation, and the most authoritative source remains <code>make help</code> run inside the tree you are building.</p>
+
+    <p class="footer-label vi-only">Tham chiếu</p>
+    <p class="footer-label en-only" lang="en">References</p>
+    <ol class="ref-list">
+      <li id="ref-1">Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006, Chapter 10 “Kernel Build Command-Line Reference”, p. 117 — đoạn mở đầu (<code>make</code> + target, ví dụ <code>make mrproper xconfig</code>, lời khuyên chạy <code>make help</code>) và Table 10-1 “Informational targets”. Bản trực tuyến miễn phí: <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-2">Sđd., Chapter 10, p. 118 — Table 10-2 “Cleaning targets” và Table 10-3 “Configuration targets”. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-3">Sđd., Chapter 10, pp. 118–119 — mục về biến môi trường <code>KCONFIG_ALLCONFIG</code>, ví dụ <code>must_be_set</code>, và danh sách tệp <code>allmod.config</code> / <code>allno.config</code> / <code>allrandom.config</code> / <code>allyes.config</code> / <code>all.config</code>. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-4">Sđd., Chapter 10, pp. 119–120 — Table 10-4 “Build targets” và Table 10-5 “Environment variables” (<code>V</code>, <code>O</code>, <code>C</code>; ghi chú về <span lang="en">sparse</span>). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-5">Sđd., Chapter 10, p. 120 — Table 10-6 “Packaging targets”. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-6">Sđd., Chapter 10, p. 121 — Table 10-7 “Documentation targets” (bao gồm ghi chú về <code>installmandocs</code>). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-7">Sđd., Chapter 10, p. 121 — mục “Architecture-Specific Targets” và Table 10-8 “32-bit Intel architecture-specific targets”. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-8">Sđd., Chapter 10, p. 121 — mục “Analysis Targets” và Table 10-9. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-9">kernel.org, <a href="https://www.kernel.org/doc/makehelp.txt" target="_blank" rel="noopener noreferrer">“Output of kernel's <code>make help</code>”</a> — bản in của danh sách đích hiện hành (cleaning / configuration / generic / static analysers / packaging / documentation / architecture-specific x86 / biến <code>V</code>, <code>O</code>, <code>C</code>, <code>W</code>); truy cập 22-09-2026. Tệp này theo sát nhánh chính, nên danh sách chính xác thay đổi theo phiên bản — nguồn cuối cùng vẫn là <code>make help</code> trong cây mã của bạn.</li>
+      <li id="ref-10">The Linux Kernel documentation, <a href="https://docs.kernel.org/kbuild/kbuild.html" target="_blank" rel="noopener noreferrer">“Kbuild”</a> — biến môi trường hiện hành (<code>KBUILD_OUTPUT</code>, <code>INSTALL_MOD_PATH</code>, <code>MODLIB</code>, <code>ALLSOURCE_ARCHS</code>, <code>IGNORE_DIRS</code>, <code>KBUILD_DEBARCH</code>, <code>LLVM</code>); chỉ mục bộ tài liệu: <a href="https://docs.kernel.org/kbuild/" target="_blank" rel="noopener noreferrer">docs.kernel.org/kbuild</a> (truy cập 22-09-2026).</li>
+      <li id="ref-11">The Linux Kernel documentation, <a href="https://docs.kernel.org/kbuild/kconfig.html" target="_blank" rel="noopener noreferrer">“Configuration targets and editors”</a> — <code>KCONFIG_ALLCONFIG</code> và khái niệm <span lang="en">miniconfig</span> (“still subject to normal dependency checks”), các trình cấu hình <code>mconf</code> / <code>nconf</code> / <code>qconf</code> / <code>gconf</code> và năng lực tìm kiếm của từng cái (truy cập 22-09-2026).</li>
+      <li id="ref-12">Masahiro Yamada, <a href="https://patchwork.kernel.org/project/linux-kbuild/patch/1519886077-31914-2-git-send-email-yamada.masahiro@socionext.com/" target="_blank" rel="noopener noreferrer">“kconfig: rename silentoldconfig to syncconfig”</a>, linux-kbuild patchwork, 2018 — đổi tên vì tên cũ là nhầm lẫn lịch sử, hạ xuống thành chi tiết nội bộ, kèm cảnh báo tên cũ sẽ bị gỡ sau Linux 4.19.</li>
+      <li id="ref-13">The Linux Kernel documentation, <a href="https://docs.kernel.org/dev-tools/sparse.html" target="_blank" rel="noopener noreferrer">“Sparse”</a> — vị trí hiện hành của tài liệu công cụ <span lang="en">sparse</span>, thay cho tệp <code>Documentation/sparse.txt</code> mà sách dẫn (truy cập 22-09-2026).</li>
+      <li id="ref-14">Mauro Carvalho Chehab, <a href="https://www.mail-archive.com/linux-kernel@vger.kernel.org/msg1429912.html" target="_blank" rel="noopener noreferrer">“[PATCH v2 00/53] Get rid of Docbook”</a>, linux-kernel mailing list, 2017 — loạt vá gỡ bộ công cụ DocBook, hợp nhất cho Linux 4.14; xem thêm trang <a href="https://www.kernel.org/doc/html/v4.11/doc-guide/docbook.html" target="_blank" rel="noopener noreferrer">“DocBook XML [DEPRECATED]”</a> trong tài liệu nhân 4.11.</li>
+      <li id="ref-15">The Linux Kernel documentation, <a href="https://docs.kernel.org/doc-guide/sphinx.html" target="_blank" rel="noopener noreferrer">“Introduction” — Sphinx doc-guide</a>: “<code>make htmldocs</code> or <code>make pdfdocs</code>”, đầu ra ở <code>Documentation/output</code>, và lời nhắc xem mục documentation của <code>make help</code> để biết các định dạng khác (truy cập 22-09-2026).</li>
+      <li id="ref-16">Jonathan Corbet, <a href="https://lwn.net/Articles/243704/" target="_blank" rel="noopener noreferrer">“i386 and x86_64: back together?”</a>, LWN.net, 2007 — bản vá của Thomas Gleixner và Ingo Molnar hợp nhất <code>arch/i386</code> và <code>arch/x86_64</code> thành <code>arch/x86</code>, nhập vào cây mã ngay sau 2.6.23 và phát hành trong 2.6.24.</li>
+      <li id="ref-17">Jacob Keller, <a href="https://lkml.rescloud.iu.edu/2010.1/02303.html" target="_blank" rel="noopener noreferrer">“[PATCH] scripts: remove namespace.pl”</a>, linux-kernel mailing list, 10-2020 — đề nghị gỡ <code>scripts/namespace.pl</code> (đích <code>namespacecheck</code>) vì quá nhiều báo động giả (11.122 ký hiệu với <code>allmodconfig</code>) và vì phần kiểm tra ký hiệu trùng đã được trình liên kết đảm nhiệm; cũng lưu ý <code>MODULE_IMPORT_NS</code>/<code>nsdeps</code> là cơ chế khác hẳn.</li>
+    </ol>
+
+    <p class="footer-label vi-only">Trong loạt bài</p>
+    <p class="footer-label en-only" lang="en">In this series</p>
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <p class="vi-only"><a href="index.html">Trang bìa</a> · <a href="chapter-9-boot-parameters.html">Chương 9 · Tham chiếu tham số khởi động</a> · <span>Chương 10 · Tham chiếu lệnh dựng nhân (trang này)</span> · <a href="chapter-11-configuration-options.html">Chương 11 · Tham chiếu tùy chọn cấu hình</a></p>
+    <p class="en-only" lang="en"><a href="index.html">Cover</a> · <a href="chapter-9-boot-parameters.html">Chapter 9 · Kernel Boot Command-Line Parameter Reference</a> · <span>Chapter 10 · Kernel Build Command-Line Reference (this page)</span> · <a href="chapter-11-configuration-options.html">Chapter 11 · Kernel Configuration Option Reference</a></p>
+    <!-- NAV:END -->
+  </div>
+  <div class="edition">LKN · CH 10 · VI/EN</div>
+</footer>
+</main>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  function sync() {
+    var mode = root.getAttribute("data-mode") || "standard";
+    var lang = root.getAttribute("data-lang") || "vi";
+    var dark = root.getAttribute("data-theme") === "dark";
+    document.querySelectorAll("[data-set-mode]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-mode") === mode));
+    });
+    document.querySelectorAll("[data-set-lang]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-lang") === lang));
+    });
+    document.querySelectorAll("[data-toggle-theme]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(dark));
+    });
+    root.setAttribute("lang", lang === "en" ? "en" : "vi");
+  }
+
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button.chip");
+    if (!b) return;
+    if (b.hasAttribute("data-set-mode")) {
+      root.setAttribute("data-mode", b.getAttribute("data-set-mode"));
+      store("lkn-reading-mode", b.getAttribute("data-set-mode"));
+    } else if (b.hasAttribute("data-set-lang")) {
+      root.setAttribute("data-lang", b.getAttribute("data-set-lang"));
+      store("lkn-lang", b.getAttribute("data-set-lang"));
+    } else if (b.hasAttribute("data-toggle-theme")) {
+      var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      store("lkn-theme", next);
+    }
+    sync();
+  });
+
+  sync();
+})();
+
+/* section-index rail: built at runtime from this page's own id'd sections */
+(function () {
+  var list = document.querySelector(".section-rail__list");
+  if (!list) return;
+  var sections = Array.prototype.slice.call(document.querySelectorAll("main section[id][aria-labelledby]"));
+  if (!sections.length) { var rail = document.querySelector(".section-rail"); if (rail) rail.remove(); return; }
+
+  /* headings carry all three reading levels + both languages as sibling spans,
+     so read only the ones actually visible under the current toggles */
+  function labelFor(sec) {
+    var head = document.getElementById(sec.getAttribute("aria-labelledby"));
+    if (!head) return sec.id;
+    var parts = [];
+    Array.prototype.forEach.call(head.children, function (el) {
+      if (el.offsetParent !== null || el.getClientRects().length) parts.push(el.textContent);
+    });
+    var label = (parts.length ? parts.join(" ") : head.textContent || "").replace(/\s+/g, " ").trim();
+    return label.length > 46 ? label.slice(0, 44) + "…" : label;
+  }
+
+  var links = sections.map(function (sec) {
+    var label = labelFor(sec);
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.href = "#" + sec.id;
+    var span = document.createElement("span");
+    span.className = "section-rail__label";
+    span.textContent = label;
+    a.appendChild(span);
+    li.appendChild(a);
+    list.appendChild(li);
+    return a;
+  });
+
+  function mark(id) {
+    links.forEach(function (a) {
+      if (a.getAttribute("href") === "#" + id) a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    });
+  }
+
+  if ("IntersectionObserver" in window) {
+    var seen = new Map();
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { seen.set(e.target.id, e.intersectionRatio); });
+      var best = null, bestR = 0;
+      seen.forEach(function (r, id) { if (r > bestR) { bestR = r; best = id; } });
+      if (best) mark(best);
+    }, { rootMargin: "-20% 0px -60% 0px", threshold: [0, .25, .5, 1] });
+    sections.forEach(function (s) { obs.observe(s); });
+  }
+
+  /* the rail labels change with the language toggle, so relabel on click */
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest("button.chip")) return;
+    sections.forEach(function (sec, i) {
+      links[i].firstChild.textContent = labelFor(sec);
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

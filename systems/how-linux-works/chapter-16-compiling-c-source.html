@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 16 · Biên dịch phần mềm từ mã nguồn C — How Linux Works</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 16 “Introduction to Compiling Software from C Source Code” trong How Linux Works (Brian Ward, No Starch Press, 3rd ed., 2021): hệ thống dựng phần mềm, giải nén gói mã nguồn, GNU autoconf và script configure, tuỳ chọn --prefix, biến môi trường, vá mã nguồn với patch, và gỡ rối biên dịch.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('hlw-reading-mode'),
+l=localStorage.getItem('hlw-lang'),
+t=localStorage.getItem('hlw-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"HOW LINUX WORKS / 16";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    How Linux Works
+    <span>Chương 16 · Introduction to Compiling Software from C Source Code</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 16 · Biên dịch phần mềm từ mã nguồn C</span>
+      <span class="en-only" lang="en">Chapter 16 · Introduction to Compiling Software from C Source Code</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Bốn bước, một script, và quyền tự quyết về phần mềm trên máy bạn</span>
+      <span class="easy-only">Tự nấu phần mềm từ “nguyên liệu” thay vì mua đồ hộp</span>
+      <span class="en-only" lang="en">Four steps, one script, and the right to decide what runs on your machine</span>
+    </h1>
+
+    <p class="standard-copy">Phần lớn phần mềm Unix phi độc quyền của bên thứ ba đến tay bạn dưới dạng <b>mã nguồn</b> để bạn tự dựng và cài, và Brian Ward đưa ra hai lý do. Thứ nhất, Unix — và cả Linux — có quá nhiều biến thể và kiến trúc, nên phát hành gói nhị phân cho mọi tổ hợp nền tảng là việc rất khó. Thứ hai, quan trọng ít nhất là ngang thế: việc phân phối mã nguồn rộng khắp trong cộng đồng Unix khuyến khích người dùng đóng góp bản vá lỗi và tính năng mới, và chính điều đó mới làm cho cụm từ <span lang="en">open source</span> có ý nghĩa.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Có hai cách để có phần mềm: lấy sẵn bản đã nấu chín, hoặc lấy “công thức và nguyên liệu” rồi tự nấu. Trên Linux, “nguyên liệu” đó gọi là mã nguồn. Người ta phát mã nguồn vì máy tính có quá nhiều loại khác nhau, và vì khi ai cũng xem được công thức thì ai cũng có thể sửa chỗ sai. <b>Nhớ nhé: mã nguồn là công thức, bạn tự nấu được món của mình.</b></p>
+    <p class="en-only" lang="en">Most nonproprietary third-party Unix software packages arrive as <b>source code</b> that you build and install yourself, and Brian Ward gives two reasons. First, Unix — and Linux itself — has so many flavors and architectures that distributing binary packages for every possible platform combination would be difficult. Second, and at least as important: widespread source code distribution throughout the Unix community encourages users to contribute bug fixes and new features, which is what gives the term <span lang="en">open source</span> its meaning.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Ward nói thẳng một điều mà nhiều hướng dẫn trên mạng né tránh: bạn <i>có thể</i> lấy gần như mọi thứ trên hệ thống Linux dưới dạng mã nguồn — từ nhân và thư viện C cho tới trình duyệt web — và thậm chí có thể cập nhật toàn bộ hệ thống bằng cách cài lại từ mã nguồn, nhưng <b>bạn có lẽ không nên làm thế</b>, trừ phi bạn thật sự thích quá trình đó hoặc có lý do riêng.<span class="cite"><a href="#ref-1">1</a></span> Các bản phân phối vốn đã có cách dễ dàng để cập nhật phần lõi như các chương trình trong <code>/bin</code>, và một tính chất đặc biệt quan trọng của bản phân phối là chúng thường vá lỗi bảo mật rất nhanh.<span class="cite"><a href="#ref-1">1</a></span> Chương này vì vậy không phải lời kêu gọi “tự biên dịch tất cả”, mà là bộ kỹ năng cho những lần bạn <i>cần</i> tự biên dịch.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> cài một gói từ mã nguồn C thường chỉ gồm bốn bước — giải nén kho lưu trữ, cấu hình gói, chạy <code>make</code> để dựng chương trình, rồi chạy <code>make install</code> — và việc học một hệ thống dựng duy nhất, các script cấu hình sinh ra từ bộ công cụ GNU autotools, là đủ để bạn chuyển kiến thức sang những hệ thống dựng khác, vì tất cả đều đặt trên nền <code>make</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> tự cài phần mềm từ mã nguồn chỉ có bốn bước: mở gói ra, chỉnh cấu hình, dựng, rồi cài. Học kỹ một bộ công cụ là bạn dùng được các bộ khác. <b>Nhớ nhé: mở gói — cấu hình — dựng — cài.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> installing a package from C source code usually involves just four steps — unpack the source archive, configure the package, run <code>make</code> to build the programs, then run <code>make install</code> — and learning one build system, the configuration scripts generated from the GNU autotools suite, is enough to transfer your knowledge to others, because they all sit on top of <code>make</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: bốn bước cài phần mềm từ mã nguồn C — giải nén, cấu hình bằng configure, dựng bằng make, cài bằng make install. Diagram: the four steps of installing from C source — unpack, configure, make, make install.">
+    <div class="core">
+      <b>./configure &amp;&amp; make</b>
+      <small class="standard-copy">Bốn bước từ kho nén tới chương trình chạy được</small>
+      <small class="easy-only">Từ gói nén thành phần mềm dùng được</small>
+      <small class="en-only" lang="en">Four steps from tarball to a running program</small>
+    </div>
+
+    <div class="node">
+      <b>1 · Unpack</b>
+      <small class="standard-copy">Giải nén <code>.tar.gz</code>, <code>.tar.bz2</code> hoặc <code>.tar.xz</code> — nhưng xem mục lục trước bằng <code>tar tvf</code></small>
+      <small class="easy-only">Mở gói ra, nhưng ngó trước xem bên trong có gì</small>
+      <small class="en-only" lang="en">Unpack the <code>.tar.gz</code>, <code>.tar.bz2</code> or <code>.tar.xz</code> — but list it first with <code>tar tvf</code></small>
+    </div>
+
+    <div class="node">
+      <b>2 · Configure</b>
+      <small class="standard-copy">Chạy <code>./configure</code> để dò đặc tính hệ thống và sinh <code>Makefile</code> từ <code>Makefile.in</code></small>
+      <small class="easy-only">Máy tự dò xem máy bạn có gì, rồi viết bản hướng dẫn dựng</small>
+      <small class="en-only" lang="en">Run <code>./configure</code> to discover your system and generate <code>Makefile</code> from <code>Makefile.in</code></small>
+    </div>
+
+    <div class="node">
+      <b>3 · make → 4 · make install</b>
+      <small class="standard-copy">Dựng chương trình, rồi cài — mặc định vào tiền tố <code>/usr/local</code></small>
+      <small class="easy-only">Dựng xong thì cài vào máy</small>
+      <small class="en-only" lang="en">Build the programs, then install — by default under the <code>/usr/local</code> prefix</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#giai-nen">
+    <span>01</span>
+    <b class="standard-copy">Vì sao mã nguồn, và mở gói cho an toàn</b>
+    <b class="easy-only">Mở gói mã nguồn</b>
+    <b class="en-only" lang="en">Why source, and how to unpack safely</b>
+  </a>
+  <a href="#autoconf">
+    <span>02</span>
+    <b class="standard-copy">GNU autoconf và script <code>configure</code></b>
+    <b class="easy-only">Script configure làm gì</b>
+    <b class="en-only" lang="en">GNU autoconf and the <code>configure</code> script</b>
+  </a>
+  <a href="#noi-cai-dat">
+    <span>03</span>
+    <b class="standard-copy">Cài ở đâu, và giữ cho gọn về sau</b>
+    <b class="easy-only">Cài vào chỗ nào cho gọn</b>
+    <b class="en-only" lang="en">Where to install, and keeping it tidy</b>
+  </a>
+  <a href="#va-va-go-roi">
+    <span>04</span>
+    <b class="standard-copy">Vá mã nguồn và đọc lỗi biên dịch</b>
+    <b class="easy-only">Vá lỗi và đọc thông báo lỗi</b>
+    <b class="en-only" lang="en">Patching source and reading build errors</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>05</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="giai-nen" aria-labelledby="giai-nen-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="giai-nen-title">
+      <span class="standard-copy">Vì sao tự cài, và cách mở một gói mã nguồn cho an toàn</span>
+      <span class="easy-only">Khi nào nên tự cài, và mở gói thế nào</span>
+      <span class="en-only" lang="en">Why install it yourself, and how to open a source package safely</span>
+    </h2>
+    <p class="standard-copy">Ward không bảo bạn đừng dùng bản phân phối — ông bảo đừng <i>trông đợi</i> bản phân phối lo mọi thứ cho bạn. Ông liệt kê bốn lý do khiến bạn muốn tự cài một số gói: để kiểm soát các tuỳ chọn cấu hình; để cài phần mềm ở bất cứ đâu bạn thích, thậm chí cài nhiều phiên bản khác nhau của cùng một gói; để kiểm soát phiên bản mình chạy, vì bản phân phối không phải lúc nào cũng theo kịp bản mới nhất, đặc biệt với các phần bổ trợ như thư viện Python; và để hiểu rõ hơn một gói vận hành ra sao.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Máy Linux đã có sẵn “cửa hàng” phần mềm của nó, và cửa hàng đó rất tiện. Nhưng có lúc bạn muốn món hơi khác: bản mới hơn, hoặc có thêm tuỳ chọn, hoặc bạn chỉ muốn nhìn xem nó được làm ra thế nào. Khi đó bạn tự nấu. <b>Nhớ nhé: tự cài khi bạn cần khác đi, chứ không phải để cho oai.</b></p>
+    <p class="en-only" lang="en">Ward is not telling you to avoid your distribution — he is telling you not to <i>expect</i> it to provide everything. He lists four reasons you might install certain packages yourself: to control configuration options; to install the software anywhere you like, even several different versions of the same package; to control the version you install, since distributions don't always stay up to date with the latest versions, particularly add-ons such as Python libraries; and to better understand how a package works.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only"><b>Trước khi bước vào chương này.</b> Ward đặt một chú ý rõ ràng: bạn nên nắm những điều cơ bản ở Chương 15 trước khi tiếp tục chương 16 — nghĩa là phân biệt được lỗi trình biên dịch, cảnh báo trình biên dịch, lỗi trình liên kết và vấn đề thư viện dùng chung.<span class="cite"><a href="#ref-1">1</a></span> Và ở thời điểm bắt đầu thực hành, bạn phải có sẵn mọi công cụ dựng cần thiết trên máy: với Debian và Ubuntu, cách dễ nhất là cài gói <code>build-essential</code>; với các hệ kiểu Fedora, dùng <span lang="en">groupinstall</span> nhóm “Development Tools”.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Một <i>hệ thống dựng</i> (<span lang="en">build system</span>) là bộ công cụ riêng của một môi trường lập trình dùng để dựng và cài các gói, nằm bên cạnh những công cụ mà bản phân phối cung cấp. Linux có nhiều môi trường lập trình — từ C truyền thống tới các ngôn ngữ script thông dịch như Python — và mỗi môi trường thường có ít nhất một hệ thống như vậy.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Hệ thống dựng là bộ “dụng cụ bếp” đi kèm công thức: nó biết phải nấu theo thứ tự nào. Mỗi loại bếp có bộ dụng cụ riêng. <b>Nhớ nhé: công thức đi kèm dụng cụ, học một bộ là quen dần các bộ khác.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A <i>build system</i> is a programming environment's own set of tools for building and installing packages, alongside the ones your Linux distribution provides. Linux hosts many programming environments — from traditional C to interpreted scripting languages such as Python — and each typically has at least one such system.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">1. tar xzf package-1.23.tar.gz<br>2. ./configure<br>3. make<br>4. make install</p>
+      <p class="easy-only">1. mở gói<br>2. cấu hình<br>3. dựng<br>4. cài</p>
+      <p class="en-only" lang="en">1. tar xzf package-1.23.tar.gz<br>2. ./configure<br>3. make<br>4. make install</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">tar tvf</span>
+      <h3>
+        <span class="standard-copy">Xem mục lục trước khi giải nén — thói quen nhỏ, hậu quả lớn</span>
+        <span class="easy-only">Ngó vào gói trước khi mở</span>
+        <span class="en-only" lang="en">List before you extract — a small habit with large consequences</span>
+      </h3>
+      <p class="standard-copy">Bản phân phối mã nguồn của một gói thường đến dưới dạng tệp <code>.tar.gz</code>, <code>.tar.bz2</code> hoặc <code>.tar.xz</code>. Trước khi giải nén, Ward yêu cầu bạn kiểm tra nội dung kho lưu trữ bằng <code>tar tvf</code> hoặc <code>tar ztvf</code>, bởi <b>một số gói không tự tạo thư mục con</b> trong thư mục nơi bạn giải nén.<span class="cite"><a href="#ref-1">1</a></span> Kết xuất kiểu <code>package-1.23/Makefile.in</code>, <code>package-1.23/README</code>, <code>package-1.23/main.c</code> — tức mọi thứ nằm dưới một thư mục chung — là dấu hiệu gói có lẽ mở được an toàn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Trước khi mở một gói nén, hãy liệt kê xem bên trong có gì. Nếu mọi thứ nằm gọn trong một thư mục thì tốt. Nếu không, mở ra sẽ vãi tung toé khắp nơi. <b>Nhớ nhé: ngó trước, mở sau.</b></p>
+      <p class="en-only" lang="en">A package's source distribution usually arrives as a <code>.tar.gz</code>, <code>.tar.bz2</code> or <code>.tar.xz</code> file. Before unpacking, Ward wants you to verify the archive's contents with <code>tar tvf</code> or <code>tar ztvf</code>, because <b>some packages don't create their own subdirectory</b> in the directory where you extract them.<span class="cite"><a href="#ref-1">1</a></span> Output like <code>package-1.23/Makefile.in</code>, <code>package-1.23/README</code>, <code>package-1.23/main.c</code> — everything under one common directory — means the package is probably okay to unpack.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Nếu mục lục hiện ra <code>Makefile</code>, <code>README</code>, <code>main.c</code> mà không có thư mục chung, hãy tạo một thư mục mới và <code>cd</code> vào đó trước khi giải nén.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi gói không có thư mục riêng — thì bạn tự tạo một thư mục rồi mới mở.</span>
+        <span class="en-only" lang="en">If the listing shows <code>Makefile</code>, <code>README</code>, <code>main.c</code> with no common directory, create a new directory and <code>cd</code> there before extracting.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đường dẫn tuyệt đối là cờ đỏ</h4>
+          <p>Ward cảnh báo phải dè chừng những gói chứa tệp có <b>đường dẫn tuyệt đối</b>, ví dụ <code>/etc/passwd</code> hay <code>/etc/inetd.conf</code>. Ông viết rằng bạn có lẽ sẽ không gặp thứ như vậy, nhưng nếu gặp thì hãy gỡ kho lưu trữ đó khỏi hệ thống: <b>nó nhiều khả năng chứa ngựa thành Troy hoặc mã độc khác</b>.<span class="cite"><a href="#ref-1">1</a></span> Đây chính là lý do kỹ thuật cho thói quen liệt kê trước: <code>tar</code> tự nó chỉ làm theo những gì kho lưu trữ nói.<span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đọc README trước, luôn luôn</h4>
+          <p>Sau khi giải nén, Ward khuyên hãy tìm những tệp tên đại loại <span lang="en">README</span> và <span lang="en">INSTALL</span>. Luôn xem README trước vì nó thường chứa mô tả gói, một cuốn hướng dẫn ngắn, các gợi ý cài đặt và thông tin hữu ích khác; nhiều gói cũng kèm tệp INSTALL với hướng dẫn biên dịch và cài đặt. Hãy đặc biệt chú ý tới các <b>tuỳ chọn và định nghĩa đặc biệt của trình biên dịch</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">package layout</span>
+      <h3>
+        <span class="standard-copy">Ba nhóm tệp trong một gói mã nguồn</span>
+        <span class="easy-only">Trong gói có những loại tệp nào</span>
+        <span class="en-only" lang="en">The three families of files inside a source package</span>
+      </h3>
+      <p class="standard-copy">Ngoài README và INSTALL, Ward xếp các tệp còn lại vào ba nhóm. <b>Một</b>: tệp liên quan tới hệ thống <code>make</code> — <code>Makefile</code>, <code>Makefile.in</code>, <code>configure</code>, <code>CMakeLists.txt</code>; vài gói rất cũ đi kèm một <code>Makefile</code> mà bạn có thể phải tự sửa, nhưng phần lớn dùng một tiện ích cấu hình như GNU autoconf hay CMake, kèm script hoặc tệp cấu hình để sinh <code>Makefile</code> từ <code>Makefile.in</code> dựa trên thiết lập hệ thống của bạn.<span class="cite"><a href="#ref-1">1</a></span> <b>Hai</b>: tệp mã nguồn kết thúc bằng <code>.c</code>, <code>.h</code> hoặc <code>.cc</code>; tệp C có thể nằm gần như bất cứ đâu trong thư mục gói, còn tệp C++ thường mang đuôi <code>.cc</code>, <code>.C</code> hoặc <code>.cxx</code>.<span class="cite"><a href="#ref-1">1</a></span> <b>Ba</b>: tệp đối tượng đuôi <code>.o</code> hoặc tệp nhị phân.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Trong gói có ba loại tệp: loại chỉ cách dựng (Makefile, configure), loại là mã nguồn thật (.c, .h), và loại đã dựng sẵn (.o). Loại thứ ba bình thường không nên có. <b>Nhớ nhé: công thức, nguyên liệu, và đồ đã nấu sẵn — loại thứ ba là đáng ngờ.</b></p>
+      <p class="en-only" lang="en">Beyond README and INSTALL, Ward sorts the remaining files into three categories. <b>One</b>: files relating to the <code>make</code> system — <code>Makefile</code>, <code>Makefile.in</code>, <code>configure</code>, <code>CMakeLists.txt</code>; some very old packages ship a <code>Makefile</code> you might need to modify, but most use a configuration utility such as GNU autoconf or CMake, with a script or configuration file that generates <code>Makefile</code> from <code>Makefile.in</code> based on your system settings.<span class="cite"><a href="#ref-1">1</a></span> <b>Two</b>: source files ending in <code>.c</code>, <code>.h</code> or <code>.cc</code>; C files may appear just about anywhere in a package directory, while C++ files usually carry <code>.cc</code>, <code>.C</code> or <code>.cxx</code> suffixes.<span class="cite"><a href="#ref-1">1</a></span> <b>Three</b>: object files ending in <code>.o</code>, or binaries.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Thấy tệp <code>.o</code> trong một bản phân phối mã nguồn thì trong phần lớn trường hợp nghĩa là gói được đóng gói không tốt — hãy chạy <code>make clean</code> để chắc chắn bạn có một lần biên dịch mới hoàn toàn.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Thấy đồ nấu sẵn lẫn trong nguyên liệu thì bỏ đi, nấu lại từ đầu.</span>
+        <span class="en-only" lang="en">Object files in a source distribution mostly mean the package wasn't put together well — run <code>make clean</code> to make sure you get a fresh compile.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ngoại lệ hiếm cho tệp .o</h4>
+          <p>Ward ghi chú rằng bình thường không có tệp đối tượng nào trong bản phân phối mã nguồn, nhưng trong vài trường hợp hiếm bạn có thể gặp — khi người bảo trì gói <b>không được phép phát hành một phần mã nguồn nào đó</b> và bạn phải làm điều gì đó đặc biệt để dùng được các tệp đối tượng ấy.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao cần <code>Makefile.in</code></h4>
+          <p>Các tệp <code>.in</code> là <b>khuôn mẫu</b>; ý tưởng là chạy script <code>configure</code> để phát hiện đặc tính hệ thống của bạn, rồi thay thế vào các tệp <code>.in</code> để tạo ra tệp dựng thật.<span class="cite"><a href="#ref-1">1</a></span> Tài liệu Autoconf mô tả đúng cơ chế đó: <code>configure</code> đoán giá trị đúng cho các biến phụ thuộc hệ thống và dùng chúng để tạo một <code>Makefile</code> trong mỗi thư mục của gói.<span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">portability</span>
+      <h3>
+        <span class="standard-copy">Vì sao không thể có một <code>Makefile</code> duy nhất</span>
+        <span class="easy-only">Vì sao mỗi máy cần một bản hướng dẫn riêng</span>
+        <span class="en-only" lang="en">Why one <code>Makefile</code> can never be enough</span>
+      </h3>
+      <p class="standard-copy">Mã nguồn C nhìn chung khá khả chuyển, nhưng Ward chỉ ra rằng <b>khác biệt giữa các nền tảng khiến việc biên dịch phần lớn gói bằng một <code>Makefile</code> duy nhất là bất khả thi</b>. Các giải pháp thời kỳ đầu là cung cấp <code>Makefile</code> riêng cho từng hệ điều hành, hoặc một <code>Makefile</code> dễ sửa. Cách tiếp cận ấy tiến hoá thành các script sinh ra <code>Makefile</code> dựa trên phân tích chính hệ thống dùng để dựng gói.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mỗi máy một khác: chỗ để thư viện khác nhau, tên công cụ khác nhau. Một bản hướng dẫn chung không dùng được cho mọi máy. Thế nên người ta viết một script tự dò máy rồi viết bản hướng dẫn riêng. <b>Nhớ nhé: máy nào cũng khác nhau một chút, nên phải dò rồi mới dựng.</b></p>
+      <p class="en-only" lang="en">C source code is usually fairly portable, but Ward points out that <b>differences on each platform make it impossible to compile most packages with a single <code>Makefile</code></b>. Early solutions provided individual Makefiles per operating system, or one Makefile that was easy to modify. That approach evolved into scripts that generate Makefiles based on an analysis of the system used to build the package.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi dòng <code>checking for…</code> mà <code>configure</code> in ra chính là một lần kiểm tra khác biệt nền tảng đang diễn ra trước mắt bạn.<span class="cite"><a href="#ref-3">3</a></span></span>
+        <span class="easy-only">Những dòng “checking…” chạy vèo vèo chính là lúc máy đang tự dò.</span>
+        <span class="en-only" lang="en">Every <code>checking for…</code> line <code>configure</code> prints is one platform difference being tested in front of you.<span class="cite"><a href="#ref-3">3</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao Ward chọn autotools cho chương này</h4>
+          <p>Ward xem xét biên dịch và cài đặt mã nguồn C với <b>chỉ một</b> trong số các hệ thống dựng: các script cấu hình sinh ra từ bộ GNU autotools. Lý do ông đưa ra: hệ thống này nhìn chung được coi là ổn định, nhiều tiện ích Linux cơ bản dùng nó, và vì nó đặt trên nền các công cụ sẵn có như <code>make</code>, sau khi thấy nó hoạt động bạn sẽ chuyển được kiến thức sang các hệ thống dựng khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Điều Autoconf hứa với người dùng cuối</h4>
+          <p>Tài liệu Autoconf nói rõ điều làm nên giá trị của cách tiếp cận này: các script cấu hình do Autoconf sinh ra <b>độc lập với Autoconf khi chạy</b>, nên người dùng không cần cài Autoconf; và chúng không cần sự can thiệp thủ công, thường cũng không cần tham số chỉ định loại hệ thống, mà tự kiểm tra sự hiện diện của từng tính năng.<span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Bạn đã mở được gói và biết tệp nào là gì. Câu hỏi tiếp theo là câu hỏi quyết định phần còn lại của chương: <b>script <code>configure</code> thật sự làm gì với máy của bạn</b>, và bạn nói chuyện với nó bằng những cách nào? Ward trả lời bằng một ví dụ thực hành trước, rồi mới tới các tuỳ chọn.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Mở gói xong rồi. Giờ tới phần chính: cái script tên <code>configure</code> làm gì, và mình bảo nó làm khác đi bằng cách nào. <b>Nhớ nhé: configure là chỗ bạn ra lệnh trước khi dựng.</b></p>
+    <p class="en-only" lang="en">You can open the package and tell the files apart. The next question decides the rest of the chapter: <b>what does the <code>configure</code> script actually do to your system</b>, and how do you talk to it? Ward answers with a hands-on example first, and the options afterwards.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="autoconf" aria-labelledby="autoconf-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="autoconf-title">
+      <span class="standard-copy">GNU autoconf: một script dò máy, rồi viết <code>Makefile</code> cho bạn</span>
+      <span class="easy-only">Script configure: máy tự dò rồi tự viết hướng dẫn</span>
+      <span class="en-only" lang="en">GNU autoconf: a script that inspects your machine, then writes the <code>Makefile</code></span>
+    </h2>
+    <p class="standard-copy">GNU autoconf là một hệ thống phổ biến để sinh <code>Makefile</code> tự động. Gói dùng hệ thống này đi kèm các tệp tên <code>configure</code>, <code>Makefile.in</code> và <code>config.h.in</code>. Các tệp <code>.in</code> là khuôn mẫu; ý tưởng là chạy script <code>configure</code> để khám phá đặc tính hệ thống của bạn, rồi thay thế vào các tệp <code>.in</code> để tạo ra tệp dựng thật.<span class="cite"><a href="#ref-1">1</a></span> Với người dùng cuối thì việc này rất dễ: để sinh <code>Makefile</code> từ <code>Makefile.in</code>, chỉ cần chạy <code>./configure</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Có một script tên là <code>configure</code>. Bạn chạy nó, nó tự đi xem máy bạn có gì — có trình biên dịch không, thư viện nằm ở đâu — rồi nó viết ra bản hướng dẫn dựng hợp với máy bạn. Bạn chỉ cần gõ đúng một dòng. <b>Nhớ nhé: gõ ./configure, rồi để máy tự lo phần dò.</b></p>
+    <p class="en-only" lang="en">GNU autoconf is a popular system for automatic Makefile generation. Packages using it come with files named <code>configure</code>, <code>Makefile.in</code> and <code>config.h.in</code>. The <code>.in</code> files are templates; the idea is to run the <code>configure</code> script to discover the characteristics of your system, then make substitutions in the <code>.in</code> files to create the real build files.<span class="cite"><a href="#ref-1">1</a></span> For the end user it's easy: to generate a <code>Makefile</code> from <code>Makefile.in</code>, run <code>./configure</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only"><b>Điều <code>configure</code> để lại sau lưng.</b> Nếu mọi việc trôi chảy, Ward mô tả rằng <code>configure</code> tạo ra một hoặc nhiều <code>Makefile</code> và một tệp <code>config.h</code>, cùng một tệp đệm <code>config.cache</code> để khỏi phải chạy lại một số kiểm tra.<span class="cite"><a href="#ref-1">1</a></span> Tài liệu Autoconf bổ sung một chi tiết đáng lưu ý: tệp đệm — thường tên <code>config.cache</code>, bật bằng <code>--cache-file=config.cache</code> hoặc gọn hơn là <code>-C</code> — <b>mặc định bị tắt</b> ở các phiên bản Autoconf hiện đại, chính để tránh những rắc rối do vô tình dùng lại tệp đệm cũ.<span class="cite"><a href="#ref-3">3</a></span> Trang này giữ cách mô tả của sách trong phần thân và ghi chú khác biệt ở đây thay vì lặng lẽ chọn một bên.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Chuỗi lệnh chuẩn.</b> Tài liệu Autoconf tóm gọn toàn bộ quy trình vào ba dòng cho người dựng từ bản phát hành: <code>./configure</code>, <code>make</code>, <code>make install</code>. Trong đó <code>make check</code> là bước tuỳ chọn chạy các bài tự kiểm tra bằng chính các tệp nhị phân vừa dựng mà chưa cài.<span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Ba dòng lệnh thôi: cấu hình, dựng, cài. Giữa chừng có thể thử <code>make check</code> để xem món có ổn không trước khi dọn lên bàn. <b>Nhớ nhé: configure — make — make install.</b></p>
+      <p class="en-only" lang="en"><b>The standard sequence.</b> The Autoconf manual compresses the whole procedure into three lines for someone building from a distribution tarball: <code>./configure</code>, <code>make</code>, <code>make install</code>. <code>make check</code> is the optional step in between, running any self-tests with the just-built, not-yet-installed binaries.<span class="cite"><a href="#ref-3">3</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">configure.ac → autoconf → configure<br>configure + Makefile.in → Makefile<br>configure + config.h.in → config.h<br>configure → config.status, config.log</p>
+      <p class="easy-only">khuôn mẫu + máy của bạn<br>&nbsp;&nbsp;→ bản hướng dẫn riêng<br>&nbsp;&nbsp;→ nhật ký để tra khi hỏng</p>
+      <p class="en-only" lang="en">configure.ac → autoconf → configure<br>configure + Makefile.in → Makefile<br>configure + config.h.in → config.h<br>configure → config.status, config.log</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">--prefix</span>
+      <h3>
+        <span class="standard-copy">--prefix — tuỳ chọn hữu ích nhất của <code>configure</code></span>
+        <span class="easy-only">--prefix — chọn chỗ để cài</span>
+        <span class="en-only" lang="en">--prefix — the most useful <code>configure</code> option</span>
+      </h3>
+      <p class="standard-copy">Ward gọi <code>--prefix</code> là một trong những tuỳ chọn hữu ích nhất: nó chỉ định thư mục cài đặt. Mặc định, đích <code>install</code> của một <code>Makefile</code> do autoconf sinh ra dùng tiền tố <code>/usr/local</code> — nghĩa là chương trình nhị phân vào <code>/usr/local/bin</code>, thư viện vào <code>/usr/local/lib</code>, và cứ thế.<span class="cite"><a href="#ref-1">1</a></span> Bạn sẽ thường muốn đổi tiền tố ấy bằng <code>./configure --prefix=<i>new_prefix</i></code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mặc định, phần mềm bạn tự dựng sẽ được cài vào <code>/usr/local</code>. Nhưng bạn có thể bảo nó cài vào bất kỳ đâu — kể cả một thư mục trong nhà bạn. Như thế gỡ đi cũng dễ. <b>Nhớ nhé: --prefix là chỗ bạn chọn nơi cài.</b></p>
+      <p class="en-only" lang="en">Ward calls <code>--prefix</code> one of the most useful options: it specifies the installation directory. By default the <code>install</code> target of an autoconf-generated Makefile uses a prefix of <code>/usr/local</code> — binaries go in <code>/usr/local/bin</code>, libraries in <code>/usr/local/lib</code>, and so on.<span class="cite"><a href="#ref-1">1</a></span> You will often want to change that with <code>./configure --prefix=<i>new_prefix</i></code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong ví dụ thực hành của Ward, <code>./configure --prefix=$HOME/mycoreutils</code> đặt toàn bộ gói GNU coreutils vào thư mục nhà, để bạn không làm hỏng hệ thống.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Ví dụ trong sách: cài vào thư mục riêng trong nhà bạn, xong xoá đi cũng chẳng sao.</span>
+        <span class="en-only" lang="en">In Ward's hands-on example, <code>./configure --prefix=$HOME/mycoreutils</code> puts the whole GNU coreutils package in your home directory, so you can't mess up your system.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Tiền tố này là một quy ước của GNU, không phải của autoconf</h4>
+          <p><span lang="en">GNU Coding Standards</span> quy định rằng <b>giá trị mặc định của <code>prefix</code> phải là <code>/usr/local</code></b>, và mọi thư mục cài đặt khác đều là thư mục con của <code>prefix</code> hoặc <code>exec_prefix</code>, chứ không có gì được cài thẳng vào hai thư mục gốc ấy.<span class="cite"><a href="#ref-5">5</a></span> <code>exec_prefix</code> mặc định bằng <code>$(prefix)</code> và dành cho những thư mục chứa tệp phụ thuộc kiến trúc máy — chương trình thực thi và thư viện — trong khi <code>$(prefix)</code> dùng trực tiếp cho các thư mục còn lại.<span class="cite"><a href="#ref-5">5</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đổi tiền tố không nên bắt biên dịch lại</h4>
+          <p>Cũng trong tài liệu đó có một câu đáng nhớ khi bạn nghi ngờ một gói cư xử lạ: chạy <code>make install</code> với giá trị <code>prefix</code> khác với giá trị lúc dựng <b>không nên</b> biên dịch lại chương trình.<span class="cite"><a href="#ref-5">5</a></span> Tài liệu Autoconf nói thêm rằng cách khả chuyển nhất vẫn là truyền đúng vị trí cho <code>configure</code>; các cách ghi đè lúc <code>make install</code> chỉ là lối tắt và có nền tảng gặp hạn chế với ngữ nghĩa thư viện dùng chung.<span class="cite"><a href="#ref-6">6</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">configure options</span>
+      <h3>
+        <span class="standard-copy">Những tuỳ chọn thiết yếu khác — khi <code>--help</code> quá dài để đọc</span>
+        <span class="easy-only">Vài tuỳ chọn đáng nhớ</span>
+        <span class="en-only" lang="en">The other essential options — when <code>--help</code> is too long to read</span>
+      </h3>
+      <p class="standard-copy">Phần lớn phiên bản <code>configure</code> có tuỳ chọn <code>--help</code> liệt kê các lựa chọn cấu hình khác. Ward nhận xét thẳng: đáng tiếc là danh sách ấy thường dài tới mức khó biết cái nào quan trọng. Ông chắt ra một nhóm thiết yếu: <code>--bindir=<i>directory</i></code> cài tệp thực thi vào <i>directory</i>; <code>--sbindir=<i>directory</i></code> cài tệp thực thi hệ thống; <code>--libdir=<i>directory</i></code> cài thư viện; <code>--disable-shared</code> ngăn gói dựng thư viện dùng chung, điều mà tuỳ thư viện có thể tránh được phiền phức về sau; và <code>--with-<i>package</i>=<i>directory</i></code> cho <code>configure</code> biết <i>package</i> nằm ở <i>directory</i>, rất tiện khi một thư viện cần thiết nằm ở vị trí phi tiêu chuẩn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Có vài công tắc hay dùng: chọn chỗ để chương trình, chọn chỗ để thư viện, và bảo nó “thư viện tôi cần nằm ở đây này”. Danh sách đầy đủ thì rất dài, nên chỉ cần nhớ mấy cái hay dùng. <b>Nhớ nhé: --prefix là chính, còn lại là chỉnh lặt vặt.</b></p>
+      <p class="en-only" lang="en">Most versions of <code>configure</code> have a <code>--help</code> option listing other configuration options. Ward is blunt: the list is usually so long that it's hard to work out what might be important. He distils an essential set: <code>--bindir=<i>directory</i></code> installs executables there; <code>--sbindir=<i>directory</i></code> installs system executables; <code>--libdir=<i>directory</i></code> installs libraries; <code>--disable-shared</code> prevents the package from building shared libraries, which depending on the library can save hassles later; and <code>--with-<i>package</i>=<i>directory</i></code> tells <code>configure</code> that <i>package</i> is in <i>directory</i>, handy when a needed library sits in a nonstandard location.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Ward cảnh báo rằng không phải mọi script <code>configure</code> đều nhận dạng tuỳ chọn <code>--with-…</code>, và có thể khó xác định cú pháp chính xác.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Không phải gói nào cũng hiểu mọi công tắc — nên đọc <code>--help</code> của chính gói đó.</span>
+        <span class="en-only" lang="en">Ward warns that not all <code>configure</code> scripts recognise the <code>--with-…</code> form, and the exact syntax can be hard to determine.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Các biến thư mục chuẩn, theo nguồn gốc của chúng</h4>
+          <p>Những tuỳ chọn <code>--bindir</code>, <code>--sbindir</code>, <code>--libdir</code> ánh xạ một-một vào các biến thư mục của <span lang="en">GNU Coding Standards</span>: <code>bindir</code> là <code>$(exec_prefix)/bin</code> cho chương trình người dùng chạy được; <code>sbindir</code> là <code>$(exec_prefix)/sbin</code> cho chương trình chỉ hữu ích với quản trị viên; <code>libexecdir</code> là <code>$(exec_prefix)/libexec</code> cho chương trình được chương trình khác gọi chứ không phải người dùng gọi; <code>datarootdir</code> là <code>$(prefix)/share</code>; <code>sysconfdir</code> là <code>$(prefix)/etc</code>; còn <code>localstatedir</code> là <code>$(prefix)/var</code> cho dữ liệu chương trình sửa đổi trong lúc chạy.<span class="cite"><a href="#ref-5">5</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao mặc định được viết theo <code>${prefix}</code></h4>
+          <p>Tài liệu Autoconf giải thích: mặc định của các tuỳ chọn thư mục nhìn chung được biểu đạt theo <code>${prefix}</code>, nên chỉ cần chỉ định <code>--prefix</code> là ảnh hưởng tới mọi thư mục khác chưa được nêu tường minh.<span class="cite"><a href="#ref-6">6</a></span> Đó là lý do một dòng <code>--prefix</code> duy nhất đủ để di dời cả gói.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">CPPFLAGS / CFLAGS / LDFLAGS</span>
+      <h3>
+        <span class="standard-copy">Biến môi trường — nơi <code>configure</code> rất khó tính</span>
+        <span class="easy-only">Ba biến hay dùng, và một dấu gạch dễ quên</span>
+        <span class="en-only" lang="en">Environment variables — where <code>configure</code> is very picky</span>
+      </h3>
+      <p class="standard-copy">Bạn có thể tác động tới <code>configure</code> bằng các biến môi trường mà nó đưa vào biến của <code>make</code>. Ward nêu ba biến quan trọng nhất: <code>CPPFLAGS</code>, <code>CFLAGS</code> và <code>LDFLAGS</code> — nhưng cảnh báo rằng <code>configure</code> có thể rất khó tính với biến môi trường. Ví dụ, bạn thường nên dùng <code>CPPFLAGS</code> thay vì <code>CFLAGS</code> cho thư mục tệp tiêu đề, <b>vì <code>configure</code> hay chạy bộ tiền xử lý độc lập với trình biên dịch</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ba cái “hộp” bạn có thể nhét chỉ dẫn vào: một cho chỗ tìm tệp tiêu đề, một cho trình biên dịch, một cho bước nối các mảnh lại. Chọn nhầm hộp là hỏng. <b>Nhớ nhé: tìm tệp .h thì dùng CPPFLAGS, đừng dùng CFLAGS.</b></p>
+      <p class="en-only" lang="en">You can influence <code>configure</code> with environment variables that it feeds into make variables. Ward names the three most important: <code>CPPFLAGS</code>, <code>CFLAGS</code> and <code>LDFLAGS</code> — but warns that <code>configure</code> can be very picky about them. For instance, you should normally use <code>CPPFLAGS</code> rather than <code>CFLAGS</code> for header file directories, <b>because <code>configure</code> often runs the preprocessor independently of the compiler</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong <code>bash</code>, cách dễ nhất là đặt phép gán ngay trước <code>./configure</code>: <code>CPPFLAGS=-DDEBUG ./configure</code>. Bạn cũng có thể truyền biến như một tuỳ chọn: <code>./configure CPPFLAGS=-DDEBUG</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Gõ biến ngay trước lệnh, hoặc gõ nó như một tham số phía sau — cả hai đều được.</span>
+        <span class="en-only" lang="en">In <code>bash</code> the easiest way is to put the assignment in front of <code>./configure</code>: <code>CPPFLAGS=-DDEBUG ./configure</code>. You can also pass a variable as an option: <code>./configure CPPFLAGS=-DDEBUG</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Tìm tệp tiêu đề và thư viện ở nơi phi tiêu chuẩn</h4>
+          <p>Ward cho hai công thức cụ thể: để bộ tiền xử lý tìm trong <i>include_dir</i>, chạy <code>CPPFLAGS=-I<i>include_dir</i> ./configure</code>; để trình liên kết tìm trong <i>lib_dir</i>, chạy <code>LDFLAGS=-L<i>lib_dir</i> ./configure</code>.<span class="cite"><a href="#ref-1">1</a></span> Nếu <i>lib_dir</i> chứa thư viện dùng chung, lệnh trên có lẽ <b>không</b> đặt đường dẫn cho trình liên kết động lúc chạy; khi đó dùng thêm tuỳ chọn <code>-rpath</code>: <code>LDFLAGS="-L<i>lib_dir</i> -Wl,-rpath=<i>lib_dir</i>" ./configure</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một dấu gạch thiếu, một lỗi khó hiểu</h4>
+          <p>Ward dựng sẵn cái bẫy: quên dấu <code>-</code> trong <code>-I</code>, tức gõ <code>CPPFLAGS=I<i>include_dir</i> ./configure</code>, sẽ sinh ra lỗi <code>configure: error: C compiler cannot create executables</code> kèm dòng <code>See 'config.log' for more details</code>.<span class="cite"><a href="#ref-1">1</a></span> Đào vào <code>config.log</code> mới thấy nguyên nhân thật: <code>gcc: error: I<i>include_dir</i>: No such file or directory</code>.<span class="cite"><a href="#ref-1">1</a></span> Thông điệp lớn hơn: <b>lỗi mà <code>configure</code> in ra thường không phải lỗi thật</b>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao nên truyền biến trên dòng lệnh</h4>
+          <p>Tài liệu Autoconf đưa một lý do kỹ thuật cho lối viết <code>./configure VAR=value</code>: một số gói có thể <b>chạy lại <code>configure</code> trong lúc dựng</b>, và khi đó giá trị tuỳ chỉnh đặt trong môi trường có thể bị mất; đặt biến ngay trên dòng lệnh <code>configure</code> tránh được vấn đề này.<span class="cite"><a href="#ref-8">8</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">make targets</span>
+      <h3>
+        <span class="standard-copy">Bốn đích <code>make</code> mà autoconf tặng thêm</span>
+        <span class="easy-only">Bốn lệnh make hay dùng</span>
+        <span class="en-only" lang="en">The four extra <code>make</code> targets autoconf gives you</span>
+      </h3>
+      <p class="standard-copy">Khi <code>configure</code> đã chạy được, Ward chỉ ra rằng <code>Makefile</code> nó sinh ra có một số đích hữu ích ngoài <code>all</code> và <code>install</code> tiêu chuẩn. <code>make clean</code> xoá mọi tệp đối tượng, tệp thực thi và thư viện. <code>make distclean</code> giống <code>clean</code> nhưng xoá <b>mọi tệp được sinh tự động</b>, gồm cả các <code>Makefile</code>, <code>config.h</code>, <code>config.log</code> — ý tưởng là sau khi chạy, cây mã nguồn trông như một bản phân phối vừa mới giải nén. <code>make check</code> chạy bộ bài kiểm tra mà một số gói kèm theo. Và <code>make install-strip</code> giống <code>install</code> nhưng lược bỏ bảng ký hiệu cùng thông tin gỡ lỗi khỏi tệp thực thi và thư viện khi cài; tệp nhị phân đã lược bỏ chiếm ít không gian hơn nhiều.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ngoài “dựng” và “cài”, còn bốn lệnh nữa: dọn dẹp, dọn sạch về như lúc mới mở gói, chạy thử, và cài bản gọn nhẹ. <b>Nhớ nhé: clean là quét nhà, distclean là trả lại nguyên trạng.</b></p>
+      <p class="en-only" lang="en">Once <code>configure</code> works, Ward points out that the generated Makefile has several useful targets beyond the standard <code>all</code> and <code>install</code>. <code>make clean</code> removes all object files, executables and libraries. <code>make distclean</code> is like <code>clean</code> but also removes <b>all automatically generated files</b>, including Makefiles, <code>config.h</code> and <code>config.log</code> — the idea being that after it runs, the source tree should look like a newly unpacked distribution. <code>make check</code> runs the battery of tests some packages ship. And <code>make install-strip</code> is like <code>install</code> except it strips the symbol table and other debugging information from executables and libraries when installing; stripped binaries require much less space.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bạn muốn cấu hình lại gói cho một hệ thống khác, <code>make distclean</code> là bước đưa cây mã nguồn về trạng thái sạch trước khi chạy lại <code>configure</code>.<span class="cite"><a href="#ref-6">6</a></span></span>
+        <span class="easy-only">Muốn làm lại từ đầu thì gõ <code>make distclean</code> trước.</span>
+        <span class="en-only" lang="en">When you want to reconfigure the package for another system, <code>make distclean</code> is the step that returns the source tree to a clean state before running <code>configure</code> again.<span class="cite"><a href="#ref-6">6</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao <code>install</code> cố tình <i>không</i> lược bỏ ký hiệu</h4>
+          <p><span lang="en">GNU Coding Standards</span> nêu lý do đằng sau cặp <code>install</code> / <code>install-strip</code>: <b>đừng lược bỏ tệp thực thi khi cài</b>, vì điều đó giúp cho việc gỡ lỗi có thể cần về sau, và ngày nay không gian đĩa rẻ trong khi bộ nạp động thường bảo đảm các phần gỡ lỗi không được nạp trong lúc chạy bình thường; người cần bản nhị phân đã lược bỏ có thể gọi đích <code>install-strip</code>.<span class="cite"><a href="#ref-9">9</a></span> Công cụ thực hiện việc lược bỏ là <code>strip</code>, vốn loại bỏ ký hiệu khỏi tệp đối tượng.<span class="cite"><a href="#ref-10">10</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4><code>clean</code> và <code>distclean</code> theo đúng định nghĩa chuẩn</h4>
+          <p>Cùng tài liệu ấy định nghĩa: <code>clean</code> xoá mọi tệp trong thư mục hiện tại thường được tạo ra khi dựng chương trình, <b>nhưng không xoá những tệp ghi lại cấu hình</b>; còn <code>distclean</code> xoá mọi tệp được tạo ra bởi việc cấu hình <i>hoặc</i> dựng, sao cho nếu bạn chỉ giải nén và dựng thì sau <code>make distclean</code> chỉ còn lại những tệp vốn có trong bản phân phối.<span class="cite"><a href="#ref-9">9</a></span> Đó chính là ranh giới giữa hai lệnh mà Ward mô tả.</p>
+        </div>
+        <div class="info-block">
+          <h4><code>check</code>: thử trước khi cài</h4>
+          <p>Định nghĩa chuẩn của <code>check</code> là <b>thực hiện các bài tự kiểm tra, nếu có</b>: người dùng phải dựng chương trình trước khi chạy kiểm tra nhưng <i>không</i> cần cài, và tác giả gói phải viết bài kiểm tra sao cho chúng chạy được khi chương trình đã dựng mà chưa cài.<span class="cite"><a href="#ref-9">9</a></span> Đây là lý do <code>make check</code> nằm giữa <code>make</code> và <code>make install</code> chứ không phải sau cùng.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">config.log</span>
+      <h3>
+        <span class="standard-copy">Đọc <code>config.log</code> từ dưới lên — nhưng đừng đọc ngay cuối</span>
+        <span class="easy-only">Khi configure hỏng thì tra nhật ký ở đâu</span>
+        <span class="en-only" lang="en">Reading <code>config.log</code> backwards — but not from the very end</span>
+      </h3>
+      <p class="standard-copy">Nếu có gì sai trong quá trình <code>configure</code> mà nguyên nhân không hiển nhiên, bạn có thể xem <code>config.log</code>. Đáng tiếc, Ward lưu ý, <code>config.log</code> thường là một tệp khổng lồ, khiến việc định vị nguồn gốc chính xác của vấn đề trở nên khó.<span class="cite"><a href="#ref-1">1</a></span> Cách tiếp cận chung là đi tới tận cuối tệp — chẳng hạn gõ <code>G</code> viết hoa trong <code>less</code> — rồi lật ngược lên cho tới khi thấy vấn đề.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Khi bước cấu hình hỏng, có một tệp nhật ký ghi lại mọi thứ. Nó rất dài. Mẹo là nhảy xuống cuối rồi tìm ngược lên, chứ không đọc từ đầu. <b>Nhớ nhé: lỗi thật thường nằm ngay phía trên chỗ bạn tìm thấy.</b></p>
+      <p class="en-only" lang="en">If something goes wrong during <code>configure</code> and the cause isn't obvious, you can examine <code>config.log</code>. Unfortunately, Ward notes, <code>config.log</code> is often a gigantic file, which makes pinpointing the exact source difficult.<span class="cite"><a href="#ref-1">1</a></span> The general approach is to go to the very end of the file — for example by typing a capital <code>G</code> in <code>less</code> — and then page back up until you see the problem.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Ward tinh chỉnh mẹo này: vẫn còn rất nhiều thứ ở cuối vì <code>configure</code> đổ toàn bộ môi trường của nó ra đó — biến kết xuất, biến đệm và các định nghĩa khác — nên thay vì lật ngược, hãy <b>tìm ngược</b> một chuỗi như <code>for more details</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Đừng lật từng trang: hãy tìm ngược một cụm chữ quen thuộc.</span>
+        <span class="en-only" lang="en">Ward refines the trick: there's still a lot at the end because <code>configure</code> dumps its entire environment there — output variables, cache variables and other definitions — so rather than paging up, <b>search backward</b> for a string such as <code>for more details</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cú pháp tìm ngược trong <code>less</code></h4>
+          <p>Ward nhắc rằng bạn khởi tạo một lần tìm ngược trong <code>less</code> bằng lệnh <code>?</code>; và có khả năng cao lỗi sẽ nằm ngay phía trên chỗ lần tìm của bạn dừng lại.<span class="cite"><a href="#ref-1">1</a></span> Trong ví dụ về dấu gạch bị thiếu, phần <code>config.log</code> đáng giá gồm bốn dòng đánh số dòng của chính script — <code>configure:5037: checking whether the C compiler works</code> cho tới <code>configure:5101: result: no</code> — với dòng <code>gcc: error:</code> nằm chính giữa.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4><code>config.log</code> là gì theo tài liệu gốc</h4>
+          <p>Tài liệu Autoconf mô tả <code>config.log</code> đúng bằng một câu: <code>configure</code> tạo ra script <code>config.status</code> để bạn tái lập cấu hình hiện tại trong tương lai, và một tệp <code>config.log</code> <b>chứa kết xuất hữu ích cho việc gỡ lỗi chính <code>configure</code></b>.<span class="cite"><a href="#ref-3">3</a></span> Nói cách khác, nó không phải nhật ký của chương trình bạn dựng — nó là nhật ký của bước dò.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Ward khép mục autoconf bằng một câu điều chỉnh kỳ vọng rất đáng nhớ: <b>một bước <code>configure</code> thành công không nhất thiết có nghĩa là bước <code>make</code> sẽ chạy được</b> — nhưng khả năng là khá cao.<span class="cite"><a href="#ref-1">1</a></span> Từ đó mở ra hai câu hỏi thực tế mà phần còn lại của chương trả lời: cài <i>ở đâu</i>, và làm gì khi <code>make</code> thật sự hỏng.</p>
+    <p class="easy-only">Cấu hình chạy ngon không có nghĩa dựng sẽ ngon — nhưng khả năng cao là ngon. <b>Nhớ nhé: qua cửa đầu tiên chưa phải là xong, nhưng đã đi được nửa đường.</b></p>
+    <p class="en-only" lang="en">Ward closes the autoconf section with a memorable expectation-setter: <b>a successful <code>configure</code> step doesn't necessarily mean the <code>make</code> step will work</b> — but the chances are pretty good.<span class="cite"><a href="#ref-1">1</a></span> That opens the two practical questions the rest of the chapter answers: <i>where</i> to install, and what to do when <code>make</code> really does fail.</p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="noi-cai-dat" aria-labelledby="noi-cai-dat-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="noi-cai-dat-title">
+      <span class="standard-copy">Cài ở đâu, cài bằng gì, và giữ cho hệ thống khỏi thành mớ hỗn độn</span>
+      <span class="easy-only">Cài vào chỗ nào cho gọn gàng</span>
+      <span class="en-only" lang="en">Where to install, with what, and how to keep the system from becoming a mess</span>
+    </h2>
+    <p class="standard-copy">Ward đảo ngược trọng tâm ở đây: biết <i>cách</i> dựng và cài phần mềm là tốt, nhưng biết <b>khi nào và ở đâu</b> nên cài gói của riêng mình còn hữu ích hơn. Vì các bản phân phối cố nhồi càng nhiều phần mềm càng tốt lúc cài đặt, bạn nên luôn kiểm tra xem tự cài một gói có tốt hơn không.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Biết nấu là một chuyện. Biết nên nấu món nào, và để món đó vào ngăn nào trong tủ, mới là chuyện quan trọng hơn. <b>Nhớ nhé: cài đúng chỗ thì sau này dọn mới dễ.</b></p>
+    <p class="en-only" lang="en">Ward flips the emphasis here: knowing <i>how</i> to build and install software is good, but knowing <b>when and where</b> to install your own packages is even more useful. Because distributions try to cram in as much software as possible at installation, you should always check whether installing a package yourself would be better.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only"><b>Danh sách hai chiều của Ward.</b> Ông không bán ý tưởng một chiều. <i>Lợi thế</i> của việc tự cài: bạn tuỳ biến được mặc định của gói; bạn thường hiểu rõ hơn cách dùng nó; bạn kiểm soát bản phát hành mình chạy; sao lưu một gói tự cài dễ hơn; và phân phối gói tự cài qua mạng cũng dễ hơn, miễn kiến trúc nhất quán và vị trí cài tương đối biệt lập.<span class="cite"><a href="#ref-1">1</a></span> <i>Bất lợi</i>: nếu gói đã có sẵn trên hệ thống, bạn có thể ghi đè các tệp quan trọng và gây rắc rối — tránh điều đó bằng tiền tố <code>/usr/local</code>; việc này tốn thời gian; gói tuỳ chỉnh <b>không tự nâng cấp</b>, một mối lo đặc biệt với các gói tương tác qua mạng vì bạn muốn luôn có bản vá bảo mật mới nhất; nếu bạn không thật sự dùng gói đó thì bạn đang phí thời gian; và luôn có nguy cơ cấu hình sai.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Tiền tố</i> (<span lang="en">prefix</span>) là thư mục gốc mà toàn bộ cây cài đặt của một gói treo bên dưới. Tiền tố mặc định trong GNU autoconf và nhiều gói khác là <code>/usr/local</code>, thư mục truyền thống cho phần mềm cài tại chỗ; việc nâng cấp hệ điều hành <b>bỏ qua</b> <code>/usr/local</code>, nên bạn sẽ không mất thứ gì đã cài ở đó khi nâng cấp hệ điều hành.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Tiền tố là cái ngăn tủ bạn chọn để cất phần mềm tự cài. Ngăn tiêu chuẩn tên là <code>/usr/local</code>, và khi hệ điều hành nâng cấp thì nó không đụng vào ngăn này. <b>Nhớ nhé: /usr/local là ngăn của riêng bạn.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> The <i>prefix</i> is the root directory under which a package's entire installed tree hangs. The default prefix in GNU autoconf and many other packages is <code>/usr/local</code>, the traditional directory for locally installed software; operating system upgrades <b>ignore</b> <code>/usr/local</code>, so you won't lose anything installed there during an OS upgrade.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">prefix = /usr/local<br>&nbsp;&nbsp;bindir&nbsp;&nbsp;= $(exec_prefix)/bin<br>&nbsp;&nbsp;libdir&nbsp;&nbsp;= $(exec_prefix)/lib<br>&nbsp;&nbsp;sysconfdir = $(prefix)/etc</p>
+      <p class="easy-only">ngăn gốc = /usr/local<br>&nbsp;&nbsp;chương trình → bin<br>&nbsp;&nbsp;thư viện → lib<br>&nbsp;&nbsp;cấu hình → etc</p>
+      <p class="en-only" lang="en">prefix = /usr/local<br>&nbsp;&nbsp;bindir&nbsp;&nbsp;= $(exec_prefix)/bin<br>&nbsp;&nbsp;libdir&nbsp;&nbsp;= $(exec_prefix)/lib<br>&nbsp;&nbsp;sysconfdir = $(prefix)/etc</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">make -n install</span>
+      <h3>
+        <span class="standard-copy">Chạy thử trước khi cài thật</span>
+        <span class="easy-only">Diễn tập trước khi làm thật</span>
+        <span class="en-only" lang="en">Rehearse the install before you do it</span>
+      </h3>
+      <p class="standard-copy">Trong ví dụ coreutils, trước khi cài Ward yêu cầu làm một lần <b>chạy khan</b> bằng <code>make -n install</code>, để thấy <code>make install</code> sẽ làm gì mà không thật sự cài. Hãy duyệt qua kết xuất, và nếu không có gì lạ — chẳng hạn gói định cài vào chỗ nào khác ngoài thư mục <code>mycoreutils</code> của bạn — thì mới cài thật bằng <code>make install</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Trước khi cài thật, bảo máy “diễn thử” đi: nó sẽ kể ra định chép những gì đi đâu, mà chưa chép gì cả. Đọc xong thấy ổn thì mới làm thật. <b>Nhớ nhé: diễn thử một lần, đỡ hối hận một lần.</b></p>
+      <p class="en-only" lang="en">In the coreutils example, Ward asks you to do a <b>dry run</b> with <code>make -n install</code> first, to see what <code>make install</code> does without actually doing it. Browse the output, and if nothing seems strange — such as the package installing anywhere other than your <code>mycoreutils</code> directory — then do the real install with <code>make install</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Sau khi cài, bạn sẽ có thư mục con <code>mycoreutils</code> trong thư mục nhà, chứa <code>bin</code>, <code>share</code> và các thư mục con khác — và vì nó độc lập với phần còn lại của hệ thống, bạn có thể xoá sạch mà không lo gây hỏng.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Cài xong, muốn bỏ thì xoá cả thư mục đó là xong — không ảnh hưởng gì tới máy.</span>
+        <span class="en-only" lang="en">After installing you'll have a <code>mycoreutils</code> subdirectory in your home directory containing <code>bin</code>, <code>share</code> and others — and because it's independent of the rest of your system, you can remove it completely without worrying about causing damage.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bài tập đầy đủ của Ward</h4>
+          <p>Ví dụ thực hành trong sách là cài gói GNU coreutils vào thư mục nhà của chính bạn để chắc chắn không làm hỏng hệ thống: lấy gói từ <code>ftp.gnu.org/gnu/coreutils/</code> (bản mới nhất thường là tốt nhất), giải nén, chuyển vào thư mục của nó, rồi <code>./configure --prefix=$HOME/mycoreutils</code>, sau đó <code>make</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span> Tiếp đó hãy thử chạy một trong các tệp thực thi vừa tạo, chẳng hạn <code>./src/ls</code>, và chạy <code>make check</code> để thực hiện một loạt bài kiểm tra trên gói — việc này có thể mất một lúc, nhưng thú vị.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Bạn vừa dựng lại chính những công cụ mình dùng</h4>
+          <p>Ward chốt bài tập bằng một nhận xét có chủ ý: hãy xem qua các chương trình trong <code>bin</code>, vì <b>bạn vừa dựng nhiều công cụ cơ bản mà bạn đã học ở Chương 2</b>.<span class="cite"><a href="#ref-1">1</a></span> Ông cũng nói thẳng ở mục sau: chẳng có mấy ý nghĩa khi cài những gói như coreutils — <code>ls</code>, <code>cat</code> và tương tự — trừ phi bạn đang dựng một hệ thống rất tuỳ biến; ngược lại, nếu bạn quan tâm sống còn tới máy chủ mạng như Apache thì cách tốt nhất để kiểm soát hoàn toàn là tự cài lấy.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">checkinstall</span>
+      <h3>
+        <span class="standard-copy">Cài bằng công cụ đóng gói, để còn gỡ được về sau</span>
+        <span class="easy-only">Cài kiểu có “phiếu bảo hành”</span>
+        <span class="en-only" lang="en">Installing through a packaging tool, so you can remove it later</span>
+      </h3>
+      <p class="standard-copy">Trên phần lớn bản phân phối, bạn có thể cài phần mềm mới như một <b>gói</b> mà sau này vẫn bảo trì được bằng công cụ đóng gói của bản phân phối. Ward nói các bản phân phối dựa trên Debian, như Ubuntu, có lẽ là dễ nhất: thay vì chạy <code>make install</code> trơn, bạn cài bằng tiện ích <code>checkinstall</code>, dạng <code># checkinstall make install</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Có một cách cài thông minh hơn: thay vì chép tệp lung tung, bạn bảo máy ghi lại danh sách mọi thứ đã chép, rồi gói danh sách đó lại. Sau này muốn gỡ, chỉ cần nói “gỡ gói này”. <b>Nhớ nhé: cài có ghi sổ thì gỡ mới sạch.</b></p>
+      <p class="en-only" lang="en">On most distributions you can install new software as a <b>package</b> that you can maintain later with your distribution's packaging tools. Ward says Debian-based distributions such as Ubuntu are perhaps the easiest: rather than running a plain <code>make install</code>, you install with the <code>checkinstall</code> utility, as <code># checkinstall make install</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Chạy lệnh này sẽ hiện các thiết lập liên quan tới gói sắp dựng và cho bạn cơ hội thay đổi; khi bạn tiếp tục, <code>checkinstall</code> theo dõi mọi tệp sẽ được cài lên hệ thống và đặt chúng vào một tệp <code>.deb</code> — sau đó bạn dùng <code>dpkg</code> để cài và gỡ gói mới.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></span>
+        <span class="easy-only">Nó hỏi bạn vài câu, rồi tạo ra một “hộp” gói đúng chuẩn để cài và gỡ như mọi gói khác.</span>
+        <span class="en-only" lang="en">Running it shows the settings for the package you're about to build and lets you change them; when you proceed, <code>checkinstall</code> tracks all the files to be installed and puts them into a <code>.deb</code> file — you then use <code>dpkg</code> to install and remove the new package.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Phía RPM thì rườm rà hơn</h4>
+          <p>Ward nói rõ rằng tạo một gói RPM <b>phức tạp hơn một chút</b>, vì trước hết bạn phải tạo một cây thư mục cho gói của mình. Việc này làm được bằng lệnh <code>rpmdev-setuptree</code>; xong xuôi thì dùng tiện ích <code>rpmbuild</code> để đi qua các bước còn lại. Ông khuyên nên theo một hướng dẫn trực tuyến cho quy trình này.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Khi <code>/usr/local</code> bắt đầu mất kiểm soát</h4>
+          <p>Ward thừa nhận nhược điểm của tiền tố truyền thống: nếu bạn cài nhiều phần mềm tuỳ chỉnh, <code>/usr/local</code> có thể biến thành một mớ hỗn độn khủng khiếp — <b>hàng nghìn tệp nhỏ lạ lẫm</b> lọt vào cây thư mục ấy, và bạn có thể chẳng biết chúng từ đâu ra.<span class="cite"><a href="#ref-1">1</a></span> Lời khuyên của ông khi mọi thứ thật sự trở nên khó bảo: hãy tự tạo gói của mình, tức quay lại đúng kỹ thuật <code>checkinstall</code>/<code>rpmbuild</code> ở trên.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">pkg-config</span>
+      <h3>
+        <span class="standard-copy"><code>pkg-config</code> — hỏi thư viện xem nó cần cờ gì</span>
+        <span class="easy-only">Hỏi thẳng thư viện xem nó ở đâu</span>
+        <span class="en-only" lang="en"><code>pkg-config</code> — asking a library which flags it needs</span>
+      </h3>
+      <p class="standard-copy">Có vô số thư viện bên thứ ba trên một hệ thống, nên giữ hết chúng ở một chỗ chung thì lộn xộn; nhưng cài mỗi thư viện với một tiền tố riêng lại gây rắc rối khi dựng các gói cần tới chúng. Ward nêu ví dụ cụ thể: muốn biên dịch OpenSSH thì bạn cần thư viện OpenSSL — làm sao cho quy trình cấu hình của OpenSSH biết OpenSSL nằm đâu và cần những thư viện nào?<span class="cite"><a href="#ref-1">1</a></span> Nhiều thư viện nay dùng chương trình <code>pkg-config</code> không chỉ để quảng bá vị trí tệp tiêu đề và thư viện, mà còn để <b>chỉ định chính xác các cờ bạn cần để biên dịch và liên kết</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Thư viện nằm rải rác khắp máy. Thay vì bạn phải đi tìm, có một chương trình nhỏ hỏi hộ: “thư viện này ở đâu, cần khai báo gì?” Nó trả lời gọn một dòng. <b>Nhớ nhé: đừng đoán chỗ thư viện — hỏi pkg-config.</b></p>
+      <p class="en-only" lang="en">The multitude of third-party libraries makes keeping them all in one common location messy, yet installing each under a separate prefix causes problems when building packages that need them. Ward's concrete example: to compile OpenSSH you need the OpenSSL library — how do you tell the OpenSSH configuration process where the OpenSSL libraries are and which ones are required?<span class="cite"><a href="#ref-1">1</a></span> Many libraries now use the <code>pkg-config</code> program not only to advertise the locations of their include files and libraries but also to <b>specify the exact flags you need to compile and link</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Cú pháp là <code>pkg-config <i>options</i> <i>package1</i> <i>package2</i> …</code>; ví dụ <code>pkg-config --libs zlib</code> cho kết quả <code>-lz</code>, còn <code>pkg-config --list-all</code> hiện mọi thư viện mà nó biết kèm mô tả ngắn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></span>
+        <span class="easy-only">Ví dụ: hỏi về thư viện nén zlib, nó trả lời đúng một chữ <code>-lz</code>.</span>
+        <span class="en-only" lang="en">The syntax is <code>pkg-config <i>options</i> <i>package1</i> <i>package2</i> …</code>; for example <code>pkg-config --libs zlib</code> outputs <code>-lz</code>, while <code>pkg-config --list-all</code> shows every library it knows about with a brief description.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Các tệp <code>.pc</code> — dữ liệu đằng sau câu trả lời</h4>
+          <p>Nhìn sau hậu trường, <code>pkg-config</code> tìm thông tin gói bằng cách đọc các tệp cấu hình kết thúc bằng <code>.pc</code>. Ward trưng ra <code>openssl.pc</code> của thư viện OpenSSL trên một hệ Ubuntu, nằm ở <code>/usr/lib/x86_64-linux-gnu/pkgconfig</code>, với các dòng như <code>prefix=/usr</code>, <code>libdir=${exec_prefix}/lib/x86_64-linux-gnu</code>, <code>Libs: -L${libdir} -lssl -lcrypto</code> và <code>Libs.private: -ldl -lz</code>.<span class="cite"><a href="#ref-1">1</a></span> Ông lưu ý bạn có thể sửa tệp này, chẳng hạn thêm <code>-Wl,-rpath=${libdir}</code> vào cờ thư viện để đặt đường dẫn tìm thư viện lúc chạy.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Nó tìm <code>.pc</code> ở đâu — và vì sao bạn thường không thấy</h4>
+          <p>Mặc định, <code>pkg-config</code> tìm trong thư mục <code>lib/pkgconfig</code> thuộc tiền tố cài đặt của chính nó: một <code>pkg-config</code> cài với tiền tố <code>/usr/local</code> sẽ tìm trong <code>/usr/local/lib/pkgconfig</code>.<span class="cite"><a href="#ref-1">1</a></span> Ward kèm một chú ý rất thực tế: bạn sẽ không thấy tệp <code>.pc</code> cho nhiều gói trừ phi cài các <b>gói phát triển</b> — ví dụ để có <code>openssl.pc</code> trên Ubuntu, bạn phải cài gói <code>libssl-dev</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hai cách đưa <code>.pc</code> ở nơi phi tiêu chuẩn vào tầm với</h4>
+          <p>Vì mặc định <code>pkg-config</code> không đọc tệp <code>.pc</code> nào ngoài tiền tố cài đặt của nó, một tệp ở chỗ như <code>/opt/openssl/lib/pkgconfig/openssl.pc</code> sẽ nằm ngoài tầm với. Ward nêu hai cách: tạo liên kết tượng trưng (hoặc bản sao) từ các tệp <code>.pc</code> thật tới thư mục <code>pkgconfig</code> trung tâm; hoặc đặt biến môi trường <code>PKG_CONFIG_PATH</code> để bao gồm các thư mục <code>pkgconfig</code> phụ — nhưng ông nói thẳng rằng <b>chiến lược thứ hai không hoạt động tốt trên phạm vi toàn hệ thống</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">separate build directory</span>
+      <h3>
+        <span class="standard-copy">Thư mục dựng riêng — giữ cây mã nguồn nguyên vẹn</span>
+        <span class="easy-only">Dựng ở một chỗ khác, đừng bày bừa lên nguyên liệu</span>
+        <span class="en-only" lang="en">A separate build directory — keeping the source tree pristine</span>
+      </h3>
+      <p class="standard-copy">Nếu bạn muốn thí nghiệm với các tuỳ chọn, Ward chỉ cách tạo <b>thư mục dựng riêng</b>: tạo một thư mục mới ở bất cứ đâu trên hệ thống, rồi từ thư mục đó chạy script <code>configure</code> nằm trong thư mục mã nguồn gốc của gói. Bạn sẽ thấy <code>configure</code> tạo một <b>rừng liên kết tượng trưng</b> trong thư mục dựng mới, nơi mọi liên kết trỏ ngược về cây mã nguồn trong thư mục gói ban đầu.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Thay vì nấu ngay trên đống nguyên liệu, bạn bày một cái bàn khác rồi nấu ở đó. Nguyên liệu vẫn sạch, và bạn có thể nấu nhiều kiểu cùng lúc. <b>Nhớ nhé: dựng ở bàn riêng, nguyên liệu giữ nguyên.</b></p>
+      <p class="en-only" lang="en">If you want to experiment with options, Ward shows how to use a <b>separate build directory</b>: create a new directory anywhere on the system and, from there, run the <code>configure</code> script in the original package source directory. You'll find <code>configure</code> makes a <b>symbolic link farm</b> in your new build directory, where all the links point back to the source tree in the original package directory.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Một số nhà phát triển thích bạn dựng gói theo lối này vì <b>cây mã nguồn gốc không bao giờ bị sửa đổi</b>; cách này cũng hữu ích khi bạn muốn dựng cho nhiều nền tảng hoặc nhiều bộ tuỳ chọn cấu hình từ cùng một gói mã nguồn.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Hữu ích khi bạn muốn thử nhiều kiểu dựng khác nhau từ cùng một bộ nguyên liệu.</span>
+        <span class="en-only" lang="en">Some developers prefer that you build this way because <b>the original source tree is never modified</b>; it's also useful when you want to build for more than one platform or option set from the same source package.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Tên chính thức của kỹ thuật này</h4>
+          <p>Tài liệu Autoconf gọi đây là <b>VPATH build</b> và mô tả cơ chế: bạn <code>cd</code> tới thư mục nơi bạn muốn đặt tệp đối tượng và tệp thực thi, rồi chạy script <code>configure</code>; <code>configure</code> tự động tìm mã nguồn trong thư mục chứa chính nó và trong <code>..</code>.<span class="cite"><a href="#ref-15">15</a></span> Tài liệu cũng cảnh báo: với một <code>make</code> không phải GNU, <b>an toàn hơn</b> là biên dịch gói cho một hệ thống tại một thời điểm ngay trong thư mục mã nguồn, và dùng <code>make distclean</code> trước khi cấu hình lại cho hệ thống khác.<span class="cite"><a href="#ref-15">15</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Họ hàng gần: cài theo giai đoạn với <code>DESTDIR</code></h4>
+          <p>Chương 16 không bàn tới <code>DESTDIR</code>, nhưng nó là công cụ đứng ngay cạnh <code>--prefix</code> khi bạn đóng gói, nên đáng phân biệt cho rõ. <code>DESTDIR</code> là một biến được <b>thêm vào trước</b> mỗi tệp đích khi cài, do người dùng chỉ định trên dòng lệnh <code>make</code> dưới dạng tên tệp tuyệt đối, ví dụ <code>make DESTDIR=/tmp/stage install</code>: một bước cài lẽ ra đặt <code>/usr/local/bin/foo</code> sẽ đặt <code>/tmp/stage/usr/local/bin/foo</code>.<span class="cite"><a href="#ref-16">16</a></span> Khác biệt cốt lõi: <code>--prefix</code> thay đổi <b>nơi chương trình nghĩ rằng nó được cài</b>, còn <code>DESTDIR</code> chỉ dời <b>nơi tệp được chép tới lần này</b> — tài liệu nói rõ rằng việc chỉ định <code>DESTDIR</code> không được thay đổi hoạt động của phần mềm theo bất kỳ cách nào, nên giá trị của nó không được nhúng vào nội dung tệp nào cả.<span class="cite"><a href="#ref-16">16</a></span> Nó chỉ nên được hỗ trợ trong các đích <code>install*</code> và <code>uninstall*</code>, và thường dùng nhất khi tạo gói.<span class="cite"><a href="#ref-16">16</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đến đây bạn đã dựng và cài được một gói ngoan ngoãn. Phần còn lại của chương xử lý hai tình huống khi mọi thứ <b>không</b> ngoan: khi bạn cầm trong tay một bản vá phải áp vào mã nguồn, và khi trình biên dịch trả về những dòng lỗi mà bạn phải đọc cho đúng.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Trường hợp thuận lợi thì xong rồi. Giờ tới hai trường hợp khó: phải vá mã nguồn, và phải đọc lỗi. <b>Nhớ nhé: phần khó mới là phần dạy bạn nhiều nhất.</b></p>
+    <p class="en-only" lang="en">By now you can build and install a well-behaved package. The rest of the chapter handles the two situations where things are <b>not</b> well-behaved: when you're handed a patch to apply against source code, and when the compiler returns error lines you have to read correctly.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="va-va-go-roi" aria-labelledby="va-va-go-roi-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="va-va-go-roi-title">
+      <span class="standard-copy">Vá mã nguồn, và đọc lỗi biên dịch cho đúng chỗ</span>
+      <span class="easy-only">Vá mã nguồn và đọc thông báo lỗi</span>
+      <span class="en-only" lang="en">Applying patches, and reading build errors in the right place</span>
+    </h2>
+    <p class="standard-copy">Phần lớn thay đổi với mã nguồn phần mềm ngày nay xuất hiện dưới dạng nhánh trong bản mã nguồn trực tuyến của nhà phát triển, chẳng hạn một kho Git. Nhưng thỉnh thoảng bạn vẫn nhận được một <b>bản vá</b> cần áp vào mã nguồn để sửa lỗi hoặc thêm tính năng. Ward ghi chú rằng bạn cũng có thể thấy từ <span lang="en">diff</span> được dùng như từ đồng nghĩa của <span lang="en">patch</span>, vì chương trình <code>diff</code> chính là thứ tạo ra bản vá.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Bản vá là một tờ giấy ghi “ở dòng này, bỏ chữ cũ, thêm chữ mới”. Có một chương trình đọc tờ giấy đó và sửa hộ bạn. <b>Nhớ nhé: bản vá là danh sách những chỗ cần sửa, không phải bản mã nguồn mới.</b></p>
+    <p class="en-only" lang="en">Most changes to software source code now arrive as branches of the developer's online source, such as a Git repository. But every now and then you get a <b>patch</b> that you need to apply against source code to fix bugs or add features. Ward notes you may also see the term <span lang="en">diff</span> used as a synonym for patch, because the <code>diff</code> program is what produces the patch.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only"><b>Trước khi gỡ rối, hãy đọc được kết xuất <code>make</code>.</b> Ward đặt một điều kiện tiên quyết: nếu bạn hiểu khác biệt giữa lỗi trình biên dịch, cảnh báo trình biên dịch, lỗi trình liên kết và vấn đề thư viện dùng chung như mô tả ở Chương 15, bạn sẽ không quá chật vật với phần lớn trục trặc khi dựng phần mềm.<span class="cite"><a href="#ref-1">1</a></span> Ông cũng nói thẳng rằng bạn <i>khó có khả năng</i> gặp những vấn đề trong mục này khi dựng bằng autoconf — nhưng biết chúng trông thế nào thì chẳng bao giờ thừa.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Phần đầu một bản vá trông như <code>--- src/file.c.orig</code> theo sau là <code>+++ src/file.c</code> và một dòng phạm vi dạng <code>@@ -2,16 +2,12 @@</code>. Bản vá thường chứa thay đổi cho nhiều hơn một tệp: hãy tìm <b>ba dấu gạch liên tiếp</b> (<code>---</code>) trong bản vá để thấy những tệp nào bị sửa.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Nhìn mấy dòng đầu là biết bản vá đụng vào tệp nào. Dấu ba gạch mở đầu mỗi tệp mới. <b>Nhớ nhé: đọc đầu bản vá trước khi áp nó.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> The beginning of a patch looks like <code>--- src/file.c.orig</code> followed by <code>+++ src/file.c</code> and a range line such as <code>@@ -2,16 +2,12 @@</code>. Patches usually contain alterations to more than one file: search the patch for <b>three dashes in a row</b> (<code>---</code>) to see which files have alterations.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">--- src/file.c.orig<br>+++ src/file.c<br>@@ -2,16 +2,12 @@<br><br>$ patch -p0 &lt; patch_file</p>
+      <p class="easy-only">tệp cũ → tệp mới<br>vị trí cần sửa<br><br>rồi chạy: patch -p0</p>
+      <p class="en-only" lang="en">--- src/file.c.orig<br>+++ src/file.c<br>@@ -2,16 +2,12 @@<br><br>$ patch -p0 &lt; patch_file</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">patch -p0</span>
+      <h3>
+        <span class="standard-copy">Đứng đúng thư mục — điều kiện thật sự của <code>patch</code></span>
+        <span class="easy-only">Đứng đúng chỗ rồi mới vá</span>
+        <span class="en-only" lang="en">Standing in the right directory — what <code>patch</code> really requires</span>
+      </h3>
+      <p class="standard-copy">Ward nhấn mạnh: hãy <b>luôn xem phần đầu bản vá để xác định thư mục làm việc cần thiết</b>. Trong ví dụ của ông, bản vá nhắc tới <code>src/file.c</code>; do đó bạn phải chuyển tới thư mục <i>chứa</i> <code>src</code>, chứ không phải vào chính thư mục <code>src</code>.<span class="cite"><a href="#ref-1">1</a></span> Áp bản vá bằng lệnh <code>patch -p0 &lt; patch_file</code>; nếu mọi việc trôi chảy, <code>patch</code> thoát mà không làm ồn, để lại cho bạn một bộ tệp đã cập nhật.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bản vá ghi đường đi tới tệp cần sửa. Bạn phải đứng đúng chỗ để đường đi đó khớp. Đứng sai một bậc là hỏng. <b>Nhớ nhé: nhìn đường dẫn trong bản vá rồi đứng cho khớp.</b></p>
+      <p class="en-only" lang="en">Ward stresses that you should <b>always look at the beginning of a patch to determine the required working directory</b>. In his example the patch refers to <code>src/file.c</code>; therefore you should change to the directory that <i>contains</i> <code>src</code>, not to the <code>src</code> directory itself.<span class="cite"><a href="#ref-1">1</a></span> Apply it with <code>patch -p0 &lt; patch_file</code>; if all goes well, <code>patch</code> exits without a fuss, leaving you with an updated set of files.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Nếu <code>patch</code> hỏi bạn <code>File to patch:</code> thì thường là bạn không ở đúng thư mục — nhưng cũng có thể mã nguồn của bạn không khớp với mã nguồn trong bản vá.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Nếu nó hỏi “vá tệp nào?” thì gần như chắc là bạn đứng sai chỗ.</span>
+        <span class="en-only" lang="en">If <code>patch</code> asks you <code>File to patch:</code>, it usually means you're not in the correct directory — but it could also mean your source code doesn't match the source in the patch.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Khi mã nguồn không khớp, hãy dừng lại</h4>
+          <p>Ward không khuyến khích cố chữa: trong trường hợp mã nguồn không khớp bản vá, bạn <b>có lẽ hết cách</b>. Kể cả nếu bạn nhận ra được một số tệp cần vá, những tệp khác vẫn sẽ không được cập nhật đúng, để lại cho bạn một cây mã nguồn không biên dịch nổi.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4><code>-p</code> làm gì, theo trang hướng dẫn</h4>
+          <p>Trang <code>patch(1)</code> định nghĩa <code>-p<i>num</i></code> (hay <code>--strip=<i>num</i></code>) là: <b>lược bỏ tiền tố ngắn nhất chứa <i>num</i> dấu gạch chéo dẫn đầu</b> khỏi mỗi tên tệp tìm thấy trong tệp vá; một chuỗi nhiều dấu gạch chéo liền nhau được tính là một. Ví dụ trong trang đó: với tên <code>/u/howard/src/blurfl/blurfl.c</code>, <code>-p0</code> giữ nguyên toàn bộ tên, <code>-p1</code> cho <code>u/howard/src/blurfl/blurfl.c</code>, còn <code>-p4</code> cho <code>blurfl/blurfl.c</code>.<span class="cite"><a href="#ref-17">17</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">patch -p1</span>
+      <h3>
+        <span class="standard-copy">Khi bản vá mang theo số phiên bản gói</span>
+        <span class="easy-only">Khi tên thư mục trong bản vá không khớp</span>
+        <span class="en-only" lang="en">When the patch carries a package version in its paths</span>
+      </h3>
+      <p class="standard-copy">Đôi khi bạn gặp một bản vá tham chiếu tới phiên bản gói, kiểu <code>--- package-3.42/src/file.c.orig</code> và <code>+++ package-3.42/src/file.c</code>. Nếu số phiên bản của bạn hơi khác — hoặc bạn chỉ vừa đổi tên thư mục — bạn có thể bảo <code>patch</code> lược bỏ các thành phần đường dẫn dẫn đầu. Đứng ở thư mục chứa <code>src</code> như trước, để <code>patch</code> bỏ qua phần <code>package-3.42/</code>, tức lược một thành phần, hãy dùng <code>patch -p1 &lt; patch_file</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nếu bản vá viết “package-3.42/src/file.c” mà thư mục của bạn tên khác, bạn bảo nó “bỏ giúp tôi bậc đầu tiên” — đó chính là con số sau chữ <code>-p</code>. <b>Nhớ nhé: -p là số bậc thư mục cần bỏ.</b></p>
+      <p class="en-only" lang="en">Sometimes you come across a patch that refers to a package version, like <code>--- package-3.42/src/file.c.orig</code> and <code>+++ package-3.42/src/file.c</code>. If you have a slightly different version number — or you just renamed the directory — you can tell <code>patch</code> to strip leading path components. Standing in the directory containing <code>src</code> as before, to make <code>patch</code> ignore the <code>package-3.42/</code> part, that is strip one leading component, use <code>patch -p1 &lt; patch_file</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Bản vá sinh từ một kho Git thường mang tiền tố <code>a/</code> và <code>b/</code> — tiền tố nguồn và đích mặc định của <code>git diff</code> — nên <code>-p1</code> là con số bạn dùng thường xuyên nhất trong thực tế.<span class="cite"><a href="#ref-24">24</a></span><span class="cite"><a href="#ref-17">17</a></span></span>
+        <span class="easy-only">Trong thực tế bạn sẽ dùng <code>-p1</code> nhiều hơn <code>-p0</code>.</span>
+        <span class="en-only" lang="en">Patches generated from a Git repository usually carry <code>a/</code> and <code>b/</code> prefixes — <code>git diff</code>’s default source and destination prefixes — which is why <code>-p1</code> is the number you reach for most often in practice.<span class="cite"><a href="#ref-24">24</a></span><span class="cite"><a href="#ref-17">17</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4><code>patch</code> chọn tên tệp thế nào</h4>
+          <p>Trang hướng dẫn mô tả một quy trình có thứ tự: <code>patch</code> lập một danh sách tên tệp ứng viên theo thứ tự (cũ, mới, <code>Index:</code>), và <b>một cái tên bị bỏ qua nếu nó không có đủ số dấu gạch chéo để thoả mãn tuỳ chọn <code>-p<i>num</i></code></b>; tên <code>/dev/null</code> cũng bị bỏ qua.<span class="cite"><a href="#ref-17">17</a></span> Nếu không tên nào từ các quy tắc này cho kết quả, <b>bạn sẽ được hỏi tên tệp cần vá</b> — chính là câu <code>File to patch:</code> mà Ward cảnh báo.<span class="cite"><a href="#ref-17">17</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một cái bẫy có sẵn trong trang <code>patch(1)</code></h4>
+          <p>Trang hướng dẫn liệt kê một hành vi đáng nhớ trong mục BUGS: nếu bạn áp một bản vá <b>đã áp rồi</b>, <code>patch</code> tưởng đó là bản vá ngược và đề nghị gỡ bản vá ra.<span class="cite"><a href="#ref-17">17</a></span> Trang này ghi chú đó là quan sát từ tài liệu <code>patch</code>, không phải từ sách của Ward.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">make error</span>
+      <h3>
+        <span class="standard-copy">Lỗi thật, lỗi bị bỏ qua, và lỗi vọng lại</span>
+        <span class="easy-only">Dòng lỗi nào mới đáng đọc</span>
+        <span class="en-only" lang="en">Real errors, ignored errors, and echoes</span>
+      </h3>
+      <p class="standard-copy">Trước khi bàn chi tiết, Ward yêu cầu bạn phải đọc được vài kiểu kết xuất <code>make</code>, và <b>quan trọng nhất là biết phân biệt lỗi với lỗi đã bị bỏ qua</b>. Dòng <code>make: *** [target] Error 1</code> là một lỗi thật mà bạn cần điều tra. Nhưng một số <code>Makefile</code> nghi ngờ rằng một điều kiện lỗi có thể xảy ra trong khi biết rằng lỗi ấy vô hại: bạn thường có thể bỏ qua thông báo dạng <code>make: *** [target] Error 1 (ignored)</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Máy in ra rất nhiều dòng đỏ, nhưng không phải dòng nào cũng là lỗi thật. Có dòng ghi rõ “(ignored)” — nghĩa là “không sao đâu”. <b>Nhớ nhé: đọc kỹ chữ trong ngoặc trước khi hoảng.</b></p>
+      <p class="en-only" lang="en">Before the specifics, Ward wants you to be able to read certain kinds of <code>make</code> output, and <b>above all to know the difference between an error and an ignored error</b>. The line <code>make: *** [target] Error 1</code> is a real error you need to investigate. But some Makefiles suspect an error condition might occur while knowing it's harmless: you can usually disregard messages like <code>make: *** [target] Error 1 (ignored)</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">GNU <code>make</code> thường tự gọi chính nó nhiều lần trong các gói lớn, mỗi lần được đánh dấu <code>[N]</code> trong thông báo lỗi, với <code>N</code> là một con số; bạn thường tìm ra lỗi nhanh bằng cách nhìn vào lỗi <code>make</code> <b>đứng ngay sau</b> thông báo lỗi của trình biên dịch.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Nhìn dòng lỗi đầu tiên, đừng nhìn dòng cuối cùng.</span>
+        <span class="en-only" lang="en">GNU <code>make</code> often calls itself many times in large packages, each instance marked <code>[N]</code> in the error message, where <code>N</code> is a number; you can often find the error quickly by looking at the <code>make</code> error that comes <b>directly after</b> the compiler error message.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đọc một chồng lỗi lồng nhau</h4>
+          <p>Ward trưng ra một chồng điển hình: thông báo lỗi trình biên dịch liên quan tới <code>file.c</code>, rồi <code>make[3]: *** [file.o] Error 1</code>, rồi <code>make[3]: Leaving directory '/home/src/package-5.0/src'</code>, và tiếp tục vọng lên qua <code>make[2]</code>, <code>make[1]</code> cho tới <code>make: *** [all] Error 2</code>.<span class="cite"><a href="#ref-1">1</a></span> Ông chỉ rõ: <b>ba dòng đầu tiên mới cho bạn thông tin cần thiết</b> — rắc rối nằm quanh <code>file.c</code>, đặt tại <code>/home/src/package-5.0/src</code>.<span class="cite"><a href="#ref-1">1</a></span> Học cách lọc bỏ các lỗi <code>make</code> phía sau giúp ích rất nhiều cho việc đào ra nguyên nhân thật.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Dấu <code>***</code> nghĩa là gì</h4>
+          <p>Tài liệu GNU <code>make</code> giải thích phần mà Ward mô tả bằng ví dụ: nếu <b>không</b> có <code>***</code> kèm theo thông báo, thì tiến trình con đã thất bại nhưng quy tắc trong makefile được đặt tiền tố bằng ký tự đặc biệt <code>-</code>, nên <code>make</code> đã bỏ qua lỗi ấy.<span class="cite"><a href="#ref-18">18</a></span> Đó chính là cơ chế đằng sau hậu tố <code>(ignored)</code>.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">missing header</span>
+      <h3>
+        <span class="standard-copy">Bốn lỗi cụ thể, và cách lần ra tệp tiêu đề bị thiếu</span>
+        <span class="easy-only">Bốn lỗi hay gặp và cách chữa</span>
+        <span class="en-only" lang="en">Four specific errors, and how to track down a missing header</span>
+      </h3>
+      <p class="standard-copy">Ward liệt kê bốn lỗi dựng thường gặp. <b>Một</b>: <code>src.c:22: conflicting types for 'item'</code> kèm <code>/usr/include/file.h:47: previous declaration of 'item'</code> — lập trình viên đã khai báo lại <code>item</code> một cách sai lầm ở dòng 22 của <code>src.c</code>; bạn thường sửa được bằng cách gỡ dòng gây lỗi, bằng chú thích, <code>#ifdef</code>, hoặc cách nào khác hiệu quả.<span class="cite"><a href="#ref-1">1</a></span> <b>Hai</b>: <code>src.c:37: 'time_t' undeclared (first use this function)</code> rồi <code>src.c:37: parse error before '...'</code> — lập trình viên quên một tệp tiêu đề then chốt.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bốn lỗi quen thuộc: khai báo hai lần, quên khai báo, thiếu tệp tiêu đề, và thiếu công cụ. Cách chữa cũng quen: đọc số dòng, tra sách hướng dẫn, thêm dòng khai báo hoặc cài thêm gói. <b>Nhớ nhé: lỗi bao giờ cũng ghi rõ tệp nào, dòng nào.</b></p>
+      <p class="en-only" lang="en">Ward lists four common build errors. <b>One</b>: <code>src.c:22: conflicting types for 'item'</code> with <code>/usr/include/file.h:47: previous declaration of 'item'</code> — the programmer made an erroneous redeclaration of <code>item</code> on line 22 of <code>src.c</code>; you can usually fix it by removing the offending line, with a comment, an <code>#ifdef</code>, or whatever works.<span class="cite"><a href="#ref-1">1</a></span> <b>Two</b>: <code>src.c:37: 'time_t' undeclared (first use this function)</code> followed by <code>src.c:37: parse error before '...'</code> — the programmer forgot a critical header file.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Ward gọi <b>các trang hướng dẫn là cách tốt nhất</b> để tìm tệp tiêu đề bị thiếu: nhìn dòng gây lỗi, tìm xuôi chỗ dùng biến quanh một lời gọi hàm, rồi tra trang hướng dẫn của hàm đó.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Tra sách hướng dẫn của hàm đó, phần SYNOPSIS ghi sẵn dòng include cần thêm.</span>
+        <span class="en-only" lang="en">Ward calls <b>the manual pages the best way</b> to find a missing header file: look at the offending line, search forward for the variable's use around a function call, then read that function's manual page.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Lần theo <code>time_t</code>, từng bước một</h4>
+          <p>Ward đi hết ví dụ: dòng 37 của <code>src.c</code> có lẽ là một khai báo biến như <code>time_t v1;</code>; tìm xuôi <code>v1</code> trong chương trình sẽ thấy nó dùng quanh một lời gọi hàm, ví dụ <code>v1 = time(NULL);</code>. Giờ chạy <code>man 2 time</code> hoặc <code>man 3 time</code> để tìm các lời gọi hệ thống và thư viện tên <code>time()</code>; trong trường hợp này trang hướng dẫn mục 2 có thứ bạn cần, với phần <code>SYNOPSIS</code> ghi <code>#include &lt;time.h&gt;</code> và <code>time_t time(time_t *t);</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span> Nghĩa là <code>time()</code> cần <code>time.h</code>: đặt <code>#include &lt;time.h&gt;</code> ở đầu <code>src.c</code> rồi thử lại.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Lỗi ba: tệp tiêu đề không tìm thấy</h4>
+          <p><code>src.c:4: pkg.h: No such file or directory</code> theo sau là một danh sách lỗi dài nghĩa là trình biên dịch đã chạy bộ tiền xử lý C trên <code>src.c</code> nhưng không tìm thấy tệp <code>pkg.h</code>. Mã nguồn có lẽ phụ thuộc vào một thư viện bạn cần cài, hoặc bạn chỉ cần cung cấp đường dẫn <code>include</code> phi tiêu chuẩn — thường là thêm một tuỳ chọn <code>-I</code> vào <code>CPPFLAGS</code>, và hãy nhớ có thể bạn cũng cần một cờ <code>-L</code> đi kèm cho trình liên kết.<span class="cite"><a href="#ref-1">1</a></span> Nếu có vẻ không phải do thiếu thư viện, có khả năng nhỏ là bạn đang biên dịch cho một hệ điều hành mà mã nguồn này không hỗ trợ; hãy kiểm tra <code>Makefile</code> và các tệp README về nền tảng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tìm gói chứa tệp tiêu đề</h4>
+          <p>Ward đưa hai công cụ cụ thể theo họ bản phân phối: trên hệ dựa trên Debian, thử <code>apt-file search pkg.h</code> — lệnh này có thể tìm ra gói phát triển bạn cần; với các bản phân phối dùng <code>yum</code>, thử <code>yum provides */pkg.h</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Lỗi bốn: thiếu chính công cụ</h4>
+          <p>Thông báo <code>make: prog: Command not found</code> nghĩa là để dựng gói, bạn cần <code>prog</code> trên hệ thống. Ward phân hai nhánh: nếu <code>prog</code> là thứ như <code>cc</code>, <code>gcc</code> hay <code>ld</code> thì bạn chưa cài các tiện ích phát triển; còn nếu bạn nghĩ <code>prog</code> đã có trên máy, hãy thử sửa <code>Makefile</code> để chỉ định đường dẫn đầy đủ của <code>prog</code>.<span class="cite"><a href="#ref-1">1</a></span> Trong vài trường hợp hiếm với mã nguồn cấu hình kém, <code>make</code> dựng <code>prog</code> rồi dùng ngay, giả định rằng thư mục hiện tại (<code>.</code>) nằm trong đường dẫn lệnh của bạn; nếu <code>$PATH</code> của bạn không có thư mục hiện tại, bạn có thể sửa <code>Makefile</code> đổi <code>prog</code> thành <code>./prog</code>, hoặc tạm thời nối <code>.</code> vào đường dẫn.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Chương khép lại bằng bốn hướng đi tiếp mà Ward đề xuất: học các hệ thống dựng khác ngoài autoconf như <span lang="en">CMake</span> và <span lang="en">SCons</span>; thiết lập quy trình dựng cho phần mềm của chính bạn — với việc đóng gói bằng GNU autoconf thì cuốn <i>Autotools</i>, tái bản lần hai, của John Calcote (No Starch Press, 2019) có thể giúp bạn; biên dịch nhân Linux, vốn có hệ thống dựng hoàn toàn khác với các công cụ còn lại và có hệ cấu hình riêng; và khám phá các gói mã nguồn riêng của bản phân phối, nơi đôi khi bạn tìm được những bản vá hữu ích mở rộng chức năng hoặc sửa lỗi trong các gói không còn được bảo trì.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span></p>
+    <p class="easy-only">Học xong chương này, bạn có bốn hướng đi tiếp: thử bộ công cụ dựng khác, tự dựng quy trình cho phần mềm của mình, thử biên dịch nhân, và xem cách bản phân phối tự đóng gói phần mềm. <b>Nhớ nhé: dựng được phần mềm là bước đầu tiên để hiểu phần mềm.</b></p>
+    <p class="en-only" lang="en">The chapter closes with four directions Ward suggests: learn build systems other than autoconf, such as <span lang="en">CMake</span> and <span lang="en">SCons</span>; set up builds for your own software — for GNU autoconf packaging, <i>Autotools</i>, 2nd edition, by John Calcote (No Starch Press, 2019) can help; compile the Linux kernel, whose build system is completely different from that of other tools and has its own configuration system; and explore distribution-specific source packages, where you can sometimes find useful patches that expand functionality or fix problems in otherwise unmaintained packages.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span></p>
+    <p class="deep-only">Ward kèm một cảnh báo cụ thể cho hướng biên dịch nhân: quy trình vốn khá thẳng thớm, và nếu bạn hiểu bộ nạp khởi động hoạt động thế nào thì sẽ không gặp khó khăn; tuy nhiên <b>hãy cẩn thận, và luôn giữ sẵn nhân cũ phòng khi không khởi động được với nhân mới</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-22">22</a></span> Ông cũng nêu tên hai công cụ dựng tự động trong hệ thống quản lý gói mã nguồn của các bản phân phối: <code>debuild</code> của Debian và <code>mock</code> dựa trên RPM.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== MISCONCEPTIONS ===================== -->
+<section class="section" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Đính chính</span>
+      <span class="en-only" lang="en">Corrections</span>
+    </p>
+    <h2 id="ngo-nhan-title">
+      <span class="standard-copy">Ba ngộ nhận mà người đọc lần đầu hay mắc</span>
+      <span class="easy-only">Ba chỗ hay hiểu nhầm</span>
+      <span class="en-only" lang="en">Three misconceptions first readers hit</span>
+    </h2>
+    <p class="standard-copy">Phần này thuộc mức đọc <b>Đầy đủ</b>: nó đối chiếu điều người đọc thường nghĩ với điều bản văn thật sự nói.</p>
+    <p class="easy-only">Phần này hơi khó, bạn có thể bỏ qua và quay lại sau. <b>Nhớ nhé: hiểu chậm mà chắc vẫn hơn.</b></p>
+    <p class="en-only" lang="en">This block belongs to the <b>Đầy đủ</b> (full) reading level: it sets what readers usually assume against what the text actually says.</p>
+  </div>
+
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Người dùng Linux giỏi thì cài mọi thứ từ mã nguồn”</span>
+          <span class="en-only" lang="en">"A good Linux user installs everything from source"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> dùng trình quản lý gói là dấu hiệu của người mới; tự biên dịch mới là cách làm “đúng”.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> Ward viết rằng bạn <i>có thể</i> cập nhật và bổ sung toàn bộ hệ thống bằng cách cài lại từ mã nguồn, nhưng <b>bạn có lẽ không nên</b> làm thế trừ phi bạn thật sự thích quá trình đó hoặc có lý do khác.<span class="cite"><a href="#ref-1">1</a></span> Ông nhấn mạnh rằng các bản phân phối cung cấp cách dễ dàng để cập nhật phần lõi và thường <b>sửa lỗi bảo mật rất nhanh</b>, còn gói tự cài thì không tự nâng cấp — một mối lo đặc biệt với phần mềm tương tác qua mạng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> using a package manager marks you as a beginner; compiling yourself is the "proper" way.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> Ward writes that you <i>can</i> update and augment your entire system by reinstalling parts from source, but <b>you probably shouldn't</b>, unless you really enjoy the process or have some other reason.<span class="cite"><a href="#ref-1">1</a></span> He stresses that distributions provide easy ways to update core parts and usually <b>fix security problems very quickly</b>, while custom packages do not automatically upgrade themselves — a particular concern for software that interacts with the network.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“<code>configure</code> chạy xong sạch nghĩa là <code>make</code> sẽ chạy được”</span>
+          <span class="en-only" lang="en">"A clean <code>configure</code> means <code>make</code> will work"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> bước cấu hình là cửa kiểm tra đầy đủ; qua được nó thì phần còn lại chỉ là hình thức.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> Ward viết rõ rằng <b>một bước <code>configure</code> thành công không nhất thiết có nghĩa là bước <code>make</code> sẽ chạy được</b>, dù khả năng là khá cao.<span class="cite"><a href="#ref-1">1</a></span> Và khi lỗi xảy ra ở bước cấu hình, thông báo bề mặt cũng thường không phải nguyên nhân: ví dụ dấu gạch bị thiếu cho ra <code>C compiler cannot create executables</code>, trong khi nguyên nhân thật — <code>gcc: error: I<i>include_dir</i>: No such file or directory</code> — chỉ lộ ra trong <code>config.log</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> the configure step is a complete gate; pass it and the rest is a formality.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> Ward writes plainly that <b>a successful <code>configure</code> step doesn't necessarily mean the <code>make</code> step will work</b>, though the chances are pretty good.<span class="cite"><a href="#ref-1">1</a></span> And when configure itself fails, the surface message is often not the cause: a missing dash yields <code>C compiler cannot create executables</code>, while the real cause — <code>gcc: error: I<i>include_dir</i>: No such file or directory</code> — appears only inside <code>config.log</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Giải nén một kho lưu trữ thì có gì mà phải kiểm tra”</span>
+          <span class="en-only" lang="en">"Extracting an archive is harmless, so why check it"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> <code>tar</code> chỉ mở gói, nên cùng lắm là bày bừa vài tệp.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> hậu quả nhẹ đúng là bừa bộn — một kho lưu trữ không có thư mục chung sẽ để lại <b>một đống lộn xộn lớn</b> trong thư mục hiện tại.<span class="cite"><a href="#ref-1">1</a></span> Nhưng Ward nêu cả trường hợp nặng: nếu bạn thấy tệp mang <b>đường dẫn tuyệt đối</b> như <code>/etc/passwd</code> hay <code>/etc/inetd.conf</code>, hãy gỡ kho lưu trữ khỏi hệ thống, vì nó nhiều khả năng chứa ngựa thành Troy hoặc mã độc khác.<span class="cite"><a href="#ref-1">1</a></span> Đó là lý do <code>tar tvf</code> đứng <i>trước</i> <code>tar xvf</code>.<span class="cite"><a href="#ref-2">2</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> <code>tar</code> only unpacks things, so the worst case is a few stray files.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> the mild consequence is indeed mess — an archive with no common directory leaves <b>a big mess</b> in your current directory.<span class="cite"><a href="#ref-1">1</a></span> But Ward also names the severe case: if you see files with <b>absolute pathnames</b> such as <code>/etc/passwd</code> or <code>/etc/inetd.conf</code>, remove the archive from your system, because it probably contains a Trojan horse or other malicious code.<span class="cite"><a href="#ref-1">1</a></span> That is why <code>tar tvf</code> comes <i>before</i> <code>tar xvf</code>.<span class="cite"><a href="#ref-2">2</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="tu-kiem-tra" aria-labelledby="tu-kiem-tra-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm tra</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="tu-kiem-tra-title">
+      <span class="standard-copy">Bạn đã tự dựng được một gói chưa?</span>
+      <span class="easy-only">Thử trả lời xem nào</span>
+      <span class="en-only" lang="en">Could you build a package yourself now?</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Trả lời bằng lời của bạn, không tra sách. Nếu một câu khiến bạn ngập ngừng, đó chính là mục bạn nên đọc lại.</p>
+      <p class="easy-only">Thử trả lời miệng thôi, không cần giở lại. Câu nào bí thì quay lại đọc phần đó nhé. <b>Nhớ nhé: chỗ bí chính là chỗ cần học.</b></p>
+      <p class="en-only" lang="en">Answer in your own words, without looking back. Whichever question makes you hesitate points at the section you should reread.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Bốn bước để cài một gói từ mã nguồn C là gì, theo đúng thứ tự?</p>
+        <p class="deep-only">Gợi ý sâu hơn: bước nào là bước duy nhất phụ thuộc vào đặc tính máy của bạn?</p>
+      </li>
+      <li>
+        <p>Vì sao nên chạy <code>tar tvf</code> trước khi giải nén, và hai dấu hiệu xấu bạn đang tìm là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: dấu hiệu nào chỉ gây bừa bộn, dấu hiệu nào buộc bạn phải xoá kho lưu trữ?</p>
+      </li>
+      <li>
+        <p><code>configure</code> làm gì với các tệp <code>.in</code>, và nó để lại những tệp nào sau khi chạy?</p>
+        <p class="deep-only">Gợi ý sâu hơn: tệp nào là nhật ký để tra khi hỏng, và mẹo tìm trong tệp đó là gì?</p>
+      </li>
+      <li>
+        <p>Tiền tố mặc định của một <code>Makefile</code> do autoconf sinh ra là gì, và vì sao lại là thư mục đó?</p>
+        <p class="deep-only">Gợi ý sâu hơn: <code>bindir</code> và <code>libdir</code> mặc định được viết theo biến nào?</p>
+      </li>
+      <li>
+        <p>Khi nào bạn dùng <code>CPPFLAGS</code> thay vì <code>CFLAGS</code>, và vì sao?</p>
+        <p class="deep-only">Gợi ý sâu hơn: thêm gì vào <code>LDFLAGS</code> nếu thư viện ở nơi phi tiêu chuẩn là thư viện dùng chung?</p>
+      </li>
+      <li>
+        <p><code>make clean</code> và <code>make distclean</code> khác nhau ở điểm nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: sau <code>distclean</code> thì cây mã nguồn trông như thế nào?</p>
+      </li>
+      <li>
+        <p>Con số sau <code>-p</code> trong <code>patch -p1</code> có ý nghĩa gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: câu hỏi <code>File to patch:</code> thường có nghĩa gì?</p>
+      </li>
+      <li>
+        <p>Trong một chồng lỗi <code>make[3]</code>, <code>make[2]</code>, <code>make[1]</code>, bạn đọc dòng nào trước?</p>
+        <p class="deep-only">Gợi ý sâu hơn: hậu tố <code>(ignored)</code> nói với bạn điều gì?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Cài phần mềm từ mã nguồn có mấy bước? Kể theo thứ tự.</p></li>
+      <li><p>Vì sao nên ngó vào gói nén trước khi mở nó ra?</p></li>
+      <li><p>Script <code>configure</code> làm gì cho bạn?</p></li>
+      <li><p><code>--prefix</code> dùng để làm gì?</p></li>
+      <li><p>Muốn thử xem <code>make install</code> sẽ làm gì mà chưa cài thật thì gõ gì?</p></li>
+      <li><p>Bản vá (<span lang="en">patch</span>) là gì?</p></li>
+      <li><p>Thấy dòng lỗi có chữ <code>(ignored)</code> thì bạn có cần lo không?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>What are the four steps of installing a package from C source code, in order?</p></li>
+      <li><p>Why run <code>tar tvf</code> before extracting, and what two bad signs are you looking for?</p></li>
+      <li><p>What does <code>configure</code> do with the <code>.in</code> files, and which files does it leave behind?</p></li>
+      <li><p>What is the default prefix of an autoconf-generated Makefile, and why that directory?</p></li>
+      <li><p>When do you use <code>CPPFLAGS</code> rather than <code>CFLAGS</code>, and why?</p></li>
+      <li><p>How do <code>make clean</code> and <code>make distclean</code> differ?</p></li>
+      <li><p>What does the number after <code>-p</code> in <code>patch -p1</code> mean?</p></li>
+      <li><p>In a stack of <code>make[3]</code>, <code>make[2]</code>, <code>make[1]</code> errors, which line do you read first?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Dựng phần mềm thường là <span class="closing-accent">bước đệm để học về lập trình và phát triển phần mềm</span>. Các công cụ trong chương này và chương trước <span class="closing-accent">gỡ bỏ sự bí ẩn về nơi phần mềm hệ thống của bạn đến từ đâu</span>. Và không khó để đi tiếp những bước sau: nhìn vào bên trong mã nguồn, thực hiện thay đổi, và tạo ra phần mềm của chính bạn.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Biết tự dựng phần mềm là <span class="closing-accent">bước đầu để hiểu phần mềm được làm ra thế nào</span>. Khi bạn đã mở được “hộp”, <span class="closing-accent">chẳng còn gì bí ẩn nữa</span> — bước sau chỉ là sửa thử một dòng. <b>Nhớ nhé: mở hộp ra xem, rồi sửa thử một dòng.</b></p>
+    <p class="en-only" lang="en">Building software is often <span class="closing-accent">a stepping stone to learning about programming and software development</span>. The tools in this chapter and the previous one <span class="closing-accent">take the mystery out of where your system software came from</span>. And it's not difficult to take the next steps: looking inside the source code, making changes, and creating your own software.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START -->
+<!-- Region owned by book-cover-curator; body authored by book-chapter-author.
+     Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-15-development-tools.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 15 · Công cụ phát triển</span>
+    <span class="nav-title en-only" lang="en">Chapter 15 · Development Tools</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-17-virtualization.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 17 · Ảo hoá</span>
+    <span class="nav-title en-only" lang="en">Chapter 17 · Virtualization</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, tái bản lần thứ 3, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chương 16, “Introduction to Compiling Software from C Source Code”, trang 385–400.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd edition, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chapter 16, "Introduction to Compiling Software from C Source Code", pp. 385–400.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd ed., No Starch Press, 2021, ch. 16 “Introduction to Compiling Software from C Source Code”, pp. 385–400. — <a href="https://openlibrary.org/books/OL29462444M" target="_blank" rel="noopener noreferrer">openlibrary.org/books/OL29462444M</a></li>
+      <li id="ref-2"><code>tar(1)</code> — Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/tar.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/tar.1.html</a></li>
+      <li id="ref-3">“Basic Installation”, GNU Autoconf Manual (Running <code>configure</code> Scripts). <a href="https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.72/html_node/Basic-Installation.html" target="_blank" rel="noopener noreferrer">gnu.org/…/autoconf-2.72/html_node/Basic-Installation.html</a></li>
+      <li id="ref-4">“Introduction”, GNU Autoconf Manual. <a href="https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.72/html_node/Introduction.html" target="_blank" rel="noopener noreferrer">gnu.org/…/autoconf-2.72/html_node/Introduction.html</a></li>
+      <li id="ref-5">“Variables for Installation Directories” (§7.2.5), GNU Coding Standards. <a href="https://www.gnu.org/prep/standards/html_node/Directory-Variables.html" target="_blank" rel="noopener noreferrer">gnu.org/prep/standards/html_node/Directory-Variables.html</a></li>
+      <li id="ref-6">“Installation Names”, GNU Autoconf Manual. <a href="https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.72/html_node/Installation-Names.html" target="_blank" rel="noopener noreferrer">gnu.org/…/autoconf-2.72/html_node/Installation-Names.html</a></li>
+      <li id="ref-7"><code>ld.so(8)</code> — dynamic linker/loader and the runtime library search path, man7.org. <a href="https://man7.org/linux/man-pages/man8/ld.so.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/ld.so.8.html</a></li>
+      <li id="ref-8">“Defining Variables”, GNU Autoconf Manual. <a href="https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.72/html_node/Defining-Variables.html" target="_blank" rel="noopener noreferrer">gnu.org/…/autoconf-2.72/html_node/Defining-Variables.html</a></li>
+      <li id="ref-9">“Standard Targets for Users” (§7.2.6), GNU Coding Standards. <a href="https://www.gnu.org/prep/standards/html_node/Standard-Targets.html" target="_blank" rel="noopener noreferrer">gnu.org/prep/standards/html_node/Standard-Targets.html</a></li>
+      <li id="ref-10"><code>strip(1)</code> — discard symbols from object files, man7.org. <a href="https://man7.org/linux/man-pages/man1/strip.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/strip.1.html</a></li>
+      <li id="ref-11">GNU coreutils source releases — the package used in the chapter's worked example. <a href="https://ftp.gnu.org/gnu/coreutils/" target="_blank" rel="noopener noreferrer">ftp.gnu.org/gnu/coreutils/</a></li>
+      <li id="ref-12"><code>dpkg(1)</code> — Debian package manager, Debian manual pages. <a href="https://manpages.debian.org/bookworm/dpkg/dpkg.1.en.html" target="_blank" rel="noopener noreferrer">manpages.debian.org/bookworm/dpkg/dpkg.1.en.html</a></li>
+      <li id="ref-13">“RPM Packaging Guide” — <code>rpmdev-setuptree</code> and <code>rpmbuild</code>, RPM Software Management. <a href="https://rpm-packaging-guide.github.io/" target="_blank" rel="noopener noreferrer">rpm-packaging-guide.github.io</a></li>
+      <li id="ref-14"><code>pkg-config(1)</code> — Debian manual page (pkgconf implementation), including <code>PKG_CONFIG_PATH</code>. <a href="https://manpages.debian.org/bookworm/pkgconf/pkg-config.1.en.html" target="_blank" rel="noopener noreferrer">manpages.debian.org/bookworm/pkgconf/pkg-config.1.en.html</a></li>
+      <li id="ref-15">“Compiling For Multiple Architectures” (VPATH builds), GNU Autoconf Manual. <a href="https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.72/html_node/Multiple-Architectures.html" target="_blank" rel="noopener noreferrer">gnu.org/…/autoconf-2.72/html_node/Multiple-Architectures.html</a></li>
+      <li id="ref-16">“<code>DESTDIR</code>: Support for Staged Installs” (§7.2.4), GNU Coding Standards. <a href="https://www.gnu.org/prep/standards/html_node/DESTDIR.html" target="_blank" rel="noopener noreferrer">gnu.org/prep/standards/html_node/DESTDIR.html</a></li>
+      <li id="ref-17"><code>patch(1)</code> — apply a diff file to an original, man7.org. <a href="https://man7.org/linux/man-pages/man1/patch.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/patch.1.html</a></li>
+      <li id="ref-18">“Errors Generated by Make”, GNU Make Manual. <a href="https://www.gnu.org/software/make/manual/html_node/Error-Messages.html" target="_blank" rel="noopener noreferrer">gnu.org/software/make/manual/html_node/Error-Messages.html</a></li>
+      <li id="ref-19"><code>time(2)</code> — Linux manual page showing <code>#include &lt;time.h&gt;</code> in its SYNOPSIS, man7.org. <a href="https://man7.org/linux/man-pages/man2/time.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/time.2.html</a></li>
+      <li id="ref-20"><code>apt-file(1)</code> — search for files in Debian packages, Debian manual pages. <a href="https://manpages.debian.org/bookworm/apt-file/apt-file.1.en.html" target="_blank" rel="noopener noreferrer">manpages.debian.org/bookworm/apt-file/apt-file.1.en.html</a></li>
+      <li id="ref-21">John Calcote, <i>Autotools</i>, 2nd edition, No Starch Press, 2019 — the follow-up book Ward recommends for GNU autoconf packaging. <a href="https://openlibrary.org/books/OL28708385M" target="_blank" rel="noopener noreferrer">openlibrary.org/books/OL28708385M</a></li>
+      <li id="ref-22">“Kconfig” — the Linux kernel's own configuration and build system, kernel documentation. <a href="https://docs.kernel.org/kbuild/kconfig.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/kbuild/kconfig.html</a></li>
+      <li id="ref-23"><code>debuild(1)</code> — build a Debian package from source, Debian manual pages. <a href="https://manpages.debian.org/bookworm/devscripts/debuild.1.en.html" target="_blank" rel="noopener noreferrer">manpages.debian.org/bookworm/devscripts/debuild.1.en.html</a></li>
+      <li id="ref-24"><code>git diff</code> options — <code>--src-prefix</code>/<code>--dst-prefix</code> and the default “a/”, “b/” prefixes, Git documentation. <a href="https://git-scm.com/docs/diff-options" target="_blank" rel="noopener noreferrer">git-scm.com/docs/diff-options</a></li>
+    </ol>
+
+    <!-- NAV:START -->
+    <!-- Footer neighbour row — owned by book-cover-curator, body authored by
+         book-chapter-author. Absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-15-development-tools.html">chapter 15</a>
+      <a href="chapter-17-virtualization.html">chapter 17</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('hlw-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('hlw-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('hlw-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

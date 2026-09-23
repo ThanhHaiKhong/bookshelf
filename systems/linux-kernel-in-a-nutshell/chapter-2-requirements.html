@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="vi" data-mode="standard" data-lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 2 · Yêu cầu để dựng và dùng nhân — Linux Kernel in a Nutshell</title>
+<meta name="description" content="Người đồng hành song ngữ Việt/Anh cho Chương 2 &quot;Requirements for Building and Using the Kernel&quot; của Linux Kernel in a Nutshell (Greg Kroah-Hartman, O'Reilly, 2006): ba gói bắt buộc để dựng nhân, các công cụ không gian người dùng để chạy nhân, và cách đọc bảng phiên bản tối thiểu.">
+<script>
+/* pre-hydration: đọc lựa chọn đã lưu trước khi vẽ, tránh nháy màn hình */
+(function () {
+  try {
+    var m = localStorage.getItem("lkn-reading-mode");
+    var l = localStorage.getItem("lkn-lang");
+    if (m === "standard" || m === "easy" || m === "deep") document.documentElement.setAttribute("data-mode", m);
+    if (l === "vi" || l === "en") document.documentElement.setAttribute("data-lang", l);
+    if (localStorage.getItem("lkn-theme") === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  } catch (e) {}
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --teal: #0f766e;
+  --blue: #1d4ed8;
+  --amber: #b45309;
+  --leaf: #4d7c0f;
+  --ink: #16202a;
+  --ink-soft: #4a5a68;
+  --ink-faint: #7c8b98;
+  --surface: #fbfaf7;
+  --surface-2: #ffffff;
+  --surface-3: #f2efe8;
+  --line: #ded8cd;
+  --line-soft: #ebe6dc;
+  --shadow: 0 1px 2px rgba(22, 32, 42, .05), 0 8px 24px rgba(22, 32, 42, .06);
+  --serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --measure: 34rem;
+}
+:root[data-theme="dark"] {
+  --teal: #5eead4;
+  --blue: #93b4ff;
+  --amber: #fbbf24;
+  --leaf: #a3e635;
+  --ink: #e8eef4;
+  --ink-soft: #a6b6c4;
+  --ink-faint: #74869a;
+  --surface: #11171d;
+  --surface-2: #171f27;
+  --surface-3: #1e2831;
+  --line: #2d3945;
+  --line-soft: #232e38;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --teal: #5eead4; --blue: #93b4ff; --amber: #fbbf24; --leaf: #a3e635;
+    --ink: #e8eef4; --ink-soft: #a6b6c4; --ink-faint: #74869a;
+    --surface: #11171d; --surface-2: #171f27; --surface-3: #1e2831;
+    --line: #2d3945; --line-soft: #232e38;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.72;
+  -webkit-font-smoothing: antialiased;
+}
+main { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem 4rem; }
+p { margin: 0 0 1.05rem; max-width: var(--measure); }
+a { color: var(--blue); }
+h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; line-height: 1.22; color: var(--ink); }
+code, kbd, samp { font-family: var(--mono); font-size: .88em; background: var(--surface-3); padding: .12em .38em; border-radius: 4px; }
+
+/* ---------- reading mode + bilingual visibility ---------- */
+.easy-only, .deep-only, .en-only { display: none; }
+:root[data-mode="standard"] .standard-copy,
+:root[data-mode="deep"] .standard-copy { display: revert; }
+:root[data-mode="deep"] .deep-only { display: revert; }
+:root[data-mode="easy"] .standard-copy { display: none; }
+:root[data-mode="easy"] .easy-only { display: revert; }
+:root[data-lang="vi"] .vi-only { display: revert; }
+:root[data-lang="en"] .vi-only,
+:root[data-lang="en"] .standard-copy,
+:root[data-lang="en"] .easy-only,
+:root[data-lang="en"] .deep-only { display: none; }
+:root[data-lang="en"] .en-only { display: revert; }
+:root[data-lang="en"] .mode-switch { opacity: .35; pointer-events: none; }
+
+/* ---------- topbar ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: .7rem 1.5rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.book-label { font-size: .78rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-right: auto; }
+.switch-group { display: flex; gap: .3rem; align-items: center; }
+.switch-group + .switch-group { margin-left: .35rem; }
+.switch-label { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin-right: .25rem; }
+button.chip {
+  font: inherit; font-size: .78rem; font-weight: 600;
+  padding: .3rem .72rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft);
+  transition: background .15s, color .15s, border-color .15s;
+}
+button.chip:hover { border-color: var(--teal); color: var(--teal); }
+button.chip[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: var(--surface); }
+:root[data-theme="dark"] button.chip[aria-pressed="true"] { color: #0b1116; }
+
+/* ---------- hero ---------- */
+.hero {
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  gap: 2.75rem; align-items: center;
+  padding: 3.75rem 0 3rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.hero::after {
+  content: "LKN / 02";
+  position: absolute; top: 1.15rem; right: 0;
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .22em;
+  color: var(--ink-faint);
+}
+.eyebrow { font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--teal); font-weight: 700; margin: 0 0 .85rem; }
+.hero h1 { font-size: clamp(2.05rem, 4.6vw, 3.1rem); margin: 0 0 1.15rem; letter-spacing: -.015em; }
+.hero p { font-size: 1.06rem; color: var(--ink-soft); }
+.thesis {
+  margin-top: 1.5rem; padding: 1.05rem 1.25rem 1.05rem 2.6rem;
+  position: relative; max-width: var(--measure);
+  background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--amber);
+  border-radius: 0 10px 10px 0; box-shadow: var(--shadow);
+}
+.thesis::before { content: "∴"; position: absolute; left: .95rem; top: .95rem; font-size: 1.15rem; color: var(--amber); }
+.thesis p { margin: 0; font-size: .97rem; color: var(--ink); }
+
+/* ---------- CSS diagrams ---------- */
+.system-map {
+  position: relative; display: grid; gap: .75rem;
+  padding: 1.5rem; border-radius: 16px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.system-map .core {
+  justify-self: center; text-align: center;
+  padding: .85rem 1.25rem; border-radius: 999px;
+  background: var(--teal); color: var(--surface); font-weight: 700; font-size: .9rem;
+  max-width: 100%;
+}
+:root[data-theme="dark"] .system-map .core { color: #0b1116; }
+.system-map .spokes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
+.system-map .node {
+  padding: .8rem .85rem; border-radius: 12px; text-align: center;
+  background: var(--surface-3); border: 1px solid var(--line-soft);
+}
+.system-map .node b { display: block; font-size: .82rem; color: var(--ink); margin-bottom: .3rem; }
+.system-map .node small { display: block; font-size: .73rem; line-height: 1.5; color: var(--ink-soft); }
+.loop-diagram { display: grid; gap: .55rem; padding: 1.25rem; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.loop-diagram .step { padding: .6rem .8rem; border-radius: 10px; background: var(--surface-3); border-left: 3px solid var(--blue); font-size: .82rem; }
+
+/* ---------- chapter path ---------- */
+.chapter-path {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem;
+  margin: 2.5rem 0 3rem;
+}
+.chapter-path a {
+  display: block; padding: .9rem 1rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+  transition: border-color .15s, transform .15s;
+}
+.chapter-path a:hover { border-color: var(--teal); transform: translateY(-2px); }
+.chapter-path span { display: block; font-size: .67rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.chapter-path b { display: block; font-family: var(--serif); font-size: .96rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- sections ---------- */
+.section { padding: 2.75rem 0; border-top: 1px solid var(--line-soft); }
+.section-heading h2 { font-size: clamp(1.5rem, 3vw, 2.05rem); margin: 0 0 .9rem; }
+.section-heading p { color: var(--ink-soft); }
+.surprise-lead {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem;
+  margin: 1.75rem 0 2rem;
+}
+.definition, .equation { padding: 1rem 1.15rem; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); font-size: .92rem; }
+.definition { border-left: 3px solid var(--blue); }
+.equation { border-left: 3px solid var(--leaf); font-family: var(--mono); font-size: .82rem; line-height: 1.7; }
+.definition p, .equation p { margin: 0; max-width: none; }
+
+.surprise-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.1rem; }
+.trap-grid { grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
+.surprise-grid > li {
+  padding: 1.25rem 1.35rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.english-term { display: inline-block; font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--amber); margin-bottom: .45rem; }
+.surprise-grid h3 { font-size: 1.05rem; margin: 0 0 .7rem; }
+.surprise-grid p { font-size: .93rem; max-width: none; }
+.opportunity {
+  margin-top: .9rem; padding: .75rem .9rem; border-radius: 10px;
+  background: var(--surface-3); border-left: 3px solid var(--leaf); font-size: .87rem;
+}
+.opportunity p { margin: 0; font-size: .87rem; }
+.mechanics { margin-top: .9rem; display: grid; gap: .7rem; }
+.info-block { padding: .75rem .9rem; border-radius: 10px; border: 1px dashed var(--line); background: var(--surface); }
+.info-block h4 { font-size: .85rem; margin: 0 0 .35rem; color: var(--teal); }
+.info-block p { margin: 0; font-size: .86rem; }
+.result { margin-top: .7rem; font-size: .86rem; color: var(--ink-soft); }
+
+.signal {
+  margin: 2rem 0 0; padding: 1.1rem 1.3rem; border-radius: 12px;
+  background: var(--surface-3); border: 1px solid var(--line-soft); border-top: 3px solid var(--blue);
+}
+.signal p { margin: 0 0 .6rem; font-size: .93rem; }
+.signal p:last-child { margin-bottom: 0; }
+
+/* ---------- misconceptions ---------- */
+.trap-comparison { margin: 2.5rem 0; }
+.comparison-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; margin-top: 1.25rem; }
+.comparison-card {
+  padding: 1.1rem 1.25rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); border-top: 3px solid var(--amber);
+}
+.comparison-card h3 { font-size: .98rem; margin: 0 0 .6rem; }
+.comparison-card p { font-size: .9rem; max-width: none; }
+.comparison-card .myth { color: var(--amber); font-weight: 600; }
+.comparison-card .fact { color: var(--teal); font-weight: 600; }
+
+/* ---------- diagnostic ---------- */
+.diagnostic { padding: 1.75rem; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.diagnostic-intro p { font-size: .97rem; }
+.question-list { counter-reset: q; list-style: none; margin: 1.25rem 0 0; padding: 0; display: grid; gap: .9rem; }
+.question-list > li { counter-increment: q; position: relative; padding-left: 2.4rem; font-size: .93rem; }
+.question-list > li::before {
+  content: counter(q, decimal-leading-zero);
+  position: absolute; left: 0; top: .05rem;
+  font-family: var(--mono); font-size: .78rem; font-weight: 600; color: var(--teal);
+  border: 1px solid var(--line); border-radius: 6px; padding: .05rem .38rem;
+}
+.question-list .deep-only { margin-top: .4rem; font-size: .87rem; color: var(--ink-soft); }
+
+/* ---------- closing ---------- */
+.closing { padding: 3rem 0 1rem; border-top: 1px solid var(--line-soft); }
+.closing blockquote {
+  margin: 0; padding: 1.5rem 0 0; max-width: 46rem;
+  font-family: var(--serif); font-size: clamp(1.15rem, 2.4vw, 1.55rem); line-height: 1.5; color: var(--ink);
+}
+.closing blockquote p { max-width: none; font-size: inherit; line-height: inherit; }
+.closing-accent { color: var(--teal); font-style: italic; }
+
+/* ---------- chapter nav ---------- */
+.chapter-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 3rem 0 0; }
+.nav-cell {
+  display: block; padding: 1rem 1.15rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); transition: border-color .15s, transform .15s;
+}
+a.nav-cell:hover { border-color: var(--teal); transform: translateY(-2px); }
+.nav-cell.disabled { opacity: .5; background: var(--surface-3); cursor: default; }
+.nav-next { text-align: right; }
+.nav-label { display: block; font-size: .68rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.nav-title { display: block; font-family: var(--serif); font-size: .95rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- footer + references ---------- */
+footer {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.5rem; align-items: start;
+  margin-top: 3rem; padding: 2rem 0 3rem; border-top: 1px solid var(--line);
+  font-size: .85rem; color: var(--ink-soft);
+}
+.footer-main p { max-width: 48rem; font-size: .85rem; }
+.footer-label { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; margin: 1.5rem 0 .6rem; }
+.ref-list { margin: 0; padding-left: 1.4rem; display: grid; gap: .5rem; }
+.ref-list li { font-size: .82rem; line-height: 1.6; }
+.edition { font-family: var(--mono); font-size: .7rem; letter-spacing: .12em; color: var(--ink-faint); white-space: nowrap; }
+.cite { font-size: .7em; vertical-align: super; line-height: 0; margin-left: .1em; }
+.cite a { text-decoration: none; padding: 0 .12em; }
+
+/* SECTION-RAIL:START */
+.section-rail {
+  position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+  z-index: 30; padding: .6rem .5rem; display: none;
+}
+.section-rail__list { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+.section-rail__list a {
+  display: flex; align-items: center; gap: .55rem;
+  text-decoration: none; color: var(--ink-faint); font-size: .74rem; line-height: 1.25;
+}
+.section-rail__list a::before {
+  content: ""; flex: 0 0 auto; width: 1.15rem; height: 2px; border-radius: 2px;
+  background: var(--line); transition: width .2s, background .2s;
+}
+.section-rail__label {
+  max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0;
+  transition: max-width .24s ease, opacity .18s ease;
+}
+.section-rail:hover .section-rail__label,
+.section-rail:focus-within .section-rail__label { max-width: 13rem; opacity: 1; }
+.section-rail:hover, .section-rail:focus-within {
+  background: color-mix(in srgb, var(--surface-2) 94%, transparent);
+  border: 1px solid var(--line-soft); border-left: 0; border-radius: 0 12px 12px 0; box-shadow: var(--shadow);
+}
+.section-rail__list a:hover,
+.section-rail__list a[aria-current="true"] { color: var(--teal); }
+.section-rail__list a[aria-current="true"]::before { width: 1.9rem; background: var(--teal); }
+@media (min-width: 1180px) { .section-rail { display: block; } }
+/* SECTION-RAIL:END */
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 2rem; padding-top: 2.5rem; }
+  .hero::after { position: static; display: block; margin-bottom: .75rem; }
+  .system-map .spokes { grid-template-columns: minmax(0, 1fr); }
+  footer { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 620px) {
+  body { font-size: 16px; }
+  main { padding: 0 1.1rem 3rem; }
+  .topbar { padding: .6rem 1.1rem; gap: .5rem; }
+  .book-label { width: 100%; margin-right: 0; }
+  .chapter-nav { grid-template-columns: minmax(0, 1fr); }
+  .nav-next { text-align: left; }
+  .diagnostic { padding: 1.25rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">Linux Kernel in a Nutshell · <span class="vi-only">Chương 2 · Yêu cầu để dựng và dùng nhân</span><span class="en-only" lang="en">Chapter 2 · Requirements for Building and Using the Kernel</span></div>
+  <div class="switch-group mode-switch">
+    <span class="switch-label vi-only">Mức đọc</span><span class="switch-label en-only" lang="en">Level</span>
+    <button class="chip" type="button" data-set-mode="easy" aria-pressed="false"><span class="vi-only">Dễ hiểu</span><span class="en-only" lang="en">Easy</span></button>
+    <button class="chip" type="button" data-set-mode="standard" aria-pressed="true"><span class="vi-only">Tiêu chuẩn</span><span class="en-only" lang="en">Standard</span></button>
+    <button class="chip" type="button" data-set-mode="deep" aria-pressed="false"><span class="vi-only">Đầy đủ</span><span class="en-only" lang="en">Deep</span></button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-set-lang="vi" aria-pressed="true">VI</button>
+    <button class="chip" type="button" data-set-lang="en" aria-pressed="false">EN</button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-toggle-theme aria-pressed="false"><span class="vi-only">Tối</span><span class="en-only" lang="en">Dark</span></button>
+  </div>
+</header>
+
+<nav class="section-rail" aria-label="Mục lục trong trang"><ul class="section-rail__list"></ul></nav>
+
+<main>
+
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow"><span class="vi-only">Phần I · Dựng nhân · Chương 2</span><span class="en-only" lang="en">Part I · Building the Kernel · Chapter 2</span></p>
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Cần sẵn những gì trước khi gõ lệnh đầu tiên</span>
+      <span class="easy-only">Chuẩn bị đồ nghề trước khi bắt tay</span>
+      <span class="en-only" lang="en">What must be in place before the first command</span>
+    </h1>
+    <p class="standard-copy">Chương 2 là chương ngắn nhất và thực dụng nhất của cả cuốn sách: nó liệt kê những chương trình bạn cần để cấu hình một nhân, dựng nó, và khởi động thành công <span class="cite"><a href="#ref-1">1</a></span>. Điều đáng chú ý không phải là danh sách, mà là lời dặn đi kèm: hãy tra tệp <code>Documentation/Changes</code> trong chính cây mã nguồn để xác minh số phiên bản cụ thể của từng công cụ, vì chương này viết cho nhân 2.6.18 <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    <p class="easy-only">Chương 2 giống như bảng kê đồ nghề. Muốn tự làm nhân, bạn cần vài chương trình cài sẵn trên máy <span class="cite"><a href="#ref-1">1</a></span>. Ông Greg Kroah-Hartman dặn: đừng tin danh sách in trong sách một cách máy móc, hãy mở tệp <code>Documentation/Changes</code> ngay trong bộ mã nguồn bạn tải về để xem bản mới nhất cần gì <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: danh sách đồ nghề thay đổi theo từng đời nhân.</p>
+    <p class="en-only" lang="en">Chapter 2 is the shortest and most practical chapter in the book: it lists the programs you need to configure a kernel, build it, and successfully boot it <span class="cite"><a href="#ref-1">1</a></span>. What matters is not the list but the instruction attached to it — consult the file <code>Documentation/Changes</code> in the source tree itself to verify the specific version number of each tool, because this chapter was based on the 2.6.18 kernel <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    <p class="deep-only">Lời dặn ấy chính là thứ khiến chương này không bị lỗi thời cùng với các con số của nó. Tệp <code>Documentation/Changes</code> ngày nay đã chuyển thành <code>Documentation/process/changes.rst</code> và vẫn giữ nguyên chức năng: một bảng “phiên bản tối thiểu” kèm lệnh để tự kiểm tra từng công cụ <span class="cite"><a href="#ref-6">6</a></span>. Phương pháp còn nguyên giá trị; chỉ các con số trong bảng là đã đi rất xa.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận điểm chương 2.</b> Chỉ cần <em>ba</em> gói để dựng được một nhân — một trình biên dịch, một trình liên kết, và một công cụ <code>make</code> <span class="cite"><a href="#ref-2">2</a></span>. Danh sách dài phía sau không phải để dựng, mà để <em>dùng</em> cái nhân vừa dựng: nâng nhân lên phiên bản khác phiên bản mà bản phân phối cấp có thể buộc bạn nâng theo một số gói người dùng <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only"><b>Ý chính.</b> Để dựng nhân chỉ cần ba thứ: trình biên dịch, trình liên kết, và <code>make</code> <span class="cite"><a href="#ref-2">2</a></span>. Danh sách dài còn lại là để <em>chạy</em> cái nhân mới, không phải để dựng nó <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: dựng thì ít đồ, dùng thì nhiều đồ.</p>
+      <p class="en-only" lang="en"><b>Chapter 2 thesis.</b> Only <em>three</em> packages are needed to successfully build a kernel: a compiler, a linker, and a make utility <span class="cite"><a href="#ref-2">2</a></span>. The longer list that follows is not for building but for <em>using</em> the kernel you built — upgrading to a kernel different from the one your distribution shipped may require upgrading some of those userspace packages too <span class="cite"><a href="#ref-3">3</a></span>.</p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: ba gói bắt buộc để dựng nhân — gcc để biên dịch, binutils để liên kết, make để điều phối. Diagram: the three required packages to build a kernel — gcc to compile, binutils to link, make to orchestrate.">
+    <div class="core"><span class="vi-only">Dựng được một nhân</span><span class="en-only" lang="en">A kernel you can build</span></div>
+    <div class="spokes">
+      <div class="node">
+        <b><span class="vi-only">gcc · biên dịch</span><span class="en-only" lang="en">gcc · compile</span></b>
+        <small class="standard-copy">Nhân viết bằng C kèm ít hợp ngữ; bắt buộc dùng gcc.</small>
+        <small class="easy-only">Dịch mã nguồn thành mã máy.</small>
+        <small class="en-only" lang="en">The kernel is C plus a little assembly; gcc must be used.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">binutils · liên kết</span><span class="en-only" lang="en">binutils · link</span></b>
+        <small class="standard-copy">gcc không tự làm hết — cần <code>ld</code> và bộ hợp dịch đi kèm.</small>
+        <small class="easy-only">Ghép các mảnh đã dịch lại với nhau.</small>
+        <small class="en-only" lang="en">gcc does not do it all — it needs <code>ld</code> and the assembler alongside.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">make · điều phối</span><span class="en-only" lang="en">make · orchestrate</span></b>
+        <small class="standard-copy">Đi khắp cây mã, quyết định tệp nào cần dịch lại, rồi gọi hai gói kia.</small>
+        <small class="easy-only">Quyết định làm gì trước, gì sau.</small>
+        <small class="en-only" lang="en">Walks the tree, decides what needs compiling, then calls the other two.</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<nav class="chapter-path" aria-label="Lối đi trong chương">
+  <a href="#ba-goi">
+    <span>01</span>
+    <b><span class="standard-copy">Ba gói để dựng nhân</span><span class="easy-only">Ba món đồ nghề</span><span class="en-only" lang="en">Three packages to build</span></b>
+  </a>
+  <a href="#dung-nhan">
+    <span>02</span>
+    <b><span class="standard-copy">Công cụ để dùng nhân</span><span class="easy-only">Đồ để chạy nhân mới</span><span class="en-only" lang="en">Tools to use the kernel</span></b>
+  </a>
+  <a href="#he-tep">
+    <span>03</span>
+    <b><span class="standard-copy">Công cụ riêng theo hệ tệp</span><span class="easy-only">Đồ riêng cho từng ổ đĩa</span><span class="en-only" lang="en">Filesystem-specific tools</span></b>
+  </a>
+  <a href="#tu-kiem">
+    <span>04</span>
+    <b><span class="standard-copy">Tự kiểm trước khi sang chương 3</span><span class="easy-only">Tự hỏi mình vài câu</span><span class="en-only" lang="en">Self-check before Chapter 3</span></b>
+  </a>
+</nav>
+
+<section class="section" id="ba-goi" aria-labelledby="ba-goi-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 01 · “Tools to Build the Kernel”</span><span class="en-only" lang="en">Concept cluster 01 · “Tools to Build the Kernel”</span></p>
+    <h2 id="ba-goi-title">
+      <span class="standard-copy">Ba gói, không hơn: trình biên dịch, trình liên kết, và <code>make</code></span>
+      <span class="easy-only">Chỉ ba món là dựng được</span>
+      <span class="en-only" lang="en">Three packages, no more: a compiler, a linker, and <code>make</code></span>
+    </h2>
+    <p class="standard-copy">Trước khi liệt kê, ông đưa ra một lối tắt thực tế: phần lớn bản phân phối có sẵn một tùy chọn cài đặt cả cụm gói “kernel hacking”, và nếu bản của bạn có tùy chọn đó thì cài nó dễ hơn nhiều so với đi lùng từng chương trình <span class="cite"><a href="#ref-2">2</a></span>. Sau đó mới đến câu then chốt: chỉ có <em>ba</em> gói cần thiết để dựng thành công một nhân — một trình biên dịch, một trình liên kết, và một công cụ <code>make</code> <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    <p class="easy-only">Nhiều bản Linux có sẵn một mục cài đặt gom hết công cụ lập trình nhân vào một chỗ; cài mục đó là nhanh nhất <span class="cite"><a href="#ref-2">2</a></span>. Còn nếu muốn cài tay thì chỉ cần ba thứ thôi: trình biên dịch, trình liên kết, và <code>make</code> <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: đừng sợ danh sách dài, ba món là đủ để bắt đầu.</p>
+    <p class="en-only" lang="en">Before the list comes a practical shortcut: most Linux distributions offer an installation option for a range of kernel hacking packages, and if yours does, installing it is far easier than tracking down each individual program <span class="cite"><a href="#ref-2">2</a></span>. Then the key sentence: only <em>three</em> packages are needed in order to successfully build a kernel — a compiler, a linker, and a make utility <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    <p class="deep-only">Hãy để ý cấu trúc của cả chương: nó gần như là một bảng biểu được viết thành văn xuôi. Mỗi mục lặp lại đúng bốn thông tin — gói này để làm gì, tên gói trong bản phân phối, địa chỉ tải mã nguồn gốc, và phiên bản cũ nhất còn dùng được với nhân 2.6.18, kèm một lệnh để tự kiểm tra. Nhận ra khuôn mẫu ấy thì đọc chương này chỉ mất vài phút, và quan trọng hơn: bạn sẽ đọc được bảng <code>changes.rst</code> hiện hành theo đúng cách đó <span class="cite"><a href="#ref-6">6</a></span>.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Chuỗi công cụ (<span lang="en">toolchain</span>).</b> Ba gói này không độc lập mà nối tiếp nhau: <code>make</code> đọc cây mã và quyết định việc, gcc dịch từng tệp C thành mã đối tượng, binutils hợp dịch phần hợp ngữ rồi liên kết tất cả thành một nhân duy nhất <span class="cite"><a href="#ref-2">2</a></span>. Thiếu một mắt xích là cả chuỗi đứng.</p>
+      <p class="easy-only"><b>Chuỗi công cụ là gì.</b> Ba món nối nhau thành một dây chuyền: <code>make</code> ra lệnh, gcc dịch, binutils ghép lại <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: thiếu một mắt xích là cả dây chuyền dừng.</p>
+      <p class="en-only" lang="en"><b>Toolchain.</b> The three packages are not independent; they chain. <code>make</code> reads the tree and decides the work, gcc compiles each C file into object code, and binutils assembles the assembly parts and links everything into a single kernel <span class="cite"><a href="#ref-2">2</a></span>. Break one link and the chain stops.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">với nhân 2.6.18 (2006):<br>gcc&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ≥ 3.2<br>binutils ≥ 2.12<br>make&nbsp;&nbsp;&nbsp;&nbsp; ≥ 3.79.1<br>→ hôm nay: 8.1 / 2.30 / 4.0</p>
+      <p class="easy-only">sách 2006 cần:<br>gcc 3.2 · binutils 2.12 · make 3.79.1<br>hôm nay cần:<br>gcc 8.1 · binutils 2.30 · make 4.0</p>
+      <p class="en-only" lang="en">for the 2.6.18 kernel (2006):<br>gcc&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ≥ 3.2<br>binutils ≥ 2.12<br>make&nbsp;&nbsp;&nbsp;&nbsp; ≥ 3.79.1<br>→ today: 8.1 / 2.30 / 4.0</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">compiler · gcc</span>
+      <h3>
+        <span class="standard-copy">gcc — và nghịch lý “mới nhất chưa chắc tốt nhất”</span>
+        <span class="easy-only">gcc — bản mới nhất không phải lúc nào cũng hay</span>
+        <span class="en-only" lang="en">gcc — and the “newest is not always best” paradox</span>
+      </h3>
+      <p class="standard-copy">Nhân Linux viết bằng ngôn ngữ C, kèm một lượng nhỏ hợp ngữ ở vài nơi, và để dựng nó thì <em>phải</em> dùng trình biên dịch gcc <span class="cite"><a href="#ref-2">2</a></span>. Tính đến bản 2.6.18, gcc 3.2 là phiên bản cũ nhất còn dựng ra được một nhân chạy được <span class="cite"><a href="#ref-2">2</a></span>. Rồi đến lời cảnh báo ngược chiều trực giác: lấy bản gcc mới nhất không phải lúc nào cũng là ý hay, vì một số bản gcc mới không dựng nhân đúng cách — trừ khi bạn muốn giúp gỡ lỗi cho chính trình biên dịch, ông khuyên đừng thử <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Nhân viết bằng ngôn ngữ C nên phải dùng gcc để dịch <span class="cite"><a href="#ref-2">2</a></span>. Sách nói bản 3.2 là bản cũ nhất còn dùng được với nhân 2.6.18 <span class="cite"><a href="#ref-2">2</a></span>. Nhưng lạ ở chỗ: bản gcc mới nhất đôi khi lại dịch sai nhân, nên ông khuyên đừng vội chạy theo bản mới nhất <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: chọn bản đã được thử nhiều, đừng chọn bản mới nhất.</p>
+      <p class="en-only" lang="en">The Linux kernel is written in C, with a small amount of assembly language in some places, and to build it the gcc C compiler <em>must</em> be used <span class="cite"><a href="#ref-2">2</a></span>. As of the 2.6.18 release, gcc 3.2 is the oldest version that can properly build a working kernel <span class="cite"><a href="#ref-2">2</a></span>. Then comes the counterintuitive warning: getting the most recent gcc version is not always a good idea, since some of the newest releases do not build the kernel properly — unless you wish to help debug compiler bugs, he does not recommend trying them <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Lệnh kiểm tra trong sách là <code>gcc --version</code> <span class="cite"><a href="#ref-2">2</a></span> — vẫn đúng nguyên văn cho tới hôm nay: bảng yêu cầu tối thiểu hiện hành liệt kê “GNU C · 8.1 · <code>gcc --version</code>” <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Gõ <code>gcc --version</code> để xem máy bạn đang có bản nào <span class="cite"><a href="#ref-2">2</a></span>. Hai mươi năm sau lệnh vẫn y hệt, chỉ số yêu cầu đổi thành 8.1 <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: lệnh kiểm tra thì bền, con số thì không.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The check command in the book is <code>gcc --version</code> <span class="cite"><a href="#ref-2">2</a></span> — still verbatim correct today: the current minimum-requirements table lists “GNU C · 8.1 · <code>gcc --version</code>” <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao “mới nhất” lại rủi ro</h4>
+          <p>Nhân không phải một chương trình C bình thường: nó dựa vào nhiều hành vi mà chuẩn ngôn ngữ bỏ ngỏ, và mỗi bản gcc mới lại tối ưu mạnh tay hơn ở đúng những chỗ đó. Vì thế nhân luôn chạy sau trình biên dịch một khoảng. Sách viết trước khi có lựa chọn nào khác; ngày nay tài liệu nhân còn hỗ trợ chính thức cả Clang/LLVM (bản tối thiểu 17.0.1) như một chuỗi công cụ thay thế <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Tải từ nguồn gốc</h4>
+          <p>Nếu muốn tự tải và tự dựng trình biên dịch, sách chỉ thẳng địa chỉ <a href="https://gcc.gnu.org" target="_blank" rel="noopener noreferrer">gcc.gnu.org</a> <span class="cite"><a href="#ref-2">2</a></span>. Nhưng ông cũng nói ngay rằng hầu hết bản phân phối đã có gói tên <code>gcc</code> để cài sẵn — con đường bình thường vẫn là cài từ bản phân phối <span class="cite"><a href="#ref-2">2</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">linker · binutils</span>
+      <h3>
+        <span class="standard-copy">binutils — mắt xích ít ai để ý</span>
+        <span class="easy-only">binutils — món đồ hay bị quên</span>
+        <span class="en-only" lang="en">binutils — the link nobody notices</span>
+      </h3>
+      <p class="standard-copy">Ông mở đầu bằng một câu đính chính: trình biên dịch gcc không tự mình làm hết việc biên dịch; nó cần thêm một bộ công cụ gọi là binutils để liên kết và hợp dịch các tệp mã nguồn <span class="cite"><a href="#ref-2">2</a></span>. Gói binutils còn chứa những tiện ích thao tác trên tệp đối tượng theo nhiều cách hữu ích, chẳng hạn xem nội dung một thư viện <span class="cite"><a href="#ref-2">2</a></span>. Với nhân 2.6.18, bản 2.12 là bản cũ nhất còn liên kết được nhân <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">gcc không làm hết một mình đâu. Nó cần thêm bộ binutils để ghép các mảnh đã dịch lại thành một khối <span class="cite"><a href="#ref-2">2</a></span>. Trong gói đó còn có công cụ để xem bên trong các tệp đã dịch <span class="cite"><a href="#ref-2">2</a></span>. Sách nói bản 2.12 là bản cũ nhất còn dùng được <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: thiếu nó thì dịch xong cũng không ghép được.</p>
+      <p class="en-only" lang="en">He opens with a correction: the C compiler, gcc, does not do all of the compiling on its own; it needs an additional set of tools known as binutils to do the linking and assembling of source files <span class="cite"><a href="#ref-2">2</a></span>. The binutils package also contains useful utilities that manipulate object files in many ways, such as viewing the contents of a library <span class="cite"><a href="#ref-2">2</a></span>. As of the 2.6.18 kernel, release 2.12 is the oldest that can successfully link the kernel <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Lệnh kiểm tra là <code>ld -v</code> <span class="cite"><a href="#ref-2">2</a></span>; gói thường mang đúng tên <code>binutils</code> trong bản phân phối, và mã nguồn gốc ở <a href="https://www.gnu.org/software/binutils/" target="_blank" rel="noopener noreferrer">gnu.org/software/binutils</a> <span class="cite"><a href="#ref-2">2</a></span>. Bảng hiện hành vẫn dùng đúng lệnh ấy, với mức tối thiểu 2.30 <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Gõ <code>ld -v</code> để xem bản binutils trên máy <span class="cite"><a href="#ref-2">2</a></span>. Hôm nay nhân cần ít nhất bản 2.30 <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: một lệnh ngắn là biết ngay.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The check command is <code>ld -v</code> <span class="cite"><a href="#ref-2">2</a></span>; the package is usually called, not surprisingly, <code>binutils</code>, with upstream source at <a href="https://www.gnu.org/software/binutils/" target="_blank" rel="noopener noreferrer">gnu.org/software/binutils</a> <span class="cite"><a href="#ref-2">2</a></span>. The current table uses the same command, with a 2.30 minimum <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">make</span>
+      <h3>
+        <span class="standard-copy"><code>make</code> — người điều phối, và lý do nên lấy bản mới</span>
+        <span class="easy-only"><code>make</code> — người chỉ huy công trường</span>
+        <span class="en-only" lang="en"><code>make</code> — the orchestrator, and why newer is better here</span>
+      </h3>
+      <p class="standard-copy"><code>make</code> là công cụ đi khắp cây mã nguồn của nhân để xác định tệp nào cần biên dịch, rồi gọi trình biên dịch cùng các công cụ dựng khác làm phần việc còn lại <span class="cite"><a href="#ref-2">2</a></span>. Nhân đòi hỏi đúng bản GNU của <code>make</code> <span class="cite"><a href="#ref-2">2</a></span>. Với 2.6.18, bản 3.79.1 là bản cũ nhất còn dựng đúng — nhưng ở riêng gói này ông lại khuyên cài bản ổn định mới nhất, vì các bản mới xử lý tệp dựng nhanh hơn <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only"><code>make</code> giống người chỉ huy công trường: nó xem tệp nào đã đổi, tệp nào cần dịch lại, rồi sai gcc làm <span class="cite"><a href="#ref-2">2</a></span>. Phải là bản GNU mới được <span class="cite"><a href="#ref-2">2</a></span>. Ở món này thì bản mới lại tốt hơn: chạy nhanh hơn <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: gcc thì đừng quá mới, còn <code>make</code> thì cứ mới.</p>
+      <p class="en-only" lang="en"><code>make</code> is the tool that walks the kernel source tree to determine which files need to be compiled, then calls the compiler and the other build tools to do the work <span class="cite"><a href="#ref-2">2</a></span>. The kernel requires the GNU version of <code>make</code> <span class="cite"><a href="#ref-2">2</a></span>. For 2.6.18, release 3.79.1 is the oldest that builds properly — but for this package he recommends installing the latest stable version, because newer ones process the build files faster <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Kiểm tra bằng <code>make --version</code> <span class="cite"><a href="#ref-2">2</a></span>; mã nguồn gốc tại <a href="https://www.gnu.org/software/make/" target="_blank" rel="noopener noreferrer">gnu.org/software/make</a> <span class="cite"><a href="#ref-2">2</a></span>. Yêu cầu hiện hành đã nhảy sang GNU make 4.0 <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Gõ <code>make --version</code> <span class="cite"><a href="#ref-2">2</a></span>. Hôm nay cần ít nhất bản 4.0 <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: ba lệnh kiểm tra, ba câu trả lời, là xong phần dựng.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Check with <code>make --version</code> <span class="cite"><a href="#ref-2">2</a></span>; upstream source at <a href="https://www.gnu.org/software/make/" target="_blank" rel="noopener noreferrer">gnu.org/software/make</a> <span class="cite"><a href="#ref-2">2</a></span>. The current requirement has moved to GNU make 4.0 <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ba gói đã thành nhiều hơn ba</h4>
+          <p>Câu “chỉ ba gói” đúng với năm 2006 và không còn đúng nguyên vẹn hôm nay. Bảng yêu cầu hiện hành còn đòi thêm <code>bash</code> 4.2, <code>bc</code> 1.06.95, <code>bison</code> 2.0, <code>flex</code> 2.5.35, <code>openssl</code> 1.0.0, <code>pahole</code> 1.26 và Python 3.9 cho những cấu hình nhất định <span class="cite"><a href="#ref-6">6</a></span>. Tinh thần thì vẫn vậy: lõi chuỗi công cụ nhỏ, phần rìa mọc dần theo năm tháng.</p>
+        </div>
+        <div class="info-block">
+          <h4>Ngôn ngữ thứ hai trong nhân</h4>
+          <p>Sách khẳng định nhân là C cộng một ít hợp ngữ <span class="cite"><a href="#ref-2">2</a></span>; điều đó vẫn đúng với phần tuyệt đại đa số cây mã. Nhưng bảng công cụ hiện hành đã liệt kê Rust 1.85.0 và <code>bindgen</code> 0.71.1 như những mục <em>tùy chọn</em> <span class="cite"><a href="#ref-6">6</a></span> — chúng chỉ cần khi bạn bật phần hỗ trợ Rust, nên phát biểu của sách không bị bác bỏ, chỉ được mở rộng.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Ba gói trên đủ để biến mã nguồn thành một nhân. Nhưng một nhân dựng xong vẫn phải <em>khởi động</em> được và <em>chạy</em> được cùng phần còn lại của hệ thống — và đó là nơi danh sách dài phía sau bắt đầu có lý do tồn tại.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Ba món kia giúp bạn làm ra cái nhân. Nhưng làm ra rồi còn phải chạy được nữa. Nhớ nhé: phần tiếp theo nói về đồ để <em>chạy</em>, không phải để làm.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> Those three packages are enough to turn source into a kernel. But a finished kernel still has to <em>boot</em> and <em>run</em> alongside the rest of the system — which is where the longer list that follows earns its place.</p>
+  </aside>
+</section>
+
+<section class="section" id="dung-nhan" aria-labelledby="dung-nhan-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 02 · “Tools to Use the Kernel”</span><span class="en-only" lang="en">Concept cluster 02 · “Tools to Use the Kernel”</span></p>
+    <h2 id="dung-nhan-title">
+      <span class="standard-copy">Công cụ để <em>dùng</em> nhân: nơi việc nâng cấp có thể lan ra</span>
+      <span class="easy-only">Đồ để chạy cái nhân mới</span>
+      <span class="en-only" lang="en">Tools to <em>use</em> the kernel: where an upgrade can spread</span>
+    </h2>
+    <p class="standard-copy">Mục này mở bằng một câu trấn an rồi thu hẹp ngay: phiên bản nhân đang chạy thường <em>không</em> ảnh hưởng đến ứng dụng người dùng, nhưng có một số ít chương trình mà phiên bản nhân là điều quan trọng <span class="cite"><a href="#ref-3">3</a></span>. Đa số chúng đã nằm sẵn trên máy bạn; vấn đề chỉ nảy sinh khi bạn nâng nhân lên một phiên bản khác với phiên bản đi kèm bản phân phối — lúc ấy vài gói trong số này có thể cũng cần nâng theo để hệ thống chạy đúng <span class="cite"><a href="#ref-3">3</a></span>.</p>
+    <p class="easy-only">Đổi nhân thường không làm ứng dụng của bạn hỏng. Chỉ một số ít chương trình là bám chặt vào phiên bản nhân <span class="cite"><a href="#ref-3">3</a></span>. Mấy chương trình đó thường đã có sẵn trên máy rồi. Nhưng nếu bạn dùng nhân khác với nhân bản phân phối cấp, có thể phải nâng cấp thêm vài gói <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: đổi nhân đôi khi kéo theo đổi vài món khác.</p>
+    <p class="en-only" lang="en">This section opens with reassurance, then narrows at once: the version of the kernel that is running does not usually affect any user application, but there are a small number of programs for which the kernel version is important <span class="cite"><a href="#ref-3">3</a></span>. Most are already installed on your Linux system; the problem only appears when you upgrade to a kernel different from the one that came with your distribution — then some of these packages may also need upgrading for the system to work properly <span class="cite"><a href="#ref-3">3</a></span>.</p>
+    <p class="deep-only">Câu này là lời giải thích thầm lặng cho một hiện tượng quen thuộc: vì sao nâng nhân bằng tay đôi khi làm máy không khởi động được trong khi bản thân nhân hoàn toàn lành lặn. Nhân và một nhúm chương trình không gian người dùng có giao diện chung — cách nạp module, nội dung <code>/sys</code>, cách đặt tên thiết bị — và chỉ cần một bên đi trước quá xa là giao diện ấy lệch. Cả mục này thực chất là danh sách các điểm lệch có thể xảy ra.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Không gian người dùng (<span lang="en">userspace</span>).</b> Phần hệ thống nằm ngoài nhân. Các gói trong mục này đặc biệt vì chúng nói chuyện trực tiếp với nhân qua những giao diện thay đổi theo phiên bản: nạp module, đọc <code>/sys</code>, gắn phân vùng, đọc bảng tiến trình <span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-5">5</a></span>.</p>
+      <p class="easy-only"><b>Không gian người dùng là gì.</b> Là mọi chương trình chạy bên ngoài nhân. Mấy gói trong phần này khác ở chỗ chúng nói chuyện thẳng với nhân, nên nhân đổi thì chúng cũng phải đổi theo <span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: chúng là phiên dịch viên giữa bạn và nhân.</p>
+      <p class="en-only" lang="en"><b>Userspace.</b> Everything outside the kernel. The packages in this section are special because they speak to the kernel directly, across interfaces that change with the version: loading modules, reading <code>/sys</code>, mounting partitions, reading the process table <span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-5">5</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">util-linux&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ≥ 2.10&nbsp;&nbsp; · fdformat --version<br>module-init-tools ≥ 0.9.10 · depmod -V<br>udev&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ≥ 081&nbsp;&nbsp;&nbsp; · udevinfo -V<br>procps&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ≥ 3.2.0&nbsp; · ps --version<br>pcmciautils&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ≥ 004&nbsp;&nbsp;&nbsp; · pccardctl -V</p>
+      <p class="easy-only">util-linux · gắn ổ đĩa<br>module-init-tools · nạp module<br>udev · đặt tên thiết bị<br>procps · xem tiến trình<br>pcmciautils · thẻ PCMCIA</p>
+      <p class="en-only" lang="en">util-linux&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ≥ 2.10&nbsp;&nbsp; · fdformat --version<br>module-init-tools ≥ 0.9.10 · depmod -V<br>udev&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ≥ 081&nbsp;&nbsp;&nbsp; · udevinfo -V<br>procps&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ≥ 3.2.0&nbsp; · ps --version<br>pcmciautils&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ≥ 004&nbsp;&nbsp;&nbsp; · pccardctl -V</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">util-linux</span>
+      <h3>
+        <span class="standard-copy">util-linux — nơi tính năng mới của nhân cần tay cầm mới</span>
+        <span class="easy-only">util-linux — bộ đồ lặt vặt cho ổ đĩa</span>
+        <span class="en-only" lang="en">util-linux — where a new kernel feature needs a new handle</span>
+      </h3>
+      <p class="standard-copy">Gói này là một tập hợp các tiện ích nhỏ làm đủ loại việc khác nhau; phần lớn lo việc gắn và tạo phân vùng đĩa, cùng thao tác với đồng hồ phần cứng của máy <span class="cite"><a href="#ref-3">3</a></span>. Với 2.6.18, bản 2.10 là bản cũ nhất còn chạy đúng <span class="cite"><a href="#ref-3">3</a></span>. Nhưng ông khuyến nghị cài bản mới nhất, vì các bản mới hỗ trợ những tính năng mới thêm vào nhân — ông lấy <span lang="en">bind mount</span> làm ví dụ: đó là một tùy chọn trong các nhân mới hơn, và cần một bản util-linux mới hơn thì mới hoạt động đúng <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Đây là túi đồ lặt vặt: gắn ổ đĩa, chia phân vùng, chỉnh đồng hồ máy <span class="cite"><a href="#ref-3">3</a></span>. Sách nói bản 2.10 là bản cũ nhất còn dùng được <span class="cite"><a href="#ref-3">3</a></span>. Nên lấy bản mới, vì nhân có tính năng mới thì phải có công cụ mới biết cách gọi — ví dụ kiểu gắn thư mục gọi là <span lang="en">bind mount</span> <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: nhân mọc tính năng mới thì công cụ phải mọc theo.</p>
+      <p class="en-only" lang="en">The util-linux package is a collection of small utilities that do a wide range of different tasks; most handle the mounting and creation of disk partitions and manipulation of the hardware clock in the system <span class="cite"><a href="#ref-3">3</a></span>. As of 2.6.18, release 2.10 is the oldest that works properly <span class="cite"><a href="#ref-3">3</a></span>. He recommends the latest version anyway, because new versions support new features added to the kernel — his example is bind mounts: an option in newer kernels that needs a newer util-linux to work properly <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Sách kiểm tra bằng <code>fdformat --version</code> và chỉ tới kho <a href="https://www.kernel.org/pub/linux/utils/util-linux" target="_blank" rel="noopener noreferrer">kernel.org/pub/linux/utils/util-linux</a> <span class="cite"><a href="#ref-3">3</a></span>. Bảng hiện hành vẫn giữ mức tối thiểu ở nhánh 2.10 nhưng đã đổi lệnh kiểm tra sang <code>mount --version</code> <span class="cite"><a href="#ref-6">6</a></span> — vì <code>fdformat</code> gắn với ổ mềm, thứ đã biến mất khỏi máy đời mới.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Ngày xưa kiểm tra bằng <code>fdformat --version</code> <span class="cite"><a href="#ref-3">3</a></span>; hôm nay tài liệu nhân bảo dùng <code>mount --version</code> <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: lệnh cũ gắn với ổ đĩa mềm, mà ổ mềm thì không còn nữa.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The book checks with <code>fdformat --version</code> and points at <a href="https://www.kernel.org/pub/linux/utils/util-linux" target="_blank" rel="noopener noreferrer">kernel.org/pub/linux/utils/util-linux</a> <span class="cite"><a href="#ref-3">3</a></span>. The current table keeps the minimum on the 2.10 line but has switched the check command to <code>mount --version</code> <span class="cite"><a href="#ref-6">6</a></span> — <code>fdformat</code> belongs to floppy drives, which modern machines no longer have.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hai con số hơi khác nhau</h4>
+          <p>Sách ghi mức tối thiểu là “2.10” <span class="cite"><a href="#ref-3">3</a></span>; bảng <code>changes.rst</code> hiện hành ghi chính xác hơn là “2.10o” <span class="cite"><a href="#ref-6">6</a></span>. Đây không phải mâu thuẫn mà là cùng một nhánh phiên bản được ghi ở hai mức chi tiết. Trong thân bài, trang này theo cách ghi của sách và nêu biến thể ở đây, đúng nguyên tắc không lặng lẽ chọn một con số.</p>
+        </div>
+        <div class="info-block">
+          <h4><span lang="en">Bind mount</span> là gì</h4>
+          <p>Là cách gắn một thư mục đang có vào một vị trí thứ hai trong cây thư mục, để cùng một nội dung xuất hiện ở hai chỗ mà không cần sao chép. Ví dụ ấy được sách chọn rất khéo: nó cho thấy một tính năng thuần túy nằm trong nhân vẫn vô dụng nếu công cụ <code>mount</code> ở phía người dùng chưa biết cú pháp để yêu cầu nó <span class="cite"><a href="#ref-3">3</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">module-init-tools</span>
+      <h3>
+        <span class="standard-copy">module-init-tools — dấu vết của một cuộc thay đổi tận gốc</span>
+        <span class="easy-only">Bộ nạp module — đã thay hẳn ở đời 2.6</span>
+        <span class="en-only" lang="en">module-init-tools — the trace of a radical change</span>
+      </h3>
+      <p class="standard-copy">Gói này cần thiết nếu bạn muốn dùng module nhân — tức những mảnh mã nạp được, có thể thêm vào hoặc gỡ khỏi nhân <em>trong lúc nhân đang chạy</em> <span class="cite"><a href="#ref-3">3</a></span>. Ông giải thích tại sao mọi bản phân phối đều dùng module: để chỉ nạp đúng những trình điều khiển và tùy chọn tương ứng với phần cứng đang có, thay vì buộc phải dựng mọi trình điều khiển vào một khối khổng lồ; module tiết kiệm bộ nhớ vì chỉ nạp phần mã cần để điều khiển máy <span class="cite"><a href="#ref-3">3</a></span>. Quy trình nạp module đã thay đổi tận gốc ở bản 2.6: trình liên kết của module — phần mã phân giải ký hiệu và tính cách ghép các mảnh trong bộ nhớ — nay nằm luôn trong nhân, khiến công cụ phía người dùng trở nên khá nhỏ <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Module là mảnh mã có thể lắp vào hoặc tháo ra khỏi nhân ngay khi máy đang chạy <span class="cite"><a href="#ref-3">3</a></span>. Nhờ vậy máy chỉ nạp đúng phần cần cho thiết bị nó có, đỡ tốn bộ nhớ <span class="cite"><a href="#ref-3">3</a></span>. Ở đời nhân 2.6, phần ghép module được dời hẳn vào trong nhân, nên công cụ bên ngoài gọn đi nhiều <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: module giống như ống kính rời — lắp cái nào thì dùng cái đó.</p>
+      <p class="en-only" lang="en">This package is needed if you wish to use kernel modules — loadable chunks of code that can be added to or removed from the kernel <em>while it is running</em> <span class="cite"><a href="#ref-3">3</a></span>. He explains why every distribution uses them: to load only the drivers and options matching the hardware present, instead of being forced to build every possible driver into one large chunk; modules save memory by loading just the code needed to control the machine <span class="cite"><a href="#ref-3">3</a></span>. The module loading process underwent a radical change in the 2.6 release: the module linker — the code that resolves symbols and figures out how to put the pieces together in memory — is now built into the kernel, which makes the userspace tools quite small <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Hệ quả rất cụ thể: các bản phân phối cũ có gói tên <code>modutils</code> <em>không</em> chạy đúng với nhân 2.6, và module-init-tools mới là gói bạn cần <span class="cite"><a href="#ref-3">3</a></span>. Bản cũ nhất còn dùng được với 2.6.18 là 0.9.10, kiểm tra bằng <code>depmod -V</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Gói cũ tên <code>modutils</code> không chạy với nhân 2.6; phải dùng module-init-tools <span class="cite"><a href="#ref-3">3</a></span>. Gõ <code>depmod -V</code> để xem bản nào <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: tên giống nhau chưa chắc là cùng một thứ.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The consequence is concrete: older distributions have a package called <code>modutils</code> that does <em>not</em> work properly with the 2.6 kernel, and module-init-tools is what you need instead <span class="cite"><a href="#ref-3">3</a></span>. The oldest version that works with 2.6.18 is 0.9.10, checked with <code>depmod -V</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hôm nay tên gói đã đổi lần nữa</h4>
+          <p>Chính module-init-tools cũng đã bị thay thế. Dự án <code>kmod</code> viết lại toàn bộ các lệnh trên nền thư viện <code>libkmod</code> làm bản thay thế cắm-vào-là-chạy, và module-init-tools ngừng phát triển từ năm 2011 <span class="cite"><a href="#ref-7">7</a></span>. Bảng yêu cầu hiện hành liệt kê “kmod · 13 · <code>kmod -V</code>”, không còn dòng module-init-tools nào <span class="cite"><a href="#ref-6">6</a></span>. Mô thức lặp lại đúng như sách mô tả cho <code>modutils</code>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Chặn module bằng danh sách đen</h4>
+          <p>Lý do nên dùng bản mới, theo sách, là những tính năng chỉ có ở bản mới — ông nêu việc đưa module vào danh sách đen để ngăn gói <code>udev</code> tự động nạp chúng, một tùy chọn có ở bản mới mà bản cũ không có <span class="cite"><a href="#ref-3">3</a></span>. Ví dụ này cho thấy hai gói người dùng cũng ràng buộc lẫn nhau, không chỉ ràng buộc với nhân.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">other tools</span>
+      <h3>
+        <span class="standard-copy">udev, procps, pcmciautils — ba món “không bắt buộc mà thiếu là hỏng”</span>
+        <span class="easy-only">Ba món nhỏ mà thiếu là rắc rối</span>
+        <span class="en-only" lang="en">udev, procps, pcmciautils — “not required, yet fatal to omit”</span>
+      </h3>
+      <p class="standard-copy">Ông xếp ba gói này vào mục “Other Tools” với một mô tả thận trọng: chúng thường không bắt buộc để nhân chạy đúng, nhưng chúng mở đường truy cập tới các loại phần cứng và chức năng khác nhau <span class="cite"><a href="#ref-5">5</a></span>. <code>udev</code> là chương trình cho phép Linux có hệ thống đặt tên thiết bị bền vững trong thư mục <code>/dev</code>, đồng thời tạo một <code>/dev</code> động giống thứ mà hệ tệp <code>devfs</code> cũ (nay đã bị gỡ bỏ) từng cung cấp; gần như mọi bản phân phối đều dùng udev để quản lý <code>/dev</code>, nên nó là <em>bắt buộc</em> để máy khởi động đúng <span class="cite"><a href="#ref-5">5</a></span>. Gói <code>procps</code> chứa những lệnh quen thuộc <code>ps</code> và <code>top</code> cùng nhiều tiện ích quản lý và theo dõi tiến trình <span class="cite"><a href="#ref-5">5</a></span>. Còn <code>pcmciautils</code> là hệ thống đơn giản hơn thay cho <code>pcmcia-cs</code> đời cũ, cần có nếu bạn muốn dùng thiết bị PCMCIA <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      <p class="easy-only">Ba món này không bắt buộc để nhân chạy, nhưng thiếu thì mất đường tới phần cứng <span class="cite"><a href="#ref-5">5</a></span>. <code>udev</code> lo đặt tên cho thiết bị trong thư mục <code>/dev</code>, và gần như bản Linux nào cũng cần nó để khởi động <span class="cite"><a href="#ref-5">5</a></span>. <code>procps</code> chứa lệnh <code>ps</code> và <code>top</code> để xem máy đang chạy gì <span class="cite"><a href="#ref-5">5</a></span>. <code>pcmciautils</code> dành cho thẻ cắm PCMCIA đời cũ <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: udev là món đừng bao giờ bỏ qua.</p>
+      <p class="en-only" lang="en">He files these three under “Other Tools” with a careful description: they are not usually required for the kernel to work properly, but they enable access to different types of hardware and functions <span class="cite"><a href="#ref-5">5</a></span>. <code>udev</code> is the program that gives Linux a persistent device-naming system in <code>/dev</code>, and a dynamic <code>/dev</code> much like the one the older (now removed) <code>devfs</code> filesystem provided; almost all distributions use udev to manage <code>/dev</code>, so it <em>is</em> required to boot the machine properly <span class="cite"><a href="#ref-5">5</a></span>. <code>procps</code> holds the familiar <code>ps</code> and <code>top</code> plus many handy tools for managing and monitoring processes <span class="cite"><a href="#ref-5">5</a></span>. And <code>pcmciautils</code> is the much simpler system that replaced the older <code>pcmcia-cs</code>, needed if you want PCMCIA devices to work <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Ba mức tối thiểu cho 2.6.18 là udev 081, procps 3.2.0, pcmciautils 004, kiểm tra lần lượt bằng <code>udevinfo -V</code>, <code>ps --version</code> và <code>pccardctl -V</code> <span class="cite"><a href="#ref-5">5</a></span>. Đáng kinh ngạc là cả ba con số ấy vẫn nguyên vẹn trong bảng hiện hành; chỉ lệnh kiểm tra udev đổi thành <code>udevadm --version</code> <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Sách ghi udev 081, procps 3.2.0, pcmciautils 004 <span class="cite"><a href="#ref-5">5</a></span>. Hai mươi năm sau, ba con số này vẫn giữ nguyên trong tài liệu nhân <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: không phải con số nào cũng cũ đi.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The three minimums for 2.6.18 are udev 081, procps 3.2.0 and pcmciautils 004, checked with <code>udevinfo -V</code>, <code>ps --version</code> and <code>pccardctl -V</code> respectively <span class="cite"><a href="#ref-5">5</a></span>. Strikingly, all three numbers still stand in today's table; only udev's check command has changed, to <code>udevadm --version</code> <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cảnh báo về udev đáng đọc kỹ</h4>
+          <p>Ông nói thẳng mặt trái: udev dựa vào cấu trúc của <code>/sys</code>, mà cấu trúc ấy vẫn thay đổi theo từng đời nhân; đã có những thay đổi làm hỏng udev tới mức máy không khởi động được <span class="cite"><a href="#ref-5">5</a></span>. Vì udev gắn rất chặt vào quy trình khởi động riêng của từng bản phân phối, ông khuyến nghị mạnh mẽ dùng đúng bản udev đi kèm bản phân phối của bạn <span class="cite"><a href="#ref-5">5</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Nơi tên gói khác nhau theo bản phân phối</h4>
+          <p>Sách có hai chú thích nhỏ dễ cứu bạn một buổi chiều: một số bản phân phối, đáng chú ý là Debian, gọi <code>quota-tools</code> là <code>quota</code>, và gọi <code>nfs-utils</code> là <code>nfs-common</code> <span class="cite"><a href="#ref-4">4</a></span>. Bài học tổng quát: tên trong sách là tên <em>dự án</em>, còn tên bạn gõ vào trình quản lý gói là tên <em>bản phân phối</em> đặt.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Những gói trên gắn với nhân nói chung. Còn một nhóm nữa gắn với thứ cụ thể hơn: hệ tệp bạn đang dùng trên ổ đĩa — và ở đó, danh sách của sách kể một câu chuyện lịch sử thú vị.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Xong phần đồ dùng chung. Còn một nhóm đồ riêng cho từng loại ổ đĩa. Nhớ nhé: phần sau là danh sách đã thay đổi nhiều nhất theo thời gian.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> Those packages attach to the kernel in general. One more group attaches to something narrower — the filesystem on your disk — and there the book's list tells an interesting historical story.</p>
+  </aside>
+</section>
+
+<section class="section" id="he-tep" aria-labelledby="he-tep-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 03 · “Filesystem-Specific Tools”</span><span class="en-only" lang="en">Concept cluster 03 · “Filesystem-Specific Tools”</span></p>
+    <h2 id="he-tep-title">
+      <span class="standard-copy">Công cụ riêng theo hệ tệp: một lát cắt của năm 2006</span>
+      <span class="easy-only">Mỗi loại ổ đĩa một bộ đồ riêng</span>
+      <span class="en-only" lang="en">Filesystem-specific tools: a cross-section of 2006</span>
+    </h2>
+    <p class="standard-copy">Cần cả một dải công cụ riêng cho từng hệ tệp để tạo, định dạng, cấu hình và sửa các phân vùng đĩa; gói util-linux có sẵn vài tiện ích loại này, nhưng một số hệ tệp phổ biến có gói riêng chứa các chương trình cần thiết <span class="cite"><a href="#ref-4">4</a></span>. Sáu gói được liệt kê: <code>e2fsprogs</code>, <code>jfsutils</code>, <code>reiserfsprogs</code>, <code>xfsprogs</code>, <code>quota-tools</code> và <code>nfs-utils</code> <span class="cite"><a href="#ref-4">4</a></span>. Đọc lại danh sách ấy hôm nay là đọc một tấm ảnh chụp bối cảnh hệ tệp Linux năm 2006.</p>
+    <p class="easy-only">Mỗi loại hệ tệp — tức cách sắp xếp dữ liệu trên ổ đĩa — có bộ công cụ riêng để tạo, định dạng và sửa chữa <span class="cite"><a href="#ref-4">4</a></span>. Sách kể sáu bộ: e2fsprogs, jfsutils, reiserfsprogs, xfsprogs, quota-tools, nfs-utils <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: dùng loại ổ nào thì cài bộ đồ của loại đó.</p>
+    <p class="en-only" lang="en">A wide range of tools specific to particular filesystems is necessary to create, format, configure and fix disk partitions; util-linux carries a few of these, but some of the more popular filesystems have separate packages containing the necessary programs <span class="cite"><a href="#ref-4">4</a></span>. Six are listed: <code>e2fsprogs</code>, <code>jfsutils</code>, <code>reiserfsprogs</code>, <code>xfsprogs</code>, <code>quota-tools</code> and <code>nfs-utils</code> <span class="cite"><a href="#ref-4">4</a></span>. Reading that list today is reading a snapshot of the Linux filesystem landscape of 2006.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Hệ tệp (<span lang="en">filesystem</span>).</b> Quy ước sắp xếp dữ liệu trên thiết bị lưu trữ. Nhân biết <em>đọc</em> hệ tệp; nhưng việc tạo ra nó, kiểm tra và sửa chữa nó thì do các chương trình ngoài nhân đảm nhiệm — đó là lý do mỗi hệ tệp kéo theo một gói công cụ riêng <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only"><b>Hệ tệp là gì.</b> Là cách dữ liệu được xếp trên ổ đĩa. Nhân biết đọc, nhưng việc tạo và sửa phải nhờ chương trình riêng bên ngoài <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: nhân đọc, công cụ sửa.</p>
+      <p class="en-only" lang="en"><b>Filesystem.</b> The convention for laying data out on a storage device. The kernel knows how to <em>read</em> one; creating, checking and repairing it is handled by programs outside the kernel — which is why each filesystem brings its own tool package <span class="cite"><a href="#ref-4">4</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">e2fsprogs&nbsp;&nbsp;&nbsp; ≥ 1.29&nbsp; · tune2fs<br>jfsutils&nbsp;&nbsp;&nbsp;&nbsp; ≥ 1.1.3 · fsck.jfs -V<br>reiserfsprogs ≥ 3.6.3 · reiserfsck -V<br>xfsprogs&nbsp;&nbsp;&nbsp;&nbsp; ≥ 2.6.0 · xfs_db -V<br>quota-tools&nbsp;&nbsp; ≥ 3.09&nbsp; · quota -V<br>nfs-utils&nbsp;&nbsp;&nbsp;&nbsp; ≥ 1.0.5 · showmount --version</p>
+      <p class="easy-only">ext2/3/4 → e2fsprogs<br>JFS&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → jfsutils<br>ReiserFS&nbsp; → reiserfsprogs<br>XFS&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → xfsprogs<br>hạn mức&nbsp;&nbsp; → quota-tools<br>NFS&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → nfs-utils</p>
+      <p class="en-only" lang="en">e2fsprogs&nbsp;&nbsp;&nbsp; ≥ 1.29&nbsp; · tune2fs<br>jfsutils&nbsp;&nbsp;&nbsp;&nbsp; ≥ 1.1.3 · fsck.jfs -V<br>reiserfsprogs ≥ 3.6.3 · reiserfsck -V<br>xfsprogs&nbsp;&nbsp;&nbsp;&nbsp; ≥ 2.6.0 · xfs_db -V<br>quota-tools&nbsp;&nbsp; ≥ 3.09&nbsp; · quota -V<br>nfs-utils&nbsp;&nbsp;&nbsp;&nbsp; ≥ 1.0.5 · showmount --version</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">e2fsprogs · ext2/ext3/ext4</span>
+      <h3>
+        <span class="standard-copy">e2fsprogs — một bộ công cụ cho ba thế hệ hệ tệp</span>
+        <span class="easy-only">Một bộ đồ dùng chung cho ext2, ext3, ext4</span>
+        <span class="en-only" lang="en">e2fsprogs — one toolset for three filesystem generations</span>
+      </h3>
+      <p class="standard-copy">Điểm tinh tế nằm ở quan hệ họ hàng: ext3 và ext4 — ở thời điểm sách viết, ext4 còn là thử nghiệm — là những bản nâng cấp của ext2 và được quản lý bằng chính các công cụ ấy; bất kỳ phiên bản gần đây nào của một công cụ dựa trên ext2 cũng làm việc được với hai hệ tệp kia <span class="cite"><a href="#ref-4">4</a></span>. Để làm việc với bất kỳ hệ tệp nào trong ba, bạn phải có gói <code>e2fsprogs</code> <span class="cite"><a href="#ref-4">4</a></span>. Với 2.6.18, bản 1.29 là bản cũ nhất còn chạy đúng, và ông khuyến nghị rất mạnh dùng bản mới nhất để tận dụng các tính năng mới của ext3 và ext4 <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only">ext3 và ext4 là bản nâng cấp của ext2, nên dùng chung một bộ công cụ <span class="cite"><a href="#ref-4">4</a></span>. Bộ đó tên là <code>e2fsprogs</code> <span class="cite"><a href="#ref-4">4</a></span>. Sách nói bản 1.29 là bản cũ nhất còn dùng được, nhưng nên lấy bản mới nhất <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: cùng một họ thì dùng chung đồ nghề.</p>
+      <p class="en-only" lang="en">The subtlety is the family relationship: ext3 and the then-experimental ext4 are upgrades of ext2 and can be managed with the same tools; any recent version of an ext2-based tool works with the other two as well <span class="cite"><a href="#ref-4">4</a></span>. To work with any of these filesystems you must have the <code>e2fsprogs</code> package <span class="cite"><a href="#ref-4">4</a></span>. As of 2.6.18, release 1.29 is the oldest that works properly, and he highly recommends the newest version to take advantage of newer ext3 and ext4 features <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Sách kiểm tra bằng <code>tune2fs</code> và chỉ tới <a href="https://e2fsprogs.sourceforge.net/" target="_blank" rel="noopener noreferrer">e2fsprogs.sourceforge.net</a> <span class="cite"><a href="#ref-4">4</a></span>. Lời dự đoán của ông đã thành hiện thực: ext4 không còn là thử nghiệm, và tài liệu nhân hiện hành mô tả nó như bản nâng cấp của ext3 với các cải tiến về quy mô và độ tin cậy <span class="cite"><a href="#ref-9">9</a></span>. Mức tối thiểu hiện hành đã lên 1.41.4, kiểm tra bằng <code>e2fsck -V</code> <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Năm 2006 ext4 còn là thử nghiệm <span class="cite"><a href="#ref-4">4</a></span>; ngày nay nó đã là hệ tệp chính thức và rất phổ biến <span class="cite"><a href="#ref-9">9</a></span>. Nhớ nhé: thứ ghi là “thử nghiệm” trong sách cũ có khi giờ đã thành tiêu chuẩn.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The book checks with <code>tune2fs</code> and points at <a href="https://e2fsprogs.sourceforge.net/" target="_blank" rel="noopener noreferrer">e2fsprogs.sourceforge.net</a> <span class="cite"><a href="#ref-4">4</a></span>. His forecast came true: ext4 is no longer experimental, and current kernel documentation describes it as an advanced level of ext3 with scalability and reliability enhancements <span class="cite"><a href="#ref-9">9</a></span>. The present minimum is 1.41.4, checked with <code>e2fsck -V</code> <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">jfsutils · reiserfsprogs · xfsprogs</span>
+      <h3>
+        <span class="standard-copy">JFS, ReiserFS, XFS — ba cái tên, ba số phận khác nhau</span>
+        <span class="easy-only">Ba hệ tệp khác, ba bộ đồ khác</span>
+        <span class="en-only" lang="en">JFS, ReiserFS, XFS — three names, three fates</span>
+      </h3>
+      <p class="standard-copy">Cấu trúc ba mục này giống hệt nhau: muốn dùng JFS của IBM thì phải có <code>jfsutils</code>, tối thiểu 1.1.3, kiểm tra bằng <code>fsck.jfs -V</code>; muốn dùng ReiserFS thì phải có <code>reiserfsprogs</code>, tối thiểu 3.6.3, kiểm tra bằng <code>reiserfsck -V</code>; muốn dùng XFS của SGI thì phải có <code>xfsprogs</code>, tối thiểu 2.6.0, kiểm tra bằng <code>xfs_db -V</code> <span class="cite"><a href="#ref-4">4</a></span>. Ba dòng giống nhau về hình thức, nhưng hai mươi năm sau chúng đã đi về ba hướng rất khác.</p>
+      <p class="easy-only">Ba hệ tệp khác: JFS của IBM cần <code>jfsutils</code>, ReiserFS cần <code>reiserfsprogs</code>, XFS của SGI cần <code>xfsprogs</code> <span class="cite"><a href="#ref-4">4</a></span>. Mỗi bộ có lệnh kiểm tra riêng <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: ba cái tên trong sách cũ, giờ số phận mỗi cái một khác.</p>
+      <p class="en-only" lang="en">These three entries share one structure: to use IBM's JFS you must have <code>jfsutils</code>, minimum 1.1.3, checked with <code>fsck.jfs -V</code>; to use ReiserFS you must have <code>reiserfsprogs</code>, minimum 3.6.3, checked with <code>reiserfsck -V</code>; to use SGI's XFS you must have <code>xfsprogs</code>, minimum 2.6.0, checked with <code>xfs_db -V</code> <span class="cite"><a href="#ref-4">4</a></span>. Three identically shaped lines — but twenty years on they have gone in three very different directions.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Bảng yêu cầu tối thiểu hiện hành vẫn giữ nguyên <code>jfsutils</code> 1.1.3 và <code>xfsprogs</code> 2.6.0 — đúng bằng con số trong sách — nhưng đã <em>không còn dòng</em> <code>reiserfsprogs</code> nào <span class="cite"><a href="#ref-6">6</a></span>. ReiserFS đã bị gỡ khỏi nhân ở bản 6.13 năm 2025 <span class="cite"><a href="#ref-8">8</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Hôm nay JFS và XFS vẫn còn, với đúng con số cũ <span class="cite"><a href="#ref-6">6</a></span>; còn ReiserFS đã bị xóa khỏi nhân từ bản 6.13 <span class="cite"><a href="#ref-8">8</a></span>. Nhớ nhé: hệ tệp cũng có tuổi thọ.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The current minimum-requirements table still carries <code>jfsutils</code> 1.1.3 and <code>xfsprogs</code> 2.6.0 — the very numbers in the book — but has <em>no</em> <code>reiserfsprogs</code> row at all <span class="cite"><a href="#ref-6">6</a></span>. ReiserFS was removed from the kernel in release 6.13, in 2025 <span class="cite"><a href="#ref-8">8</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao một hệ tệp biến mất</h4>
+          <p>ReiserFS là hệ tệp có nhật ký đầu tiên được đưa vào nhân chuẩn, từ bản 2.4.1 <span class="cite"><a href="#ref-8">8</a></span>. Cộng đồng bàn việc gỡ nó từ đầu năm 2022 vì các vấn đề kỹ thuật cố hữu và tình trạng thiếu người bảo trì, và việc gỡ hoàn tất ở nhân 6.13 năm 2025 <span class="cite"><a href="#ref-8">8</a></span>. Đây là ví dụ sống cho lời dặn mở đầu chương: hãy tra bảng trong cây mã bạn đang dùng, đừng tin danh sách in sẵn.</p>
+        </div>
+        <div class="info-block">
+          <h4>Điều chương này không nói</h4>
+          <p>Danh sách của sách phản ánh đúng năm 2006 và vì thế không có Btrfs hay các hệ tệp sinh sau. Bảng yêu cầu hiện hành đã bổ sung <code>btrfs-progs</code> và <code>squashfs-tools</code> vào cùng chỗ với các gói cũ <span class="cite"><a href="#ref-6">6</a></span>. Khuôn mẫu “mỗi hệ tệp một gói công cụ” thì không đổi — chỉ danh mục là đổi.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">quota-tools · nfs-utils</span>
+      <h3>
+        <span class="standard-copy">quota-tools và nfs-utils — hai chức năng nhân cần người phiên dịch</span>
+        <span class="easy-only">Hạn mức đĩa và chia sẻ qua mạng</span>
+        <span class="en-only" lang="en">quota-tools and nfs-utils — two kernel features needing an interpreter</span>
+      </h3>
+      <p class="standard-copy">Hai gói cuối không gắn với một định dạng đĩa mà với một <em>chức năng</em> của nhân. Muốn dùng chức năng hạn mức của nhân thì phải có <code>quota-tools</code>: gói này gồm các chương trình cho phép đặt hạn mức cho người dùng, cung cấp thống kê về lượng hạn mức mà từng người đang dùng, và phát cảnh báo khi ai đó sắp cạn hạn mức khả dụng <span class="cite"><a href="#ref-4">4</a></span>. Muốn dùng hệ tệp NFS cho đúng thì phải có <code>nfs-utils</code>: gói này gồm các chương trình cho phép bạn gắn phân vùng NFS ở phía máy khách, và chạy một máy chủ NFS <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only">Hai gói cuối không gắn với ổ đĩa mà gắn với chức năng. <code>quota-tools</code> để đặt hạn mức dung lượng cho từng người dùng và cảnh báo khi sắp hết <span class="cite"><a href="#ref-4">4</a></span>. <code>nfs-utils</code> để dùng ổ đĩa chia sẻ qua mạng, cả phía nhận lẫn phía cho <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: nhân có chức năng, nhưng cần công cụ mới gọi ra được.</p>
+      <p class="en-only" lang="en">The last two packages attach not to a disk format but to a kernel <em>function</em>. To use the kernel's quota functionality you must have <code>quota-tools</code>: it includes programs that let you set quotas on users, provide statistics on how much quota different users are consuming, and issue warnings when people get too close to using up their available filesystem quota <span class="cite"><a href="#ref-4">4</a></span>. To use the NFS filesystem properly you must have <code>nfs-utils</code>: it includes programs that let you mount NFS partitions as a client, and run an NFS server <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Mức tối thiểu là quota-tools 3.09 (<code>quota -V</code>) và nfs-utils 1.0.5 (<code>showmount --version</code>) <span class="cite"><a href="#ref-4">4</a></span> — và đây là hai dòng hiếm hoi mà bảng hiện hành giữ nguyên cả con số lẫn lệnh kiểm tra <span class="cite"><a href="#ref-6">6</a></span>. Hãy nhớ hai chú thích về tên gói: Debian gọi chúng là <code>quota</code> và <code>nfs-common</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Gõ <code>quota -V</code> và <code>showmount --version</code> để kiểm tra <span class="cite"><a href="#ref-4">4</a></span>. Trên Debian, hai gói này mang tên khác: <code>quota</code> và <code>nfs-common</code> <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: cùng một phần mềm có thể mang hai cái tên.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The minimums are quota-tools 3.09 (<code>quota -V</code>) and nfs-utils 1.0.5 (<code>showmount --version</code>) <span class="cite"><a href="#ref-4">4</a></span> — and these are two of the rare rows where today's table keeps both number and command unchanged <span class="cite"><a href="#ref-6">6</a></span>. Remember the package-name footnotes: Debian calls them <code>quota</code> and <code>nfs-common</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </div>
+    </li>
+  </ol>
+
+  <div class="trap-comparison deep-only">
+    <p class="eyebrow"><span class="vi-only">Ba hiểu lầm thường gặp</span><span class="en-only" lang="en">Three common misconceptions</span></p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Phải cài hết danh sách mới dựng được nhân”</span><span class="en-only" lang="en">“You must install the whole list before building”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> chương này là điều kiện cần để biên dịch. <span class="fact">Thực tế:</span> chỉ ba gói là cần để dựng thành công một nhân <span class="cite"><a href="#ref-2">2</a></span>; phần còn lại thuộc mục “Tools to Use the Kernel”, tức để <em>chạy</em> nhân đó, và nhiều gói trong đó chỉ cần khi bạn thật sự dùng hệ tệp hoặc phần cứng tương ứng <span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-4">4</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> this chapter is a precondition for compiling. <span class="fact">Fact:</span> only three packages are needed to successfully build a kernel <span class="cite"><a href="#ref-2">2</a></span>; the rest belong to “Tools to Use the Kernel”, i.e. to <em>run</em> it, and many are only needed if you actually use the matching filesystem or hardware <span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Cứ cài bản mới nhất cho mọi thứ”</span><span class="en-only" lang="en">“Just install the newest of everything”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> mới nhất luôn an toàn nhất. <span class="fact">Thực tế:</span> ông khuyên ngược chiều nhau tùy gói — với gcc thì cảnh báo rằng một số bản mới nhất không dựng nhân đúng cách <span class="cite"><a href="#ref-2">2</a></span>, còn với <code>make</code>, util-linux, module-init-tools và e2fsprogs thì khuyến nghị lấy bản mới nhất <span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-4">4</a></span>. Riêng udev thì nên dùng đúng bản của bản phân phối <span class="cite"><a href="#ref-5">5</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> newest is always safest. <span class="fact">Fact:</span> his advice runs in opposite directions per package — for gcc he warns that some of the newest releases do not build the kernel properly <span class="cite"><a href="#ref-2">2</a></span>, while for <code>make</code>, util-linux, module-init-tools and e2fsprogs he recommends the latest <span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-4">4</a></span>. For udev specifically, use the version your distribution ships <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Các con số trong sách vẫn dùng được”</span><span class="en-only" lang="en">“The numbers in the book still apply”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> cứ chép theo bảng in trong sách. <span class="fact">Thực tế:</span> chính ông dặn phải tra <code>Documentation/Changes</code> của cây mã bạn đang dùng, vì chương này dựa trên nhân 2.6.18 <span class="cite"><a href="#ref-1">1</a></span>. Tệp ấy nay là <code>Documentation/process/changes.rst</code>, nơi gcc đã lên 8.1 và module-init-tools đã được thay bằng kmod 13 <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> copy the printed table. <span class="fact">Fact:</span> he himself instructs you to consult <code>Documentation/Changes</code> in the tree you are actually using, because this chapter was based on the 2.6.18 kernel <span class="cite"><a href="#ref-1">1</a></span>. That file is now <code>Documentation/process/changes.rst</code>, where gcc has risen to 8.1 and module-init-tools has been replaced by kmod 13 <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      </div>
+    </div>
+  </div>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Đồ nghề đã đủ. Chương 3 bắt đầu phần việc thật: lấy mã nguồn nhân về máy — và ngay ở đó bạn sẽ gặp lại tệp <code>Documentation/Changes</code> mà chương này dặn phải tra.</p>
+    <p class="easy-only"><b>Nối sang chương sau.</b> Có đồ nghề rồi. Chương 3 là đi lấy mã nguồn về. Nhớ nhé: lấy mã nguồn xong, nhớ mở tệp <code>Documentation/Changes</code> ra đọc.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> The toolkit is complete. Chapter 3 begins the real work — getting the kernel source onto your machine — and that is exactly where you meet the <code>Documentation/Changes</code> file this chapter told you to consult.</p>
+  </aside>
+</section>
+
+<section class="section" id="tu-kiem" aria-labelledby="tu-kiem-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Tự kiểm</span><span class="en-only" lang="en">Self-check</span></p>
+    <h2 id="tu-kiem-title">
+      <span class="standard-copy">Tự kiểm trước khi sang chương 3</span>
+      <span class="easy-only">Tự hỏi mình vài câu</span>
+      <span class="en-only" lang="en">Self-check before Chapter 3</span>
+    </h2>
+  </div>
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Chương này thì có lệnh để gõ — và tất cả đều vô hại, chỉ in ra số phiên bản. Chạy chúng bằng tài khoản thường, ghi lại kết quả, rồi đối chiếu với bảng trong cây mã nguồn bạn sắp tải về.</p>
+      <p class="easy-only">Chương này có mấy lệnh để gõ thử, đều an toàn vì chỉ hiện số phiên bản. Chạy bằng tài khoản thường thôi. Nhớ nhé: ghi lại kết quả để lát nữa so sánh.</p>
+      <p class="en-only" lang="en">This chapter does have commands to type — all of them harmless, printing only version numbers. Run them as a normal user, write down the results, then compare against the table in the source tree you are about to download.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>Bạn kể được ba gói bắt buộc để dựng nhân, và vai trò riêng của từng gói trong chuỗi?
+        <p class="deep-only">Đáp án của sách: một trình biên dịch, một trình liên kết, và một công cụ <code>make</code> <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </li>
+      <li>Bạn chạy được ba lệnh kiểm tra <code>gcc --version</code>, <code>ld -v</code>, <code>make --version</code> và đọc ra ba con số?
+        <p class="deep-only">Cả ba lệnh đều lấy nguyên từ sách <span class="cite"><a href="#ref-2">2</a></span> và vẫn là lệnh chuẩn trong bảng yêu cầu hiện hành <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      </li>
+      <li>Bạn giải thích được vì sao ông khuyên lấy bản <code>make</code> mới nhất nhưng lại cảnh báo về bản gcc mới nhất?</li>
+      <li>Bạn nói được vì sao đổi nhân có thể buộc phải nâng cấp vài gói không gian người dùng, và kể tên một gói như vậy?
+        <p class="deep-only">Ví dụ rõ nhất trong sách: <code>modutils</code> đời cũ không chạy đúng với nhân 2.6, phải thay bằng module-init-tools <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      </li>
+      <li>Bạn biết mình đang dùng hệ tệp nào, và gói công cụ tương ứng đã có trên máy chưa?</li>
+      <li>Bạn biết sẽ mở tệp nào trong cây mã nguồn để lấy bảng phiên bản đúng cho nhân bạn định dựng?</li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li>Ba món cần có để dựng nhân là gì?</li>
+      <li>Bạn đã thử gõ <code>gcc --version</code>, <code>ld -v</code> và <code>make --version</code> chưa?</li>
+      <li>Vì sao có món nên lấy bản mới, có món thì không?</li>
+      <li>Máy bạn đang dùng hệ tệp nào — ext4 hay loại khác?</li>
+      <li>Nhớ nhé: trả lời được hết thì sang chương 3 lấy mã nguồn thôi.</li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>Can you name the three packages required to build a kernel, and each one's role in the chain?
+        <p class="deep-only" lang="en">The book's answer: a compiler, a linker, and a make utility <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </li>
+      <li>Can you run <code>gcc --version</code>, <code>ld -v</code> and <code>make --version</code> and read off three numbers?
+        <p class="deep-only" lang="en">All three commands come straight from the book <span class="cite"><a href="#ref-2">2</a></span> and remain standard in today's requirements table <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      </li>
+      <li>Can you explain why he recommends the newest <code>make</code> yet warns against the newest gcc?</li>
+      <li>Can you say why changing kernels may force a userspace upgrade, and name one such package?
+        <p class="deep-only" lang="en">The clearest example in the book: the older <code>modutils</code> does not work properly with the 2.6 kernel and must be replaced by module-init-tools <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      </li>
+      <li>Do you know which filesystem you are running, and whether its tool package is installed?</li>
+      <li>Do you know which file in the source tree holds the correct version table for the kernel you intend to build?</li>
+    </ol>
+  </div>
+</section>
+
+<section class="closing" id="dong-lai" aria-labelledby="dong-lai-title">
+  <p class="eyebrow" id="dong-lai-title"><span class="vi-only">Đọng lại</span><span class="en-only" lang="en">What remains</span></p>
+  <blockquote>
+    <p class="standard-copy">Để dựng một nhân, bạn chỉ cần <span class="closing-accent">ba gói: một trình biên dịch, một trình liên kết, và <code>make</code></span>. Danh sách dài phía sau không phải hàng rào — nó là bản đồ những chỗ mà nhân và phần còn lại của hệ thống chạm vào nhau. Và bài học bền nhất của chương không phải một con số nào, mà là một thói quen: <span class="closing-accent">tra bảng phiên bản trong chính cây mã bạn đang dựng</span>.</p>
+    <p class="easy-only">Dựng nhân chỉ cần <span class="closing-accent">ba món đồ nghề</span>. Danh sách dài còn lại là để chạy nhân, không phải để làm ra nó. Và điều đáng nhớ nhất không phải con số nào, mà là thói quen <span class="closing-accent">mở tệp danh sách trong bộ mã nguồn ra đọc</span>. Nhớ nhé: sách chỉ cách làm, cây mã cho con số.</p>
+    <p class="en-only" lang="en">To build a kernel you need only <span class="closing-accent">three packages: a compiler, a linker, and <code>make</code></span>. The longer list is not a barrier — it is a map of the places where the kernel and the rest of the system touch. And the chapter's most durable lesson is not a number but a habit: <span class="closing-accent">read the version table inside the very tree you are building</span>.</p>
+  </blockquote>
+</section>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-1-introduction.html">
+    <span class="nav-label">◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span></span>
+    <span class="nav-title"><span class="vi-only">Chương 1 · Nhập môn</span><span class="en-only" lang="en">Chapter 1 · Introduction</span></span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-3-retrieving-source.html">
+    <span class="nav-label"><span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶</span>
+    <span class="nav-title"><span class="vi-only">Chương 3 · Lấy mã nguồn nhân</span><span class="en-only" lang="en">Chapter 3 · Retrieving the Kernel Source</span></span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chương 2, “Requirements for Building and Using the Kernel” (trang 5–11). Trang này là <b>người đồng hành diễn giải</b>, không phải bản dịch: nó tóm lược, sắp xếp lại và chú giải nội dung chương, không thay thế việc đọc sách gốc. Các ví dụ và phép so sánh ở mức đọc <i>Dễ hiểu</i> là minh họa do trang này thêm vào, không có trong sách. Sách xuất bản năm 2006 và viết cho nhân 2.6.18; mọi số phiên bản trích từ sách đều gắn với mốc đó, và mọi ghi chú về tình hình hiện nay đều được dẫn nguồn riêng.</p>
+    <p class="en-only" lang="en"><b>Primary source.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chapter 2, “Requirements for Building and Using the Kernel” (pages 5–11). This page is an <b>interpretive study companion</b>, not a translation: it summarises, rearranges and annotates the chapter, and does not replace reading the book itself. Examples and analogies at the <i>Easy</i> reading level are illustrations added here, not the author's. The book was published in 2006 and targets the 2.6.18 kernel; every version number quoted from it belongs to that moment, and every note about the present day carries its own citation.</p>
+
+    <p class="footer-label vi-only">Tham chiếu</p>
+    <p class="footer-label en-only" lang="en">References</p>
+    <ol class="ref-list">
+      <li id="ref-1">Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006, Chapter 2 “Requirements for Building and Using the Kernel”, p. 5 (đoạn mở đầu: tra <code>Documentation/Changes</code>; chương dựa trên nhân 2.6.18). Bản trực tuyến miễn phí: <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-2">Sđd., Chapter 2, “Tools to Build the Kernel”, pp. 5–6 — gói “kernel hacking”; ba gói bắt buộc; gcc ≥ 3.2 (<code>gcc --version</code>, <a href="https://gcc.gnu.org" target="_blank" rel="noopener noreferrer">gcc.gnu.org</a>); binutils ≥ 2.12 (<code>ld -v</code>, <a href="https://www.gnu.org/software/binutils/" target="_blank" rel="noopener noreferrer">gnu.org/software/binutils</a>); GNU make ≥ 3.79.1 (<code>make --version</code>, <a href="https://www.gnu.org/software/make/" target="_blank" rel="noopener noreferrer">gnu.org/software/make</a>).</li>
+      <li id="ref-3">Sđd., Chapter 2, “Tools to Use the Kernel”, pp. 6–7 — util-linux ≥ 2.10 (<code>fdformat --version</code>, <a href="https://www.kernel.org/pub/linux/utils/util-linux" target="_blank" rel="noopener noreferrer">kernel.org/pub/linux/utils/util-linux</a>); module-init-tools ≥ 0.9.10 (<code>depmod -V</code>, <a href="https://www.kernel.org/pub/linux/utils/kernel/module-init-tools" target="_blank" rel="noopener noreferrer">kernel.org/pub/linux/utils/kernel/module-init-tools</a>); <code>modutils</code> không dùng được với nhân 2.6.</li>
+      <li id="ref-4">Sđd., Chapter 2, “Filesystem-Specific Tools”, pp. 8–9 — e2fsprogs ≥ 1.29 (<code>tune2fs</code>, <a href="https://e2fsprogs.sourceforge.net/" target="_blank" rel="noopener noreferrer">e2fsprogs.sourceforge.net</a>); jfsutils ≥ 1.1.3; reiserfsprogs ≥ 3.6.3; xfsprogs ≥ 2.6.0; quota-tools ≥ 3.09; nfs-utils ≥ 1.0.5; cùng hai chú thích về tên gói trên Debian (<code>quota</code>, <code>nfs-common</code>).</li>
+      <li id="ref-5">Sđd., Chapter 2, “Other Tools”, pp. 9–11 — udev ≥ 081 (<code>udevinfo -V</code>), cảnh báo về cấu trúc <code>/sys</code>; procps ≥ 3.2.0 (<code>ps --version</code>); pcmciautils ≥ 004 (<code>pccardctl -V</code>), thay cho <code>pcmcia-cs</code>. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-6">The Linux Kernel documentation, <a href="https://docs.kernel.org/process/changes.html" target="_blank" rel="noopener noreferrer">“Minimal requirements to compile the Kernel” (<code>Documentation/process/changes.rst</code>)</a>, docs.kernel.org (truy cập 22-09-2026) — bảng phiên bản tối thiểu hiện hành: GNU C 8.1, binutils 2.30, GNU make 4.0, util-linux 2.10o, kmod 13, e2fsprogs 1.41.4, jfsutils 1.1.3, xfsprogs 2.6.0, quota-tools 3.09, nfs-utils 1.0.5, udev 081, procps 3.2.0, pcmciautils 004, cùng bash 4.2, bc, bison, flex, openssl, pahole, Python 3.9, Clang/LLVM 17.0.1 và Rust 1.85.0 (tùy chọn).</li>
+      <li id="ref-7">Dự án kmod: <a href="https://github.com/kmod-project/kmod" target="_blank" rel="noopener noreferrer">kmod-project/kmod — README</a> và kho phát hành <a href="https://www.kernel.org/pub/linux/utils/kernel/kmod/" target="_blank" rel="noopener noreferrer">kernel.org/pub/linux/utils/kernel/kmod</a> (truy cập 22-09-2026) — kmod thay thế module-init-tools (ngừng phát triển năm 2011), viết lại trên nền <code>libkmod</code>.</li>
+      <li id="ref-8">Wikipedia, <a href="https://en.wikipedia.org/wiki/ReiserFS" target="_blank" rel="noopener noreferrer">“ReiserFS”</a> (truy cập 22-09-2026) — hệ tệp có nhật ký đầu tiên vào nhân chuẩn ở bản 2.4.1; cộng đồng bàn việc gỡ từ đầu 2022 và gỡ hẳn ở nhân 6.13 năm 2025.</li>
+      <li id="ref-9">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/ext4.html" target="_blank" rel="noopener noreferrer">“ext4 General Information”</a>, docs.kernel.org (truy cập 22-09-2026) — ext4 là bản nâng cấp của ext3 với các cải tiến về quy mô và độ tin cậy; nơi tải e2fsprogs mới nhất.</li>
+    </ol>
+
+    <p class="footer-label vi-only">Trong loạt bài</p>
+    <p class="footer-label en-only" lang="en">In this series</p>
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <p class="vi-only"><a href="index.html">Trang bìa</a> · <a href="chapter-1-introduction.html">Chương 1 · Nhập môn</a> · <span>Chương 2 · Yêu cầu để dựng và dùng nhân (trang này)</span> · <a href="chapter-3-retrieving-source.html">Chương 3 · Lấy mã nguồn nhân</a></p>
+    <p class="en-only" lang="en"><a href="index.html">Cover</a> · <a href="chapter-1-introduction.html">Chapter 1 · Introduction</a> · <span>Chapter 2 · Requirements for Building and Using the Kernel (this page)</span> · <a href="chapter-3-retrieving-source.html">Chapter 3 · Retrieving the Kernel Source</a></p>
+    <!-- NAV:END -->
+  </div>
+  <div class="edition">LKN · CH 02 · VI/EN</div>
+</footer>
+
+</main>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  function sync() {
+    var mode = root.getAttribute("data-mode") || "standard";
+    var lang = root.getAttribute("data-lang") || "vi";
+    var dark = root.getAttribute("data-theme") === "dark";
+    document.querySelectorAll("[data-set-mode]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-mode") === mode));
+    });
+    document.querySelectorAll("[data-set-lang]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-lang") === lang));
+    });
+    document.querySelectorAll("[data-toggle-theme]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(dark));
+    });
+    root.setAttribute("lang", lang === "en" ? "en" : "vi");
+  }
+
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button.chip");
+    if (!b) return;
+    if (b.hasAttribute("data-set-mode")) {
+      root.setAttribute("data-mode", b.getAttribute("data-set-mode"));
+      store("lkn-reading-mode", b.getAttribute("data-set-mode"));
+    } else if (b.hasAttribute("data-set-lang")) {
+      root.setAttribute("data-lang", b.getAttribute("data-set-lang"));
+      store("lkn-lang", b.getAttribute("data-set-lang"));
+    } else if (b.hasAttribute("data-toggle-theme")) {
+      var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      store("lkn-theme", next);
+    }
+    sync();
+  });
+
+  sync();
+})();
+
+/* section-index rail: built at runtime from this page's own id'd sections */
+(function () {
+  var list = document.querySelector(".section-rail__list");
+  if (!list) return;
+  var sections = Array.prototype.slice.call(document.querySelectorAll("main section[id][aria-labelledby]"));
+  if (!sections.length) { var rail = document.querySelector(".section-rail"); if (rail) rail.remove(); return; }
+
+  /* headings carry all three reading levels + both languages as sibling spans,
+     so read only the ones actually visible under the current toggles */
+  function labelFor(sec) {
+    var head = document.getElementById(sec.getAttribute("aria-labelledby"));
+    if (!head) return sec.id;
+    var parts = [];
+    Array.prototype.forEach.call(head.children, function (el) {
+      if (el.offsetParent !== null || el.getClientRects().length) parts.push(el.textContent);
+    });
+    var label = (parts.length ? parts.join(" ") : head.textContent || "").replace(/\s+/g, " ").trim();
+    return label.length > 46 ? label.slice(0, 44) + "…" : label;
+  }
+
+  var links = sections.map(function (sec) {
+    var label = labelFor(sec);
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.href = "#" + sec.id;
+    var span = document.createElement("span");
+    span.className = "section-rail__label";
+    span.textContent = label;
+    a.appendChild(span);
+    li.appendChild(a);
+    list.appendChild(li);
+    return a;
+  });
+
+  function mark(id) {
+    links.forEach(function (a) {
+      if (a.getAttribute("href") === "#" + id) a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    });
+  }
+
+  if ("IntersectionObserver" in window) {
+    var seen = new Map();
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { seen.set(e.target.id, e.intersectionRatio); });
+      var best = null, bestR = 0;
+      seen.forEach(function (r, id) { if (r > bestR) { bestR = r; best = id; } });
+      if (best) mark(best);
+    }, { rootMargin: "-20% 0px -60% 0px", threshold: [0, .25, .5, 1] });
+    sections.forEach(function (s) { obs.observe(s); });
+  }
+
+  /* the rail labels change with the language toggle, so relabel on click */
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest("button.chip")) return;
+    sections.forEach(function (sec, i) {
+      links[i].firstChild.textContent = labelFor(sec);
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

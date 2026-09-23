@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 4 · Đĩa và hệ thống tệp — How Linux Works</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 4 “Disks and Filesystems” trong How Linux Works (Brian Ward, No Starch Press, 3rd ed., 2021): phân vùng đĩa MBR và GPT, tạo và gắn hệ thống tệp, UUID, /etc/fstab, kiểm tra sửa chữa với fsck, hệ thống tệp đặc biệt, và không gian tráo đổi.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('hlw-reading-mode'),
+l=localStorage.getItem('hlw-lang'),
+t=localStorage.getItem('hlw-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"HOW LINUX WORKS / 04";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    How Linux Works
+    <span>Chương 4 · Disks and Filesystems</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 4 · Đĩa và hệ thống tệp</span>
+      <span class="en-only" lang="en">Chapter 4 · Disks and Filesystems</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Một cái đĩa chỉ là các khối — phân vùng và hệ thống tệp là những tầng ta dựng lên trên nó</span>
+      <span class="easy-only">Cái đĩa giống một tờ giấy trắng khổng lồ</span>
+      <span class="en-only" lang="en">A disk is only blocks — partitions and filesystems are the layers we build on top</span>
+    </h1>
+
+    <p class="standard-copy">Chương 3 cho bạn cái nhìn tổng quan về những thiết bị đĩa ở tầng trên mà nhân phơi bày ra; chương 4 đi xuống chi tiết: cách phân vùng đĩa, cách tạo và bảo trì các hệ thống tệp nằm bên trong những phân vùng đó, và cách làm việc với không gian tráo đổi.<span class="cite"><a href="#ref-1">1</a></span> Ward nhắc lại rằng một thiết bị đĩa như <code>/dev/sda</code> — đĩa đầu tiên của phân hệ SCSI — là một <span lang="en">block device</span> đại diện cho <i>toàn bộ</i> cái đĩa; nhưng bên trong cái đĩa ấy có rất nhiều thành phần và tầng lớp.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Cái đĩa trong máy tính giống một tờ giấy trắng rất to. Tờ giấy đó không tự biết chỗ nào để ảnh, chỗ nào để bài hát. Người ta phải kẻ ô trước (gọi là phân vùng), rồi mới vẽ bảng mục lục vào từng ô (gọi là hệ thống tệp). Có mục lục rồi thì máy mới tìm được tệp của bạn. <b>Nhớ nhé: kẻ ô trước, làm mục lục sau, rồi mới cất đồ vào.</b></p>
+    <p class="en-only" lang="en">Chapter 3 gave an overview of the top-level disk devices the kernel makes available; Chapter 4 goes into detail: how to partition disks, how to create and maintain the filesystems that go inside disk partitions, and how to work with swap space.<span class="cite"><a href="#ref-1">1</a></span> Ward reminds us that a disk device such as <code>/dev/sda</code> — the first SCSI subsystem disk — is a <span lang="en">block device</span> representing the <i>entire</i> disk; but inside that disk there are many different components and layers.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Hình 4-1 của sách vẽ một lược đồ đĩa Linux điển hình theo chiều từ ngoài vào: <b>bảng phân vùng</b> nằm trên cùng; bên dưới là các <b>phân vùng</b>; trong một phân vùng là <b>hệ thống tệp</b> cùng các cấu trúc dữ liệu của nó; và trong cùng là <b>dữ liệu tệp</b>.<span class="cite"><a href="#ref-1">1</a></span> Ward rút ra hệ quả thực hành ngay từ lược đồ: muốn truy cập dữ liệu của một tệp, bạn phải lấy đúng vị trí phân vùng từ bảng phân vùng, rồi tra cơ sở dữ liệu hệ thống tệp trên phân vùng đó để tìm dữ liệu tệp mong muốn.<span class="cite"><a href="#ref-1">1</a></span> Còn hình 4-2 nhìn từ phía nhân: tiến trình người dùng gọi xuống qua lời gọi hệ thống tới hệ thống tệp, hệ thống tệp gọi xuống giao diện thiết bị khối và ánh xạ phân vùng, rồi tới phân hệ SCSI và các trình điều khiển khác; song song với nhánh đó là <b>truy cập thiết bị thô (trực tiếp)</b> qua các tệp thiết bị.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> giữa “cái đĩa vật lý” và “thư mục bạn gõ <code>ls</code> vào” có đúng ba tầng trung gian — bảng phân vùng, hệ thống tệp, và điểm gắn kết; mỗi tầng do một công cụ riêng cai quản, và gần như mọi rắc rối về lưu trữ đều là chuyện bạn nhầm tầng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> từ cái đĩa đến thư mục của bạn có ba chặng: chia ô, làm mục lục, và treo mục lục đó vào cây thư mục. <b>Nhớ nhé: ba chặng — chia ô, mục lục, treo vào cây.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> between "the physical disk" and "the directory you type <code>ls</code> into" there are exactly three intermediate layers — the partition table, the filesystem, and the mount point; each is governed by its own tool, and nearly every storage problem is a matter of confusing one layer for another.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: một đĩa Linux điển hình gồm bảng phân vùng, các phân vùng, hệ thống tệp bên trong phân vùng, và dữ liệu tệp trong cùng. Diagram: a typical Linux disk — partition table, partitions, the filesystem inside a partition, and file data innermost.">
+    <div class="core">
+      <b>Block device</b>
+      <small class="standard-copy">Cả đĩa: <code>/dev/sda</code> — chỉ là một dãy khối</small>
+      <small class="easy-only">Tờ giấy trắng khổng lồ</small>
+      <small class="en-only" lang="en">The whole disk: <code>/dev/sda</code> — just a run of blocks</small>
+    </div>
+
+    <div class="node">
+      <b>Partition table</b>
+      <small class="standard-copy">Một vùng nhỏ trên đĩa nói các khối được chia thế nào — MBR hoặc GPT</small>
+      <small class="easy-only">Tờ giấy kẻ ô: ô nào từ đâu đến đâu</small>
+      <small class="en-only" lang="en">A small area saying how the blocks are divided — MBR or GPT</small>
+    </div>
+
+    <div class="node">
+      <b>Partition</b>
+      <small class="standard-copy">Phần chia nhỏ của cả đĩa: <code>/dev/sda1</code>, <code>/dev/sdb3</code> — nhân trình bày nó cũng như một thiết bị khối</small>
+      <small class="easy-only">Một ô trên tờ giấy</small>
+      <small class="en-only" lang="en">A subdivision of the whole disk: <code>/dev/sda1</code>, <code>/dev/sdb3</code> — presented as a block device too</small>
+    </div>
+
+    <div class="node">
+      <b>Filesystem</b>
+      <small class="standard-copy">Cơ sở dữ liệu của tệp và thư mục; bên trong nó là dữ liệu tệp</small>
+      <small class="easy-only">Quyển mục lục và đồ đạc bên trong</small>
+      <small class="en-only" lang="en">The database of files and directories; inside it, the file data</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#phan-vung">
+    <span>01</span>
+    <b class="standard-copy">Phân vùng: MBR, GPT và hình học đĩa</b>
+    <b class="easy-only">Chia đĩa thành các ô</b>
+    <b class="en-only" lang="en">Partitioning: MBR, GPT and disk geometry</b>
+  </a>
+  <a href="#he-thong-tep">
+    <span>02</span>
+    <b class="standard-copy">Hệ thống tệp: tạo, gắn, UUID, fstab</b>
+    <b class="easy-only">Mục lục và cách treo nó lên</b>
+    <b class="en-only" lang="en">Filesystems: creating, mounting, UUIDs, fstab</b>
+  </a>
+  <a href="#bao-tri">
+    <span>03</span>
+    <b class="standard-copy">Sức chứa, sửa chữa, hệ thống tệp đặc biệt và swap</b>
+    <b class="easy-only">Còn bao nhiêu chỗ, hỏng thì sửa sao</b>
+    <b class="en-only" lang="en">Capacity, repair, special filesystems and swap</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>04</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="phan-vung" aria-labelledby="phan-vung-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="phan-vung-title">
+      <span class="standard-copy">Phân vùng đĩa: bảng phân vùng, MBR, GPT và hình học đã thành hư cấu</span>
+      <span class="easy-only">Chia cái đĩa thành từng ô</span>
+      <span class="en-only" lang="en">Partitioning disk devices: the table, MBR, GPT, and a geometry that became fiction</span>
+    </h2>
+    <p class="standard-copy">Ward mở đầu phần này bằng một câu gỡ bỏ toàn bộ vẻ huyền bí: “không có gì đặc biệt ở một bảng phân vùng — nó chỉ là một mớ dữ liệu nói rằng các khối trên đĩa được chia ra thế nào”.<span class="cite"><a href="#ref-1">1</a></span> Bảng truyền thống, có từ thời máy PC, nằm bên trong <span lang="en">Master Boot Record</span> (MBR) và mang nhiều giới hạn; hầu hết hệ thống mới hơn dùng <span lang="en">Globally Unique Identifier Partition Table</span> (GPT).<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Trước khi cất đồ vào một cái tủ rất to, người ta đóng vách ngăn chia tủ thành từng ngăn. Bảng phân vùng chính là tờ giấy ghi “ngăn một từ đây đến đây, ngăn hai từ đây đến đây”. Nó không chứa đồ, nó chỉ ghi ranh giới thôi. <b>Nhớ nhé: bảng phân vùng chỉ ghi ranh giới, không chứa đồ.</b></p>
+    <p class="en-only" lang="en">Ward opens this part with a line that removes all the mystique: "there's nothing special about a partition table—it's just a bunch of data that says how the blocks on the disk are divided."<span class="cite"><a href="#ref-1">1</a></span> The traditional table, dating back to the PC days, lives inside the <span lang="en">Master Boot Record</span> (MBR) and carries many limitations; most newer systems use the <span lang="en">Globally Unique Identifier Partition Table</span> (GPT).<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Ông cũng cắm một cái mốc khái niệm ngay tại đây, và nó chi phối cả chương: có một <i>khác biệt then chốt</i> giữa phân vùng và thao tác hệ thống tệp — bảng phân vùng định nghĩa những ranh giới đơn giản trên đĩa, còn hệ thống tệp là một hệ dữ liệu phức tạp hơn nhiều. Chính vì thế người ta dùng những công cụ tách bạch cho hai việc.<span class="cite"><a href="#ref-1">1</a></span> Nếu bạn chỉ nhớ một điều từ chương này, hãy nhớ điều đó: công cụ phân vùng (<code>fdisk</code>, <code>parted</code>) không bao giờ tạo ra hệ thống tệp, và công cụ tạo hệ thống tệp (<code>mkfs</code>) không bao giờ vẽ lại ranh giới.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Phân vùng</i> là phần chia nhỏ của cả đĩa. Trên Linux chúng được ký hiệu bằng một con số đặt sau tên thiết bị khối của cả đĩa — <code>/dev/sda1</code>, <code>/dev/sdb3</code>. Nhân trình bày mỗi phân vùng như một thiết bị khối, y như cách nó trình bày cả đĩa. Các phân vùng được định nghĩa trên một vùng nhỏ của đĩa gọi là <i>bảng phân vùng</i> (còn gọi là <span lang="en">disk label</span>).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Phân vùng là một ngăn trong tủ. Ngăn có tên riêng: tủ là <code>sda</code> thì ngăn một là <code>sda1</code>. <b>Nhớ nhé: thêm số vào sau tên đĩa là ra tên ngăn.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A <i>partition</i> is a subdivision of the whole disk. On Linux they are denoted with a number after the whole block device — <code>/dev/sda1</code>, <code>/dev/sdb3</code>. The kernel presents each partition as a block device, just as it would an entire disk. Partitions are defined on a small area of the disk called the <i>partition table</i> (also called a <span lang="en">disk label</span>).<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">parted -l        → xem bảng<br>fdisk /dev/sdd   → sửa bảng<br>&nbsp;&nbsp;p = in · d = xoá<br>&nbsp;&nbsp;n = tạo · w = ghi<br>&nbsp;&nbsp;q = thoát, KHÔNG ghi</p>
+      <p class="easy-only">xem  → parted -l<br>sửa  → fdisk /dev/sdX<br>&nbsp;&nbsp;p in · n tạo<br>&nbsp;&nbsp;w ghi · q bỏ</p>
+      <p class="en-only" lang="en">parted -l        → view table<br>fdisk /dev/sdd   → edit table<br>&nbsp;&nbsp;p = print · d = delete<br>&nbsp;&nbsp;n = new · w = write<br>&nbsp;&nbsp;q = quit, WITHOUT writing</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">partition table</span>
+      <h3>
+        <span class="standard-copy">Bảng phân vùng — vài trăm byte quyết định cả cái đĩa</span>
+        <span class="easy-only">Bảng phân vùng — tờ giấy kẻ ô</span>
+        <span class="en-only" lang="en">The partition table — a few hundred bytes that decide the whole disk</span>
+      </h3>
+      <p class="standard-copy">Bạn xem bảng phân vùng của hệ thống bằng <code>parted -l</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Trong ví dụ của sách, lệnh đó in ra hai thiết bị mang hai loại bảng khác nhau: <code>/dev/sda</code> dùng bảng MBR truyền thống (<code>parted</code> gọi nó là <code>msdos</code>), còn <code>/dev/sdf</code> chứa một GPT.<span class="cite"><a href="#ref-1">1</a></span> Hai kiểu bảng lưu những tập tham số khác nhau — đáng chú ý nhất là bảng MBR <i>không có</i> cột <code>Name</code>, bởi vì lược đồ đó không có khái niệm tên.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Muốn biết cái đĩa đang được chia thế nào, gõ <code>parted -l</code>. Nó in ra một bảng: ngăn này bắt đầu ở đâu, kết thúc ở đâu, to bao nhiêu. Xem thì an toàn, không làm hỏng gì cả. <b>Nhớ nhé: xem thì cứ xem thoải mái, chỉ khi sửa mới phải cẩn thận.</b></p>
+      <p class="en-only" lang="en">You view your system's partition table with <code>parted -l</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> In the book's sample output that command shows two devices with two different kinds of table: <code>/dev/sda</code> uses the traditional MBR table (which <code>parted</code> calls <code>msdos</code>), while <code>/dev/sdf</code> contains a GPT.<span class="cite"><a href="#ref-1">1</a></span> The two table types store different sets of parameters — most visibly, the MBR table has <i>no</i> <code>Name</code> column, because names don't exist under that scheme.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi cắm một ổ USB lạ vào máy và tự hỏi “trong này có gì” — <code>parted -l</code> hoặc <code>lsblk</code> là câu trả lời an toàn đầu tiên.</span>
+        <span class="easy-only">Khi bạn cắm USB vào và muốn biết bên trong chia mấy ngăn.</span>
+        <span class="en-only" lang="en">Every time you plug in an unfamiliar drive and wonder what's on it — <code>parted -l</code> or <code>lsblk</code> is the safe first answer.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cảnh báo về đơn vị</h4>
+          <p>Ward đặt một ghi chú riêng cho chuyện này: hãy coi chừng đơn vị khi đọc bảng phân vùng. <code>parted</code> hiển thị kích thước <i>xấp xỉ</i>, dựa trên cái mà nó cho là dễ đọc nhất. Ngược lại, <code>fdisk -l</code> hiển thị con số chính xác, nhưng trong hầu hết trường hợp đơn vị là “sector” 512 byte — dễ gây hiểu lầm vì trông như bạn vừa nhân đôi kích thước đĩa.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Kiểu hệ thống tệp ≠ system ID</h4>
+          <p>Kiểu hệ thống tệp mà <code>parted</code> liệt kê không nhất thiết trùng với trường <span lang="en">system ID</span> trong các mục MBR. System ID của MBR chỉ là một con số nhận dạng loại phân vùng — ví dụ <code>83</code> là phân vùng Linux và <code>82</code> là phân vùng swap Linux — còn <code>parted</code> thì cố tỏ ra hữu ích hơn bằng cách tự xác định loại hệ thống tệp thực sự nằm trên phân vùng đó. Nếu bạn nhất định cần biết system ID của một MBR, hãy dùng <code>fdisk -l</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">MBR</span>
+      <h3>
+        <span class="standard-copy">MBR — primary, extended, logical và cái trần bốn ngăn</span>
+        <span class="easy-only">MBR — kiểu bảng cũ, chỉ kẻ được bốn ô</span>
+        <span class="en-only" lang="en">MBR — primary, extended, logical, and the ceiling of four</span>
+      </h3>
+      <p class="standard-copy">Một <i>primary partition</i> là phần chia nhỏ bình thường của đĩa. MBR cơ bản có giới hạn <b>bốn</b> phân vùng primary; vậy nên nếu muốn nhiều hơn bốn, bạn phải chỉ định một trong số đó làm <i>extended partition</i>. Phân vùng extended lại chia nhỏ thành các <i>logical partition</i>, và hệ điều hành dùng chúng như mọi phân vùng khác.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Trong ví dụ của sách, phân vùng 2 là extended và nó chứa phân vùng logical số 5.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Kiểu bảng cũ chỉ kẻ được bốn ô lớn. Muốn nhiều ô hơn, người ta lấy một ô lớn làm “ô chứa ô con”, rồi kẻ tiếp bên trong nó. <b>Nhớ nhé: MBR cho bốn ô lớn; muốn thêm thì phải có ô chứa ô con.</b></p>
+      <p class="en-only" lang="en">A <i>primary partition</i> is a normal subdivision of the disk. The basic MBR has a limit of <b>four</b> primary partitions, so if you want more than four you must designate one as an <i>extended partition</i>. An extended partition breaks down into <i>logical partitions</i>, which the operating system can then use as it would any other partition.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> In the book's example, partition 2 is an extended partition containing logical partition 5.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi đọc nhật ký nhân lúc khởi động và thấy dòng <code>sda: sda1 sda2 &lt; sda5 &gt;</code> — dấu ngoặc nhọn chính là phân vùng extended đang ôm lấy phân vùng logical bên trong.</span>
+        <span class="easy-only">Khi máy in ra dòng lạ có dấu ngoặc nhọn quanh một tên đĩa.</span>
+        <span class="en-only" lang="en">When you read the boot-time kernel log and see <code>sda: sda1 sda2 &lt; sda5 &gt;</code> — the angle brackets are an extended partition holding a logical partition inside.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đọc nhật ký nhân</h4>
+          <p>Khi đọc bảng MBR lần đầu, nhân Linux sinh ra dòng gỡ lỗi mà bạn xem được bằng <code>journalctl -k</code>. Phần <code>sda2 &lt; sda5 &gt;</code> cho biết <code>/dev/sda2</code> là một phân vùng extended chứa một phân vùng logical là <code>/dev/sda5</code>. Thông thường bạn bỏ qua chính phân vùng extended, vì cái bạn quan tâm là các phân vùng logical nằm trong nó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Dấu hiệu LVM</h4>
+          <p>Khi xem bảng phân vùng, nếu bạn thấy các phân vùng gắn nhãn LVM (mã loại <code>8e</code>), các thiết bị tên <code>/dev/dm-*</code>, hoặc những tham chiếu tới “device mapper”, thì hệ thống của bạn đang dùng LVM — và những gì bạn thấy sẽ hơi khác so với phân vùng đĩa trực tiếp truyền thống.<span class="cite"><a href="#ref-1">1</a></span> Trên hệ như vậy, <code>parted -l</code> in ra những thứ trông <i>như</i> phân vùng nhưng lại được gọi là <span lang="en">disk</span>, chẳng hạn <code>/dev/mapper/ubuntu--vg-root</code> với bảng kiểu <code>loop</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">GPT</span>
+      <h3>
+        <span class="standard-copy">GPT — bảng có tên, và một công cụ duy nhất cho cả hai</span>
+        <span class="easy-only">GPT — kiểu bảng mới, ô có tên riêng</span>
+        <span class="en-only" lang="en">GPT — a table with names, and one tool for both</span>
+      </h3>
+      <p class="standard-copy">GPT là kiểu bảng mà hầu hết hệ thống mới hơn dùng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> Khác biệt dễ thấy nhất trong đầu ra <code>parted -l</code> là cột <code>Name</code>: trong ví dụ của sách, hai phân vùng GPT trên <code>/dev/sdf</code> mang tên <code>myfirst</code> và <code>mysecond</code> — những cái tên mà chính tác giả nói là ông đặt tuỳ ý.<span class="cite"><a href="#ref-1">1</a></span> Cả <code>parted</code> lẫn <code>fdisk</code> phiên bản gần đây đều hỗ trợ cả MBR lẫn GPT; chỉ những bản <code>fdisk</code> cũ mới bị giới hạn ở MBR.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only">Kiểu bảng mới cho phép đặt tên cho từng ô, và không bị trần bốn ô như kiểu cũ. Máy tính đời mới gần như đều dùng kiểu này. <b>Nhớ nhé: bảng mới thì ô có tên, bảng cũ thì ô chỉ có số.</b></p>
+      <p class="en-only" lang="en">GPT is the table type most newer systems use.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> The most visible difference in <code>parted -l</code> output is the <code>Name</code> column: in the book's example the two GPT partitions on <code>/dev/sdf</code> are named <code>myfirst</code> and <code>mysecond</code> — names the author says he chose arbitrarily.<span class="cite"><a href="#ref-1">1</a></span> Both <code>parted</code> and recent versions of <code>fdisk</code> support MBR and GPT; only older <code>fdisk</code> versions were limited to MBR.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Bất cứ máy tính nào khởi động bằng UEFI: phân vùng hệ thống EFI của nó nằm trong một GPT.</span>
+        <span class="easy-only">Máy tính đời mới của bạn gần như chắc chắn đang dùng GPT.</span>
+        <span class="en-only" lang="en">Any machine that boots via UEFI: its EFI system partition lives in a GPT.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bộ công cụ mà sách chọn</h4>
+          <p>Ward giải thích rõ vì sao ông trộn hai công cụ: vì <code>parted</code> đã hỗ trợ cả MBR lẫn GPT từ lâu và chạy một lệnh đơn để lấy nhãn phân vùng rất dễ, nên ông dùng <code>parted</code> để <i>hiển thị</i> bảng phân vùng; nhưng khi <i>tạo và thay đổi</i> bảng thì ông dùng <code>fdisk</code>. Cách đó minh hoạ cả hai giao diện, và cho thấy vì sao nhiều người thích <code>fdisk</code> — nó tương tác, và nó không thay đổi gì trên đĩa cho tới khi bạn đã có cơ hội xem lại.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Còn công cụ nào nữa</h4>
+          <p>Sách liệt kê ba công cụ phân vùng Linux: <code>parted</code> (“partition editor”), một công cụ văn bản hỗ trợ cả MBR và GPT; <code>gparted</code>, bản đồ hoạ của <code>parted</code>; và <code>fdisk</code>, công cụ phân vùng dạng văn bản truyền thống của Linux.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">fdisk vs parted</span>
+      <h3>
+        <span class="standard-copy">Sửa bảng — khác biệt sống còn giữa “soạn rồi ghi” và “làm ngay”</span>
+        <span class="easy-only">Sửa bảng — một bên cho xem lại, một bên làm luôn</span>
+        <span class="en-only" lang="en">Modifying the table — the crucial gap between "draft then write" and "do it now"</span>
+      </h3>
+      <p class="standard-copy">Đây là điểm mà Ward nhấn mạnh nhất: <b>với <code>fdisk</code>, bạn thiết kế bảng phân vùng mới <i>trước</i>, và nó chỉ thực hiện thay đổi khi bạn thoát chương trình; còn với <code>parted</code>, phân vùng được tạo, sửa và xoá ngay khi bạn ra lệnh — bạn không có cơ hội xem lại bảng trước khi thay đổi nó.</b><span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Trong <code>fdisk</code>, nếu bạn phạm một sai lầm không cứu được, lệnh <code>q</code> cho phép thoát mà không ghi thay đổi.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Có hai kiểu sửa. Kiểu thứ nhất giống viết nháp: bạn kẻ lại trên giấy nháp, xem kỹ, rồi mới chép vào bản thật. Kiểu thứ hai làm thẳng vào bản thật, không có nháp. Người mới nên dùng kiểu có nháp. <b>Nhớ nhé: có nháp thì còn đường lui.</b></p>
+      <p class="en-only" lang="en">This is what Ward stresses most: <b>with <code>fdisk</code> you design the new partition table <i>first</i>, and it makes the changes only when you exit the program; with <code>parted</code>, partitions are created, modified and removed as you issue the commands — you don't get the chance to review the table before you change it.</b><span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> In <code>fdisk</code>, if you make a mistake you can't recover from, the <code>q</code> command quits without writing the changes.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lần đầu bạn định dạng lại một ổ cứng cũ — và lần đầu bạn nhận ra <code>w</code> và <code>q</code> chỉ cách nhau một phím.</span>
+        <span class="easy-only">Khi bạn định xoá sạch một ổ cũ để dùng lại.</span>
+        <span class="en-only" lang="en">The first time you repartition an old drive — and the first time you notice that <code>w</code> and <code>q</code> are one keystroke apart.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hai rủi ro mà sách bắt bạn ghi nhớ</h4>
+          <p>Ward nói thẳng: xem bảng phân vùng là thao tác tương đối đơn giản và vô hại, nhưng <i>thay đổi</i> nó thì có rủi ro. Hai điều phải nhớ: (1) thay đổi bảng phân vùng khiến việc khôi phục dữ liệu trên những phân vùng bạn xoá hoặc định nghĩa lại trở nên rất khó, vì làm vậy có thể xoá mất vị trí của các hệ thống tệp trên đó — hãy chắc chắn bạn có bản sao lưu nếu đĩa chứa dữ liệu quan trọng; (2) hãy bảo đảm không phân vùng nào trên đĩa đích đang được dùng, vì hầu hết bản phân phối Linux tự động gắn mọi hệ thống tệp mà nó phát hiện.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ai nói cho nhân biết</h4>
+          <p>Cả <code>fdisk</code> lẫn <code>parted</code> đều sửa phân vùng <i>hoàn toàn trong không gian người dùng</i>; không cần nhân hỗ trợ việc ghi lại bảng phân vùng, vì không gian người dùng đọc và sửa được toàn bộ một thiết bị khối.<span class="cite"><a href="#ref-1">1</a></span> Nhưng đến một lúc nào đó nhân <i>phải</i> đọc bảng để trình bày các phân vùng ra thành thiết bị khối. <code>fdisk</code> làm việc đó bằng một lời gọi hệ thống duy nhất bảo nhân đọc lại bảng phân vùng của đĩa; <code>parted</code> thì không dùng lời gọi toàn-đĩa đó mà báo cho nhân biết khi từng phân vùng riêng lẻ bị thay đổi, nên nó không sinh ra dòng gỡ lỗi kể trên.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ví dụ thực tế của sách</h4>
+          <p>Ward dựng một kịch bản cụ thể để bạn theo: một đĩa 4GB (ổ flash USB nhỏ, chưa dùng), bảng phân vùng kiểu MBR, hai phân vùng dự định đặt hệ thống tệp ext4 — <b>200MB và 3,8GB</b> — trên thiết bị <code>/dev/sdd</code>; ông nhắc bạn phải tự tìm vị trí thiết bị của mình bằng <code>lsblk</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Trình tự tương tác: <code>p</code> để in bảng hiện tại (hầu hết thiết bị đã có sẵn một phân vùng kiểu FAT), <code>d</code> để xoá, <code>n</code> để tạo — <code>fdisk</code> hỏi kiểu phân vùng MBR, số hiệu, sector đầu và sector cuối (hoặc kích thước); các giá trị mặc định rất thường là cái bạn muốn, và trong ví dụ thứ duy nhất bị đổi là kích thước cuối, viết theo cú pháp <code>+200M</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+          <p>Cuối cùng là <code>w</code> để ghi bảng. Ward ghi chú một điều đáng ghim: <b><code>fdisk</code> không hỏi bạn “có chắc không” như một biện pháp an toàn — nó chỉ đơn giản làm việc của mình rồi thoát.</b><span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ba cách nhìn thấy thay đổi</h4>
+          <p>Sách đưa ba cách: dùng <code>udevadm monitor --kernel</code> để xem sự kiện nhân gỡ thiết bị phân vùng cũ và thêm thiết bị mới; xem <code>/proc/partitions</code> để lấy thông tin phân vùng đầy đủ; hoặc xem <code>/sys/block/<i>device</i>/</code> và <code>/dev</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-24">24</a></span> Và nếu bạn nhất định phải xác nhận thay đổi, <code>blockdev --rereadpt /dev/sdf</code> thực hiện đúng lời gọi hệ thống kiểu cũ mà <code>fdisk</code> phát ra.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">CHS / LBA</span>
+      <h3>
+        <span class="standard-copy">Hình học đĩa — cylinder, head, sector, và những con số là hư cấu</span>
+        <span class="easy-only">Hình dạng bên trong đĩa quay</span>
+        <span class="en-only" lang="en">Disk geometry — cylinder, head, sector, and numbers that are fiction</span>
+      </h3>
+      <p class="standard-copy">Một đĩa cứng gồm đĩa tròn (<span lang="en">platter</span>) quay trên trục (<span lang="en">spindle</span>), với đầu đọc (<span lang="en">head</span>) gắn vào một cánh tay quét theo bán kính. Khi cánh tay đứng yên ở một vị trí, đầu đọc chỉ đọc được dữ liệu trên một vòng tròn cố định — vòng tròn đó gọi là <i>cylinder</i>, vì đĩa lớn có nhiều platter xếp chồng quay quanh cùng một trục. Chia nhỏ một cylinder ra thì được các lát gọi là <i>sector</i>. Cách nghĩ này gọi là <b>CHS</b> — cylinder-head-sector.<span class="cite"><a href="#ref-1">1</a></span> Nhưng Ward nói thẳng: trên bất kỳ đĩa cứng nào tương đối gần đây, <b>những giá trị được báo cáo đều là hư cấu</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Đĩa cứng kiểu cũ giống cái đĩa than: một tấm tròn quay, một cái kim đọc. Ngày xưa người ta tìm dữ liệu bằng cách nói “vòng thứ mấy, kim nào, lát nào”. Bây giờ cách đó không còn đúng nữa — máy chỉ đánh số các khối từ đầu đến cuối. <b>Nhớ nhé: bây giờ đĩa chỉ là một dãy khối được đánh số.</b></p>
+      <p class="en-only" lang="en">A hard disk consists of a spinning platter on a spindle, with a head on a moving arm that sweeps across the radius. When the arm is in one position the head can read only from a fixed circle — that circle is called a <i>cylinder</i>, because larger disks have several platters stacked around the same spindle. Divide a cylinder into slices and you get <i>sectors</i>. This way of thinking is called <b>CHS</b>, for cylinder-head-sector.<span class="cite"><a href="#ref-1">1</a></span> But Ward is blunt: on any halfway recent hard disk, <b>the reported values are fiction</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một công cụ phân vùng đời cũ cằn nhằn rằng phân vùng của bạn không nằm đúng biên cylinder — Ward bảo cứ bỏ qua.</span>
+        <span class="easy-only">Khi một chương trình cũ kêu ca về “biên cylinder”.</span>
+        <span class="en-only" lang="en">When an older partitioning program complains that your partitions aren't on cylinder boundaries — Ward says ignore it.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao CHS sụp đổ</h4>
+          <p>Lược đồ địa chỉ truyền thống dùng CHS không mở rộng được theo phần cứng đĩa hiện đại, và nó cũng không tính đến chuyện bạn nhét được nhiều dữ liệu hơn vào các cylinder vòng ngoài so với vòng trong. Phần cứng đĩa hỗ trợ <b>Logical Block Addressing (LBA)</b> — định vị một chỗ trên đĩa bằng số hiệu khối, một giao diện thẳng thắn hơn nhiều. Nhưng tàn dư của CHS vẫn còn: bảng phân vùng MBR chứa cả thông tin CHS lẫn tương đương LBA, và một số boot loader vẫn đủ ngây thơ để tin vào các giá trị CHS — may là hầu hết boot loader Linux dùng giá trị LBA.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Biên cylinder có còn quan trọng?</h4>
+          <p>Sách dành riêng một khung cho câu hỏi này. Ý tưởng cylinder từng cực kỳ quan trọng với việc phân vùng, vì cylinder là biên lý tưởng: đọc một luồng dữ liệu từ một cylinder rất nhanh do đầu đọc thu dữ liệu liên tục khi đĩa quay. Nhưng “khái niệm căn chỉnh phân vùng chính xác đã trở nên lỗi thời”. Lược đồ LBA của đĩa, cùng với logic tốt hơn trong các tiện ích phân vùng mới, bảo đảm phân vùng của bạn được bố trí hợp lý.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một từ, hai nghĩa</h4>
+          <p>Ward cảnh báo riêng rằng từ <i>sector</i> gây nhầm lẫn, vì các chương trình phân vùng Linux có thể dùng nó với một giá trị khác hẳn với nghĩa hình học ở trên.<span class="cite"><a href="#ref-1">1</a></span> Ông cũng ghi chú: <i>track</i> là phần của một cylinder mà một đầu đọc đơn lẻ truy cập — và bạn không cần bận tâm về track.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">SSD alignment</span>
+      <h3>
+        <span class="standard-copy">Ổ thể rắn — không có đầu đọc, nhưng có biên trang</span>
+        <span class="easy-only">Ổ SSD — không quay, nhưng vẫn kén chỗ bắt đầu</span>
+        <span class="en-only" lang="en">Solid-state disks — no head, but page boundaries still matter</span>
+      </h3>
+      <p class="standard-copy">Với SSD, truy cập ngẫu nhiên không còn là vấn đề vì không có đầu đọc nào phải quét qua platter. Nhưng một trong những yếu tố quan trọng nhất ảnh hưởng tới hiệu năng SSD là <b>căn chỉnh phân vùng</b>. Khi đọc dữ liệu từ SSD, bạn đọc theo từng khối gọi là <i>page</i> — chẳng hạn 4.096 hoặc 8.192 byte mỗi lần — và phép đọc phải bắt đầu ở một bội số của kích thước đó. Nếu phân vùng và dữ liệu của bạn không nằm trên biên, bạn có thể phải đọc hai lần thay vì một cho những thao tác nhỏ và phổ biến, như đọc nội dung một thư mục.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ổ SSD không có kim đọc nên tìm chỗ nào cũng nhanh như nhau. Nhưng nó đọc theo từng ô vuông cố định. Nếu ngăn của bạn bắt đầu lệch so với ô vuông đó, mỗi lần đọc máy phải lấy hai ô thay vì một — chậm gấp đôi một cách vô ích. May là các chương trình chia ngăn đời mới tự căn cho khớp rồi. <b>Nhớ nhé: đặt đúng vạch thì đọc một lần là xong.</b></p>
+      <p class="en-only" lang="en">On an SSD random access isn't a problem, because there's no head to sweep across a platter. But one of the most significant factors affecting SSD performance is <b>partition alignment</b>. You read SSD data in chunks called <i>pages</i> — 4,096 or 8,192 bytes at a time, say — and the read must begin at a multiple of that size. If your partition and its data do not lie on a boundary, you may have to do two reads instead of one for small, common operations such as reading the contents of a directory.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một phân vùng cũ do công cụ đời cũ tạo ra chạy chậm bất thường trên SSD mới — thường vì nó bắt đầu ở một offset lẻ.</span>
+        <span class="easy-only">Khi một ổ SSD chạy chậm hơn hẳn so với ổ y hệt bên cạnh.</span>
+        <span class="en-only" lang="en">When an old partition made by an old tool is oddly slow on a new SSD — often because it starts at an awkward offset.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Con số 2.048</h4>
+          <p>Các tiện ích phân vùng hiện nay <i>không</i> tính toán gì cả; chúng chỉ căn phân vùng trên biên 1MB — chính xác hơn là <b>2.048 khối 512 byte</b>. Đây là cách tiếp cận khá bảo thủ, vì biên đó khớp với các kích thước page 4.096, 8.192, và cứ thế lên tới 1.048.576.<span class="cite"><a href="#ref-1">1</a></span> Đó cũng là lý do trong ví dụ <code>fdisk</code> của sách, sector đầu tiên mặc định là <code>2048</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tự kiểm tra bằng một phép chia</h4>
+          <p>Bạn tìm offset của phân vùng trong thư mục <code>/sys/block</code>. Với <code>/dev/sdf2</code>: <code>cat /sys/block/sdf/sdf2/start</code> — trong ví dụ của sách, kết quả là <code>1953126</code>. Đầu ra là offset của phân vùng tính từ đầu thiết bị, đơn vị 512 byte. Nếu SSD dùng page 4.096 byte thì một page chứa tám “sector” như vậy; việc bạn cần làm chỉ là xem offset có chia hết cho 8 không. Trong trường hợp này thì không, nên phân vùng sẽ không đạt hiệu năng tối ưu.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đến đây bạn đã có <i>ranh giới</i>. Nhưng ranh giới không biết tệp nào nằm ở đâu — một phân vùng mới toanh, với Linux, vẫn chỉ là một dãy khối vô nghĩa. Ward đặt mốc chuyển rất rõ: “bạn đã có mọi thứ cơ bản để bắt đầu phân vùng đĩa”; bước tiếp theo là đặt một hệ thống tệp lên đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Kẻ ô xong rồi, nhưng ô vẫn trống trơn và chưa có mục lục. Phần sau là làm mục lục. <b>Nhớ nhé: kẻ ô xong mới tới làm mục lục.</b></p>
+    <p class="en-only" lang="en">You now have <i>boundaries</i>. But boundaries don't know which file is where — to Linux, a brand-new partition is still a meaningless run of blocks. Ward marks the transition plainly: "you have all the basics to start partitioning disks"; the next step is putting a filesystem on the disk.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="he-thong-tep" aria-labelledby="he-thong-tep-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="he-thong-tep-title">
+      <span class="standard-copy">Hệ thống tệp: một cơ sở dữ liệu, một động tác gắn, và một cái tên không đổi</span>
+      <span class="easy-only">Mục lục, cách treo mục lục, và cái tên riêng của nó</span>
+      <span class="en-only" lang="en">Filesystems: a database, an act of mounting, and a name that never changes</span>
+    </h2>
+    <p class="standard-copy">Hệ thống tệp thường là mắt xích cuối cùng giữa nhân và không gian người dùng đối với đĩa — đó chính là thứ bạn tương tác khi chạy <code>ls</code> hay <code>cd</code>. Ward định nghĩa nó gọn gàng: hệ thống tệp là <b>một dạng cơ sở dữ liệu</b>; nó cung cấp cấu trúc để biến một thiết bị khối đơn giản thành cái cây phân cấp tinh vi gồm tệp và thư mục mà con người hiểu được.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hệ thống tệp là quyển mục lục của cái ngăn tủ. Nó ghi: bức ảnh này nằm ở chỗ nào, bài hát kia nằm ở chỗ nào, thư mục này chứa những gì. Không có mục lục, máy nhìn vào ngăn tủ chỉ thấy một mớ số. <b>Nhớ nhé: hệ thống tệp là quyển mục lục, không phải cái ngăn.</b></p>
+    <p class="en-only" lang="en">The filesystem is typically the last link between the kernel and user space for disks — it is what you interact with when you run <code>ls</code> or <code>cd</code>. Ward's definition is neat: a filesystem is <b>a form of database</b>; it supplies the structure to transform a simple block device into the sophisticated hierarchy of files and subdirectories that users can understand.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Ông kể tiếp một đoạn lịch sử ngắn nhưng quan trọng. Xưa kia mọi hệ thống tệp đều nằm trên đĩa và các phương tiện vật lý dành riêng cho việc lưu trữ. Nhưng cấu trúc thư mục dạng cây và giao diện vào/ra của hệ thống tệp linh hoạt đến mức ngày nay hệ thống tệp làm đủ thứ việc — chẳng hạn các giao diện hệ thống bạn thấy ở <code>/sys</code> và <code>/proc</code>. Hệ thống tệp theo truyền thống được hiện thực trong nhân, nhưng sáng kiến 9P từ Plan 9 đã truyền cảm hứng cho việc phát triển hệ thống tệp trong không gian người dùng; tính năng <b>FUSE</b> (File System in User Space) cho phép điều đó trên Linux.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> Hoàn tất bức tranh là tầng trừu tượng <b>VFS</b> (Virtual File System): giống như phân hệ SCSI chuẩn hoá giao tiếp giữa các loại thiết bị khác nhau, VFS bảo đảm mọi hiện thực hệ thống tệp đều hỗ trợ một giao diện chuẩn, để ứng dụng không gian người dùng truy cập tệp và thư mục theo cùng một cách. Chính VFS đã cho phép Linux hỗ trợ một số lượng hệ thống tệp lớn đến phi thường.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Gắn kết</i> (<span lang="en">mounting</span>) là quá trình gắn một hệ thống tệp vào một hệ thống đang chạy. Khi máy khởi động, nhân đọc một ít dữ liệu cấu hình và gắn gốc <code>/</code> dựa trên dữ liệu đó. Muốn gắn một hệ thống tệp, bạn phải biết ba thứ: thiết bị / vị trí / định danh của nó; kiểu hệ thống tệp; và <i>điểm gắn kết</i> — nơi trong cây thư mục hiện tại mà hệ thống tệp sẽ được gắn vào. Điểm gắn kết luôn là một thư mục bình thường, và không nhất thiết phải nằm ngay dưới <code>/</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Gắn kết là treo quyển mục lục vào một cái móc trong nhà. Cái móc đó là một thư mục bình thường. Treo xong thì đi vào thư mục đó là thấy đồ. <b>Nhớ nhé: gắn kết = treo mục lục vào một thư mục.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <i>Mounting</i> is the process of attaching a filesystem to a running system. When the system boots, the kernel reads some configuration data and mounts root (<code>/</code>) based on it. To mount a filesystem you must know three things: its device, location or identifier; the filesystem type; and the <i>mount point</i> — the place in the current directory hierarchy where the filesystem will be attached. The mount point is always a normal directory, and need not be directly below <code>/</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy"># mkfs -t ext4 /dev/sdf2<br># mount -t ext4 /dev/sdf2 /home/extra<br>$ mount            → xem đang gắn gì<br># umount /home/extra<br># mount UUID=b600… /home/extra</p>
+      <p class="easy-only">tạo mục lục → mkfs -t ext4<br>treo lên     → mount<br>xem          → mount<br>gỡ xuống     → umount</p>
+      <p class="en-only" lang="en"># mkfs -t ext4 /dev/sdf2<br># mount -t ext4 /dev/sdf2 /home/extra<br>$ mount            → see what's mounted<br># umount /home/extra<br># mount UUID=b600… /home/extra</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">filesystem types</span>
+      <h3>
+        <span class="standard-copy">Các kiểu hệ thống tệp — ext4, Btrfs, FAT, XFS, ISO 9660</span>
+        <span class="easy-only">Có nhiều kiểu mục lục khác nhau</span>
+        <span class="en-only" lang="en">Filesystem types — ext4, Btrfs, FAT, XFS, ISO 9660</span>
+      </h3>
+      <p class="standard-copy">Linux hỗ trợ cả thiết kế bản địa tối ưu cho Linux, các kiểu ngoại lai như họ FAT của Windows, lẫn các hệ thống tệp phổ quát như ISO 9660.<span class="cite"><a href="#ref-1">1</a></span> <b>ext4</b> (Fourth Extended filesystem) là bản lặp hiện thời của một dòng hệ thống tệp bản địa Linux; <b>ext2</b> từng là mặc định lâu năm, lấy cảm hứng từ các hệ thống tệp Unix truyền thống như UFS và FFS; <b>ext3</b> thêm tính năng <i>journal</i> — một vùng đệm nhỏ nằm ngoài cấu trúc dữ liệu bình thường — để tăng toàn vẹn dữ liệu và rút ngắn thời gian khởi động; còn ext4 là một cải tiến tăng dần, hỗ trợ tệp lớn hơn ext2/ext3 và nhiều thư mục con hơn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+      <p class="easy-only">Mục lục cũng có nhiều kiểu: kiểu của Linux (tên là ext4), kiểu của Windows (tên là FAT), kiểu của đĩa CD... Kiểu nào cũng ghi “cái gì ở đâu”, chỉ khác cách ghi. <b>Nhớ nhé: nhiều kiểu mục lục, nhưng việc thì giống nhau.</b></p>
+      <p class="en-only" lang="en">Linux supports native designs optimised for Linux, foreign types such as the Windows FAT family, and universal filesystems like ISO 9660.<span class="cite"><a href="#ref-1">1</a></span> <b>ext4</b> (the Fourth Extended filesystem) is the current iteration of a line of filesystems native to Linux; <b>ext2</b> was a longtime default, inspired by traditional Unix filesystems such as UFS and FFS; <b>ext3</b> added a <i>journal</i> — a small cache outside the normal filesystem data structure — to enhance data integrity and hasten booting; and ext4 is an incremental improvement supporting larger files than ext2 or ext3 as well as a greater number of subdirectories.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Cột <code>TYPE</code> trong đầu ra <code>blkid</code>, hoặc cột thứ ba trong <code>/etc/fstab</code> — đó là nơi kiểu hệ thống tệp lộ diện.</span>
+        <span class="easy-only">Khi máy hỏi bạn muốn định dạng USB theo kiểu nào.</span>
+        <span class="en-only" lang="en">The <code>TYPE</code> column in <code>blkid</code> output, or the third column of <code>/etc/fstab</code> — that's where the type shows itself.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Tương thích ngược, nhưng chỉ một chiều</h4>
+          <p>Ward nêu một quy tắc rất cụ thể và dễ nhớ sai: bạn có thể gắn hệ thống tệp ext2 và ext3 như nhau, và có thể gắn ext2 lẫn ext3 <i>dưới dạng</i> ext4 — nhưng bạn <b>không</b> thể gắn ext4 dưới dạng ext2 hay ext3.<span class="cite"><a href="#ref-1">1</a></span> Tương thích ngược ở đây chỉ chạy theo một chiều.</p>
+        </div>
+        <div class="info-block">
+          <h4>Những kiểu còn lại trong danh sách</h4>
+          <p><b>Btrfs</b> (B-tree filesystem) là hệ thống tệp bản địa Linux mới hơn, thiết kế để vượt qua khả năng của ext4.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span> <b>FAT</b> gồm <code>msdos</code>, <code>vfat</code>, <code>exfat</code>: hầu hết phương tiện flash tháo lắp như thẻ SD và ổ USB mặc định chứa phân vùng <code>vfat</code> (tới 4GB) hoặc <code>exfat</code> (từ 4GB trở lên).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span> <b>XFS</b> là hệ thống tệp hiệu năng cao được vài bản phân phối dùng mặc định, chẳng hạn Red Hat Enterprise Linux từ 7.0 trở đi.<span class="cite"><a href="#ref-1">1</a></span> <b>HFS+</b> (<code>hfsplus</code>) là chuẩn của Apple trên hầu hết máy Macintosh, và <b>ISO 9660</b> (<code>iso9660</code>) là chuẩn CD-ROM.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một dự đoán có mốc thời gian</h4>
+          <p>Trong khung “Linux Filesystem Evolution”, Ward viết rằng <i>tại thời điểm ông viết</i>, Btrfs là mặc định của một bản phân phối Linux lớn; nếu điều đó thành công, nhiều khả năng Btrfs sẽ ở vị thế thay thế dòng Extended.<span class="cite"><a href="#ref-1">1</a></span> Đây là một dự đoán gắn với thời điểm 2021, không phải một tuyên bố về hiện tại — khi bạn đọc trang này, hãy tự kiểm tra xem bản phân phối của mình đang mặc định dùng gì.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">mkfs</span>
+      <h3>
+        <span class="standard-copy">Tạo hệ thống tệp — một lệnh, một superblock, và một cảnh báo</span>
+        <span class="easy-only">Làm mục lục mới cho một ngăn trống</span>
+        <span class="en-only" lang="en">Creating a filesystem — one command, one superblock, one warning</span>
+      </h3>
+      <p class="standard-copy">Tiện ích <code>mkfs</code> tạo được nhiều kiểu hệ thống tệp; ví dụ, tạo một hệ thống tệp ext4 trên <code>/dev/sdf2</code>: <code>mkfs -t ext4 /dev/sdf2</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span> Chương trình tự xác định số khối trong thiết bị và đặt vài giá trị mặc định hợp lý — và Ward khuyên thẳng: trừ khi bạn thật sự biết mình đang làm gì và thích đọc tài liệu chi tiết, <b>đừng đổi chúng</b>.<span class="cite"><a href="#ref-1">1</a></span> Cũng như phân vùng, việc này diễn ra trong không gian người dùng, vì một tiến trình người dùng truy cập và thao tác trực tiếp được với thiết bị khối.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Làm mục lục mới chỉ mất một lệnh. Nhưng làm mục lục mới cũng có nghĩa là vứt bỏ mục lục cũ — và khi mục lục cũ mất, đồ đạc trong ngăn coi như mất luôn. <b>Nhớ nhé: chỉ làm mục lục mới cho ngăn mà bạn chắc chắn là trống.</b></p>
+      <p class="en-only" lang="en">The <code>mkfs</code> utility can create many kinds of filesystem; to create an ext4 filesystem on <code>/dev/sdf2</code>: <code>mkfs -t ext4 /dev/sdf2</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span> The program automatically determines the number of blocks in a device and sets some reasonable defaults — and Ward's advice is blunt: unless you really know what you're doing and feel like reading the documentation in detail, <b>don't change them</b>.<span class="cite"><a href="#ref-1">1</a></span> As with partitioning, this happens in user space, because a user-space process can directly access and manipulate a block device.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Cảnh báo của tác giả</span><span class="en-only" lang="en">The author's warning</span></b>
+        <span class="standard-copy">Sách để nguyên chữ WARNING: chỉ tạo hệ thống tệp sau khi thêm đĩa mới hoặc phân vùng lại đĩa cũ, và chỉ <i>một lần</i> cho mỗi phân vùng mới chưa có dữ liệu. Tạo một hệ thống tệp mới đè lên một hệ thống tệp đang tồn tại sẽ <b>huỷ hoại dữ liệu cũ</b>.</span>
+        <span class="easy-only">Làm mục lục mới đè lên mục lục cũ là mất sạch đồ cũ. Đừng làm nếu chưa chắc.</span>
+        <span class="en-only" lang="en">The book keeps the word WARNING: create a filesystem only after adding a new disk or repartitioning an old one, and just <i>once</i> for each new partition with no preexisting data. Creating a new filesystem on top of an existing one will effectively <b>destroy the old data</b>.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Superblock và các bản sao lưu</h4>
+          <p>Khi bạn tạo hệ thống tệp, <code>mkfs</code> in ra thông tin chẩn đoán trong lúc làm việc, trong đó có phần về <b>superblock</b>. Superblock là thành phần then chốt ở tầng trên cùng của cơ sở dữ liệu hệ thống tệp, và nó quan trọng đến mức <code>mkfs</code> tạo sẵn một số bản sao lưu phòng khi bản gốc bị phá hỏng. Ward khuyên bạn cân nhắc ghi lại vài con số bản sao lưu superblock khi <code>mkfs</code> chạy, phòng khi phải khôi phục.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>mkfs thật ra là gì</h4>
+          <p>Hoá ra <code>mkfs</code> chỉ là một <span lang="en">frontend</span> cho một loạt chương trình tạo hệ thống tệp mang tên <code>mkfs.<i>fs</i></code>; khi bạn chạy <code>mkfs -t ext4</code>, đến lượt nó chạy <code>mkfs.ext4</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span> Và còn một tầng gián tiếp nữa: trong danh sách <code>ls -l /sbin/mkfs.*</code> của sách, <code>mkfs.ext2</code>, <code>mkfs.ext3</code> và <code>mkfs.ext4</code> đều là liên kết tượng trưng trỏ tới <code>mke2fs</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span> Điều đó đáng nhớ khi bạn tra tài liệu: trang hướng dẫn thật nằm ở <code>mke2fs(8)</code>.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">mount / umount</span>
+      <h3>
+        <span class="standard-copy">Gắn và gỡ — sáu trường của một dòng <code>mount</code></span>
+        <span class="easy-only">Treo mục lục lên và gỡ xuống</span>
+        <span class="en-only" lang="en">Mounting and unmounting — the six fields of a <code>mount</code> line</span>
+      </h3>
+      <p class="standard-copy">Gõ <code>mount</code> không tham số để biết trạng thái hiện thời. Mỗi dòng ứng với một hệ thống tệp đang được gắn, theo đúng thứ tự: (1) thiết bị, (2) chữ <code>on</code>, (3) điểm gắn kết, (4) chữ <code>type</code>, (5) kiểu hệ thống tệp, (6) các tuỳ chọn gắn trong ngoặc đơn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span> Để gắn thủ công: <code>mount -t <i>type</i> <i>device</i> <i>mountpoint</i></code> — ví dụ <code>mount -t ext4 /dev/sdf2 /home/extra</code>. Thường bạn không cần cung cấp <code>-t</code> vì <code>mount</code> tự đoán ra; nhưng đôi khi vẫn cần, chẳng hạn để phân biệt các kiểu FAT na ná nhau.<span class="cite"><a href="#ref-1">1</a></span> Để gỡ: <code>umount <i>mountpoint</i></code>, hoặc dùng tên thiết bị thay cho điểm gắn kết.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Muốn xem đang treo những gì: gõ <code>mount</code>. Muốn treo thêm: <code>mount</code> kèm tên ngăn và tên thư mục. Muốn gỡ xuống: <code>umount</code> kèm tên thư mục. <b>Nhớ nhé: rút USB thì phải gỡ xuống trước, đừng rút ngang.</b></p>
+      <p class="en-only" lang="en">Type <code>mount</code> with no arguments to learn the current status. Each line corresponds to one mounted filesystem, in this order: (1) the device, (2) the word <code>on</code>, (3) the mount point, (4) the word <code>type</code>, (5) the filesystem type, (6) the mount options in parentheses.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span> To mount manually: <code>mount -t <i>type</i> <i>device</i> <i>mountpoint</i></code> — for example <code>mount -t ext4 /dev/sdf2 /home/extra</code>. You normally don't need <code>-t</code> because <code>mount</code> usually figures it out, though sometimes it's necessary to distinguish between similar FAT-style types.<span class="cite"><a href="#ref-1">1</a></span> To unmount: <code>umount <i>mountpoint</i></code>, or use the device instead of the mount point.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Thư mục <code>/mnt</code> có mặt trên gần như mọi hệ Linux như một điểm gắn kết tạm để thử nghiệm — nhưng nếu định gắn lâu dài, Ward khuyên tìm hoặc tạo một chỗ khác.</span>
+        <span class="easy-only">Khi bạn cắm ổ cứng ngoài và thấy nó hiện ra trong một thư mục.</span>
+        <span class="en-only" lang="en">The <code>/mnt</code> directory exists on almost every Linux system as a temporary mount point for testing — but for extended use, Ward advises finding or making another spot.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Có những “thiết bị” không phải thiết bị</h4>
+          <p>Trong đầu ra <code>mount</code> mẫu, vài mục ở cột đầu không phải thiết bị thật — <code>proc</code> là ví dụ. Chúng chỉ là chỗ đứng thay cho tên thiết bị thật, vì những hệ thống tệp chuyên dụng ấy không cần thiết bị nào cả.<span class="cite"><a href="#ref-1">1</a></span> Đó cũng là lý do trong danh sách ba thứ bạn cần biết để gắn, Ward mở ngoặc rằng vài hệ thống tệp chuyên dụng như <code>proc</code> và <code>sysfs</code> không có vị trí.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Gắn lại thay vì gỡ ra gắn vào</h4>
+          <p>Có lúc bạn cần đổi tuỳ chọn của một hệ thống tệp <i>đang</i> được gắn; tình huống phổ biến nhất là khi cần biến một hệ thống tệp chỉ-đọc thành ghi được trong lúc khôi phục sau sự cố. Lệnh <code>mount -n -o remount /</code> gắn lại thư mục gốc ở chế độ đọc-ghi; bạn cần <code>-n</code> vì <code>mount</code> không ghi được vào cơ sở dữ liệu gắn kết của hệ thống khi gốc đang ở chế độ chỉ-đọc. Lệnh này giả định rằng mục thiết bị đúng cho <code>/</code> có trong <code>/etc/fstab</code>; nếu không, bạn phải chỉ rõ thiết bị.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">UUID</span>
+      <h3>
+        <span class="standard-copy">UUID — vì tên thiết bị thì đổi, còn số hiệu thì không</span>
+        <span class="easy-only">UUID — số hiệu riêng không bao giờ đổi</span>
+        <span class="en-only" lang="en">The UUID — because device names change and serial numbers don't</span>
+      </h3>
+      <p class="standard-copy">Gắn theo tên thiết bị có một chỗ yếu: tên thiết bị <i>đổi được</i>, vì chúng phụ thuộc vào thứ tự nhân tìm thấy thiết bị. Giải pháp là nhận dạng và gắn hệ thống tệp bằng <b>UUID</b> — một chuẩn công nghiệp cho những “số sê-ri” duy nhất dùng để nhận dạng đối tượng trong máy tính. Các chương trình tạo hệ thống tệp như <code>mke2fs</code> sinh ra một UUID khi khởi tạo cấu trúc dữ liệu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span> Xem danh sách bằng <code>blkid</code>, và gắn bằng <code>mount UUID=<i>…</i> /home/extra</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span></p>
+      <p class="easy-only">Tên ổ đĩa có thể đổi: hôm nay là ổ số một, mai cắm thêm ổ khác thì thành ổ số hai. Nhưng mỗi mục lục có một số hiệu riêng, dài và xấu, không bao giờ đổi. Máy dùng số hiệu đó để tìm đúng ổ. <b>Nhớ nhé: tên đổi được, số hiệu thì không.</b></p>
+      <p class="en-only" lang="en">Mounting by device name has a weakness: device names <i>can</i> change, because they depend on the order in which the kernel finds the devices. The fix is to identify and mount filesystems by their <b>UUID</b> — an industry standard for unique "serial numbers" identifying objects in a computer system. Filesystem creation programs like <code>mke2fs</code> generate a UUID when initialising the filesystem data structure.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span> List them with <code>blkid</code>, and mount with <code>mount UUID=<i>…</i> /home/extra</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mở <code>/etc/fstab</code> trên bất kỳ bản phân phối hiện đại nào: cột đầu tiên gần như luôn là <code>UUID=…</code> chứ không phải <code>/dev/sda1</code>.</span>
+        <span class="easy-only">Khi bạn mở tệp cấu hình của máy và thấy một dãy chữ số dài loằng ngoằng.</span>
+        <span class="en-only" lang="en">Open <code>/etc/fstab</code> on any modern distribution: the first column is almost always <code>UUID=…</code>, not <code>/dev/sda1</code>.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>FAT không có UUID thật</h4>
+          <p>Trong đầu ra <code>blkid</code> mẫu của sách có bốn phân vùng mang dữ liệu: hai ext4, một chữ ký swap, và một FAT. Các phân vùng bản địa Linux đều có UUID chuẩn, nhưng phân vùng FAT thì <i>không</i> — bạn tham chiếu nó bằng số sê-ri ổ đĩa FAT, trong ví dụ là <code>4859-EFEA</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span> Chính con số ngắn ấy cũng là điểm gắn kết: trên Ubuntu có người đăng nhập, thẻ nhớ đó sẽ được gắn ở <code>/media/<i>user</i>/4859-EFEA</code> khi cắm vào, và <code>udevd</code> của chương 3 xử lý sự kiện cắm thiết bị ban đầu.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Khi nào cần đổi UUID</h4>
+          <p>Ward nói thực tế rằng bạn thường <i>không</i> gắn thủ công bằng UUID, vì bạn thường biết tên thiết bị và gõ tên thì dễ hơn gõ cái UUID điên rồ kia. Nhưng hiểu UUID vẫn quan trọng: đó là cách được ưa dùng để gắn tự động các hệ thống tệp không-LVM trong <code>/etc/fstab</code> lúc khởi động.<span class="cite"><a href="#ref-1">1</a></span> Bạn cũng có thể <i>đổi</i> UUID khi cần — chẳng hạn khi vừa sao chép trọn một hệ thống tệp từ nơi khác về và giờ cần phân biệt nó với bản gốc; cách làm trên ext2/3/4 nằm ở trang <code>tune2fs(8)</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">mount options</span>
+      <h3>
+        <span class="standard-copy">Tuỳ chọn gắn — ngắn và dài, chung và riêng</span>
+        <span class="easy-only">Các lựa chọn khi treo mục lục</span>
+        <span class="en-only" lang="en">Mount options — short and long, general and specific</span>
+      </h3>
+      <p class="standard-copy">Ward thừa nhận “tổng số tuỳ chọn gắn nhiều đến choáng váng”; trang <code>mount(8)</code> là tài liệu tham khảo tốt, nhưng khó biết bắt đầu từ đâu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span> Các tuỳ chọn chia thành hai nhóm thô: <b>chung</b> (thường dùng được cho mọi kiểu hệ thống tệp) và <b>riêng theo hệ thống tệp</b>. Kích hoạt một tuỳ chọn bằng <code>-o</code> — ví dụ <code>-o remount,rw</code> gắn lại ở chế độ đọc-ghi một hệ thống tệp đang chỉ-đọc.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Khi treo mục lục lên, bạn nói thêm được vài điều kiện: “chỉ cho đọc thôi, không cho sửa”, hay “không cho chạy chương trình từ đây”. Đó là các tuỳ chọn. <b>Nhớ nhé: chỉ-đọc là cái khoá an toàn nhất.</b></p>
+      <p class="en-only" lang="en">Ward admits "the total number of mount options is staggering"; the <code>mount(8)</code> manual page is a good reference, but it's hard to know where to start.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span> Options fall into two rough categories: <b>general</b> (typically working for all filesystem types) and <b>filesystem-specific</b>. You activate an option with <code>-o</code> — for example <code>-o remount,rw</code> remounts a read-only filesystem in read-write mode.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Phần trong ngoặc đơn ở cuối mỗi dòng <code>mount</code> — <code>(rw,noexec,nosuid,nodev)</code> — chính là bộ tuỳ chọn đang có hiệu lực.</span>
+        <span class="easy-only">Phần trong ngoặc ở cuối mỗi dòng khi bạn gõ <code>mount</code>.</span>
+        <span class="en-only" lang="en">The parenthesised tail of every <code>mount</code> line — <code>(rw,noexec,nosuid,nodev)</code> — is the option set currently in force.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ba tuỳ chọn ngắn quan trọng nhất</h4>
+          <p><code>-r</code> gắn hệ thống tệp ở chế độ chỉ-đọc; bạn không cần chỉ định nó khi truy cập thiết bị vốn chỉ-đọc như CD-ROM, hệ thống sẽ tự làm và cũng báo cho bạn biết. <code>-n</code> bảo đảm <code>mount</code> không tìm cách cập nhật cơ sở dữ liệu gắn kết lúc chạy của hệ thống, <code>/etc/mtab</code>; mặc định thao tác gắn <i>thất bại</i> khi không ghi được tệp này, nên tuỳ chọn này quan trọng lúc khởi động — khi phân vùng gốc ban đầu còn ở chế độ chỉ-đọc — và cũng tiện khi sửa lỗi hệ thống trong chế độ một người dùng. <code>-t <i>type</i></code> chỉ định kiểu hệ thống tệp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao phải có tuỳ chọn dài</h4>
+          <p>Lý do Ward đưa ra rất thực tế: các tuỳ chọn ngắn kiểu <code>-r</code> quá hạn chế cho số lượng tuỳ chọn ngày một tăng — <i>không đủ chữ cái trong bảng chữ cái</i> — và một chữ cái đơn lẻ cũng khó đoán nghĩa. Vì vậy nhiều tuỳ chọn chung và <i>tất cả</i> tuỳ chọn riêng theo hệ thống tệp dùng dạng dài, viết sau <code>-o</code> và ngăn cách bằng dấu phẩy. Ví dụ đầy đủ của sách: <code>mount -t vfat /dev/sde1 /dos -o ro,uid=1000</code>, trong đó <code>ro</code> là chỉ-đọc và <code>uid=1000</code> bảo nhân coi mọi tệp trên hệ thống tệp đó như thuộc sở hữu của người dùng có ID 1000.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Bốn tuỳ chọn dài hữu dụng nhất</h4>
+          <p><code>exec</code> / <code>noexec</code> bật hoặc tắt việc thực thi chương trình trên hệ thống tệp; <code>suid</code> / <code>nosuid</code> bật hoặc tắt các chương trình setuid; <code>ro</code> gắn ở chế độ chỉ-đọc (tương đương <code>-r</code>); <code>rw</code> gắn ở chế độ đọc-ghi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">/etc/fstab</span>
+      <h3>
+        <span class="standard-copy">/etc/fstab — sáu trường, và hai con số hay bị đặt sai</span>
+        <span class="easy-only">Danh sách “tự treo khi bật máy”</span>
+        <span class="en-only" lang="en">/etc/fstab — six fields, two of them commonly mis-set</span>
+      </h3>
+      <p class="standard-copy">Để gắn hệ thống tệp lúc khởi động và bớt việc nhàm chán cho lệnh <code>mount</code>, Linux giữ một danh sách cố định các hệ thống tệp và tuỳ chọn trong <code>/etc/fstab</code> — một tệp văn bản thuần với định dạng rất đơn giản.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span> Mỗi dòng ứng với một hệ thống tệp và chia thành <b>sáu trường</b>, từ trái sang phải: thiết bị hoặc UUID; điểm gắn kết; kiểu hệ thống tệp; các tuỳ chọn dài ngăn bằng dấu phẩy; thông tin sao lưu cho lệnh <code>dump</code>; và thứ tự kiểm tra toàn vẹn hệ thống tệp.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Đây là tờ danh sách “mỗi lần bật máy thì treo sẵn những mục lục này lên”. Nhờ nó bạn không phải treo lại bằng tay mỗi sáng. <b>Nhớ nhé: sửa tệp này sai thì máy có thể không khởi động được — sửa xong nhớ đọc lại.</b></p>
+      <p class="en-only" lang="en">To mount filesystems at boot time and take the drudgery out of the <code>mount</code> command, Linux keeps a permanent list of filesystems and options in <code>/etc/fstab</code> — a plaintext file in a very simple format.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span> Each line corresponds to one filesystem and is broken into <b>six fields</b>, left to right: the device or UUID; the mount point; the filesystem type; long options separated by commas; backup information for the <code>dump</code> command; and the filesystem integrity test order.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Nếu hệ thống tệp bạn cần đã có trong <code>/etc/fstab</code>, bạn đi đường tắt được: chỉ cần <code>mount /cdrom</code>. Và <code>mount -a</code> cố gắng gắn đồng thời mọi mục không mang tuỳ chọn <code>noauto</code>.</span>
+        <span class="easy-only">Khi bạn chỉ cần gõ <code>mount /cdrom</code> mà máy vẫn hiểu.</span>
+        <span class="en-only" lang="en">If the filesystem you want is already in <code>/etc/fstab</code> you can take a shortcut: just <code>mount /cdrom</code>. And <code>mount -a</code> tries to mount every entry that doesn't carry <code>noauto</code>.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Trường 5 và trường 6</h4>
+          <p>Hai trường cuối là nơi người ta hay đặt bừa. Trường <b>dump</b>: <code>dump</code> là một tiện ích sao lưu đã lỗi thời từ lâu, trường này không còn liên quan nữa — Ward bảo <i>luôn đặt nó là 0</i>. Trường <b>thứ tự kiểm tra</b>: để bảo đảm <code>fsck</code> luôn chạy trên gốc trước tiên, luôn đặt <code>1</code> cho hệ thống tệp gốc và <code>2</code> cho mọi hệ thống tệp gắn cục bộ khác trên đĩa cứng hay SSD; dùng <code>0</code> để tắt kiểm tra lúc khởi động cho mọi hệ thống tệp còn lại, kể cả thiết bị chỉ-đọc, swap, và hệ thống tệp <code>/proc</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Bốn tuỳ chọn chỉ sống trong fstab</h4>
+          <p><code>defaults</code> đặt các mặc định gắn: chế độ đọc-ghi, bật tệp thiết bị, bật chương trình thực thi, bật bit setuid, v.v. — dùng khi bạn không muốn tuỳ chọn đặc biệt nào nhưng vẫn phải điền đủ trường. <code>errors</code> là tham số riêng của ext2/3/4, đặt hành vi của nhân khi hệ thống gặp trục trặc lúc gắn: mặc định thường là <code>errors=continue</code> (trả mã lỗi và chạy tiếp), <code>errors=remount-ro</code> bảo nhân thử gắn lại ở chế độ chỉ-đọc, còn <code>errors=panic</code> bảo nhân — và hệ thống của bạn — dừng hẳn. <code>noauto</code> bảo <code>mount -a</code> bỏ qua mục đó, hữu ích để chặn việc gắn lúc khởi động cho phương tiện tháo lắp. <code>user</code> cho phép người dùng không đặc quyền chạy <code>mount</code> trên một mục cụ thể; vì người ta có thể đặt một tệp setuid-root lên phương tiện tháo lắp bằng hệ thống khác, tuỳ chọn này đồng thời bật <code>nosuid</code>, <code>noexec</code> và <code>nodev</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hai lựa chọn thay thế</h4>
+          <p>Dù <code>/etc/fstab</code> là cách truyền thống, sách nêu hai lựa chọn khác. Thứ nhất là thư mục <code>/etc/fstab.d</code>, chứa các tệp cấu hình riêng lẻ cho từng hệ thống tệp — ý tưởng rất giống nhiều thư mục cấu hình khác trong sách. Thứ hai là cấu hình các <span lang="en">unit</span> systemd cho hệ thống tệp; tuy nhiên cấu hình unit của systemd thường được <i>sinh ra</i> từ (hoặc dựa trên) chính tệp <code>/etc/fstab</code>, nên bạn có thể thấy chúng chồng lấn nhau.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Một chi tiết dễ bị bỏ qua nhưng giải thích rất nhiều hiện tượng: Linux <b>đệm</b> các thao tác ghi xuống đĩa. Nhân thường không ghi thay đổi ngay khi tiến trình yêu cầu, mà giữ chúng trong RAM cho tới khi thấy đúng lúc. Hệ đệm này trong suốt với người dùng và đem lại lợi ích hiệu năng rất đáng kể.<span class="cite"><a href="#ref-1">1</a></span> Khi bạn <code>umount</code>, nhân tự động đồng bộ với đĩa; bạn cũng ép được bất cứ lúc nào bằng <code>sync</code>, lệnh này mặc định đồng bộ mọi đĩa trên hệ thống.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span> Nếu vì lý do nào đó bạn không gỡ được hệ thống tệp trước khi tắt máy, hãy chạy <code>sync</code> trước.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Khi bạn lưu một tệp, máy chưa chép xuống đĩa ngay đâu — nó giữ trong bộ nhớ một lát cho nhanh. Vì thế rút USB đột ngột rất dễ mất dữ liệu. <b>Nhớ nhé: gỡ ra đàng hoàng rồi hãy rút.</b></p>
+    <p class="en-only" lang="en">A detail easy to skip that explains a great deal: Linux <b>buffers</b> writes to the disk. The kernel usually doesn't write changes immediately when processes request them; it stores them in RAM until it determines a good time. The buffering is transparent to the user and provides a very significant performance gain.<span class="cite"><a href="#ref-1">1</a></span> When you <code>umount</code>, the kernel automatically synchronises with the disk; you can also force this at any time with <code>sync</code>, which by default synchronises all the disks on the system.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span> If for some reason you can't unmount before powering off, run <code>sync</code> first.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Mặt còn lại của cùng cơ chế là <b>cache</b>: nhân dùng RAM để lưu đệm các khối khi chúng được đọc từ đĩa. Nhờ vậy, nếu một hoặc nhiều tiến trình truy cập một tệp lặp đi lặp lại, nhân không phải xuống đĩa hết lần này đến lần khác — nó đọc thẳng từ cache, tiết kiệm thời gian và tài nguyên.<span class="cite"><a href="#ref-1">1</a></span> Hãy ghi nhớ chi tiết này: nó sẽ quay lại ở phần swap, nơi nhân đôi khi chọn tráo một tiến trình ra đĩa để lấy thêm chỗ cho cache.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="bao-tri" aria-labelledby="bao-tri-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="bao-tri-title">
+      <span class="standard-copy">Sức chứa, sửa chữa, hệ thống tệp không có đĩa, và không gian tráo đổi</span>
+      <span class="easy-only">Còn bao nhiêu chỗ, hỏng thì sửa, và bộ nhớ mượn từ đĩa</span>
+      <span class="en-only" lang="en">Capacity, repair, disk-less filesystems, and swap space</span>
+    </h2>
+    <p class="standard-copy">Ba việc cuối của chương đều là việc thường ngày của quản trị viên: biết còn bao nhiêu chỗ trống, biết làm gì khi hệ thống tệp hỏng, và biết rằng không phải hệ thống tệp nào cũng nằm trên phương tiện vật lý. Ward chốt lại bằng <b>swap</b> — cách hệ thống bộ nhớ ảo mượn không gian đĩa khi RAM thật cạn.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Phần cuối là ba việc bạn sẽ làm hằng ngày: xem còn bao nhiêu chỗ trống, sửa khi mục lục bị rách, và hiểu vì sao máy có những “mục lục” không nằm trên đĩa nào cả. <b>Nhớ nhé: biết xem chỗ trống là kỹ năng đầu tiên.</b></p>
+    <p class="en-only" lang="en">The chapter's last three topics are all everyday administrator work: knowing how much space is left, knowing what to do when a filesystem breaks, and knowing that not every filesystem lives on physical media. Ward closes with <b>swap</b> — how the virtual memory system borrows disk space when real memory runs out.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Swapping</i> là việc hệ thống bộ nhớ ảo của Linux tự động chuyển các mảnh bộ nhớ ra và vào không gian lưu trữ trên đĩa khi bạn cạn bộ nhớ thật. Tên gọi đến từ chính hành động: các mảnh của chương trình đang nhàn rỗi được <i>tráo</i> ra đĩa để đổi lấy những mảnh đang hoạt động nằm trên đĩa. Vùng đĩa dùng để lưu các trang bộ nhớ ấy gọi là <i>swap space</i> — hay gọn hơn là <i>swap</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Bàn làm việc của bạn nhỏ. Khi hết chỗ, bạn cất bớt mấy quyển sách đang không đọc xuống ngăn kéo, lấy chỗ cho quyển đang đọc. Máy tính cũng làm y như vậy với bộ nhớ: cất bớt xuống đĩa. <b>Nhớ nhé: swap là cái ngăn kéo dưới gầm bàn.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <i>Swapping</i> is the Linux virtual memory system automatically moving pieces of memory to and from disk storage when you run out of real memory. The name comes from the act itself: pieces of idle programs are swapped to the disk in exchange for active pieces residing on the disk. The disk area used to store those memory pages is called <i>swap space</i> — or just <i>swap</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">$ df          → chỗ trống theo hệ thống tệp<br>$ du -s *     → ai đang ngốn chỗ<br># fsck /dev/sdb1   → kiểm tra (KHÔNG gắn!)<br># mkswap dev ; swapon dev</p>
+      <p class="easy-only">df  → còn bao nhiêu chỗ<br>du  → ai chiếm chỗ<br>fsck → kiểm tra mục lục<br>mkswap → làm ngăn kéo</p>
+      <p class="en-only" lang="en">$ df          → free space per filesystem<br>$ du -s *     → who is eating the space<br># fsck /dev/sdb1   → check (NOT mounted!)<br># mkswap dev ; swapon dev</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">df / du</span>
+      <h3>
+        <span class="standard-copy">Sức chứa — và 5 phần trăm bị giấu đi</span>
+        <span class="easy-only">Xem còn bao nhiêu chỗ trống</span>
+        <span class="en-only" lang="en">Capacity — and the 5 percent that's hidden</span>
+      </h3>
+      <p class="standard-copy">Lệnh <code>df</code> cho biết kích thước và mức sử dụng của các hệ thống tệp đang gắn. Các trường của nó: <code>Filesystem</code> là thiết bị; <code>1K-blocks</code> là tổng sức chứa tính theo khối 1.024 byte; <code>Used</code> là số khối đã chiếm; <code>Available</code> là số khối còn trống; <code>Use%</code> là phần trăm khối đang dùng; và <code>Mounted on</code> là điểm gắn kết.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span> Ward chỉ ra một điều lạ trong đầu ra mẫu: 127.989.560 cộng 75.339.204 <i>không</i> bằng 214.234.312, và 127.989.560 cũng không phải 63 phần trăm của 214.234.312 — cả hai trường hợp đều thiếu mất 5 phần trăm tổng sức chứa.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Gõ <code>df</code> để xem còn bao nhiêu chỗ. Có một điều lạ: cộng phần đã dùng với phần còn trống lại không ra tổng. Vì máy giấu đi một phần nhỏ để dành cho trường hợp khẩn cấp. <b>Nhớ nhé: máy luôn giữ lại một ít chỗ dự phòng cho riêng nó.</b></p>
+      <p class="en-only" lang="en">The <code>df</code> command shows the size and utilisation of currently mounted filesystems. Its fields: <code>Filesystem</code> is the device; <code>1K-blocks</code> the total capacity in 1,024-byte blocks; <code>Used</code> the occupied blocks; <code>Available</code> the free blocks; <code>Use%</code> the percentage in use; <code>Mounted on</code> the mount point.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span> Ward points at something odd in the sample output: 127,989,560 plus 75,339,204 does <i>not</i> equal 214,234,312, and 127,989,560 is not 63 percent of 214,234,312 — in both cases 5 percent of the total capacity is unaccounted for.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi khó tìm đúng dòng trong đầu ra <code>df</code>, chạy <code>df <i>dir</i></code> để giới hạn về hệ thống tệp của thư mục đó. Cách dùng rất phổ biến là <code>df .</code> — giới hạn về thiết bị đang chứa thư mục hiện tại.</span>
+        <span class="easy-only">Khi đĩa đầy và máy báo không lưu được tệp nữa.</span>
+        <span class="en-only" lang="en">When it's hard to find the right line in <code>df</code> output, run <code>df <i>dir</i></code> to limit it to that directory's filesystem. A very common use is <code>df .</code> — limiting output to the device holding your current directory.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Khối dự trữ</h4>
+          <p>Chỗ thiếu ấy thực ra vẫn còn, nhưng bị giấu trong các <b>khối dự trữ</b> (<span lang="en">reserved blocks</span>): chỉ siêu người dùng mới dùng được khối dự trữ của hệ thống tệp khi nó bắt đầu đầy. Tính năng này giữ cho các máy chủ hệ thống khỏi hỏng ngay lập tức khi hết dung lượng đĩa.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đi tìm kẻ ngốn chỗ với du</h4>
+          <p>Nếu đĩa đầy và bạn cần biết đống tệp đa phương tiện đang nằm đâu, dùng <code>du</code>. Không tham số, <code>du</code> in mức sử dụng đĩa của mọi thư mục trong cây, bắt đầu từ thư mục làm việc hiện tại. <code>du -s</code> bật chế độ tóm tắt, chỉ in tổng cộng. Muốn đánh giá mọi thứ trong một thư mục cụ thể, hãy chuyển vào đó và chạy <code>du -s *</code> — nhớ rằng lệnh này sẽ bỏ sót các thư mục bắt đầu bằng dấu chấm.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-22">22</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>512 hay 1.024 byte?</h4>
+          <p>Chuẩn POSIX định nghĩa kích thước khối là 512 byte. Nhưng kích thước đó khó đọc, nên mặc định đầu ra của <code>df</code> và <code>du</code> trên hầu hết bản phân phối Linux dùng khối 1.024 byte. Nếu bạn nhất định muốn hiển thị theo khối 512 byte, hãy đặt biến môi trường <code>POSIXLY_CORRECT</code>. Để chỉ định rõ khối 1.024 byte, dùng <code>-k</code> (cả hai tiện ích đều hỗ trợ). Cả hai cũng có <code>-m</code> để liệt kê theo khối 1MB và <code>-h</code> để đoán cách hiển thị dễ đọc nhất cho con người.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span><span class="cite"><a href="#ref-22">22</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">fsck</span>
+      <h3>
+        <span class="standard-copy">Kiểm tra và sửa chữa — năm lượt, một cảnh báo tuyệt đối</span>
+        <span class="easy-only">Khi mục lục bị rách thì sửa thế nào</span>
+        <span class="en-only" lang="en">Checking and repairing — five passes, one absolute warning</span>
+      </h3>
+      <p class="standard-copy">Công cụ kiểm tra hệ thống tệp là <code>fsck</code>. Cũng như <code>mkfs</code>, có một phiên bản <code>fsck</code> riêng cho từng kiểu hệ thống tệp; khi chạy trên dòng Extended (ext2/ext3/ext4), <code>fsck</code> nhận ra kiểu và khởi động tiện ích <code>e2fsck</code> — nên thường bạn không cần gõ <code>e2fsck</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span> Chạy ở chế độ thủ công tương tác bằng cách đưa thiết bị hoặc điểm gắn kết làm tham số: <code>fsck /dev/sdb1</code>. Ở chế độ đó, nó in báo cáo chi tiết theo từng lượt: lượt 1 kiểm tra inode, khối và kích thước; lượt 2 kiểm tra cấu trúc thư mục; lượt 3 kiểm tra tính liên thông của thư mục; lượt 4 kiểm tra số đếm tham chiếu; lượt 5 kiểm tra thông tin tóm tắt nhóm.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nếu mục lục bị rách — thường vì rút điện đột ngột — có một chương trình chuyên đi vá lại, tên là <code>fsck</code>. Nó soát năm lượt, hỏi bạn từng chỗ hỏng. Nhưng tuyệt đối không được vá một quyển mục lục đang treo trên tường. <b>Nhớ nhé: gỡ xuống rồi mới sửa.</b></p>
+      <p class="en-only" lang="en">The tool to check a filesystem is <code>fsck</code>. As with <code>mkfs</code>, there's a different version for each filesystem type; run on the Extended series (ext2/ext3/ext4), <code>fsck</code> recognises the type and starts <code>e2fsck</code>, so you generally don't need to type <code>e2fsck</code> yourself.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span> Run it in interactive manual mode by giving the device or mount point as the argument: <code>fsck /dev/sdb1</code>. In that mode it prints verbose per-pass reports: pass 1 checks inodes, blocks and sizes; pass 2 the directory structure; pass 3 directory connectivity; pass 4 reference counts; pass 5 group summary information.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Cảnh báo của tác giả</span><span class="en-only" lang="en">The author's warning</span></b>
+        <span class="standard-copy">Sách để nguyên chữ WARNING: <b>đừng bao giờ dùng <code>fsck</code> trên một hệ thống tệp đang được gắn</b> — nhân có thể thay đổi dữ liệu đĩa ngay trong lúc bạn chạy kiểm tra, gây ra những lệch pha lúc chạy có thể làm sập hệ thống và hỏng tệp. Chỉ có một ngoại lệ: nếu bạn gắn phân vùng gốc ở chế độ chỉ-đọc trong chế độ một người dùng, bạn được dùng <code>fsck</code> trên nó.</span>
+        <span class="easy-only">Không bao giờ sửa mục lục đang treo. Gỡ xuống trước đã.</span>
+        <span class="en-only" lang="en">The book keeps the word WARNING: <b>never use <code>fsck</code> on a mounted filesystem</b> — the kernel may alter the disk data as you run the check, causing runtime mismatches that can crash your system and corrupt files. There is exactly one exception: if you mount the root partition read-only in single-user mode, you may use <code>fsck</code> on it.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>lost+found và những inode lạc</h4>
+          <p>Khi <code>fsck</code> tìm thấy vấn đề ở chế độ thủ công, nó dừng lại và hỏi một câu liên quan tới việc sửa — những câu về cấu trúc bên trong hệ thống tệp, như nối lại các inode lạc và xoá khối. Khi <code>fsck</code> hỏi bạn về việc nối lại một inode, nghĩa là nó vừa tìm thấy một tệp dường như không có tên. Khi nối lại tệp như vậy, <code>fsck</code> đặt nó vào thư mục <code>lost+found</code> của hệ thống tệp, với một con số làm tên tệp. Lúc đó bạn phải đoán tên dựa vào nội dung; tên gốc gần như chắc chắn đã mất.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ba cờ đáng nhớ: -p, -n, -b</h4>
+          <p><code>e2fsck -p</code> tự động sửa những vấn đề thông thường mà không hỏi, và bỏ cuộc khi gặp lỗi nghiêm trọng — các bản phân phối Linux chạy một biến thể của <code>fsck -p</code> lúc khởi động (bạn cũng có thể thấy <code>fsck -a</code>, làm y hệt).<span class="cite"><a href="#ref-1">1</a></span> Nếu bạn nghĩ có chuyện thật sự tệ đã xảy ra, hãy thử <code>fsck -n</code> để kiểm tra mà <i>không</i> sửa gì cả. Nếu bạn nghi chỉ superblock hỏng, có thể khôi phục bằng một trong các bản sao lưu superblock mà <code>mkfs</code> đã tạo: <code>fsck -b <i>num</i></code> thay superblock hỏng bằng bản dự phòng ở khối <i>num</i>. Và nếu không biết tìm bản sao lưu ở đâu, bạn có thể chạy <code>mkfs -n</code> trên thiết bị để xem danh sách số hiệu superblock dự phòng mà không phá dữ liệu — Ward nhấn mạnh hãy chắc chắn có <code>-n</code>, nếu không bạn sẽ thật sự xé nát hệ thống tệp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao ext3/ext4 hiếm khi cần kiểm tra tay</h4>
+          <p>Bạn thường <i>không</i> cần kiểm tra ext3 và ext4 thủ công, vì journal bảo đảm toàn vẹn dữ liệu — journal là một vùng đệm dữ liệu nhỏ chưa được ghi vào đúng chỗ của nó trong hệ thống tệp. Nếu bạn không tắt máy sạch sẽ, hãy chờ đợi journal còn chứa dữ liệu. Để xả journal của một hệ thống tệp ext3 hay ext4 về cơ sở dữ liệu thường, chạy <code>e2fsck -fy /dev/<i>disk_device</i></code>. Tuy vậy có lúc bạn lại muốn gắn một hệ thống tệp ext3/ext4 hỏng ở chế độ ext2, vì nhân sẽ không gắn một hệ thống tệp ext3 hay ext4 có journal chưa rỗng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tình huống xấu nhất</h4>
+          <p>Với sự cố đĩa nghiêm trọng hơn, sách cho ba lựa chọn: trích toàn bộ ảnh hệ thống tệp ra khỏi đĩa bằng <code>dd</code> và chuyển sang một phân vùng trên đĩa khác cùng kích thước; vá hệ thống tệp hết mức có thể, gắn ở chế độ chỉ-đọc và cứu được gì hay nấy; hoặc thử <code>debugfs</code>. Công cụ <code>debugfs</code> cho phép bạn nhìn xuyên qua các tệp trên hệ thống tệp và chép chúng đi nơi khác; mặc định nó mở hệ thống tệp ở chế độ chỉ-đọc.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-25">25</a></span> Ward nói thẳng về lựa chọn <code>fsck -y</code> (trả lời <i>có</i> cho mọi câu hỏi): chỉ làm như biện pháp cuối cùng, vì trong quá trình sửa có thể nảy sinh những vấn đề mà bạn muốn tự tay xử lý hơn.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">special-purpose filesystems</span>
+      <h3>
+        <span class="standard-copy">Hệ thống tệp chuyên dụng — proc, sysfs, tmpfs, squashfs, overlay</span>
+        <span class="easy-only">Những “mục lục” không nằm trên đĩa nào cả</span>
+        <span class="en-only" lang="en">Special-purpose filesystems — proc, sysfs, tmpfs, squashfs, overlay</span>
+      </h3>
+      <p class="standard-copy">Không phải hệ thống tệp nào cũng đại diện cho lưu trữ trên phương tiện vật lý. Hầu hết phiên bản Unix có những hệ thống tệp đóng vai trò <b>giao diện hệ thống</b>: thay vì chỉ là phương tiện cất dữ liệu lên thiết bị, một hệ thống tệp có thể đại diện cho thông tin hệ thống, như ID tiến trình và chẩn đoán của nhân.<span class="cite"><a href="#ref-1">1</a></span> Ward truy nguyên ý tưởng này về cơ chế <code>/dev</code> — một mô hình sơ khai của việc dùng tệp làm giao diện vào/ra; ý tưởng <code>/proc</code> đến từ phiên bản thứ tám của Unix nghiên cứu, do Tom J. Killian hiện thực, và được đẩy nhanh khi Bell Labs tạo ra Plan 9.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-26">26</a></span></p>
+      <p class="easy-only">Có những mục lục không ghi về đồ đạc trên đĩa, mà ghi về chính cái máy: máy đang chạy chương trình nào, bộ xử lý là loại gì. Bạn mở chúng ra đọc như đọc tệp bình thường, nhưng chúng không chiếm chỗ trên đĩa. <b>Nhớ nhé: có những thư mục chỉ là cửa sổ nhìn vào ruột máy.</b></p>
+      <p class="en-only" lang="en">Not all filesystems represent storage on physical media. Most versions of Unix have filesystems that serve as <b>system interfaces</b>: rather than only storing data on a device, a filesystem can represent system information such as process IDs and kernel diagnostics.<span class="cite"><a href="#ref-1">1</a></span> Ward traces the idea back to the <code>/dev</code> mechanism — an early model of using files for I/O interfaces; the <code>/proc</code> idea came from the eighth edition of research Unix, implemented by Tom J. Killian, and accelerated when Bell Labs created Plan 9.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-26">26</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi lần bạn <code>cat /proc/cpuinfo</code> — bạn vừa đọc một “tệp” không hề tồn tại trên đĩa nào.</span>
+        <span class="easy-only">Khi bạn xem thông tin bộ xử lý của máy bằng cách đọc một tệp.</span>
+        <span class="en-only" lang="en">Every time you <code>cat /proc/cpuinfo</code> — you just read a "file" that exists on no disk.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>proc và sysfs</h4>
+          <p><b>proc</b> được gắn ở <code>/proc</code>; cái tên là dạng viết tắt của <i>process</i>. Mỗi thư mục đánh số bên trong <code>/proc</code> ứng với ID của một tiến trình hiện tại trên hệ thống, và các tệp trong mỗi thư mục biểu diễn nhiều khía cạnh khác nhau của tiến trình đó; <code>/proc/self</code> đại diện cho tiến trình hiện tại. Hệ thống tệp proc của Linux còn chứa rất nhiều thông tin bổ sung về nhân và phần cứng trong những tệp như <code>/proc/cpuinfo</code>. Ward nhắc một điểm dễ bỏ qua: hướng dẫn thiết kế nhân khuyến nghị chuyển những thông tin không liên quan tới tiến trình ra khỏi <code>/proc</code> và đưa vào <code>/sys</code>, nên thông tin hệ thống trong <code>/proc</code> có thể không phải giao diện mới nhất.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-27">27</a></span> <b>sysfs</b> được gắn ở <code>/sys</code> — bạn đã gặp nó ở chương 3.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>tmpfs — bộ nhớ đội lốt thư mục</h4>
+          <p><b>tmpfs</b> được gắn ở <code>/run</code> và vài chỗ khác. Với tmpfs, bạn dùng bộ nhớ vật lý và không gian swap làm nơi lưu trữ tạm. Bạn gắn tmpfs ở đâu tuỳ thích, dùng các tuỳ chọn dài <code>size</code> và <code>nr_blocks</code> để khống chế kích thước tối đa.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-28">28</a></span> Nhưng Ward cảnh báo: hãy cẩn thận đừng liên tục đổ mọi thứ vào một vị trí tmpfs, vì rốt cuộc hệ thống sẽ hết bộ nhớ và các chương trình sẽ bắt đầu sập.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>squashfs và overlay</h4>
+          <p><b>squashfs</b> là một kiểu hệ thống tệp chỉ-đọc, trong đó nội dung được lưu ở dạng nén và giải nén theo yêu cầu qua một thiết bị loopback; một ví dụ sử dụng là hệ quản lý gói <span lang="en">snap</span>, vốn gắn các gói dưới thư mục <code>/snap</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-29">29</a></span> <b>overlay</b> là hệ thống tệp hợp nhất nhiều thư mục thành một thư mục tổng hợp; các <span lang="en">container</span> thường dùng hệ thống tệp overlay, và chương 17 sẽ cho thấy chúng hoạt động thế nào.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-30">30</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">swap space</span>
+      <h3>
+        <span class="standard-copy">Không gian tráo đổi — ba bước, và một quy tắc đã lỗi thời</span>
+        <span class="easy-only">Ngăn kéo dưới gầm bàn</span>
+        <span class="en-only" lang="en">Swap space — three steps, and a rule that has aged out</span>
+      </h3>
+      <p class="standard-copy">Không phải phân vùng nào trên đĩa cũng chứa hệ thống tệp.<span class="cite"><a href="#ref-1">1</a></span> Để dùng trọn một phân vùng làm swap, sách nêu <b>ba bước</b>: (1) bảo đảm phân vùng rỗng; (2) chạy <code>mkswap <i>dev</i></code> — lệnh này đặt một <i>chữ ký swap</i> lên phân vùng, đánh dấu nó là không gian swap chứ không phải hệ thống tệp; (3) chạy <code>swapon <i>dev</i></code> để đăng ký không gian đó với nhân.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-31">31</a></span><span class="cite"><a href="#ref-32">32</a></span> Sau đó bạn thêm một mục swap vào <code>/etc/fstab</code> để hệ thống dùng nó ngay khi máy khởi động; mục mẫu của sách là <code>/dev/sda5 none swap sw 0 0</code>.<span class="cite"><a href="#ref-1">1</a></span> Chữ ký swap cũng có UUID, nên nhiều hệ thống nay dùng UUID thay cho tên thiết bị thô.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bạn có thể dành hẳn một ngăn tủ làm chỗ để đồ tạm cho máy. Ba bước: chắc chắn ngăn trống, dán nhãn “ngăn để tạm”, rồi báo cho máy biết. Từ đó máy tự dùng khi bàn hết chỗ. <b>Nhớ nhé: ngăn kéo chậm hơn bàn rất nhiều — dùng ít thôi thì tốt.</b></p>
+      <p class="en-only" lang="en">Not every partition on a disk contains a filesystem.<span class="cite"><a href="#ref-1">1</a></span> To use an entire partition as swap, the book gives <b>three steps</b>: (1) make sure the partition is empty; (2) run <code>mkswap <i>dev</i></code> — this puts a <i>swap signature</i> on the partition, marking it as swap space rather than a filesystem; (3) run <code>swapon <i>dev</i></code> to register the space with the kernel.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-31">31</a></span><span class="cite"><a href="#ref-32">32</a></span> You then add a swap entry to <code>/etc/fstab</code> so the system uses it as soon as the machine boots; the book's sample entry is <code>/dev/sda5 none swap sw 0 0</code>.<span class="cite"><a href="#ref-1">1</a></span> Swap signatures have UUIDs, so many systems now use those instead of raw device names.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đầu ra lệnh <code>free</code> có một dòng <code>Swap:</code> — nó cho biết mức dùng swap hiện tại, tính bằng kilobyte.</span>
+        <span class="easy-only">Dòng có chữ <code>Swap</code> khi bạn gõ lệnh <code>free</code>.</span>
+        <span class="en-only" lang="en">The <code>free</code> command's output has a <code>Swap:</code> line — it reports current swap usage in kilobytes.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Dùng một tệp thay cho phân vùng</h4>
+          <p>Bạn dùng được một tệp thường làm swap, trong tình huống mà nếu không thì phải phân vùng lại đĩa để tạo phân vùng swap — và Ward nói bạn sẽ không thấy vấn đề gì khi làm vậy. Ba lệnh của sách: <code>dd if=/dev/zero of=<i>swap_file</i> bs=1024k count=<i>num_mb</i></code> để tạo tệp rỗng, rồi <code>mkswap <i>swap_file</i></code>, rồi <code>swapon <i>swap_file</i></code>; ở đây <i>num_mb</i> là kích thước mong muốn tính bằng megabyte.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-33">33</a></span> Để gỡ một phân vùng hay tệp swap khỏi nhóm đang hoạt động của nhân, dùng <code>swapoff</code> — nhưng hệ thống phải còn đủ bộ nhớ trống (thật và swap cộng lại) để chứa mọi trang đang hoạt động trong phần bạn sắp gỡ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-32">32</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>“Gấp đôi RAM” đến từ đâu</h4>
+          <p>Ward kể lại nguồn gốc của quy tắc kinh nghiệm cũ: có thời trí khôn thông thường của Unix nói rằng bạn nên luôn dành ít nhất <i>gấp đôi</i> bộ nhớ thật cho swap. Quy tắc ấy có từ thời nhiều người dùng cùng đăng nhập vào một máy; không phải ai cũng đang hoạt động, nên việc tráo bộ nhớ của những người nhàn rỗi ra đĩa là tiện lợi.<span class="cite"><a href="#ref-1">1</a></span> Ngày nay, dung lượng đĩa và bộ nhớ khổng lồ đã làm vấn đề mờ đi, và cách ta dùng máy cũng đã khác: một mặt đĩa rẻ đến mức dễ cấp phát hơn gấp đôi, mặt khác bạn có thể chẳng bao giờ chạm tới swap vì RAM thật quá dư dả.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-34">34</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Khi swap trở thành vấn đề</h4>
+          <p>Nếu bạn chạy nhiều tiến trình, tráo ra các phần của tiến trình nhàn rỗi — hay cả những mảnh nhàn rỗi của tiến trình đang hoạt động — nói chung là ổn. Nhưng nếu bạn <i>thường xuyên</i> truy cập swap vì quá nhiều tiến trình hoạt động cùng muốn dùng bộ nhớ một lúc, bạn sẽ gặp vấn đề hiệu năng nghiêm trọng: vào/ra đĩa, kể cả của SSD, đơn giản là quá chậm để theo kịp phần còn lại của hệ thống. Ward liệt kê đúng ba giải pháp, trong đó cái cuối là một câu đùa nghiêm túc: mua thêm bộ nhớ, kết thúc bớt tiến trình, hoặc than phiền.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>OOM killer và chuyện không cấu hình swap</h4>
+          <p>Đôi khi nhân Linux chọn tráo một tiến trình ra đĩa để đổi lấy thêm một chút cache đĩa; để ngăn hành vi đó, một số quản trị viên cấu hình vài hệ thống hoàn toàn không có swap — ví dụ máy chủ hiệu năng cao thì không bao giờ nên chạm vào swap và nên tránh truy cập đĩa hết mức có thể.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-35">35</a></span> Nhưng Ward kèm ngay một ghi chú cảnh báo: cấu hình không có swap trên một máy đa dụng là <b>nguy hiểm</b>. Nếu máy cạn hoàn toàn cả bộ nhớ thật lẫn swap, nhân Linux sẽ gọi <b>OOM killer</b> (out-of-memory killer) để giết một tiến trình nhằm giải phóng bộ nhớ — điều hiển nhiên bạn không muốn xảy ra với ứng dụng trên máy để bàn của mình. Mặt khác, các máy chủ hiệu năng cao có hệ thống giám sát, dự phòng và cân bằng tải tinh vi để bảo đảm chúng không bao giờ chạm vùng nguy hiểm.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-36">36</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Hai chỗ trong chương này Ward cố ý để ngỏ, và cả hai đều dẫn sang nơi khác. Thứ nhất là <b>LVM</b>: nó thêm một tầng nữa giữa thiết bị khối vật lý và hệ thống tệp — bạn chọn một tập <i>physical volume</i> để gộp vào một <i>volume group</i>, rồi cắt các <i>logical volume</i> ra từ nhóm đó; điểm khác biệt then chốt so với đĩa-và-phân-vùng là bạn thường <i>không</i> định nghĩa cách bố trí các logical volume — LVM tự tính lấy.<span class="cite"><a href="#ref-1">1</a></span> Thứ hai là bộ nhớ: Ward khép phần swap bằng lời hẹn rằng bạn sẽ học nhiều hơn về cách hệ thống bộ nhớ hoạt động ở chương 8.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Còn hai thứ chương này chỉ hé mở: một cách chia đĩa linh hoạt hơn (tên là LVM), và cách bộ nhớ hoạt động — để dành cho chương sau. <b>Nhớ nhé: chưa hiểu hết là bình thường, sách còn nhiều chương.</b></p>
+    <p class="en-only" lang="en">Ward deliberately leaves two doors open, and both lead elsewhere. First, <b>LVM</b>: it adds another layer between physical block devices and the filesystem — you select a set of <i>physical volumes</i> to include in a <i>volume group</i>, then carve <i>logical volumes</i> out of it; the critical difference from disks-and-partitions is that you don't normally define how the logical volumes are laid out — LVM works that out.<span class="cite"><a href="#ref-1">1</a></span> Second, memory: he closes the swap section by promising you'll learn much more about how the memory system works in Chapter 8.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 · MISCONCEPTIONS ===================== -->
+<section class="section" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Đính chính</span>
+      <span class="en-only" lang="en">Corrections</span>
+    </p>
+    <h2 id="ngo-nhan-title">
+      <span class="standard-copy">Ba ngộ nhận mà người đọc lần đầu hay mắc</span>
+      <span class="easy-only">Ba chỗ hay hiểu nhầm</span>
+      <span class="en-only" lang="en">Three misconceptions first readers hit</span>
+    </h2>
+    <p class="standard-copy">Phần này thuộc mức đọc <b>Đầy đủ</b>: nó đối chiếu điều người đọc thường nghĩ với điều bản văn thật sự nói.</p>
+    <p class="easy-only">Phần này hơi khó, bạn có thể bỏ qua và quay lại sau. <b>Nhớ nhé: hiểu chậm mà chắc vẫn hơn.</b></p>
+    <p class="en-only" lang="en">This block belongs to the <b>Đầy đủ</b> (full) reading level: it sets what readers usually assume against what the text actually says.</p>
+  </div>
+
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Phân vùng xong là đĩa dùng được”</span>
+          <span class="en-only" lang="en">"Once it's partitioned, the disk is usable"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> công cụ phân vùng chuẩn bị đĩa cho việc lưu trữ, nên sau khi <code>fdisk</code> ghi bảng xong là chép tệp vào được.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> có một khác biệt then chốt giữa phân vùng và thao tác hệ thống tệp — bảng phân vùng chỉ định nghĩa <i>ranh giới đơn giản</i> trên đĩa, còn hệ thống tệp là một hệ dữ liệu phức tạp hơn nhiều; chính vì thế người ta dùng những công cụ tách bạch cho hai việc.<span class="cite"><a href="#ref-1">1</a></span> Một phân vùng chưa có <code>mkfs</code> vẫn chỉ là một dãy khối.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> the partitioning tool prepares the disk for storage, so once <code>fdisk</code> has written the table you can copy files in.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> there's a critical difference between partitioning and filesystem manipulation — the partition table defines simple <i>boundaries</i> on the disk, whereas a filesystem is a much more involved data system; that's exactly why separate tools are used.<span class="cite"><a href="#ref-1">1</a></span> A partition without <code>mkfs</code> is still just a run of blocks.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Lưu xong là dữ liệu đã nằm trên đĩa”</span>
+          <span class="en-only" lang="en">"Once it's saved, the data is on the disk"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> khi chương trình báo đã lưu, dữ liệu đã thật sự nằm trên đĩa vật lý.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> Linux <i>đệm</i> các thao tác ghi; nhân thường không ghi thay đổi ngay khi tiến trình yêu cầu, mà giữ chúng trong RAM cho tới khi nó xác định được thời điểm tốt để thật sự ghi xuống.<span class="cite"><a href="#ref-1">1</a></span> Đó là lý do <code>umount</code> tự động đồng bộ, và là lý do Ward dặn chạy <code>sync</code> trước khi tắt máy nếu bạn không gỡ được hệ thống tệp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> when the program says it saved, the data is genuinely on the physical disk.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> Linux <i>buffers</i> writes; the kernel usually doesn't write changes immediately when processes request them, but stores them in RAM until it determines a good time to actually write them out.<span class="cite"><a href="#ref-1">1</a></span> That's why <code>umount</code> synchronises automatically, and why Ward tells you to run <code>sync</code> before powering off if you can't unmount.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Có journal thì không bao giờ phải chạy fsck”</span>
+          <span class="en-only" lang="en">"With a journal you never need fsck"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> ext4 có journal nên hệ thống tệp miễn nhiễm với hỏng hóc.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> tuy nhiều hệ thống tệp hỗ trợ journal khiến hỏng hóc hiếm đi <i>rất nhiều</i>, bạn vẫn luôn nên tắt máy đúng cách, và <b>bất kể dùng hệ thống tệp nào, thỉnh thoảng vẫn cần kiểm tra hệ thống tệp</b> để chắc rằng mọi thứ còn ổn.<span class="cite"><a href="#ref-1">1</a></span> Journal chỉ là một vùng đệm dữ liệu nhỏ chưa được ghi vào đúng chỗ của nó — nó thu hẹp cửa sổ rủi ro, không xoá bỏ nó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> ext4 has a journal, so the filesystem is immune to corruption.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> although many filesystems support journals that make corruption far less common, you should always shut down properly, and <b>regardless of the filesystem in use, filesystem checks are still necessary every now and then</b> to make sure everything is in order.<span class="cite"><a href="#ref-1">1</a></span> A journal is only a small data cache not yet written to its specific spot — it narrows the window of risk, it doesn't remove it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="tu-kiem-tra" aria-labelledby="tu-kiem-tra-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm tra</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="tu-kiem-tra-title">
+      <span class="standard-copy">Bạn đã nắm các tầng của một cái đĩa chưa?</span>
+      <span class="easy-only">Thử trả lời xem nào</span>
+      <span class="en-only" lang="en">Do you have the disk's layers yet?</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Trả lời bằng lời của bạn, không tra sách. Nếu một câu khiến bạn ngập ngừng, đó chính là tầng bạn nên đọc lại.</p>
+      <p class="easy-only">Thử trả lời miệng thôi, không cần giở lại. Câu nào bí thì quay lại đọc phần đó nhé. <b>Nhớ nhé: chỗ bí chính là chỗ cần học.</b></p>
+      <p class="en-only" lang="en">Answer in your own words, without looking back. Whichever question makes you hesitate points at the layer you should reread.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Bảng phân vùng chứa gì, và vì sao nó <i>không</i> chứa hệ thống tệp?</p>
+        <p class="deep-only">Gợi ý sâu hơn: nói lại bằng lời mình cái “khác biệt then chốt” mà Ward đặt ra giữa phân vùng và thao tác hệ thống tệp.</p>
+      </li>
+      <li>
+        <p>Khác biệt sống còn giữa cách <code>fdisk</code> và <code>parted</code> thay đổi đĩa là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: lệnh nào trong <code>fdisk</code> cho bạn thoát ra mà không ghi gì?</p>
+      </li>
+      <li>
+        <p>Vì sao <code>/etc/fstab</code> hiện đại dùng <code>UUID=</code> thay cho <code>/dev/sda1</code>?</p>
+        <p class="deep-only">Gợi ý sâu hơn: tên thiết bị phụ thuộc vào cái gì, và điều đó thay đổi khi nào?</p>
+      </li>
+      <li>
+        <p>Vì sao rút ổ USB mà không <code>umount</code> lại nguy hiểm, dù bạn đã bấm “lưu”?</p>
+        <p class="deep-only">Gợi ý sâu hơn: lệnh nào ép nhân ghi bộ đệm xuống đĩa ngay lập tức?</p>
+      </li>
+      <li>
+        <p>Vì sao tuyệt đối không được chạy <code>fsck</code> trên một hệ thống tệp đang được gắn — và ngoại lệ duy nhất là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: <code>fsck</code> đặt những tệp không tên tìm được vào thư mục nào?</p>
+      </li>
+      <li>
+        <p><code>/proc</code> và <code>tmpfs</code> giống nhau ở điểm nào, và khác nhau ở điểm nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: cái nào tiêu thụ bộ nhớ vật lý của bạn, và vì sao đổ dữ liệu vào nó mãi là nguy hiểm?</p>
+      </li>
+      <li>
+        <p>Ba bước để biến một phân vùng rỗng thành không gian swap là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: điều gì xảy ra khi máy cạn cả bộ nhớ thật lẫn swap?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Từ cái đĩa đến thư mục của bạn có mấy chặng? Kể tên.</p></li>
+      <li><p>Bảng phân vùng ghi cái gì — đồ đạc hay ranh giới?</p></li>
+      <li><p>Lệnh nào dùng để xem đĩa còn bao nhiêu chỗ trống?</p></li>
+      <li><p>Vì sao rút USB đột ngột lại có thể mất dữ liệu?</p></li>
+      <li><p>Swap là gì? Giải thích bằng hình ảnh cái bàn và ngăn kéo.</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>
+        <p>What does a partition table contain, and why does it <i>not</i> contain a filesystem?</p>
+      </li>
+      <li>
+        <p>What is the crucial difference in how <code>fdisk</code> and <code>parted</code> change a disk?</p>
+      </li>
+      <li>
+        <p>Why does a modern <code>/etc/fstab</code> use <code>UUID=</code> rather than <code>/dev/sda1</code>?</p>
+      </li>
+      <li>
+        <p>Why is pulling a USB drive without <code>umount</code> dangerous, even after you pressed save?</p>
+      </li>
+      <li>
+        <p>Why must you never run <code>fsck</code> on a mounted filesystem — and what is the single exception?</p>
+      </li>
+      <li>
+        <p>What do <code>/proc</code> and <code>tmpfs</code> have in common, and how do they differ?</p>
+      </li>
+      <li>
+        <p>What are the three steps that turn an empty partition into swap space?</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Bảng phân vùng chỉ định nghĩa <span class="closing-accent">những ranh giới đơn giản</span> trên đĩa; hệ thống tệp là <span class="closing-accent">một hệ dữ liệu phức tạp hơn nhiều</span> — và chính vì thế, hai việc ấy có hai bộ công cụ riêng.<span class="cite"><a href="#ref-1">1</a></span> Muốn đọc dữ liệu một tệp, bạn lấy đúng vị trí phân vùng từ bảng, rồi tra cơ sở dữ liệu hệ thống tệp trên phân vùng đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Bảng phân vùng chỉ <span class="closing-accent">kẻ ranh giới</span>; hệ thống tệp mới là <span class="closing-accent">quyển mục lục</span>. Hai việc khác nhau, hai công cụ khác nhau. <b>Nhớ nhé: kẻ ô là một việc, làm mục lục là việc khác.</b></p>
+    <p class="en-only" lang="en">The partition table defines only <span class="closing-accent">simple boundaries</span> on the disk; a filesystem is <span class="closing-accent">a much more involved data system</span> — and that is exactly why the two have separate tools.<span class="cite"><a href="#ref-1">1</a></span> To read a file's data, you take the right partition location from the table, then search the filesystem database on that partition.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START -->
+<!-- Region owned by book-cover-curator; body authored by book-chapter-author.
+     Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-3-devices.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 3 · Thiết bị</span>
+    <span class="nav-title en-only" lang="en">Chapter 3 · Devices</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-5-kernel-boots.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 5 · Nhân Linux khởi động thế nào</span>
+    <span class="nav-title en-only" lang="en">Chapter 5 · How the Linux Kernel Boots</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, tái bản lần thứ 3, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chương 4, “Disks and Filesystems”, trang 69–115.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd edition, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chapter 4, "Disks and Filesystems", pp. 69–115.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="vi-only"><b>Lưu ý an toàn:</b> chương này chứa các lệnh có thể phá huỷ dữ liệu (<code>fdisk</code>, <code>mkfs</code>, <code>fsck</code>, <code>mkswap</code>, <code>dd</code>). Mọi cảnh báo trên trang này là cảnh báo của chính tác giả, dẫn lại kèm trích dẫn; đừng chạy các lệnh ấy trên một đĩa có dữ liệu bạn cần, và hãy sao lưu trước.</p>
+    <p class="en-only" lang="en"><b>Safety note:</b> this chapter contains commands that can destroy data (<code>fdisk</code>, <code>mkfs</code>, <code>fsck</code>, <code>mkswap</code>, <code>dd</code>). Every warning on this page is the author's own, reproduced with a citation; don't run these commands against a disk holding data you need, and back up first.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd ed., No Starch Press, 2021, ch. 4 “Disks and Filesystems”, pp. 69–115. — <a href="https://openlibrary.org/books/OL29462444M" target="_blank" rel="noopener noreferrer">openlibrary.org/books/OL29462444M</a></li>
+      <li id="ref-2">GNU Parted user manual — the <code>parted</code> partition editor. <a href="https://www.gnu.org/software/parted/manual/parted.html" target="_blank" rel="noopener noreferrer">gnu.org/software/parted/manual/parted.html</a></li>
+      <li id="ref-3"><code>parted(8)</code> — Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man8/parted.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/parted.8.html</a></li>
+      <li id="ref-4"><code>fdisk(8)</code> — manipulate disk partition table, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man8/fdisk.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/fdisk.8.html</a></li>
+      <li id="ref-5">“Master boot record” — MBR structure, partition entries, primary/extended/logical partitions and CHS/LBA fields. <a href="https://en.wikipedia.org/wiki/Master_boot_record" target="_blank" rel="noopener noreferrer">en.wikipedia.org/wiki/Master_boot_record</a></li>
+      <li id="ref-6">“GUID Partition Table” — the GPT layout defined by the UEFI specification. <a href="https://en.wikipedia.org/wiki/GUID_Partition_Table" target="_blank" rel="noopener noreferrer">en.wikipedia.org/wiki/GUID_Partition_Table</a></li>
+      <li id="ref-7"><code>lsblk(8)</code> — list block devices, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man8/lsblk.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/lsblk.8.html</a></li>
+      <li id="ref-8"><code>blockdev(8)</code> — call block device ioctls from the command line (includes <code>--rereadpt</code>), man7.org. <a href="https://man7.org/linux/man-pages/man8/blockdev.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/blockdev.8.html</a></li>
+      <li id="ref-9">“FUSE” — Filesystem in Userspace, The Linux Kernel documentation. <a href="https://docs.kernel.org/filesystems/fuse/index.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/filesystems/fuse/index.html</a></li>
+      <li id="ref-10">“Overview of the Linux Virtual File System”, The Linux Kernel documentation. <a href="https://docs.kernel.org/filesystems/vfs.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/filesystems/vfs.html</a></li>
+      <li id="ref-11">“ext4 Data Structures and Algorithms”, The Linux Kernel documentation. <a href="https://docs.kernel.org/filesystems/ext4/index.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/filesystems/ext4/index.html</a></li>
+      <li id="ref-12">“BTRFS”, The Linux Kernel documentation. <a href="https://docs.kernel.org/filesystems/btrfs.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/filesystems/btrfs.html</a></li>
+      <li id="ref-13">“exFAT file system specification” — Microsoft Learn (the 4GB-and-up removable-media case). <a href="https://learn.microsoft.com/en-us/windows/win32/fileio/exfat-specification" target="_blank" rel="noopener noreferrer">learn.microsoft.com/en-us/windows/win32/fileio/exfat-specification</a></li>
+      <li id="ref-14"><code>mke2fs(8)</code> — create an ext2/ext3/ext4 filesystem (superblock backups, reserved blocks, UUID), man7.org. <a href="https://man7.org/linux/man-pages/man8/mke2fs.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/mke2fs.8.html</a></li>
+      <li id="ref-15"><code>mkfs(8)</code> — build a Linux filesystem (the frontend to <code>mkfs.<i>fs</i></code>), man7.org. <a href="https://man7.org/linux/man-pages/man8/mkfs.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/mkfs.8.html</a></li>
+      <li id="ref-16"><code>mount(8)</code> — mount a filesystem; the full option list including <code>-r</code>, <code>-n</code>, <code>-t</code>, <code>-o remount</code>, <code>ro</code>, <code>rw</code>, <code>exec</code>/<code>noexec</code>, <code>suid</code>/<code>nosuid</code>, man7.org. <a href="https://man7.org/linux/man-pages/man8/mount.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/mount.8.html</a></li>
+      <li id="ref-17"><code>blkid(8)</code> — locate/print block device attributes (UUID, TYPE, PARTUUID), man7.org. <a href="https://man7.org/linux/man-pages/man8/blkid.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/blkid.8.html</a></li>
+      <li id="ref-18"><code>tune2fs(8)</code> — adjust tunable filesystem parameters on ext2/ext3/ext4 (including <code>-U</code> to change the UUID), man7.org. <a href="https://man7.org/linux/man-pages/man8/tune2fs.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/tune2fs.8.html</a></li>
+      <li id="ref-19"><code>fstab(5)</code> — static information about the filesystems; the six fields, <code>defaults</code>, <code>noauto</code>, <code>user</code>, dump and pass numbers, man7.org. <a href="https://man7.org/linux/man-pages/man5/fstab.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/fstab.5.html</a></li>
+      <li id="ref-20"><code>sync(1)</code> — flush file system buffers, man7.org. <a href="https://man7.org/linux/man-pages/man1/sync.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/sync.1.html</a></li>
+      <li id="ref-21"><code>df(1)</code> — report file system space usage (fields, <code>-k</code>, <code>-m</code>, <code>-h</code>, <code>POSIXLY_CORRECT</code>), man7.org. <a href="https://man7.org/linux/man-pages/man1/df.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/df.1.html</a></li>
+      <li id="ref-22"><code>du(1)</code> — estimate file space usage (<code>-s</code>, <code>-k</code>, <code>-m</code>, <code>-h</code>), man7.org. <a href="https://man7.org/linux/man-pages/man1/du.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/du.1.html</a></li>
+      <li id="ref-23"><code>e2fsck(8)</code> — check an ext2/ext3/ext4 filesystem (the passes, <code>-p</code>, <code>-n</code>, <code>-y</code>, <code>-b</code>, <code>lost+found</code>), man7.org. <a href="https://man7.org/linux/man-pages/man8/e2fsck.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/e2fsck.8.html</a></li>
+      <li id="ref-24"><code>udevadm(8)</code> — udev management tool (<code>udevadm monitor</code>), man7.org. <a href="https://man7.org/linux/man-pages/man8/udevadm.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/udevadm.8.html</a></li>
+      <li id="ref-25"><code>debugfs(8)</code> — ext2/ext3/ext4 filesystem debugger (read-only by default), man7.org. <a href="https://man7.org/linux/man-pages/man8/debugfs.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/debugfs.8.html</a></li>
+      <li id="ref-26">“Plan 9 from Bell Labs” — the research system that took filesystem abstraction further; linked by Ward in the text. <a href="https://en.wikipedia.org/wiki/Plan_9_from_Bell_Labs" target="_blank" rel="noopener noreferrer">en.wikipedia.org/wiki/Plan_9_from_Bell_Labs</a></li>
+      <li id="ref-27">“The /proc Filesystem”, The Linux Kernel documentation. <a href="https://docs.kernel.org/filesystems/proc.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/filesystems/proc.html</a></li>
+      <li id="ref-28">“tmpfs” — mount options including <code>size</code> and <code>nr_blocks</code>, The Linux Kernel documentation. <a href="https://docs.kernel.org/filesystems/tmpfs.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/filesystems/tmpfs.html</a></li>
+      <li id="ref-29">“SquashFS 4.0 Filesystem”, The Linux Kernel documentation. <a href="https://docs.kernel.org/filesystems/squashfs.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/filesystems/squashfs.html</a></li>
+      <li id="ref-30">“Overlay Filesystem”, The Linux Kernel documentation. <a href="https://docs.kernel.org/filesystems/overlayfs.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/filesystems/overlayfs.html</a></li>
+      <li id="ref-31"><code>mkswap(8)</code> — set up a Linux swap area (the swap signature and its UUID), man7.org. <a href="https://man7.org/linux/man-pages/man8/mkswap.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/mkswap.8.html</a></li>
+      <li id="ref-32"><code>swapon(8)</code> / <code>swapoff(8)</code> — enable and disable devices and files for paging and swapping, man7.org. <a href="https://man7.org/linux/man-pages/man8/swapon.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/swapon.8.html</a></li>
+      <li id="ref-33"><code>dd(1)</code> — convert and copy a file (<code>if</code>, <code>of</code>, <code>bs</code>, <code>count</code>), man7.org. <a href="https://man7.org/linux/man-pages/man1/dd.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/dd.1.html</a></li>
+      <li id="ref-34">Ubuntu community documentation, “SwapFaq” — a public discussion of how much swap to allocate, showing that the “twice real memory” rule is no longer a single agreed number. <a href="https://help.ubuntu.com/community/SwapFaq" target="_blank" rel="noopener noreferrer">help.ubuntu.com/community/SwapFaq</a></li>
+      <li id="ref-35">“Documentation for /proc/sys/vm/” — kernel virtual-memory tunables including <code>swappiness</code>, The Linux Kernel documentation. <a href="https://docs.kernel.org/admin-guide/sysctl/vm.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/admin-guide/sysctl/vm.html</a></li>
+      <li id="ref-36">“Concepts overview” — memory management, including OOM behaviour, The Linux Kernel documentation. <a href="https://docs.kernel.org/admin-guide/mm/concepts.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/admin-guide/mm/concepts.html</a></li>
+    </ol>
+
+    <!-- NAV:START -->
+    <!-- Footer neighbour row — owned by book-cover-curator, body authored by
+         book-chapter-author. Absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-3-devices.html">chapter 3</a>
+      <a href="chapter-5-kernel-boots.html">chapter 5</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('hlw-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('hlw-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('hlw-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

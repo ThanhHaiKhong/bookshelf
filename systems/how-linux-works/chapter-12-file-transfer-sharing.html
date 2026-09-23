@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 12 · Truyền và chia sẻ tệp qua mạng — How Linux Works</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 12 “Network File Transfer and Sharing” trong How Linux Works (Brian Ward, No Starch Press, 3rd ed., 2021): sao chép nhanh, rsync và dấu gạch chéo cuối, Samba và smb.conf, SSHFS, NFS, lưu trữ đám mây qua FUSE.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('hlw-reading-mode'),
+l=localStorage.getItem('hlw-lang'),
+t=localStorage.getItem('hlw-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"HOW LINUX WORKS / 12";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    How Linux Works
+    <span>Chương 12 · Network File Transfer and Sharing</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 12 · Truyền và chia sẻ tệp qua mạng</span>
+      <span class="en-only" lang="en">Chapter 12 · Network File Transfer and Sharing</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Có quá nhiều cách đưa tệp qua mạng, vì không cách nào đủ tốt cho mọi tình huống</span>
+      <span class="easy-only">Nhiều cách gửi tệp qua mạng — vì chẳng cách nào hoàn hảo</span>
+      <span class="en-only" lang="en">There are so many ways to move files across a network because no single way is good enough</span>
+    </h1>
+
+    <p class="standard-copy">Brian Ward mở chương này bằng một bảng tình huống: mỗi nhu cầu chia sẻ tệp lại ứng với một công cụ khác nhau — máy chủ web <span lang="en">SimpleHTTPServer</span> của Python cho việc đưa tạm một thư mục ra mạng, <code>rsync</code> cho việc sao chép định kỳ, Samba cho máy Windows, <span lang="en">CIFS</span> để gắn thư mục chia sẻ của Windows vào Linux, SSHFS cho chia sẻ quy mô nhỏ giữa các máy Linux, NFS cho <span lang="en">NAS</span> trong mạng nội bộ tin cậy, và các hệ tệp dựa trên FUSE cho lưu trữ đám mây.<span class="cite"><a href="#ref-1">1</a></span> Ông cũng nói rõ điều <i>không</i> có trong danh sách: chia sẻ quy mô lớn giữa nhiều địa điểm với nhiều người dùng — không phải bất khả thi, nhưng thường tốn khá nhiều công sức và nằm ngoài phạm vi quyển sách.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Bạn muốn gửi một tệp sang máy khác. Có rất nhiều cách làm: mở một trang web tạm, dùng lệnh <code>rsync</code>, hoặc “gắn” hẳn thư mục máy kia vào máy mình như một ổ đĩa. Mỗi cách hợp với một hoàn cảnh riêng. <b>Nhớ nhé: chọn cách theo việc bạn cần, đừng chọn theo cách nào nghe oai nhất.</b></p>
+    <p class="en-only" lang="en">Brian Ward opens this chapter with a table of scenarios: each file-sharing need maps to a different tool — Python's <span lang="en">SimpleHTTPServer</span> for making a directory temporarily available, <code>rsync</code> for regular copying, Samba for Windows machines, <span lang="en">CIFS</span> for mounting Windows shares on Linux, SSHFS for small-scale sharing between Linux machines, NFS for a NAS on a trusted local network, and FUSE-based filesystems for cloud storage.<span class="cite"><a href="#ref-1">1</a></span> He is equally clear about what is <i>not</i> in the list: large-scale sharing across multiple locations with many users — not impossible, but generally a fair amount of work and outside the book's scope.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Điểm lạ của chương này, Ward tự ghi chú: khác với nhiều chương khác trong sách, phần cuối chương <i>không</i> phải tài liệu nâng cao. Thật ra hai mục “lý thuyết” nhất — 12.3 và 12.8 — lại là nơi bạn thu được nhiều giá trị nhất, vì chúng giải thích <i>vì sao</i> ngay từ đầu lại có nhiều lựa chọn đến thế.<span class="cite"><a href="#ref-1">1</a></span> Nói cách khác, chương này không dạy bạn một công cụ; nó dạy bạn cách đọc một hệ sinh thái công cụ chưa hội tụ.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> truyền tệp và chia sẻ tệp là hai bài toán khác nhau — <i>sao chép</i> (copy) đưa dữ liệu sang rồi kết thúc, còn <i>chia sẻ thật sự</i> (true file sharing) gắn một thư mục của máy này vào máy kia và để nó sống ở đó.<span class="cite"><a href="#ref-1">1</a></span> Danh sách công cụ dài không phải vì Linux thừa thãi, mà vì hiệu năng và bảo mật của chia sẻ qua mạng vẫn chưa có một lời giải chuẩn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> “gửi một bản sao” và “dùng chung một thư mục” là hai việc khác nhau. Có nhiều công cụ vì chưa có công cụ nào vừa nhanh vừa an toàn vừa dễ cài. <b>Nhớ nhé: chép là chép, dùng chung là dùng chung — đừng lẫn hai việc.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> transferring files and sharing files are two different problems — <i>copying</i> moves the data over and finishes, whereas <i>true file sharing</i> attaches a directory on one machine to another machine and lets it live there.<span class="cite"><a href="#ref-1">1</a></span> The long list of tools is not Linux being redundant; it is the absence of a settled answer to network sharing's performance and security problems.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: ba nhóm giải pháp — sao chép một chiều, chia sẻ liên hệ điều hành, chia sẻ giữa các máy Unix và đám mây. Diagram: three families of solution — one-way copying, cross-OS sharing, Unix-to-Unix and cloud sharing.">
+    <div class="core">
+      <b>File transfer vs sharing</b>
+      <small class="standard-copy">Chép xong là hết · Gắn vào thì sống cùng</small>
+      <small class="easy-only">Gửi bản sao · hoặc dùng chung</small>
+      <small class="en-only" lang="en">Copy and be done · or mount and live with it</small>
+    </div>
+
+    <div class="node">
+      <b>Copy</b>
+      <small class="standard-copy"><span lang="en">SimpleHTTPServer</span> cho lần một; <code>scp -r</code> cho thư mục; <code>rsync</code> cho việc làm đi làm lại</small>
+      <small class="easy-only">Gửi một lần: trang web tạm. Gửi thường xuyên: <code>rsync</code></small>
+      <small class="en-only" lang="en"><span lang="en">SimpleHTTPServer</span> for one-offs; <code>scp -r</code> for a tree; <code>rsync</code> when you do it again and again</small>
+    </div>
+
+    <div class="node">
+      <b>Cross-OS sharing</b>
+      <small class="standard-copy">Samba phục vụ SMB cho Windows; <code>mount -t cifs</code> đi chiều ngược lại</small>
+      <small class="easy-only">Nói chuyện với máy Windows</small>
+      <small class="en-only" lang="en">Samba serves SMB to Windows; <code>mount -t cifs</code> goes the other way</small>
+    </div>
+
+    <div class="node">
+      <b>Unix &amp; cloud sharing</b>
+      <small class="standard-copy">SSHFS cho việc nhỏ, NFS cho NAS, FUSE cho đám mây</small>
+      <small class="easy-only">Máy Linux với nhau, và ổ đĩa trên mây</small>
+      <small class="en-only" lang="en">SSHFS for small jobs, NFS for a NAS, FUSE for the cloud</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#sao-chep">
+    <span>01</span>
+    <b class="standard-copy">Sao chép: từ một lần tới rsync</b>
+    <b class="easy-only">Chép tệp: nhanh và chuyên nghiệp</b>
+    <b class="en-only" lang="en">Copying: from one-off to rsync</b>
+  </a>
+  <a href="#chia-se">
+    <span>02</span>
+    <b class="standard-copy">Chia sẻ thật sự: hiệu năng, bảo mật, Samba</b>
+    <b class="easy-only">Dùng chung thư mục, và máy Windows</b>
+    <b class="en-only" lang="en">True sharing: performance, security, Samba</b>
+  </a>
+  <a href="#unix-va-may">
+    <span>03</span>
+    <b class="standard-copy">SSHFS, NFS và lưu trữ đám mây</b>
+    <b class="easy-only">Máy Linux với nhau, và mây</b>
+    <b class="en-only" lang="en">SSHFS, NFS and cloud storage</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>04</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="sao-chep" aria-labelledby="sao-chep-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="sao-chep-title">
+      <span class="standard-copy">Sao chép: từ một lần cho xong tới rsync làm đi làm lại</span>
+      <span class="easy-only">Chép tệp: cách nhanh và cách chuyên nghiệp</span>
+      <span class="en-only" lang="en">Copying: from a one-off to rsync doing it again and again</span>
+    </h2>
+    <p class="standard-copy">Ward chia bài toán sao chép theo tần suất. Cần đưa vài tệp sang máy bên cạnh một lần duy nhất? Một máy chủ web tạm là đủ. Cần chép cả cây thư mục? <code>scp -r</code> làm được việc nhưng “không linh hoạt lắm”: sau khi chép xong, máy đích có thể <i>không</i> có bản sao chính xác của thư mục nguồn, vì các tệp thừa đã nằm sẵn ở đích vẫn tồn tại.<span class="cite"><a href="#ref-1">1</a></span> Nếu bạn định làm việc này thường xuyên — nhất là khi định tự động hoá — ông khuyên dùng một <b>hệ đồng bộ</b> chuyên dụng biết phân tích và kiểm chứng; trên Linux, <code>rsync</code> là bộ đồng bộ chuẩn.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Chép một lần thì làm cách nhanh. Chép đi chép lại thì cần công cụ biết nhớ: lần sau nó chỉ gửi phần đã đổi, và nó kiểm tra lại giùm bạn. Công cụ đó tên là <code>rsync</code>. <b>Nhớ nhé: làm một lần thì tuỳ tiện cũng được, làm nhiều lần thì phải có công cụ.</b></p>
+    <p class="en-only" lang="en">Ward splits the copying problem by frequency. Need to get a couple of files to the machine next to you, once? A temporary web server is enough. Need to copy a whole directory tree? <code>scp -r</code> gets the job done but "is not very flexible": after the transfer, the remote host may <i>not</i> hold an exact copy of the directory, because extraneous files already at the destination persist.<span class="cite"><a href="#ref-1">1</a></span> If you expect to do this regularly — and especially if you plan to automate it — he recommends a dedicated <b>synchronizer</b> that can also analyse and verify; on Linux, <code>rsync</code> is the standard one.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only"><b>Về <code>python -m SimpleHTTPServer</code>.</b> Ward ghi lệnh ở dạng Python 2, và lưu ý nó chạy ở cổng 8000 theo mặc định, nên từ máy đích bạn trỏ trình duyệt tới <code>http://10.1.2.4:8000</code> nếu máy nguồn ở địa chỉ đó.<span class="cite"><a href="#ref-1">1</a></span> Trên Python 3, ba mô-đun <code>BaseHTTPServer</code>, <code>CGIHTTPServer</code> và <code>SimpleHTTPServer</code> đã được gộp vào gói <code>http</code>,<span class="cite"><a href="#ref-7">7</a></span> nên lệnh tương đương ngày nay là <code>python -m http.server</code> — tài liệu Python xác nhận nó “lắng nghe ở cổng 8000 theo mặc định”, và cổng có thể ghi đè bằng tham số.<span class="cite"><a href="#ref-6">6</a></span> Trang này ghi cả hai thay vì lặng lẽ sửa chữ của tác giả.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>rsync</code> là một <i>bộ đồng bộ</i> (<span lang="en">synchronizer</span>): thay vì gửi mù toàn bộ, nó so sánh hai bên rồi chỉ gửi phần khác biệt. Theo trang <code>rsync(1)</code>, mặc định nó dùng thuật toán “kiểm tra nhanh” (<span lang="en">quick check</span>) tìm các tệp đã đổi <b>kích thước</b> hoặc <b>thời điểm sửa cuối</b>.<span class="cite"><a href="#ref-2">2</a></span> Ward mô tả cùng cơ chế: phép kiểm dùng tổ hợp kích thước tệp và ngày sửa cuối.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> <code>rsync</code> giống người chuyển nhà thông minh: nó nhìn hai bên, thấy món nào giống hệt thì bỏ qua, chỉ khuân món đã đổi. <b>Nhớ nhé: nó so trước, chép sau.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>rsync</code> is a <i>synchronizer</i>: instead of blindly resending everything, it compares the two sides and sends only the differences. Per <code>rsync(1)</code>, by default it uses a "quick check" algorithm that looks for files changed in <b>size</b> or in <b>last-modified time</b>.<span class="cite"><a href="#ref-2">2</a></span> Ward describes the same mechanism: the check uses a combination of file size and last-modified date.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">rsync -nva dir host:dest_dir<br>&nbsp;&nbsp;-n → chạy thử, không chép<br>&nbsp;&nbsp;-v → kể ra đang làm gì<br>&nbsp;&nbsp;-a → cả cây, giữ nguyên thuộc tính</p>
+      <p class="easy-only">-n → thử thôi<br>-v → nói cho mình nghe<br>-a → chép cả thư mục</p>
+      <p class="en-only" lang="en">rsync -nva dir host:dest_dir<br>&nbsp;&nbsp;-n → trial run, copies nothing<br>&nbsp;&nbsp;-v → say what you are doing<br>&nbsp;&nbsp;-a → whole tree, attributes preserved</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">quick copy</span>
+      <h3>
+        <span class="standard-copy">Quick copy — một máy chủ web sống đúng năm phút</span>
+        <span class="easy-only">Chép nhanh — mở tạm một trang web</span>
+        <span class="en-only" lang="en">Quick copy — a web server that lives five minutes</span>
+      </h3>
+      <p class="standard-copy">Khi bạn chỉ muốn đưa tệp sang máy khác trong mạng cá nhân, không cần chép ngược, không cần gì cầu kỳ, Ward chỉ một mẹo: vào thư mục chứa tệp rồi chạy <code>python -m SimpleHTTPServer</code>. Lệnh này khởi động một máy chủ web cơ bản, biến thư mục hiện tại thành thứ mà bất kỳ trình duyệt nào trên mạng cũng lấy được.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bạn đứng ở thư mục có tệp, gõ một lệnh, thế là máy bạn thành một trang web nhỏ. Máy bên kia mở trình duyệt, bấm tải về là xong. Gõ Ctrl-C là trang web biến mất. <b>Nhớ nhé: mở tạm, lấy xong thì đóng.</b></p>
+      <p class="en-only" lang="en">When you only want to get files to another machine on your personal network — no copying back, nothing fancy — Ward gives one trick: go to the directory holding the files and run <code>python -m SimpleHTTPServer</code>. That starts a basic web server making the current directory available to any browser on the network.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Cảnh báo của tác giả</span><span class="en-only" lang="en">The author's warning</span></b>
+        <span class="standard-copy">Cách này <i>giả định mạng nội bộ của bạn an toàn</i>. Đừng làm thế trên mạng công cộng hay bất kỳ môi trường mạng nào bạn không tin.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Chỉ làm ở nhà hoặc ở nơi bạn tin. Đừng làm ở quán cà phê.</span>
+        <span class="en-only" lang="en">This method <i>assumes your local network is secure</i>. Don't do it on a public network or any network environment you do not trust.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Tài liệu Python nói gì</h4>
+          <p>Tài liệu chính thức của mô-đun kế nhiệm mang đúng cảnh báo ấy ở dạng kỹ thuật: “<span lang="en">http.server is not recommended for production. It only implements basic security checks.</span>”<span class="cite"><a href="#ref-6">6</a></span> Mục cân nhắc bảo mật còn nói thêm <code>SimpleHTTPRequestHandler</code> sẽ đi theo liên kết tượng trưng, nên tệp <i>ngoài</i> thư mục được chỉ định vẫn có thể bị phục vụ.<span class="cite"><a href="#ref-6">6</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Mặc định cổng 8000</h4>
+          <p>Cả Ward lẫn tài liệu Python đều ghi cổng mặc định là 8000; tài liệu bổ sung rằng có thể ghi đè bằng cách truyền số cổng làm tham số, và <code>--bind</code> giới hạn địa chỉ lắng nghe.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">trailing slash</span>
+      <h3>
+        <span class="standard-copy">Dấu gạch chéo cuối — một ký tự đổi hẳn kết quả</span>
+        <span class="easy-only">Dấu <code>/</code> ở cuối — nhỏ mà đổi mọi thứ</span>
+        <span class="en-only" lang="en">The trailing slash — one character changes the outcome</span>
+      </h3>
+      <p class="standard-copy">Đây là chỗ sai kinh điển, và Ward dặn phải <i>đặc biệt cẩn thận</i>. Với <code>rsync -a dir host:dest_dir</code>, khi xong bạn sẽ có thư mục <code>dir</code> <b>nằm bên trong</b> <code>dest_dir</code> trên <code>host</code>.<span class="cite"><a href="#ref-1">1</a></span> Thêm một dấu <code>/</code> vào tên nguồn thì hành vi đổi hẳn: <code>rsync -a dir/ host:dest_dir</code> chép <b>mọi thứ bên trong</b> <code>dir</code> vào <code>dest_dir</code> mà <i>không</i> tạo ra <code>dir</code> ở đích — gần giống <code>cp dir/* dest_dir</code> trên hệ tệp cục bộ.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nghĩ thế này: <code>dir</code> là “gửi cả cái hộp”, còn <code>dir/</code> là “gửi những thứ <i>trong</i> hộp, bỏ hộp lại”. Thiếu hay thừa một dấu gạch chéo là ra hai kết quả khác nhau. <b>Nhớ nhé: có gạch chéo = đổ ruột ra; không gạch chéo = bê nguyên hộp.</b></p>
+      <p class="en-only" lang="en">This is the classic mistake, and Ward says to be <i>particularly careful</i>. With <code>rsync -a dir host:dest_dir</code>, on completion you have the directory <code>dir</code> <b>inside</b> <code>dest_dir</code> on <code>host</code>.<span class="cite"><a href="#ref-1">1</a></span> Adding a <code>/</code> to the source name changes the behaviour significantly: <code>rsync -a dir/ host:dest_dir</code> copies <b>everything inside</b> <code>dir</code> into <code>dest_dir</code> <i>without</i> creating <code>dir</code> at the destination — similar to <code>cp dir/* dest_dir</code> on the local filesystem.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Ví dụ của tác giả</span><span class="en-only" lang="en">The author's example</span></b>
+        <span class="standard-copy">Có <code>dir/a</code> và <code>dir/b</code>. Bản có gạch chéo cho <code>dest_dir</code> chứa <code>a</code> và <code>b</code> nhưng không có <code>dir</code>; bản bỏ gạch chéo cho ra <code>dest_dir/dir/a</code> và <code>dest_dir/dir/b</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Hộp có hai món <code>a</code> và <code>b</code>. Một cách để lại hai món; cách kia để lại nguyên cái hộp có hai món bên trong.</span>
+        <span class="en-only" lang="en">You have <code>dir/a</code> and <code>dir/b</code>. The trailing-slash version leaves <code>dest_dir</code> holding <code>a</code> and <code>b</code> but no <code>dir</code>; omitting the slash yields <code>dest_dir/dir/a</code> and <code>dest_dir/dir/b</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Trang man nói cùng một điều</h4>
+          <p>“<span lang="en">A trailing slash on the source changes this behavior to avoid creating an additional directory level at the destination.</span>” Man page gợi ý cách nhớ: dấu <code>/</code> cuối nghĩa là “chép <i>nội dung</i> thư mục này”, đối lập với “chép thư mục theo tên”; ở cả hai trường hợp, thuộc tính của thư mục chứa vẫn được chuyển sang thư mục chứa ở đích.<span class="cite"><a href="#ref-2">2</a></span> Hệ quả: <code>rsync -av /src/foo /dest</code> và <code>rsync -av /src/foo/ /dest/foo</code> cho kết quả như nhau.<span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao đây là cái bẫy chứ không phải phiền toái</h4>
+          <p>Ward nói bình thường lỡ thêm <code>/</code> chỉ là chuyện phiền: bạn sang máy kia, tạo lại <code>dir</code>, dồn mọi thứ vào. Nhưng khi kết hợp dấu <code>/</code> cuối với <code>--delete</code> thì nguy cơ thảm hoạ lớn hơn nhiều — bạn có thể xoá nhầm những tệp chẳng liên quan gì.<span class="cite"><a href="#ref-1">1</a></span> Ông còn cảnh báo riêng về tính năng tự hoàn tất tên tệp của shell: nhiều shell tự gắn dấu gạch chéo vào tên thư mục sau khi bạn bấm TAB.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">--delete</span>
+      <h3>
+        <span class="standard-copy">Bản sao chính xác — và cái giá của nó</span>
+        <span class="easy-only">Muốn giống hệt thì phải xoá bớt</span>
+        <span class="en-only" lang="en">An exact replica — and what it costs</span>
+      </h3>
+      <p class="standard-copy">Mặc định, <code>rsync</code> chép tệp và thư mục mà không đoái hoài tới nội dung sẵn có ở đích. Ward lấy ví dụ: chuyển thư mục <code>d</code> chứa <code>a</code> và <code>b</code> sang một máy vốn đã có <code>d/c</code>, thì sau khi xong đích sẽ có cả <code>d/a</code>, <code>d/b</code> lẫn <code>d/c</code>.<span class="cite"><a href="#ref-1">1</a></span> Muốn một bản sao <i>y hệt</i> nguồn, bạn phải xoá những tệp ở đích mà nguồn không có — đó là việc của <code>--delete</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mặc định <code>rsync</code> chỉ thêm vào, không dọn đi. Muốn hai bên giống hệt nhau thì phải cho phép nó xoá — và đó là lúc phải thật cẩn thận. <b>Nhớ nhé: trước khi cho phép xoá, chạy thử bằng <code>-nv</code> đã.</b></p>
+      <p class="en-only" lang="en">By default <code>rsync</code> copies files and directories without considering what is already at the destination. Ward's example: transfer directory <code>d</code> containing <code>a</code> and <code>b</code> to a machine that already has <code>d/c</code>, and afterwards the destination holds <code>d/a</code>, <code>d/b</code> <i>and</i> <code>d/c</code>.<span class="cite"><a href="#ref-1">1</a></span> To make an exact replica of the source you must delete destination files that do not exist in the source — that is what <code>--delete</code> does.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Cảnh báo của tác giả</span><span class="en-only" lang="en">The author's warning</span></b>
+        <span class="standard-copy">“Thao tác này có thể nguy hiểm” — hãy dành thời gian soi thư mục đích xem có gì bạn sẽ vô tình xoá. Nếu chưa chắc, chạy thử bằng <code>-nv</code> để biết chính xác khi nào <code>rsync</code> định xoá một tệp.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Xoá là xoá thật. Thử trước đã.</span>
+        <span class="en-only" lang="en">"This operation can be dangerous" — take the time to inspect the destination for anything you would inadvertently delete. If uncertain, do a dry run with <code>-nv</code> so you know exactly when <code>rsync</code> wants to delete a file.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Điều kiện mà man page thêm vào</h4>
+          <p><code>--delete</code> xoá tệp thừa ở phía nhận “<span lang="en">but only for the directories that are being synchronized</span>”. Man page nhấn mạnh bạn phải yêu cầu <code>rsync</code> gửi cả thư mục (<code>dir</code> hoặc <code>dir/</code>), chứ không phải liệt kê tệp bằng ký tự đại diện (<code>dir/*</code>) — vì shell khai triển ký tự đại diện trước, nên <code>rsync</code> chỉ thấy các tệp riêng lẻ chứ không thấy thư mục cha.<span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Man page cũng đồng ý với cảnh báo</h4>
+          <p>“<span lang="en">This option can be dangerous if used incorrectly! It is a very good idea to first try a run using the --dry-run (-n) option to see what files are going to be deleted.</span>”<span class="cite"><a href="#ref-2">2</a></span> Hai nguồn độc lập cùng nói một câu — đó là dấu hiệu nên nghe theo.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">--exclude</span>
+      <h3>
+        <span class="standard-copy">Loại trừ — mẫu, không phải tên tệp</span>
+        <span class="easy-only">Bỏ bớt vài thứ không muốn chép</span>
+        <span class="en-only" lang="en">Excluding — a pattern, not a filename</span>
+      </h3>
+      <p class="standard-copy">Muốn chuyển thư mục <code>src</code> sang <code>host</code> nhưng bỏ qua mọi thứ tên <code>.git</code>, bạn viết <code>rsync -a --exclude=.git src host:</code>. Ward nhấn mạnh: lệnh này loại trừ <b>mọi</b> tệp và thư mục tên <code>.git</code>, vì <code>--exclude</code> nhận một <i>mẫu</i> chứ không phải một tên tệp tuyệt đối. Muốn loại đúng một mục, hãy chỉ ra đường dẫn tuyệt đối bắt đầu bằng <code>/</code>: <code>--exclude=/src/.git</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bạn nói: “chép hết, trừ những thứ tên là <code>.git</code>”. Nhưng nhớ rằng nó sẽ bỏ <i>tất cả</i> chỗ nào tên như vậy, không phải chỉ một chỗ. <b>Nhớ nhé: nói “trừ” là trừ khắp nơi.</b></p>
+      <p class="en-only" lang="en">To transfer <code>src</code> to <code>host</code> while excluding anything named <code>.git</code>, you write <code>rsync -a --exclude=.git src host:</code>. Ward stresses that this excludes <b>all</b> files and directories named <code>.git</code>, because <code>--exclude</code> takes a <i>pattern</i>, not an absolute filename. To exclude one specific item, give an absolute path starting with <code>/</code>: <code>--exclude=/src/.git</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Chú thích quan trọng</span><span class="en-only" lang="en">The note that matters</span></b>
+        <span class="standard-copy">Dấu <code>/</code> đầu tiên trong <code>/src/.git</code> <i>không</i> phải thư mục gốc của hệ thống, mà là thư mục cơ sở của lần chuyển.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Dấu <code>/</code> ở đầu nghĩa là “tính từ chỗ bắt đầu chép”, không phải gốc máy.</span>
+        <span class="en-only" lang="en">The first <code>/</code> in <code>/src/.git</code> is <i>not</i> your system's root directory but the base directory of the transfer.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bốn mẹo còn lại của tác giả</h4>
+          <p>Bạn có thể dùng bao nhiêu tham số <code>--exclude</code> tuỳ thích; nếu lặp lại cùng một bộ mẫu, hãy đặt chúng vào một tệp văn bản thuần (mỗi dòng một mẫu) rồi dùng <code>--exclude-from=file</code>; để loại thư mục tên <code>item</code> nhưng vẫn giữ tệp cùng tên, thêm dấu gạch chéo cuối: <code>--exclude=item/</code>; và nếu mẫu của bạn quá chặt, dùng <code>--include</code> để đưa lại một tệp hay thư mục cụ thể.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Quy tắc khớp mẫu</h4>
+          <p>Ward viết rằng mẫu loại trừ dựa trên một thành phần tên tệp hoặc thư mục đầy đủ và có thể chứa <span lang="en">glob</span> đơn giản: <code>t*s</code> khớp <code>this</code> nhưng không khớp <code>ethers</code>.<span class="cite"><a href="#ref-1">1</a></span> Man page phát biểu cùng luật chặt chẽ hơn: mẫu không chứa <code>/</code> (không kể dấu cuối) hay <code>**</code> thì chỉ khớp thành phần cuối của đường dẫn; mẫu kết thúc bằng <code>/</code> chỉ khớp thư mục; mẫu bắt đầu bằng <code>/</code> được neo vào đầu đường dẫn của lần chuyển.<span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">safeguards</span>
+      <h3>
+        <span class="standard-copy">Kiểm chứng và lưới an toàn</span>
+        <span class="easy-only">Mấy cái “phanh” của rsync</span>
+        <span class="en-only" lang="en">Verification and safety nets</span>
+      </h3>
+      <p class="standard-copy">Khi tệp hai bên không giống nhau, <code>rsync</code> gửi bản nguồn và <b>ghi đè</b> bản ở xa. Ward liệt kê những tuỳ chọn để thay hành vi mặc định đó: <code>--checksum</code> (viết tắt <code>-c</code>) tính tổng kiểm — “chữ ký gần như duy nhất” — để xem hai tệp có thật sự giống nhau không, tốn một ít I/O và CPU nhưng là bắt buộc với dữ liệu nhạy cảm hoặc các tệp hay trùng kích thước; <code>--ignore-existing</code> không đụng tới tệp đã có ở đích; <code>--backup</code> (<code>-b</code>) đổi tên tệp cũ bằng cách thêm hậu tố <code>~</code> trước khi ghi bản mới; <code>--suffix=s</code> đổi hậu tố ấy; và <code>--update</code> (<code>-u</code>) không ghi đè tệp ở đích nếu nó mới hơn tệp nguồn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><code>rsync</code> có mấy cái phanh: “so kỹ hơn rồi hãy chép”, “đã có rồi thì đừng đụng”, “giữ lại bản cũ trước khi đè”, “bản ở kia mới hơn thì để yên”. <b>Nhớ nhé: phanh có sẵn, chỉ cần nhớ đạp.</b></p>
+      <p class="en-only" lang="en">When the source files differ from the destination files, <code>rsync</code> transfers the source and <b>overwrites</b> what is there. Ward lists the options that change that default: <code>--checksum</code> (abbreviated <code>-c</code>) computes checksums — "mostly unique signatures" — to see whether files really are the same, costing a little I/O and CPU but a must for sensitive data or files of uniform size; <code>--ignore-existing</code> doesn't clobber files already on the target; <code>--backup</code> (<code>-b</code>) renames existing files by adding a <code>~</code> suffix before transferring the new ones; <code>--suffix=s</code> changes that suffix; and <code>--update</code> (<code>-u</code>) doesn't clobber any target file with a later date than its source counterpart.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Quy trình hai bước của tác giả</span><span class="en-only" lang="en">The author's two-step routine</span></b>
+        <span class="standard-copy">Lần đầu chạy <code>rsync -n</code> để xác nhận không tệp nào có sẵn ở đích. Chạy xong lần thật rồi, chạy lại với <code>rsync -v</code>: lần này danh sách chuyển phải trống, vì cả hai bên đã có cùng bộ tệp với cùng ngày sửa.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Chạy thử → chạy thật → chạy lại lần nữa để xem có im lặng không. Im lặng là đúng.</span>
+        <span class="en-only" lang="en">First run <code>rsync -n</code> to verify nothing already exists at the destination. After the real run, run it again with <code>rsync -v</code>: this time no files should appear in the transfer list, because the file set exists on both ends with the same modification dates.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Mức độ ồn ào</h4>
+          <p>Không có tuỳ chọn đặc biệt, <code>rsync</code> chạy im lặng, chỉ lên tiếng khi có vấn đề. <code>-v</code> bật chế độ chi tiết, <code>-vv</code> chi tiết hơn — Ward nói bạn có thể gắn bao nhiêu chữ <code>v</code> tuỳ thích, nhưng hai chữ đã là nhiều hơn mức cần. Muốn bản tổng kết đầy đủ sau khi chuyển, dùng <code>rsync --stats</code>.<span class="cite"><a href="#ref-1">1</a></span> Man page mô tả cùng thang đó: một <code>-v</code> cho biết tệp nào đang được chuyển kèm tóm tắt ngắn ở cuối; hai <code>-v</code> cho biết tệp nào bị bỏ qua; “<span lang="en">More than two -v options should only be used if you are debugging rsync.</span>”<span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4><code>-c</code> làm gì cho đúng</h4>
+          <p>Man page nói rõ: thay vì phép kiểm nhanh theo kích thước và thời gian, <code>-c</code> so <i>tổng kiểm</i> cho mỗi tệp có kích thước khớp — nghĩa là cả hai phía phải đọc toàn bộ dữ liệu, nên có thể chậm đi đáng kể.<span class="cite"><a href="#ref-2">2</a></span> Đúng như Ward tóm tắt, đây là lựa chọn “trả giá để chắc chắn”.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">-z / --bwlimit</span>
+      <h3>
+        <span class="standard-copy">Nén và giới hạn băng thông — hai con dao hai lưỡi</span>
+        <span class="easy-only">Nén lại, và đi chậm lại</span>
+        <span class="en-only" lang="en">Compression and bandwidth limiting — two double-edged options</span>
+      </h3>
+      <p class="standard-copy">Nhiều người thích dùng <code>-z</code> kèm <code>-a</code> để nén dữ liệu trước khi truyền: <code>rsync -az dir host:dest_dir</code>. Ward cân nhắc rất sòng phẳng: nén cải thiện hiệu năng trong vài tình huống — khi tải lên lượng lớn dữ liệu qua kết nối chậm, hoặc khi độ trễ giữa hai máy cao — nhưng trên mạng cục bộ nhanh, hai đầu có thể bị nghẽn ở chính thời gian CPU dùng để nén và giải nén, nên truyền <i>không</i> nén lại nhanh hơn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nén giống như xếp đồ cho gọn trước khi gửi: đường xa thì đáng, đường gần thì mất công xếp lâu hơn cả đi. Còn <code>--bwlimit</code> là bảo nó “đi chậm thôi” để mạng nhà vẫn còn chỗ cho việc khác. <b>Nhớ nhé: nén khi đường chậm, nhường đường khi mình còn cần mạng.</b></p>
+      <p class="en-only" lang="en">Many users like <code>-z</code> alongside <code>-a</code> to compress data before transmission: <code>rsync -az dir host:dest_dir</code>. Ward weighs it honestly: compression helps in certain situations — uploading a lot of data across a slow connection, or when latency between the two hosts is high — but across a fast local network the two endpoints can be constrained by the CPU time spent compressing and decompressing, so an uncompressed transfer may be faster.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Vì sao phải hãm băng thông</span><span class="en-only" lang="en">Why throttle at all</span></b>
+        <span class="standard-copy">Tải lên nhiều dữ liệu rất dễ làm nghẽn đường lên. Dù bạn không dùng tới đường xuống (thường rộng hơn), kết nối vẫn có vẻ chậm, vì các gói TCP đi ra như yêu cầu HTTP phải tranh băng thông đường lên với lần truyền của bạn.<span class="cite"><a href="#ref-1">1</a></span> Ward ví dụ <code>rsync --bwlimit=100000 -a dir host:dest_dir</code> để giới hạn ở 100.000&nbsp;Kbps.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi máy bạn đang gửi hết sức, mọi thứ khác trên mạng đều chậm theo. Bảo nó gửi chậm lại là mọi người dễ thở.</span>
+        <span class="en-only" lang="en">Uploading a large amount of data easily clogs your uplink. Even without using your (usually larger) downlink, the connection still feels slow, because outgoing TCP packets such as HTTP requests compete with your transfer for uplink bandwidth.<span class="cite"><a href="#ref-1">1</a></span> Ward's example, <code>rsync --bwlimit=100000 -a dir host:dest_dir</code>, limits it to 100,000&nbsp;Kbps.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đơn vị của <code>--bwlimit</code></h4>
+          <p>Man page mô tả <code>--bwlimit=RATE</code> là tốc độ truyền tối đa qua socket, tính theo đơn vị mỗi giây; nếu không ghi hậu tố, giá trị được hiểu là đơn vị 1024 byte (như thể đã thêm “K” hoặc “KiB”), và <code>0</code> nghĩa là không giới hạn.<span class="cite"><a href="#ref-2">2</a></span> Đây là một chỗ hai nguồn dùng đơn vị khác nhau: Ward viết “giới hạn băng thông ở 100.000&nbsp;Kbps”<span class="cite"><a href="#ref-1">1</a></span> trong khi man page hiểu một con số trần là đơn vị 1024 byte mỗi giây.<span class="cite"><a href="#ref-2">2</a></span> Theo cách hiểu của man page, <code>--bwlimit=100000</code> tương đương xấp xỉ 97,7&nbsp;MiB/s. Trang này giữ nguyên con số và cách gọi của sách trong phần chính, và ghi chú sự khác biệt ở đây thay vì lặng lẽ sửa.</p>
+        </div>
+        <div class="info-block">
+          <h4>Chiều ngược lại</h4>
+          <p><code>rsync</code> không chỉ để đẩy đi. Đặt máy và đường dẫn nguồn ở xa làm tham số <i>đầu tiên</i> là bạn kéo về: <code>rsync -a host:src_dir dest_dir</code>.<span class="cite"><a href="#ref-1">1</a></span> Và như Ward nhắc lại, bỏ <code>host:</code> ở cả hai tham số thì <code>rsync</code> nhân bản thư mục ngay trên máy bạn.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đến đây bạn đã có một cách <i>chép</i> tốt. Nhưng chép là hành động có điểm kết thúc: xong là xong, hai bản sống hai đời. Câu hỏi tiếp theo trong chương là chuyện khác hẳn — nếu bạn muốn thư mục ở máy kia <i>luôn là</i> thư mục ở máy này, không phải bản sao của nó thì sao? Đó là <b>chia sẻ tệp thật sự</b>, và Ward mở đầu phần ấy bằng một câu hỏi không dễ chịu: trước hết, vì sao bạn lại làm việc này?<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Chép xong là hai bản riêng. Còn “dùng chung” nghĩa là chỉ có một bản, ai cũng nhìn thấy nó. Nghe hay hơn, nhưng có cái giá. <b>Nhớ nhé: dùng chung thì tiện, nhưng chậm hơn và khó giữ an toàn hơn.</b></p>
+    <p class="en-only" lang="en">At this point you have a good way to <i>copy</i>. But copying is an action with an end: once done, the two copies live separate lives. The chapter's next question is different in kind — what if you want the directory on that machine to <i>be</i> the directory on this one, not a replica of it? That is <b>true file sharing</b>, and Ward opens that part with an uncomfortable question: why are you doing this in the first place?<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="chia-se" aria-labelledby="chia-se-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="chia-se-title">
+      <span class="standard-copy">Chia sẻ thật sự: hiệu năng, bảo mật, và Samba</span>
+      <span class="easy-only">Dùng chung thư mục, và nói chuyện với máy Windows</span>
+      <span class="en-only" lang="en">True sharing: performance, security, and Samba</span>
+    </h2>
+    <p class="standard-copy">Ward đặt hai câu hỏi trước khi đưa công cụ. Thứ nhất là <b>vì sao</b>: trong các mạng Unix truyền thống có hai lý do lớn — tiện lợi và thiếu lưu trữ cục bộ; gom lưu trữ về vài máy chủ trung tâm rẻ hơn nhiều so với mua và bảo trì ổ đĩa cho từng máy.<span class="cite"><a href="#ref-1">1</a></span> Thứ hai là <b>cái giá</b>: ưu thế của mô hình đó bị che lấp bởi một nhược điểm lớn không đổi qua năm tháng — hiệu năng lưu trữ qua mạng thường kém so với lưu trữ cục bộ.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Trước khi dùng chung thư mục, hãy tự hỏi: mình cần gì? Nếu chỉ xem phim, nghe nhạc thì mạng chịu được. Nếu sửa video hay lập trình dự án lớn thì để tệp ngay trên máy mình. <b>Nhớ nhé: dữ liệu to mà đọc tuần tự thì qua mạng được; đọc lắt nhắt nhiều tệp thì không.</b></p>
+    <p class="en-only" lang="en">Ward asks two questions before handing over any tool. First, <b>why</b>: traditional Unix networks had two major reasons — convenience and lack of local storage; concentrating storage on a few central servers was far more economical than buying and maintaining local storage for every machine.<span class="cite"><a href="#ref-1">1</a></span> Second, <b>the cost</b>: that model's advantages are overshadowed by one disadvantage constant over the years — network storage performance is often poor compared to local storage.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only"><b>Thủ phạm mang tên độ trễ.</b> Ward tách bạch hai kiểu truy cập. Phát video và âm thanh từ máy chủ tới trình phát thì phần cứng và mạng hiện đại không gặp vấn đề, một phần vì <i>mẫu truy cập rất dễ đoán</i>: máy chủ biết máy khách sẽ đọc tuần tự nên nạp trước và đệm hiệu quả. Nhưng khi bạn thao tác phức tạp hơn hoặc chạm vào nhiều tệp khác nhau cùng lúc, CPU của bạn sẽ ngồi chờ mạng nhiều hơn là làm việc. Độ trễ — thời gian nhận dữ liệu cho một lần truy cập tệp bất kỳ — là một trong những thủ phạm chính: trước khi gửi được byte nào, máy chủ phải nhận và giải mã yêu cầu, rồi định vị và nạp dữ liệu; các bước đầu thường chậm nhất, và chúng lặp lại gần như với mọi lần mở tệp mới.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <b>Samba</b> là bộ phần mềm chia sẻ tệp chuẩn cho Unix, nói giao thức mạng chuẩn của Windows: <span lang="en">Server Message Block</span> (SMB).<span class="cite"><a href="#ref-1">1</a></span> Nó chạy cả hai chiều — máy Windows trong mạng tới được hệ thống Linux của bạn, và bạn cũng in ấn cùng truy cập tệp trên máy chủ Windows từ máy Linux thông qua phần mềm máy khách của Samba.<span class="cite"><a href="#ref-1">1</a></span> macOS cũng hỗ trợ chia sẻ tệp SMB, nhưng với macOS bạn còn có thể dùng SSHFS.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Samba là “người phiên dịch” giữa Linux và Windows về chuyện chia sẻ thư mục và máy in. Nhờ nó, máy Windows nhìn thấy thư mục trên máy Linux như một ổ đĩa mạng bình thường. <b>Nhớ nhé: Samba = Linux nói được tiếng Windows.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <b>Samba</b> is the standard file sharing software suite for Unix, speaking the standard Windows network protocol: <span lang="en">Server Message Block</span> (SMB).<span class="cite"><a href="#ref-1">1</a></span> It works both ways — your network's Windows computers reach your Linux system, and you can print to and access files on Windows servers from your Linux machine via Samba's client software.<span class="cite"><a href="#ref-1">1</a></span> macOS supports SMB file sharing too, but there you can also use SSHFS.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">1 · tạo smb.conf<br>2 · thêm mục chia sẻ tệp<br>3 · thêm mục chia sẻ máy in<br>4 · chạy nmbd và smbd</p>
+      <p class="easy-only">viết một tệp cấu hình<br>khai thư mục dùng chung<br>khai máy in dùng chung<br>bật hai dịch vụ lên</p>
+      <p class="en-only" lang="en">1 · create smb.conf<br>2 · add file sharing sections<br>3 · add printer sharing sections<br>4 · start nmbd and smbd</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">smb.conf</span>
+      <h3>
+        <span class="standard-copy">smb.conf — bốn bước và một tệp duy nhất</span>
+        <span class="easy-only">Một tệp cấu hình cho tất cả</span>
+        <span class="en-only" lang="en">smb.conf — four steps and one file</span>
+      </h3>
+      <p class="standard-copy">Ward gói việc dựng máy chủ Samba vào bốn bước: tạo tệp <code>smb.conf</code>; thêm các mục chia sẻ tệp; thêm các mục chia sẻ máy in; rồi khởi động hai tiến trình nền <code>nmbd</code> và <code>smbd</code>.<span class="cite"><a href="#ref-1">1</a></span> Khi bạn cài Samba từ gói của bản phân phối, hệ thống thường tự làm các bước đó với mặc định hợp lý — nhưng nó không thể đoán bạn muốn chia sẻ đúng những tài nguyên nào.<span class="cite"><a href="#ref-1">1</a></span> Tệp <code>smb.conf</code> thường nằm trong một thư mục <code>etc</code> như <code>/etc/samba</code>, nhưng có khi phải tìm quanh vì nó cũng có thể ở một thư mục <code>lib</code> như <code>/usr/local/samba/lib</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Muốn chia sẻ, bạn viết một tệp nhỏ nói rõ: tên máy là gì, thư mục nào được dùng chung, ai được vào. Rồi bật dịch vụ lên. <b>Nhớ nhé: một tệp cấu hình, bốn bước, thế là xong phần khung.</b></p>
+      <p class="en-only" lang="en">Ward packs setting up a Samba server into four steps: create an <code>smb.conf</code> file; add file sharing sections; add printer sharing sections; then start the Samba daemons <code>nmbd</code> and <code>smbd</code>.<span class="cite"><a href="#ref-1">1</a></span> When you install Samba from a distribution package, your system usually performs those steps with reasonable defaults — but it cannot determine which particular shares you want to offer.<span class="cite"><a href="#ref-1">1</a></span> The file usually lives in an <code>etc</code> directory such as <code>/etc/samba</code>, though you may have to hunt for it, as it can also sit in a <code>lib</code> directory such as <code>/usr/local/samba/lib</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Định dạng bạn đã gặp</span><span class="en-only" lang="en">A format you have met</span></b>
+        <span class="standard-copy">Ward nhận xét định dạng <code>smb.conf</code> giống kiểu XDG bạn từng thấy ở nơi khác (chẳng hạn định dạng cấu hình của systemd), chia thành nhiều mục đặt trong dấu ngoặc vuông như <code>[global]</code> và <code>[printers]</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Tệp này chia thành từng khối, mỗi khối có tên trong ngoặc vuông — giống các tệp cấu hình khác bạn đã thấy.</span>
+        <span class="en-only" lang="en">Ward notes that the <code>smb.conf</code> format resembles the XDG style you've seen elsewhere (such as systemd's configuration format), breaking into sections denoted with square brackets like <code>[global]</code> and <code>[printers]</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ba tham số của <code>[global]</code></h4>
+          <p>Ward giải thích: <code>netbios name</code> là tên máy chủ — nếu bỏ qua, Samba dùng tên host Unix; <code>server string</code> là mô tả ngắn, mặc định là số hiệu phiên bản Samba; <code>workgroup</code> là tên nhóm làm việc Windows, và nếu bạn ở trong một miền Windows thì đặt nó thành tên miền.<span class="cite"><a href="#ref-1">1</a></span> Trang <code>smb.conf(5)</code> xác nhận cả ba: mặc định của <code>netbios name</code> là thành phần đầu của tên DNS của máy (tối đa 15 ký tự), mặc định của <code>server string</code> là <code>Samba %v</code> với <code>%v</code> được thay bằng số hiệu phiên bản, và <code>workgroup</code> mặc định là <code>WORKGROUP</code>.<span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Phạm vi mà tác giả tự giới hạn</h4>
+          <p>Ward nói thẳng rằng phần Samba trong chương “không nhằm bao quát toàn diện”: nó giới hạn ở việc để các máy Windows trong cùng một mạng con nhìn thấy một máy Linux độc lập qua trình duyệt Network Places. Có vô số cách cấu hình Samba vì có rất nhiều khả năng về kiểm soát truy cập và tô-pô mạng; với chi tiết cho máy chủ quy mô lớn, ông giới thiệu <i>Using Samba</i>, ấn bản thứ 3 của Gerald Carter, Jay Ts và Robert Eckstein (O'Reilly, 2007) và trang web Samba.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">access control</span>
+      <h3>
+        <span class="standard-copy">Kiểm soát truy cập — ai vào được, từ đâu</span>
+        <span class="easy-only">Ai được vào và vào từ chỗ nào</span>
+        <span class="en-only" lang="en">Access control — who gets in, and from where</span>
+      </h3>
+      <p class="standard-copy">Ward liệt kê vài tuỳ chọn đặt trong <code>[global]</code> hoặc trong từng mục chia sẻ. <code>interfaces</code> khiến Samba chỉ lắng nghe trên những mạng hay giao diện được nêu, ví dụ <code>interfaces = 10.23.2.0/255.255.255.0</code> hay <code>interfaces = enp0s31f6</code>. <code>bind interfaces only = yes</code> đi kèm với <code>interfaces</code> để giới hạn truy cập vào đúng những máy bạn với tới trực tiếp trên các giao diện đó. <code>valid users = jruser, bill</code> cho phép đúng những người được nêu. <code>guest ok</code> đặt là true sẽ mở mục chia sẻ cho người dùng ẩn danh trên mạng — chỉ làm khi bạn chắc chắn mạng là riêng tư.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bạn có thể nói: chỉ nghe ở cửa này thôi; chỉ mấy người này được vào; hoặc ai cũng vào được (chỉ làm khi mạng là mạng nhà mình). <b>Nhớ nhé: mở cửa cho khách lạ thì phải chắc mình đang ở trong sân nhà.</b></p>
+      <p class="en-only" lang="en">Ward lists a few options for <code>[global]</code> or for individual shares. <code>interfaces</code> makes Samba listen only on the given networks or interfaces, e.g. <code>interfaces = 10.23.2.0/255.255.255.0</code> or <code>interfaces = enp0s31f6</code>. <code>bind interfaces only = yes</code> accompanies <code>interfaces</code> to limit access to only the machines you can directly reach on those interfaces. <code>valid users = jruser, bill</code> allows the given users. <code>guest ok</code> set to true makes a share available to anonymous users on the network — do this only if you are sure the network is private.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Ẩn không phải là khoá</span><span class="en-only" lang="en">Hidden is not locked</span></b>
+        <span class="standard-copy"><code>browseable</code> quyết định mục chia sẻ có hiện ra với trình duyệt mạng hay không. Đặt <code>no</code> cho một mục thì bạn <i>vẫn</i> truy cập được nó trên máy chủ Samba — chỉ là phải biết đúng tên.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Đặt “không hiện” chỉ là giấu đi, không phải khoá lại. Ai biết tên vẫn vào được.</span>
+        <span class="en-only" lang="en"><code>browseable</code> controls whether a share is visible to network browsers. Set it to <code>no</code> and you can <i>still</i> access the share on the Samba server — you just need to know its exact name.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Trang man xác nhận từng tham số</h4>
+          <p><code>smb.conf(5)</code> mô tả <code>bind interfaces only</code> đúng như Ward: nó cho quản trị viên “giới hạn những giao diện nào trên máy sẽ phục vụ yêu cầu SMB”, ảnh hưởng tới <code>smbd</code> và <code>nmbd</code> theo cách hơi khác nhau, mặc định là <code>no</code>.<span class="cite"><a href="#ref-3">3</a></span> <code>browseable</code> điều khiển “việc mục chia sẻ này có được thấy trong danh sách các mục khả dụng ở <span lang="en">net view</span> và trong danh sách duyệt hay không”, mặc định <code>yes</code>.<span class="cite"><a href="#ref-3">3</a></span> <code>guest ok</code> khi đặt <code>yes</code> nghĩa là “không cần mật khẩu để kết nối tới dịch vụ”, và đặc quyền sẽ là của tài khoản khách, mặc định <code>no</code>.<span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một sắc thái nhỏ của <code>valid users</code></h4>
+          <p>Ward tóm tắt tham số này là “cho phép những người được nêu truy cập”. Trang man mô tả cùng cơ chế nhưng gọi nó là “một phép kiểm tra rất cẩn trọng để tuyệt đối chắc chắn một thiết lập sai không chọc thủng bảo mật của bạn”, và bổ sung cú pháp nhóm: tên bắt đầu bằng <code>@</code> được hiểu là nhóm NIS rồi tới nhóm UNIX, <code>+</code> chỉ tra cơ sở dữ liệu nhóm UNIX, <code>&amp;</code> chỉ tra NIS.<span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">tdbsam</span>
+      <h3>
+        <span class="standard-copy">Mật khẩu — hai hệ thống không nói chuyện được với nhau</span>
+        <span class="easy-only">Mật khẩu Windows và mật khẩu Linux là hai thứ</span>
+        <span class="en-only" lang="en">Passwords — two systems that don't speak to each other</span>
+      </h3>
+      <p class="standard-copy">Ward khuyên chỉ cho phép truy cập máy chủ Samba kèm xác thực mật khẩu. Vấn đề: hệ mật khẩu cơ bản trên Unix khác hệ trên Windows, nên trừ khi bạn dùng mật khẩu mạng dạng văn bản rõ hoặc xác thực qua máy chủ miền Windows, bạn phải dựng một hệ mật khẩu thay thế.<span class="cite"><a href="#ref-1">1</a></span> Ông chỉ cách dùng <span lang="en">Trivial Database</span> (TDB) của Samba — phù hợp cho mạng nhỏ — với bốn dòng trong <code>[global]</code>: <code>security = user</code>, <code>passdb backend = tdbsam</code>, <code>obey pam restrictions = yes</code>, <code>smb passwd file = /etc/samba/passwd_smb</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Máy Linux giữ mật khẩu theo kiểu của nó; Windows giữ theo kiểu khác. Muốn hai bên hiểu nhau, Samba phải giữ một sổ mật khẩu riêng. <b>Nhớ nhé: mật khẩu Samba là một sổ riêng, không phải sổ đăng nhập Linux.</b></p>
+      <p class="en-only" lang="en">Ward advises allowing access to your Samba server only with password authentication. The catch: Unix's basic password system differs from Windows', so unless you specify cleartext network passwords or authenticate against a Windows domain server, you must set up an alternative password system.<span class="cite"><a href="#ref-1">1</a></span> He shows Samba's <span lang="en">Trivial Database</span> (TDB) backend — appropriate for small networks — with four lines in <code>[global]</code>: <code>security = user</code>, <code>passdb backend = tdbsam</code>, <code>obey pam restrictions = yes</code>, <code>smb passwd file = /etc/samba/passwd_smb</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Cái bẫy được tác giả nêu đích danh</span><span class="en-only" lang="en">The trap the author names</span></b>
+        <span class="standard-copy">Nếu thấy dòng <code>unix password sync = yes</code> trong <code>smb.conf</code>, hãy cẩn thận: nó khiến <code>smbpasswd</code> đổi luôn mật khẩu Linux thường của người dùng. Kết quả rất dễ gây rối — người dùng đổi mật khẩu Samba thành một thứ khác mật khẩu Linux rồi phát hiện mình không đăng nhập vào hệ thống Linux được nữa. Ward lưu ý <i>một số bản phân phối đặt tham số này theo mặc định</i> trong gói máy chủ Samba của họ.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Có một dòng cấu hình khiến đổi mật khẩu Samba là đổi luôn mật khẩu đăng nhập máy. Nhiều bản Linux bật sẵn dòng đó. Kiểm tra trước khi đổi.</span>
+        <span class="en-only" lang="en">If you see <code>unix password sync = yes</code> in <code>smb.conf</code>, be careful: it makes <code>smbpasswd</code> change the user's normal Linux password too. The result is very confusing — a user changes their Samba password to something that is not their Linux password and finds they can no longer log in to their Linux system. Ward notes <i>some distributions set this parameter by default</i> in their Samba server packages.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Thêm, xoá, tạm khoá người dùng</h4>
+          <p>Ward: thêm bằng <code>smbpasswd -a username</code>, và tên ấy <i>phải</i> là một tên người dùng hợp lệ trên hệ thống Linux của bạn; xoá bằng <code>-x</code>; tạm vô hiệu hoá bằng <code>-d</code> và bật lại bằng <code>-e</code>.<span class="cite"><a href="#ref-1">1</a></span> Trang <code>smbpasswd(8)</code> khớp từng điểm: <code>-d</code> ghi cờ <code>D</code> vào vùng kiểm soát tài khoản, sau đó “mọi nỗ lực xác thực qua SMB bằng tên người dùng này sẽ thất bại”; <code>-e</code> không có tác dụng nếu tài khoản vốn chưa bị vô hiệu; và các phần hậu cảnh mặc định yêu cầu người dùng đã tồn tại trong tệp mật khẩu hệ thống (thường là <code>/etc/passwd</code>).<span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ai đổi được mật khẩu của ai</h4>
+          <p>Với quyền siêu người dùng, <code>smbpasswd username</code> đổi mật khẩu của người đó; nhưng nếu máy chủ Samba đang chạy, bất kỳ người dùng nào cũng đổi được mật khẩu Samba của chính mình bằng cách gõ <code>smbpasswd</code> trơ trọi.<span class="cite"><a href="#ref-1">1</a></span> Trang man giải thích tại sao việc chạy máy chủ lại là điều kiện: công cụ hoạt động theo kiểu máy khách – máy chủ chứ không phải setuid, nên “<span lang="en">the smbd daemon must be running on the local machine</span>”.<span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao có <code>obey pam restrictions</code></h4>
+          <p>Ward giải thích tham số này bảo đảm người dùng đổi mật khẩu bằng <code>smbpasswd</code> phải tuân mọi quy tắc mà PAM áp cho việc đổi mật khẩu thường.<span class="cite"><a href="#ref-1">1</a></span> Trang man bổ sung sắc thái quan trọng: mặc định là <code>no</code>, và Samba <i>luôn</i> bỏ qua PAM cho khâu xác thực khi bật mã hoá mật khẩu, vì các mô-đun PAM không hỗ trợ được cơ chế thách thức – đáp ứng.<span class="cite"><a href="#ref-3">3</a></span> Nói cách khác, tham số này chi phối khâu quản lý tài khoản và phiên, không phải khâu xác thực.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">nmbd / smbd</span>
+      <h3>
+        <span class="standard-copy">Hai tiến trình nền — một đặt tên, một làm việc</span>
+        <span class="easy-only">Hai dịch vụ: một gọi tên, một phục vụ</span>
+        <span class="en-only" lang="en">Two daemons — one names, one works</span>
+      </h3>
+      <p class="standard-copy">Nếu cài Samba từ gói của bản phân phối, thường bạn không phải lo chuyện khởi động — Ward khuyên kiểm tra bằng danh sách từ <code>systemctl --type=service</code>. Nhưng nếu cài từ mã nguồn, chạy <code>nmbd -D -s smb_config_file</code> và <code>smbd -D -s smb_config_file</code>. <code>nmbd</code> là máy chủ tên NetBIOS, còn <code>smbd</code> làm công việc thật sự là xử lý các yêu cầu chia sẻ; <code>-D</code> chỉ định chế độ tiến trình nền.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Một dịch vụ lo việc “máy tôi tên gì để bên kia tìm thấy”, dịch vụ kia lo việc “đưa tệp cho bên kia”. Thường thì hệ thống tự bật cả hai. <b>Nhớ nhé: một cái để được gọi tên, một cái để làm việc.</b></p>
+      <p class="en-only" lang="en">If you installed Samba from a distribution package you usually needn't worry about starting it — Ward suggests checking the list from <code>systemctl --type=service</code>. But if you built from source, run <code>nmbd -D -s smb_config_file</code> and <code>smbd -D -s smb_config_file</code>. <code>nmbd</code> is a NetBIOS name server, while <code>smbd</code> does the actual work of handling share requests; <code>-D</code> specifies daemon mode.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Khi bạn sửa cấu hình</span><span class="en-only" lang="en">When you edit the config</span></b>
+        <span class="standard-copy">Nếu sửa <code>smb.conf</code> trong lúc <code>smbd</code> đang chạy, bạn báo cho tiến trình nền biết bằng tín hiệu HUP — “dù gần như luôn tốt hơn nếu để systemd giám sát máy chủ”, khi đó <code>systemctl</code> làm hộ bạn.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Sửa xong thì phải báo cho dịch vụ biết. Cách gọn nhất là để systemd lo.</span>
+        <span class="en-only" lang="en">If you alter <code>smb.conf</code> while <code>smbd</code> is running, notify the daemon with a HUP signal — "though it's almost always for the better if you let systemd supervise the server," in which case <code>systemctl</code> does the work.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Trang man của hai tiến trình</h4>
+          <p><code>nmbd(8)</code> tự mô tả là “<span lang="en">NetBIOS name server to provide NetBIOS over IP naming services to clients</span>”, và <code>-D|--daemon</code> khiến nó tách ra chạy nền, nhận yêu cầu ở cổng thích hợp.<span class="cite"><a href="#ref-5">5</a></span> <code>smbd(8)</code> là “<span lang="en">server to provide SMB/CIFS services to clients</span>”, cung cấp dịch vụ tệp và máy in cho máy khách Windows.<span class="cite"><a href="#ref-8">8</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>HUP làm gì ở mỗi bên</h4>
+          <p>Với <code>smbd</code>, tài liệu cho biết tệp cấu hình và các tệp nó include được tự nạp lại mỗi ba phút nếu có thay đổi, và “<span lang="en">One can force a reload by sending a SIGHUP to the server</span>” — nạp lại không ảnh hưởng tới các kết nối đã thiết lập.<span class="cite"><a href="#ref-8">8</a></span> Với <code>nmbd</code>, SIGHUP khiến nó đổ danh sách tên ra tệp <code>namelist.debug</code> và cũng nạp lại cấu hình; tài liệu khuyên dùng SIGTERM để dừng, không dùng SIGKILL.<span class="cite"><a href="#ref-5">5</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Khi có trục trặc</h4>
+          <p>Ward: lỗi lúc khởi động hiện ngay trên dòng lệnh, nhưng các thông điệp chẩn đoán lúc chạy đi vào hai tệp nhật ký <code>log.nmbd</code> và <code>log.smbd</code>, thường nằm trong một thư mục <code>/var/log</code> như <code>/var/log/samba</code>; ở đó bạn còn thấy nhật ký riêng cho từng máy khách.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">[share] / [homes] / [printers]</span>
+      <h3>
+        <span class="standard-copy">Khai một mục chia sẻ — tệp, thư mục nhà, máy in</span>
+        <span class="easy-only">Khai thư mục dùng chung và máy in</span>
+        <span class="en-only" lang="en">Declaring a share — files, home directories, printers</span>
+      </h3>
+      <p class="standard-copy">Để xuất một thư mục cho máy khách SMB, Ward thêm một mục dạng <code>[label]</code> với <code>path</code>, <code>comment</code>, <code>guest ok = no</code>, <code>writable = yes</code>, <code>printable = no</code>.<span class="cite"><a href="#ref-1">1</a></span> Ông giải nghĩa từng tham số: <code>guest ok = yes</code> cho phép khách vào (<code>public</code> là từ đồng nghĩa); <code>writable = yes</code> hay <code>true</code> đánh dấu mục chia sẻ là đọc-ghi — và <b>đừng cho khách truy cập một mục đọc-ghi</b>; <code>printable</code> hiển nhiên phải là <code>no</code> hoặc <code>false</code> với một mục chia sẻ thư mục; <code>veto files</code> chặn xuất mọi tệp khớp mẫu đã cho, mỗi mẫu phải đặt giữa hai dấu gạch chéo, ví dụ <code>veto files = /*.o/bin/</code> cấm tệp đối tượng cùng mọi tệp hay thư mục tên <code>bin</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bạn khai: thư mục này tên gì khi nhìn từ máy khác, nằm ở đâu, ai được ghi vào. Rồi bạn có thể nói thêm “giấu mấy tệp kiểu này đi”. <b>Nhớ nhé: cho phép ghi thì đừng cho phép khách lạ.</b></p>
+      <p class="en-only" lang="en">To export a directory to SMB clients, Ward adds a <code>[label]</code> section with <code>path</code>, <code>comment</code>, <code>guest ok = no</code>, <code>writable = yes</code>, <code>printable = no</code>.<span class="cite"><a href="#ref-1">1</a></span> He glosses each: <code>guest ok = yes</code> allows guest access (<code>public</code> is a synonym); <code>writable = yes</code> or <code>true</code> marks the share read-write — and <b>do not allow guest access to a read-write share</b>; <code>printable</code> obviously must be <code>no</code> or <code>false</code> on a directory share; <code>veto files</code> prevents the export of any files matching the given patterns, each enclosed between forward slashes, e.g. <code>veto files = /*.o/bin/</code> bars object files as well as anything named <code>bin</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Thư mục nhà và phép thế %S</span><span class="en-only" lang="en">Home directories and the %S substitution</span></b>
+        <span class="standard-copy">Mục <code>[homes]</code> xuất thư mục nhà cho người dùng; mặc định Samba đọc mục <code>/etc/passwd</code> của người đang đăng nhập để xác định thư mục nhà. Muốn đặt thư mục nhà Windows ở chỗ khác thư mục nhà Linux, dùng phép thế <code>%S</code> trong tham số <code>path</code> — chẳng hạn <code>path = /u/%S</code> chuyển thư mục <code>[homes]</code> của người dùng sang <code>/u/user</code>; Samba thay <code>%S</code> bằng tên người dùng hiện tại.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Có một khối đặc biệt tên <code>[homes]</code> để mỗi người tự thấy thư mục riêng của mình, không phải khai từng người một.</span>
+        <span class="en-only" lang="en">The <code>[homes]</code> section exports home directories to users; by default Samba reads the logged-in user's <code>/etc/passwd</code> entry to determine their home directory. To keep Windows home directories somewhere other than the regular Linux ones, use the <code>%S</code> substitution in <code>path</code> — e.g. <code>path = /u/%S</code> switches a user's <code>[homes]</code> directory to <code>/u/user</code>; Samba substitutes the current username for <code>%S</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Chia sẻ máy in</h4>
+          <p>Ward xuất máy in bằng một mục <code>[printers]</code>; với CUPS — hệ in chuẩn của Unix — nó gồm <code>comment</code>, <code>browseable = yes</code>, <code>printing = CUPS</code>, <code>path = cups</code>, <code>printable = yes</code>, <code>writable = no</code>. Để dùng được <code>printing = CUPS</code>, bản cài Samba của bạn phải được cấu hình và liên kết với thư viện CUPS.<span class="cite"><a href="#ref-1">1</a></span> Trang man liệt kê CUPS trong số các kiểu in được hỗ trợ và nhắc rằng CUPS cùng IPRINT chỉ khả dụng nếu thư viện phát triển CUPS có mặt lúc biên dịch hoặc đóng gói Samba — khớp đúng với điều kiện Ward nêu.<span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một lối tắt hợp lý cho máy in</h4>
+          <p>Ward ghi chú: tuỳ cấu hình, bạn có thể muốn cho khách truy cập máy in bằng <code>guest ok = yes</code> thay vì phát mật khẩu hay tài khoản Samba cho mọi người cần in; và chẳng hạn rất dễ giới hạn quyền in trong một mạng con bằng luật tường lửa.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Sắc thái của <code>printable</code> và <code>veto files</code></h4>
+          <p>Trang man nói <code>printable = yes</code> nghĩa là máy khách “có thể mở, ghi vào và nộp tệp cuộn in trong thư mục được chỉ định cho dịch vụ”, mặc định là <code>no</code>; và <code>veto files</code> là “danh sách tệp và thư mục vừa không nhìn thấy vừa không truy cập được”, mỗi mục ngăn bằng <code>/</code>, dùng được <code>*</code> và <code>?</code>.<span class="cite"><a href="#ref-3">3</a></span> Lưu ý <code>writable</code> trong tài liệu hiện tại là “từ đồng nghĩa đảo” của <code>read only</code>.<span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">smbclient / CIFS</span>
+      <h3>
+        <span class="standard-copy">Chiều ngược lại — từ Linux nhìn sang Windows</span>
+        <span class="easy-only">Từ máy Linux mở thư mục của máy Windows</span>
+        <span class="en-only" lang="en">The other direction — Linux looking at Windows</span>
+      </h3>
+      <p class="standard-copy">Chương trình máy khách <code>smbclient</code> in ấn và truy cập được các mục chia sẻ Windows ở xa — tiện khi bạn ở trong môi trường buộc phải làm việc với máy chủ Windows không có cách giao tiếp thân thiện với Unix.<span class="cite"><a href="#ref-1">1</a></span> Bắt đầu bằng <code>-L</code> để lấy danh sách mục chia sẻ từ một máy chủ: <code>smbclient -L -U username SERVER</code>; bỏ <code>-U username</code> được nếu tên người dùng Linux của bạn trùng tên trên <code>SERVER</code>. Sau đó nó hỏi mật khẩu; bấm ENTER để thử vào với tư cách khách.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bạn có thể hỏi máy Windows: “cho tôi xem bạn đang chia sẻ những gì”. Rồi bạn mở một cái ra, và gõ lệnh để lấy tệp về hoặc đẩy tệp sang. <b>Nhớ nhé: hỏi danh sách trước, rồi mới mở một mục.</b></p>
+      <p class="en-only" lang="en">The <code>smbclient</code> client program can print to and access remote Windows shares — handy in an environment where you must interact with Windows servers that offer no Unix-friendly means of communication.<span class="cite"><a href="#ref-1">1</a></span> Start with <code>-L</code> to list a remote server's shares: <code>smbclient -L -U username SERVER</code>; drop <code>-U username</code> if your Linux username matches your username on <code>SERVER</code>. It then asks for a password; press ENTER to try accessing as a guest.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Đọc cột Type</span><span class="en-only" lang="en">Read the Type column</span></b>
+        <span class="standard-copy">Danh sách trả về có cột <code>Type</code>. Ward dặn chỉ để ý các mục <code>Disk</code> và <code>Printer</code> — các mục <code>IPC</code> là để quản trị từ xa. Dùng tên ở cột <code>Sharename</code> để truy cập từng mục.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Trong danh sách, chỉ quan tâm hai loại: ổ đĩa và máy in.</span>
+        <span class="en-only" lang="en">The returned list has a <code>Type</code> field. Ward says to pay attention only to the <code>Disk</code> and <code>Printer</code> shares — the <code>IPC</code> ones are for remote management. Use the name in the <code>Sharename</code> column to access each share.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Chế độ giống ftp</h4>
+          <p>Với truy cập thông thường vào một mục chia sẻ đĩa, dùng <code>smbclient -U username '\\SERVER\sharename'</code>; thành công thì bạn nhận dấu nhắc <code>smb: \&gt;</code>. Ward nói ở chế độ truyền tệp này <code>smbclient</code> giống <code>ftp</code> của Unix, với các lệnh <code>get file</code>, <code>put file</code>, <code>cd dir</code>, <code>lcd localdir</code>, <code>pwd</code>, <code>!command</code> (chạy lệnh trên máy cục bộ — đặc biệt tiện là <code>!pwd</code> và <code>!ls</code>) và <code>help</code>.<span class="cite"><a href="#ref-1">1</a></span> Trang <code>smbclient(1)</code> tự mô tả đúng là “<span lang="en">ftp-like client to access SMB/CIFS resources on servers</span>” và xác nhận <code>get</code>, <code>put</code>, <code>cd</code>, <code>lcd</code>, <code>!</code>, <code>help</code>.<span class="cite"><a href="#ref-9">9</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Gắn hẳn vào cây thư mục</h4>
+          <p>Muốn truy cập tiện hơn, bạn gắn thẳng mục chia sẻ vào hệ thống bằng <code>mount</code>. Ward lưu ý cú pháp khác thường — dùng <code>SERVER:sharename</code> chứ không phải dạng <code>\\SERVER\sharename</code> quen thuộc: <code>mount -t cifs SERVER:sharename mountpoint -o user=username,pass=password</code>. Để <code>mount</code> làm được việc này, máy bạn phải cài bộ tiện ích <span lang="en">Common Internet File System</span> (CIFS), thường là một gói riêng trong các bản phân phối.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Điều trang man nói thêm</h4>
+          <p><code>mount.cifs(8)</code> xác nhận công cụ này “là một phần của bộ cifs-utils”, và mô tả dịch vụ theo cú pháp UNC <code>//server/share</code>. Nó cũng khuyên viết đủ <code>username=</code> thay vì <code>user=</code>, vì <code>user=</code> “có thể làm chương trình mount tiêu chuẩn nhầm rằng đây là một lần mount không phải của siêu người dùng”, và cảnh báo mật khẩu chứa dấu phẩy sẽ không được phân tích đúng trên dòng lệnh.<span class="cite"><a href="#ref-10">10</a></span> Đây là chỗ thực hành đi hơi xa khỏi chữ trong sách — trang này ghi cả hai.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Samba giải bài toán “Linux gặp Windows”. Nhưng Ward nói rõ rằng bảo mật trong các giao thức chia sẻ tệp theo truyền thống <i>không</i> được coi là ưu tiên cao, và điều đó quyết định bạn nên triển khai chia sẻ tệp <b>ở đâu</b>. Nếu có bất kỳ lý do nào để nghi ngờ độ an toàn của mạng giữa các máy, bạn phải tính tới cả ủy quyền/xác thực lẫn mã hoá.<span class="cite"><a href="#ref-1">1</a></span> Nghịch lý ông nêu rất đáng nhớ: những lựa chọn dễ cấu hình nhất thường kém an toàn nhất, và không có cách chuẩn hoá nào để bảo mật kiểu truy cập đó — dù nếu chịu khó ghép đúng các mảnh, những công cụ như <span lang="en">stunnel</span>, IPSec và VPN có thể bảo vệ các tầng nằm dưới giao thức chia sẻ tệp cơ bản.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+    <p class="easy-only">Cách dễ cài nhất thường là cách hở nhất. Muốn an toàn thì phải thêm một lớp bảo vệ bên dưới. <b>Nhớ nhé: dễ và an toàn hiếm khi đi cùng nhau.</b></p>
+    <p class="en-only" lang="en">Samba solves "Linux meets Windows". But Ward is explicit that security in file sharing protocols has traditionally <i>not</i> been treated as a high priority, and that this determines <b>where</b> you want to implement file sharing. If you have any reason to doubt the security of the networks between the machines, you must consider both authorization/authentication and encryption.<span class="cite"><a href="#ref-1">1</a></span> The paradox he states is worth remembering: the easiest options to configure are typically the least secure, and there are no standardized ways to secure these types of access — though with the work of connecting the right pieces, tools such as <span lang="en">stunnel</span>, IPSec and VPNs can secure the layers below basic file sharing protocols.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="unix-va-may" aria-labelledby="unix-va-may-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="unix-va-may-title">
+      <span class="standard-copy">SSHFS, NFS và lưu trữ đám mây — ba nấc của cùng một thoả hiệp</span>
+      <span class="easy-only">Máy Linux với nhau, ổ NAS, và ổ trên mây</span>
+      <span class="en-only" lang="en">SSHFS, NFS and cloud storage — three notches of one trade-off</span>
+    </h2>
+    <p class="standard-copy">Rời khỏi thế giới Windows, Ward xếp ba lựa chọn theo mức công sức bỏ ra. <b>SSHFS</b> cho những tình huống không phức tạp lắm — “không gì khác hơn một hệ tệp không gian người dùng mở một kết nối SSH và trình bày các tệp ở đầu kia tại một điểm gắn trên máy bạn”.<span class="cite"><a href="#ref-1">1</a></span> <b>NFS</b> là một trong những hệ chia sẻ tệp truyền thống được dùng nhiều nhất giữa các hệ thống Unix, với rất nhiều phiên bản cho nhiều kịch bản.<span class="cite"><a href="#ref-1">1</a></span> Còn <b>lưu trữ đám mây</b> là một hướng khác hẳn, gần như luôn được hiện thực dưới dạng giao diện FUSE.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Ba cách: một cách dễ cài nhưng chậm (SSHFS), một cách nhanh hơn nhưng phải dựng máy chủ (NFS), và một cách thuê người khác giữ giùm (đám mây). <b>Nhớ nhé: dễ, nhanh, khỏi lo — chọn hai trong ba thôi.</b></p>
+    <p class="en-only" lang="en">Leaving the Windows world, Ward ranks three options by the effort they demand. <b>SSHFS</b> for scenarios that aren't particularly complicated — "nothing more than a user-space filesystem that opens an SSH connection and presents the files on the other side at a mount point on your machine".<span class="cite"><a href="#ref-1">1</a></span> <b>NFS</b> is one of the most commonly used traditional systems for file sharing among Unix systems, with many versions for different scenarios.<span class="cite"><a href="#ref-1">1</a></span> And <b>cloud storage</b> is a different direction altogether, nearly always implemented as a FUSE interface.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only"><b>Về số phiên bản NFS.</b> Ward không chốt một con số — ông chỉ nói “có nhiều phiên bản NFS khác nhau cho các kịch bản khác nhau”, rằng NFS phục vụ được trên cả TCP và UDP, với rất nhiều tuỳ chọn xác thực và mã hoá mà “rất ít trong số đó được bật theo mặc định, đáng tiếc thay”.<span class="cite"><a href="#ref-1">1</a></span> Trang <code>nfs(5)</code> thì cụ thể hơn: máy khách Linux có thể hỗ trợ các phiên bản 3, 4.0, 4.1 hoặc 4.2 tuỳ tuỳ chọn biên dịch nhân; nếu không yêu cầu phiên bản nào, máy khách thử 4.2 trước rồi thương lượng lùi dần cho tới khi gặp phiên bản máy chủ hỗ trợ.<span class="cite"><a href="#ref-13">13</a></span> Trang này giữ cách nói mở của Ward trong phần chính và ghi con số cụ thể ở đây, thay vì lặng lẽ chọn một bên.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <b>FUSE</b> — <span lang="en">File System in User Space</span> — là cách hiện thực một hệ tệp mà dữ liệu và siêu dữ liệu do một tiến trình người dùng bình thường cung cấp, nhưng vẫn truy cập được bình thường qua giao diện của nhân.<span class="cite"><a href="#ref-16">16</a></span> Ward diễn đạt gọn hơn: một bộ xử lý FUSE “không gì khác hơn một tiến trình nền không gian người dùng đóng vai trung gian giữa nguồn dữ liệu và nhân”.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Bình thường, muốn thêm một loại ổ đĩa mới thì phải sửa nhân — việc rất khó. FUSE cho phép viết nó như một chương trình thường. Nhờ vậy mới có “ổ đĩa Dropbox”, “ổ đĩa S3”… <b>Nhớ nhé: FUSE là cách làm ổ đĩa giả mà không phải động vào nhân.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <b>FUSE</b> — <span lang="en">File System in User Space</span> — is a way to implement a filesystem whose data and metadata are provided by an ordinary userspace process, yet which is accessed normally through the kernel interface.<span class="cite"><a href="#ref-16">16</a></span> Ward puts it more compactly: a FUSE handler is "nothing more than a user-space daemon that acts as an intermediary between the data source and the kernel".<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">sshfs username@host:dir mountpoint<br>fusermount -u mountpoint<br><br>mount -t nfs server:directory mountpoint</p>
+      <p class="easy-only">sshfs máy:thư-mục điểm-gắn<br>fusermount -u điểm-gắn<br><br>mount -t nfs máy:thư-mục điểm-gắn</p>
+      <p class="en-only" lang="en">sshfs username@host:dir mountpoint<br>fusermount -u mountpoint<br><br>mount -t nfs server:directory mountpoint</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">sshfs</span>
+      <h3>
+        <span class="standard-copy">SSHFS — nếu mở được SSH thì gắn được thư mục</span>
+        <span class="easy-only">SSHFS — có SSH là có ổ đĩa mạng</span>
+        <span class="en-only" lang="en">SSHFS — if you can open SSH, you can mount</span>
+      </h3>
+      <p class="standard-copy">Cú pháp SSHFS trên dòng lệnh nhìn bề ngoài giống các lệnh SSH bạn đã gặp; bạn cung cấp thư mục chia sẻ ở máy xa và điểm gắn mong muốn: <code>sshfs username@host:dir mountpoint</code>. Như với SSH, bỏ được <code>username@</code> nếu tên người dùng hai bên trùng nhau, và bỏ được <code>:dir</code> nếu bạn chỉ muốn gắn thư mục nhà ở đầu kia.<span class="cite"><a href="#ref-1">1</a></span> Hầu hết bản phân phối không cài sẵn SSHFS, nên bạn có thể phải cài gói của bản phân phối.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nếu bạn đã đăng nhập được vào máy kia bằng SSH thì bạn cũng gắn được thư mục của nó vào máy mình, như cắm một cái USB. Không cần cài gì ở máy kia. <b>Nhớ nhé: có SSH là có ổ đĩa mạng, gần như miễn phí công sức.</b></p>
+      <p class="en-only" lang="en">SSHFS's command line looks superficially like the SSH commands you've seen; you supply the shared directory on the remote host and the desired mount point: <code>sshfs username@host:dir mountpoint</code>. As in SSH, you can drop <code>username@</code> if the username is the same on both sides, and omit <code>:dir</code> if you just want the home directory on the other side.<span class="cite"><a href="#ref-1">1</a></span> Most distributions don't install SSHFS by default, so you may need your distribution's package.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Tháo gắn đúng cách</span><span class="en-only" lang="en">Unmounting properly</span></b>
+        <span class="standard-copy">Vì đây là hệ tệp không gian người dùng, nếu chạy với tư cách người dùng thường thì bạn phải tháo bằng <code>fusermount -u mountpoint</code>. Siêu người dùng cũng tháo được bằng <code>umount</code>; nhưng để bảo đảm nhất quán về quyền sở hữu và bảo mật, loại hệ tệp này thường nên được gắn với tư cách người dùng thường.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Gắn bằng tài khoản nào thì tháo bằng tài khoản đó, và dùng đúng lệnh tháo dành cho nó.</span>
+        <span class="en-only" lang="en">Because this is a user-space filesystem, running as a regular user you unmount with <code>fusermount -u mountpoint</code>. The superuser can also unmount with <code>umount</code>; but to ensure consistency of ownership and security, this type of filesystem is usually best mounted as a regular user.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hai ưu, hai nhược</h4>
+          <p>Ward cân đối rất gọn. Ưu: thiết lập tối thiểu — yêu cầu duy nhất ở máy xa là SFTP được bật, và hầu hết máy chủ SSH bật sẵn; và nó không phụ thuộc vào bất kỳ cấu hình mạng cụ thể nào — mở được kết nối SSH là SSHFS chạy, dù trên mạng nội bộ an toàn hay mạng xa không an toàn.<span class="cite"><a href="#ref-1">1</a></span> Nhược: hiệu năng kém đi vì chi phí mã hoá, biên dịch và vận chuyển (“nhưng có thể không tệ như bạn nghĩ”), và các thiết lập nhiều người dùng bị hạn chế.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Trang man ghi gì</h4>
+          <p><code>sshfs(1)</code> ghi cú pháp <code>sshfs [user@]host:[dir] mountpoint [options]</code> — khớp đúng dạng Ward dùng — và mô tả SSHFS là máy khách hệ tệp dựa trên SSH, hoạt động qua hệ con SFTP.<span class="cite"><a href="#ref-12">12</a></span> Một khác biệt nhỏ đáng biết: bản man hiện hành nêu lệnh tháo dưới dạng <code>fusermount3 -u mountpoint</code> trên Linux (và <code>umount</code> trên macOS/FreeBSD), phản ánh việc libfuse đã lên phiên bản 3.<span class="cite"><a href="#ref-12">12</a></span> Chữ <code>fusermount</code> của Ward vẫn đúng ở nhiều bản phân phối; trên máy của bạn, hãy dùng tên nào thật sự tồn tại.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">nfs</span>
+      <h3>
+        <span class="standard-copy">NFS — cùng cú pháp, khác thế giới</span>
+        <span class="easy-only">NFS — chuẩn cũ của thế giới Unix</span>
+        <span class="en-only" lang="en">NFS — same syntax, different world</span>
+      </h3>
+      <p class="standard-copy">Để gắn một thư mục ở xa bằng NFS, Ward dùng đúng cú pháp cơ bản như khi gắn thư mục CIFS: <code>mount -t nfs server:directory mountpoint</code>. Về kỹ thuật, bạn không cần tuỳ chọn <code>-t nfs</code> vì <code>mount</code> đáng ra tự nhận ra, nhưng bạn nên tìm hiểu các tuỳ chọn trong trang <code>nfs(5)</code>.<span class="cite"><a href="#ref-1">1</a></span> Ở đó có vài tuỳ chọn bảo mật khác nhau qua tham số <code>sec</code>; nhiều quản trị viên trên mạng nhỏ, khép kín dùng kiểm soát truy cập dựa trên máy, còn các phương pháp tinh vi hơn — như xác thực dựa trên Kerberos — đòi hỏi cấu hình bổ sung ở những phần khác của hệ thống.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">NFS là cách cũ nhất và phổ biến nhất để các máy Unix dùng chung thư mục. Lệnh gắn nhìn y hệt cách gắn ổ đĩa thường. <b>Nhớ nhé: gắn vào là dùng như thư mục trên máy mình.</b></p>
+      <p class="en-only" lang="en">To mount a remote directory with NFS, Ward uses the same basic syntax as for a CIFS directory: <code>mount -t nfs server:directory mountpoint</code>. Technically you don't need <code>-t nfs</code> because <code>mount</code> should figure it out, but you may want to investigate the options in the <code>nfs(5)</code> manual page.<span class="cite"><a href="#ref-1">1</a></span> There you'll find several security options via <code>sec</code>; many administrators on small, closed networks use host-based access control, while more sophisticated methods such as Kerberos-based authentication require additional configuration elsewhere in your system.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Gắn khi cần, không gắn lúc khởi động</span><span class="en-only" lang="en">Mount on demand, not at boot</span></b>
+        <span class="standard-copy">Khi bạn dùng hệ tệp qua mạng nhiều hơn, Ward khuyên dựng <span lang="en">automounter</span> để hệ thống chỉ gắn hệ tệp lúc bạn thật sự chạm vào nó — nhằm tránh các vấn đề phụ thuộc khi khởi động. Công cụ tự gắn truyền thống tên là <code>automount</code>, có một bản mới hơn tên <code>amd</code>, nhưng phần lớn chức năng nay đã được thay thế bởi kiểu đơn vị <code>automount</code> của systemd.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span></span>
+        <span class="easy-only">Đừng bắt máy nối tới ổ mạng ngay lúc khởi động — nếu mạng chưa sẵn sàng, máy sẽ treo. Hãy để nó nối khi bạn cần.</span>
+        <span class="en-only" lang="en">As you use network filesystems more, Ward recommends setting up the <span lang="en">automounter</span> so the system mounts them only when you actually try to use them — preventing dependency problems at boot. The traditional tool was <code>automount</code>, with a newer version called <code>amd</code>, but much of this functionality has now been supplanted by systemd's <code>automount</code> unit type.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Phía máy chủ mà sách cố ý không dạy</h4>
+          <p>Ward nói thẳng trong khung phụ: dựng một máy chủ NFS để chia sẻ tệp cho các máy Linux khác phức tạp hơn cấu hình phía máy khách — bạn cần chạy các tiến trình nền máy chủ (<code>mountd</code> và <code>nfsd</code>) và thiết lập tệp <code>/etc/exports</code> phản ánh những thư mục bạn chia sẻ. Ông không trình bày máy chủ NFS, chủ yếu vì thường tiện hơn nhiều nếu chỉ mua một thiết bị NAS lo giúp; nhiều thiết bị như vậy chạy trên nền Linux nên tự nhiên có hỗ trợ máy chủ NFS, và nhà sản xuất tăng giá trị bằng công cụ quản trị riêng giúp bớt khổ với những việc tẻ nhạt như cấu hình RAID và sao lưu đám mây.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4><code>/etc/exports</code> là gì</h4>
+          <p>Trang <code>exports(5)</code> mô tả tệp này là “bảng các hệ tệp vật lý cục bộ trên một máy chủ NFS mà máy khách NFS truy cập được”, mỗi mục kèm danh sách tuỳ chọn và một danh sách kiểm soát truy cập; bảng được <code>exportfs(8)</code> đọc và chuyển cho <code>mountd(8)</code>.<span class="cite"><a href="#ref-14">14</a></span> Một mặc định đáng nhớ: ánh xạ uid 0 sang danh tính ẩn danh — gọi là <i>root squashing</i> — “là mặc định, và có thể tắt bằng <code>no_root_squash</code>”.<span class="cite"><a href="#ref-14">14</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tuỳ chọn <code>sec</code> cụ thể là gì</h4>
+          <p><code>nfs(5)</code> ghi <code>sec=</code> nhận danh sách các “hương vị” bảo mật, ngăn bằng dấu hai chấm, với các giá trị hợp lệ <code>none</code>, <code>sys</code>, <code>krb5</code>, <code>krb5i</code>, <code>krb5p</code>; nếu không chỉ định, máy khách tự tìm một hương vị mà cả hai bên đều hỗ trợ.<span class="cite"><a href="#ref-13">13</a></span> Ba biến thể Kerberos lần lượt cho: chứng minh danh tính bằng mật mã trong mỗi yêu cầu RPC, thêm phát hiện giả mạo, và mã hoá toàn bộ yêu cầu RPC.<span class="cite"><a href="#ref-13">13</a></span> RFC 7530 — “<span lang="en">Network File System (NFS) Version 4 Protocol</span>” — quy định rằng máy khách và máy chủ NFSv4 <i>phải</i> hỗ trợ cơ chế bảo mật Kerberos V5, và ánh xạ ba giả-hương-vị <code>krb5</code>, <code>krb5i</code>, <code>krb5p</code> sang ba mức dịch vụ RPCSEC_GSS.<span class="cite"><a href="#ref-15">15</a></span> Đây chính là “cấu hình bổ sung” mà Ward nhắc tới.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">cloud storage</span>
+      <h3>
+        <span class="standard-copy">Đám mây — đổi hiệu năng lấy sự khỏi lo</span>
+        <span class="easy-only">Ổ đĩa trên mây — người khác giữ giùm</span>
+        <span class="en-only" lang="en">The cloud — trading performance for peace of mind</span>
+      </h3>
+      <p class="standard-copy">Ward nêu lựa chọn thứ ba rất gọn: lưu trữ đám mây như AWS S3 hay Google Cloud Storage không có hiệu năng của lưu trữ trên mạng cục bộ, nhưng đổi lại có hai ưu thế lớn — bạn không bao giờ phải bảo trì chúng, và bạn không phải lo chuyện sao lưu.<span class="cite"><a href="#ref-1">1</a></span> Ngoài các giao diện web và giao diện lập trình mà mọi nhà cung cấp đều có, còn có cách gắn hầu hết các loại lưu trữ đám mây vào một hệ thống Linux — và khác với hầu hết hệ tệp đã gặp trong sách, chúng gần như đều được hiện thực bằng FUSE.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ổ đĩa trên mây chậm hơn ổ trong nhà, nhưng bạn không phải thay ổ hỏng, không phải nhớ sao lưu. Đó là cái bạn mua. <b>Nhớ nhé: mây thì chậm hơn nhưng khỏi phải chăm.</b></p>
+      <p class="en-only" lang="en">Ward states the third option compactly: cloud storage such as AWS S3 or Google Cloud Storage doesn't have the performance of storage on a local network, but it offers two significant advantages — you never have to maintain it, and you shouldn't have to worry about backups.<span class="cite"><a href="#ref-1">1</a></span> Besides the web (and programmatic) interfaces every provider offers, there are ways to mount most kinds of cloud storage on a Linux system — and unlike most of the filesystems in the book, these are nearly all implemented as FUSE interfaces.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Vòng tròn khép lại với rsync</span><span class="en-only" lang="en">The circle closes back to rsync</span></b>
+        <span class="standard-copy">Ward nối lại đầu chương: bạn có thể gắn lưu trữ internet như Amazon S3 vào hệ thống Linux rồi dùng <code>rsync --delete</code> để đồng bộ định kỳ một hệ tệp với lưu trữ mạng — “một hệ thống sao lưu rất hiệu quả”.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Gắn ổ trên mây vào máy, rồi bảo <code>rsync</code> đồng bộ mỗi đêm. Thế là có sao lưu.</span>
+        <span class="en-only" lang="en">Ward ties it back to the opening: you can attach internet storage such as Amazon's S3 to your Linux system and then use <code>rsync --delete</code> to periodically synchronize a filesystem with the network storage — "a very effective backup system".<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao “nhiều lựa chọn” lại hợp lý</h4>
+          <p>Với một số nhà cung cấp phổ biến như S3, Ward nói thậm chí có <i>nhiều</i> lựa chọn khác nhau — và điều đó hợp lý, vì một bộ xử lý FUSE chẳng qua chỉ là một tiến trình nền không gian người dùng đứng giữa nguồn dữ liệu và nhân.<span class="cite"><a href="#ref-1">1</a></span> Nói cách khác, rào cản viết một hệ tệp mới đã hạ xuống mức của một chương trình thường; <code>s3fs-fuse</code> là một trong những hiện thực mã nguồn mở gắn một <span lang="en">bucket</span> S3 vào cây thư mục cục bộ theo đúng kiểu đó.<span class="cite"><a href="#ref-18">18</a></span> Sách cố ý không trình bày chi tiết cách thiết lập một máy khách lưu trữ đám mây, vì mỗi cái một khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Chi tiết kỹ thuật của FUSE</h4>
+          <p>Tài liệu nhân mô tả FUSE gồm ba mảnh: một mô-đun nhân (<code>fuse.ko</code>), một thư viện không gian người dùng (<code>libfuse.*</code>) và một tiện ích gắn (<code>fusermount</code>); điểm mạnh nổi bật là “<span lang="en">allowing secure, non-privileged mounts</span>”.<span class="cite"><a href="#ref-16">16</a></span> Vì lời gọi hệ thống <code>mount()</code> là thao tác đặc quyền, <code>fusermount</code> được cài đặt setuid root — và để bù lại, nó luôn thêm <code>nosuid</code> cùng <code>nodev</code> vào tuỳ chọn gắn cho các lần gắn không đặc quyền, đồng thời kiểm tra quyền trên điểm gắn.<span class="cite"><a href="#ref-16">16</a></span> Đây chính là lý do kỹ thuật cho lời khuyên “tốt nhất nên gắn với tư cách người dùng thường” ở phần SSHFS.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">the state of sharing</span>
+      <h3>
+        <span class="standard-copy">Vì sao vẫn chưa có một chuẩn duy nhất</span>
+        <span class="easy-only">Vì sao chưa ai thắng cuộc</span>
+        <span class="en-only" lang="en">Why there is still no single standard</span>
+      </h3>
+      <p class="standard-copy">Ward kết chương bằng một sự thừa nhận: phần bàn về NFS và chia sẻ tệp nói chung có vẻ còn dang dở — và đúng là vậy, nhưng chỉ dang dở đúng bằng mức mà chính các hệ chia sẻ tệp còn dang dở.<span class="cite"><a href="#ref-1">1</a></span> Cụ thể: mức bảo mật cơ sở của NFS khá thấp, cần rất nhiều công sức bổ sung để cải thiện; các hệ CIFS khá hơn ở điểm này vì những tầng mã hoá cần thiết đã được tích hợp vào phần mềm hiện đại. Nhưng giới hạn hiệu năng thì không dễ vượt qua — chưa kể một hệ thống có thể hoạt động tệ đến mức nào khi tạm thời mất kết nối tới lưu trữ mạng của nó.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Đã có nhiều người thử làm một cách chia sẻ tệp thật tốt. Chưa ai làm ra cái vừa nhanh, vừa an toàn, vừa dễ cài. Vì thế mới còn nhiều lựa chọn. <b>Nhớ nhé: nhiều lựa chọn thường có nghĩa là chưa có lựa chọn nào đủ tốt.</b></p>
+      <p class="en-only" lang="en">Ward closes the chapter with an admission: the discussion of NFS and of file sharing in general may feel somewhat incomplete — and it might be, but only as much as the file sharing systems themselves are.<span class="cite"><a href="#ref-1">1</a></span> Concretely: NFS's base security level is quite low, requiring significant extra work to improve; CIFS systems are somewhat better in this regard, as the necessary encryption layers are built into contemporary software. But performance limitations aren't easy to overcome — not to mention how badly a system can perform when it is temporarily unable to reach its network storage.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Câu chuyện AFS</span><span class="en-only" lang="en">The AFS story</span></b>
+        <span class="standard-copy">Nỗ lực rộng nhất, theo Ward, có lẽ là <span lang="en">Andrew File System</span> (AFS) — thiết kế lần đầu vào thập niên 1980, được dựng quanh lời giải cho chính những vấn đề này. Vậy vì sao không phải ai cũng dùng AFS? Không có một câu trả lời duy nhất, nhưng phần lớn quy về một sự thiếu linh hoạt nhất định trong vài phần của thiết kế — ví dụ cơ chế bảo mật đòi hỏi một hệ xác thực Kerberos, thứ tuy phổ biến khắp nơi nhưng chưa bao giờ là chuẩn trên các hệ Unix và cần công sức không nhỏ để dựng cùng duy trì (bạn phải dựng hẳn một máy chủ cho nó).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span><span class="cite"><a href="#ref-20">20</a></span></span>
+        <span class="easy-only">Có một hệ rất hay từ thập niên 1980 tên AFS, nhưng muốn dùng nó thì phải dựng thêm cả một hệ đăng nhập riêng — quá sức với người dùng nhỏ.</span>
+        <span class="en-only" lang="en">The most extensive attempt, Ward suggests, is perhaps the <span lang="en">Andrew File System</span> (AFS) — first designed in the 1980s and built around solutions to exactly these problems. So why doesn't everyone use AFS? There is no single answer, but much of it comes down to a certain lack of flexibility in parts of the design — its security mechanism, for example, requires a Kerberos authentication system, which, though universally available, has never been standard on Unix systems and takes a nontrivial amount of work to set up and maintain (you have to set up a server for it).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span><span class="cite"><a href="#ref-20">20</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ai thì AFS lại hợp</h4>
+          <p>Với một tổ chức lớn, đáp ứng những yêu cầu như Kerberos không phải vấn đề — và đó chính là môi trường AFS phát triển tốt: các trường đại học và định chế tài chính là những nơi dùng AFS lớn. Nhưng với người dùng nhỏ thì đơn giản là dễ hơn nếu không làm thế, nên họ chọn những lựa chọn giản dị hơn như NFS hay CIFS.<span class="cite"><a href="#ref-1">1</a></span> Ward lưu ý giới hạn kiểu này lan cả sang Windows: bắt đầu từ Windows 2000, Microsoft chuyển sang Kerberos làm xác thực mặc định trên dòng sản phẩm máy chủ, nhưng các mạng nhỏ hiếm khi là miền Windows có loại máy chủ ấy.<span class="cite"><a href="#ref-1">1</a></span> Tài liệu hiện hành của Microsoft xác nhận trạng thái ấy vẫn còn: Windows Server hiện thực giao thức xác thực Kerberos phiên bản 5, với Trung tâm phân phối khoá (KDC) chạy trên mọi bộ điều khiển miền và dùng cơ sở dữ liệu Active Directory Domain Services làm cơ sở dữ liệu tài khoản.<span class="cite"><a href="#ref-21">21</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Lý do kỹ thuật thứ hai: mã trong nhân</h4>
+          <p>Ngoài điều kiện tiên quyết về xác thực, Ward nêu một vấn đề sâu hơn: nhiều máy khách hệ tệp mạng theo truyền thống là mã nhân — NFS là ví dụ rõ nhất. Yêu cầu của hệ tệp mạng phức tạp tới mức bắt đầu sinh vấn đề: riêng khâu xác thực đã <i>không có chỗ</i> trong nhân. Một hiện thực máy khách nằm trong nhân cũng thu hẹp nghiêm trọng số lập trình viên có thể tham gia, làm chậm cả hệ thống nói chung; có trường hợp mã máy khách nằm ở không gian người dùng, nhưng bên dưới vẫn luôn phải có một kiểu tuỳ biến nhân nào đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao đám mây lại là lối thoát</h4>
+          <p>Ward kết bằng một dự đoán có cơ sở. Khi các nhà cung cấp bắt đầu bán lưu trữ đám mây, rõ ràng các hình thức chia sẻ tệp truyền thống không phù hợp. Trên đám mây, phương thức truy cập được dựng bên trên những cơ chế bảo mật như TLS, khiến việc truy cập lưu trữ không đòi hỏi dựng cả một hệ thống lớn như Kerberos. Với vô số lựa chọn qua FUSE, “chúng ta không còn phụ thuộc vào nhân cho bất kỳ phần nào của máy khách” — mọi khâu xác thực, mã hoá hay xử lý đều làm được ở không gian người dùng. Vì thế tương lai rất có thể sẽ thấy những thiết kế chia sẻ tệp linh hoạt hơn về bảo mật và cả những mặt khác như dịch tên tệp.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Nếu phải rút một sợi chỉ xuyên suốt chương: <b>mọi lựa chọn ở đây đều là một điểm trên đường đánh đổi giữa công sức thiết lập, hiệu năng và bảo mật</b> — và chưa có điểm nào chiếm được cả ba. SSHFS mua sự dễ dàng bằng hiệu năng; NFS mua hiệu năng bằng công sức bảo mật; đám mây mua sự an tâm bằng độ trễ. Biết mình đang đánh đổi cái gì lấy cái gì là toàn bộ nội dung thực dụng của chương này.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Mỗi cách đều được cái này, mất cái kia. Việc của bạn là biết mình đang mất gì. <b>Nhớ nhé: không có lựa chọn đúng, chỉ có lựa chọn hợp với việc của bạn.</b></p>
+    <p class="en-only" lang="en">If you pull one thread through the chapter: <b>every option here is a point on a trade-off between setup effort, performance and security</b> — and none of them wins all three. SSHFS buys ease with performance; NFS buys performance with security work; the cloud buys peace of mind with latency. Knowing what you are trading for what is the whole practical content of this chapter.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 · MISCONCEPTIONS ===================== -->
+<section class="section" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Đính chính</span>
+      <span class="en-only" lang="en">Corrections</span>
+    </p>
+    <h2 id="ngo-nhan-title">
+      <span class="standard-copy">Ba ngộ nhận mà người đọc lần đầu hay mắc</span>
+      <span class="easy-only">Ba chỗ hay hiểu nhầm</span>
+      <span class="en-only" lang="en">Three misconceptions first readers hit</span>
+    </h2>
+    <p class="standard-copy">Phần này thuộc mức đọc <b>Đầy đủ</b>: nó đối chiếu điều người đọc thường nghĩ với điều bản văn thật sự nói.</p>
+    <p class="easy-only">Phần này hơi khó, bạn có thể bỏ qua và quay lại sau. <b>Nhớ nhé: hiểu chậm mà chắc vẫn hơn.</b></p>
+    <p class="en-only" lang="en">This block belongs to the <b>Đầy đủ</b> (full) reading level: it sets what readers usually assume against what the text actually says.</p>
+  </div>
+
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Thêm hay bớt dấu <code>/</code> cuối thì cũng thế thôi”</span>
+          <span class="en-only" lang="en">"A trailing <code>/</code> makes no real difference"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> <code>dir</code> và <code>dir/</code> chỉ là hai cách viết của cùng một đường dẫn, nên <code>rsync</code> xử lý như nhau.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> thêm dấu <code>/</code> vào tên nguồn “thay đổi đáng kể hành vi” — <code>rsync -a dir/ host:dest_dir</code> đổ nội dung của <code>dir</code> vào <code>dest_dir</code> mà không tạo <code>dir</code> ở đích, còn bỏ dấu <code>/</code> thì bạn nhận <code>dest_dir/dir/…</code>.<span class="cite"><a href="#ref-1">1</a></span> Man page phát biểu cùng điều bằng chữ của nó: dấu gạch chéo cuối “tránh tạo thêm một tầng thư mục ở đích”.<span class="cite"><a href="#ref-2">2</a></span> Kết hợp với <code>--delete</code>, nhầm lẫn này không còn là phiền toái mà thành khả năng xoá nhầm tệp chẳng liên quan.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> <code>dir</code> and <code>dir/</code> are two spellings of the same path, so <code>rsync</code> treats them alike.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> adding a <code>/</code> to the source name "significantly changes the behavior" — <code>rsync -a dir/ host:dest_dir</code> pours the contents of <code>dir</code> into <code>dest_dir</code> without creating <code>dir</code> there, whereas omitting the <code>/</code> gives you <code>dest_dir/dir/…</code>.<span class="cite"><a href="#ref-1">1</a></span> The man page states the same in its own words: a trailing slash "avoid[s] creating an additional directory level at the destination".<span class="cite"><a href="#ref-2">2</a></span> Combined with <code>--delete</code>, the slip stops being a nuisance and becomes a way to remove unrelated files.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Đặt <code>browseable = no</code> là mục chia sẻ đã được bảo vệ”</span>
+          <span class="en-only" lang="en">"Setting <code>browseable = no</code> protects the share"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> không hiện trong danh sách duyệt nghĩa là không ai vào được.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> đặt tham số này thành <code>no</code> thì bạn <i>vẫn</i> truy cập được các mục chia sẻ trên máy chủ Samba — chỉ là cần biết chính xác tên của chúng.<span class="cite"><a href="#ref-1">1</a></span> Trang <code>smb.conf(5)</code> mô tả tham số này đúng ở phạm vi hiển thị: nó điều khiển việc mục chia sẻ có được thấy trong danh sách khả dụng hay không, chứ không phải quyền truy cập.<span class="cite"><a href="#ref-3">3</a></span> Quyền truy cập là việc của <code>valid users</code>, <code>guest ok</code> và mật khẩu.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> not appearing in the browse list means nobody can get in.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> set it to <code>no</code> for a share and you'll <i>still</i> be able to access it on the Samba server — you just need to know the exact name.<span class="cite"><a href="#ref-1">1</a></span> The <code>smb.conf(5)</code> page scopes the parameter to visibility exactly: it controls whether the share is seen in the list of available shares, not who may reach it.<span class="cite"><a href="#ref-3">3</a></span> Access is the job of <code>valid users</code>, <code>guest ok</code> and passwords.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Gắn được thư mục qua mạng thì coi như có ổ đĩa thứ hai”</span>
+          <span class="en-only" lang="en">"A mounted network share is just a second disk"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> đã gắn vào cây thư mục rồi thì dùng y như lưu trữ cục bộ.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> hiệu năng lưu trữ qua mạng thường kém so với cục bộ, và <i>độ trễ</i> là một trong những thủ phạm chính — trước khi gửi dữ liệu, máy chủ phải nhận và giải mã yêu cầu rồi định vị và nạp dữ liệu, mà các bước chậm nhất ấy lặp lại với gần như mọi lần mở tệp mới.<span class="cite"><a href="#ref-1">1</a></span> Vì thế Ward khuyên rất cụ thể: dữ liệu lớn không cần truy cập ngẫu nhiên thường xuyên thì không sao, nhưng nếu bạn dựng video hay phát triển một hệ phần mềm cỡ lớn, hãy giữ mọi tệp trên lưu trữ cục bộ.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> once it's mounted in your tree, you use it just like local storage.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> network storage performance is often poor compared to local storage, and <i>latency</i> is one of the primary culprits — before sending any data the server must accept and decipher the request, then locate and load the data, and those slowest steps repeat for almost every new file access.<span class="cite"><a href="#ref-1">1</a></span> So Ward's advice is concrete: large amounts of data not requiring frequent random access will be fine, but if you're editing video or developing a software system of any substantial size, keep all your files on local storage.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="tu-kiem-tra" aria-labelledby="tu-kiem-tra-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm tra</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="tu-kiem-tra-title">
+      <span class="standard-copy">Bạn đã chọn được đúng công cụ chưa?</span>
+      <span class="easy-only">Thử trả lời xem nào</span>
+      <span class="en-only" lang="en">Can you pick the right tool yet?</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Trả lời bằng lời của bạn, không tra sách. Nếu một câu khiến bạn ngập ngừng, đó chính là mục bạn nên đọc lại.</p>
+      <p class="easy-only">Thử trả lời miệng thôi, không cần giở lại. Câu nào bí thì quay lại đọc phần đó nhé. <b>Nhớ nhé: chỗ bí chính là chỗ cần học.</b></p>
+      <p class="en-only" lang="en">Answer in your own words, without looking back. Whichever question makes you hesitate points at the section you should reread.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Khác biệt giữa <i>truyền tệp</i> và <i>chia sẻ tệp thật sự</i> là gì, và vì sao chương này tách bạch hai việc đó?</p>
+        <p class="deep-only">Gợi ý sâu hơn: hãy nói thêm vì sao <code>scp -r</code> không cho bạn một bản sao chính xác.</p>
+      </li>
+      <li>
+        <p><code>rsync -a dir host:dest</code> và <code>rsync -a dir/ host:dest</code> để lại gì ở đích? Vì sao kết hợp với <code>--delete</code> lại nguy hiểm?</p>
+        <p class="deep-only">Gợi ý sâu hơn: tính năng nào của shell làm tăng nguy cơ mắc lỗi này?</p>
+      </li>
+      <li>
+        <p>Mặc định <code>rsync</code> dựa vào hai thuộc tính nào để quyết định bỏ qua một tệp, và tuỳ chọn nào thay phép kiểm đó bằng tổng kiểm?</p>
+        <p class="deep-only">Gợi ý sâu hơn: cái giá của tuỳ chọn ấy là gì, và khi nào nó đáng?</p>
+      </li>
+      <li>
+        <p>Bốn bước dựng máy chủ Samba là gì? Hai tiến trình nền ở bước cuối tên gì và mỗi cái làm việc gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: nếu bạn sửa <code>smb.conf</code> khi máy chủ đang chạy thì phải làm gì?</p>
+      </li>
+      <li>
+        <p>Vì sao Samba cần một cơ sở dữ liệu mật khẩu riêng, và dòng cấu hình nào có thể khiến người dùng mất quyền đăng nhập Linux?</p>
+        <p class="deep-only">Gợi ý sâu hơn: tham số <code>obey pam restrictions</code> chi phối khâu nào — xác thực hay quản lý tài khoản?</p>
+      </li>
+      <li>
+        <p>SSHFS mua sự tiện lợi bằng cái gì, và điều kiện duy nhất mà nó đòi hỏi ở máy xa là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao nên gắn nó với tư cách người dùng thường, và tháo bằng lệnh nào?</p>
+      </li>
+      <li>
+        <p>Theo Ward, vì sao AFS không trở thành chuẩn dù được thiết kế đúng quanh những vấn đề này?</p>
+        <p class="deep-only">Gợi ý sâu hơn: ngoài điều kiện về Kerberos, vấn đề kỹ thuật thứ hai ông nêu là gì?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>“Chép tệp” và “dùng chung thư mục” khác nhau chỗ nào?</p></li>
+      <li><p>Dấu <code>/</code> ở cuối tên thư mục làm <code>rsync</code> đổi hành vi thế nào?</p></li>
+      <li><p>Trước khi cho <code>rsync</code> xoá tệp, bạn nên làm gì?</p></li>
+      <li><p>Samba dùng để làm gì? Nói một câu thôi.</p></li>
+      <li><p>Vì sao đặt “không hiện trong danh sách” chưa phải là khoá lại?</p></li>
+      <li><p>Nếu bạn dựng video, nên để tệp trên máy mình hay trên ổ mạng? Vì sao?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>
+        <p>What is the difference between <i>file transfer</i> and <i>true file sharing</i>, and why does this chapter separate them?</p>
+      </li>
+      <li>
+        <p>What does <code>rsync -a dir host:dest</code> leave at the destination versus <code>rsync -a dir/ host:dest</code>? Why is the combination with <code>--delete</code> dangerous?</p>
+      </li>
+      <li>
+        <p>Which two attributes does <code>rsync</code> use by default to decide it can skip a file, and which option replaces that check with a checksum?</p>
+      </li>
+      <li>
+        <p>What are the four steps of setting up a Samba server? Name the two daemons in the last step and what each does.</p>
+      </li>
+      <li>
+        <p>Why does Samba need its own password database, and which configuration line can cost a user their Linux login?</p>
+      </li>
+      <li>
+        <p>What does SSHFS buy its convenience with, and what is its only requirement on the remote host?</p>
+      </li>
+      <li>
+        <p>According to Ward, why did AFS not become the standard even though it was designed around exactly these problems?</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Ở thời điểm này, <span class="closing-accent">chúng ta thấy mình không có một phương thức chia sẻ tệp qua mạng thật sự chuẩn mực</span> trong thế giới Linux/Unix — ít nhất là nếu bạn không phải một cơ sở lớn, hoặc không sẵn lòng bỏ ra kha khá công sức. <span class="closing-accent">Nhưng điều đó không nhất thiết sẽ mãi như vậy.</span><span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hôm nay chưa có cách chia sẻ tệp nào là “cách chuẩn”. <span class="closing-accent">Nhưng chuyện đó có thể sẽ thay đổi</span>. <b>Nhớ nhé: chọn công cụ theo việc của mình, và đừng chờ một cách hoàn hảo.</b></p>
+    <p class="en-only" lang="en">At the moment, <span class="closing-accent">we find ourselves without a truly standard means of network file sharing</span> in the Linux/Unix world — at least if you're not a large site or you aren't willing to put in a fair amount of work. <span class="closing-accent">However, this won't necessarily always be the case.</span><span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-11-shell-scripts.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 11 · Nhập môn shell script</span>
+    <span class="nav-title en-only" lang="en">Chapter 11 · Introduction to Shell Scripts</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-13-user-environments.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 13 · Môi trường người dùng</span>
+    <span class="nav-title en-only" lang="en">Chapter 13 · User Environments</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, tái bản lần thứ 3, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chương 12, “Network File Transfer and Sharing”, trang 315–334.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd edition, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chapter 12, "Network File Transfer and Sharing", pp. 315–334.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd ed., No Starch Press, 2021, ch. 12 “Network File Transfer and Sharing”, pp. 315–334. — <a href="https://openlibrary.org/books/OL29462444M" target="_blank" rel="noopener noreferrer">openlibrary.org/books/OL29462444M</a></li>
+      <li id="ref-2"><code>rsync(1)</code> — Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/rsync.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/rsync.1.html</a> · rsync home page: <a href="https://rsync.samba.org/" target="_blank" rel="noopener noreferrer">rsync.samba.org</a></li>
+      <li id="ref-3"><code>smb.conf(5)</code> — Samba documentation, samba.org. <a href="https://www.samba.org/samba/docs/current/man-html/smb.conf.5.html" target="_blank" rel="noopener noreferrer">samba.org/samba/docs/current/man-html/smb.conf.5.html</a></li>
+      <li id="ref-4"><code>smbpasswd(8)</code> — Samba documentation, samba.org. <a href="https://www.samba.org/samba/docs/current/man-html/smbpasswd.8.html" target="_blank" rel="noopener noreferrer">samba.org/samba/docs/current/man-html/smbpasswd.8.html</a></li>
+      <li id="ref-5"><code>nmbd(8)</code> — Samba documentation, samba.org. <a href="https://www.samba.org/samba/docs/current/man-html/nmbd.8.html" target="_blank" rel="noopener noreferrer">samba.org/samba/docs/current/man-html/nmbd.8.html</a></li>
+      <li id="ref-6"><code>http.server</code> — HTTP servers, Python 3 standard library documentation. <a href="https://docs.python.org/3/library/http.server.html" target="_blank" rel="noopener noreferrer">docs.python.org/3/library/http.server.html</a></li>
+      <li id="ref-7">“What's New In Python 3.0” — the <code>http</code> package absorbing <code>BaseHTTPServer</code>, <code>CGIHTTPServer</code> and <code>SimpleHTTPServer</code>. <a href="https://docs.python.org/3/whatsnew/3.0.html" target="_blank" rel="noopener noreferrer">docs.python.org/3/whatsnew/3.0.html</a></li>
+      <li id="ref-8"><code>smbd(8)</code> — Samba documentation, samba.org. <a href="https://www.samba.org/samba/docs/current/man-html/smbd.8.html" target="_blank" rel="noopener noreferrer">samba.org/samba/docs/current/man-html/smbd.8.html</a></li>
+      <li id="ref-9"><code>smbclient(1)</code> — Samba documentation, man.archlinux.org mirror. <a href="https://man.archlinux.org/man/smbclient.1" target="_blank" rel="noopener noreferrer">man.archlinux.org/man/smbclient.1</a></li>
+      <li id="ref-10"><code>mount.cifs(8)</code> — cifs-utils, man.archlinux.org. <a href="https://man.archlinux.org/man/mount.cifs.8" target="_blank" rel="noopener noreferrer">man.archlinux.org/man/mount.cifs.8</a></li>
+      <li id="ref-11">stunnel — TLS proxy wrapping arbitrary TCP services, project home page. <a href="https://www.stunnel.org/" target="_blank" rel="noopener noreferrer">stunnel.org</a></li>
+      <li id="ref-12"><code>sshfs(1)</code> — Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/sshfs.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/sshfs.1.html</a></li>
+      <li id="ref-13"><code>nfs(5)</code> — fstab format and options for NFS filesystems, man7.org. <a href="https://man7.org/linux/man-pages/man5/nfs.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/nfs.5.html</a></li>
+      <li id="ref-14"><code>exports(5)</code> — NFS server export table, man7.org. <a href="https://man7.org/linux/man-pages/man5/exports.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/exports.5.html</a></li>
+      <li id="ref-15">T. Haynes &amp; D. Noveck (eds.), “Network File System (NFS) Version 4 Protocol”, RFC 7530, IETF, March 2015. <a href="https://www.rfc-editor.org/rfc/rfc7530.html" target="_blank" rel="noopener noreferrer">rfc-editor.org/rfc/rfc7530.html</a></li>
+      <li id="ref-16">“FUSE” — The Linux Kernel documentation, filesystems. <a href="https://docs.kernel.org/filesystems/fuse/fuse.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/filesystems/fuse/fuse.html</a></li>
+      <li id="ref-17"><code>systemd.automount(5)</code> — automount unit configuration, freedesktop.org. <a href="https://www.freedesktop.org/software/systemd/man/latest/systemd.automount.html" target="_blank" rel="noopener noreferrer">freedesktop.org/software/systemd/man/latest/systemd.automount.html</a></li>
+      <li id="ref-18">s3fs-fuse — a FUSE-based file system backed by Amazon S3, project repository. <a href="https://github.com/s3fs-fuse/s3fs-fuse" target="_blank" rel="noopener noreferrer">github.com/s3fs-fuse/s3fs-fuse</a></li>
+      <li id="ref-19">“Andrew File System” — origin at Carnegie Mellon University's Andrew Project, and its use of Kerberos for authentication. <a href="https://en.wikipedia.org/wiki/Andrew_File_System" target="_blank" rel="noopener noreferrer">en.wikipedia.org/wiki/Andrew_File_System</a></li>
+      <li id="ref-20">OpenAFS Administrator Guide — “AFS: A Distributed File System”, the Kerberos KDC and support for Kerberos authentication. <a href="https://docs.openafs.org/AdminGuide/index.html" target="_blank" rel="noopener noreferrer">docs.openafs.org/AdminGuide/index.html</a></li>
+      <li id="ref-21">“Kerberos authentication overview in Windows Server” — Microsoft Learn. <a href="https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-authentication-overview" target="_blank" rel="noopener noreferrer">learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-authentication-overview</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row. Absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-11-shell-scripts.html">chapter 11</a>
+      <a href="chapter-13-user-environments.html">chapter 13</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('hlw-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('hlw-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('hlw-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

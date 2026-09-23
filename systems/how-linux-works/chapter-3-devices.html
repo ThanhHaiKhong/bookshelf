@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 3 · Thiết bị — How Linux Works</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 3 “Devices” trong How Linux Works (Brian Ward, No Starch Press, 3rd ed., 2021): tập tin thiết bị và số major/minor, đường dẫn sysfs, dd, bảng tên thiết bị, udev và devtmpfs, và hệ con SCSI trong nhân Linux.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('hlw-reading-mode'),
+l=localStorage.getItem('hlw-lang'),
+t=localStorage.getItem('hlw-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"HOW LINUX WORKS / 03";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    How Linux Works
+    <span>Chương 3 · Devices</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 3 · Thiết bị</span>
+      <span class="en-only" lang="en">Chapter 3 · Devices</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Nhân biến phần cứng thành tập tin — và đó là lý do bạn điều khiển được nó</span>
+      <span class="easy-only">Trong Linux, cái ổ cứng cũng chỉ là một “tập tin”</span>
+      <span class="en-only" lang="en">The kernel turns hardware into files — and that is why you can drive it</span>
+    </h1>
+
+    <p class="standard-copy">Ward mở chương này như một chuyến tham quan hạ tầng thiết bị do nhân cung cấp trong một hệ thống Linux đang chạy.<span class="cite"><a href="#ref-1">1</a></span> Điểm khởi hành là một thiết kế rất cũ của Unix: nhân trình phần lớn giao diện nhập/xuất của thiết bị ra cho tiến trình người dùng <i>dưới dạng tập tin</i>.<span class="cite"><a href="#ref-1">1</a></span> Nhờ vậy, thao tác với hầu hết thiết bị trên một hệ Unix trở nên dễ dàng: không cần là lập trình viên, bạn vẫn dùng được thiết bị bằng những chương trình thông thường như <code>cat</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Máy tính có nhiều đồ: ổ cứng, bàn phím, loa, USB. Linux có một mẹo rất hay: nó coi mỗi món đồ như một <b>tập tin</b> nằm trong thư mục <code>/dev</code>. Muốn nói chuyện với món đồ nào, bạn “ghi” vào tập tin của nó hoặc “đọc” từ nó — y như đọc ghi một tệp văn bản. <b>Nhớ nhé: trong Linux, gần như mọi thứ đều là một tập tin.</b></p>
+    <p class="en-only" lang="en">Ward opens this chapter as a basic tour of the kernel-provided device infrastructure in a functioning Linux system.<span class="cite"><a href="#ref-1">1</a></span> The starting point is a very old Unix design: the kernel presents most device I/O interfaces to user processes <i>as files</i>.<span class="cite"><a href="#ref-1">1</a></span> That is what makes most devices on a Unix system easy to manipulate: you don't have to be a programmer to use a device, since some are also accessible to standard programs such as <code>cat</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Ông nói thẳng hai giới hạn ngay từ đầu, và đó là điều tách chương này khỏi khẩu hiệu “mọi thứ đều là tập tin”. Thứ nhất, <b>có giới hạn cho những gì bạn làm được qua giao diện tập tin</b>, nên không phải thiết bị nào hay khả năng nào của thiết bị cũng với tới được bằng nhập/xuất tệp tiêu chuẩn.<span class="cite"><a href="#ref-1">1</a></span> Thứ hai, <b>không phải thiết bị nào cũng có tập tin thiết bị</b>: giao diện khối và ký tự không phù hợp trong mọi trường hợp — giao diện mạng là ví dụ, về lý thuyết có thể biểu diễn bằng một thiết bị ký tự nhưng sẽ rất khó dùng, nên nhân cung cấp giao diện nhập/xuất khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> để làm chủ thiết bị trên Linux, bạn cần đọc được <i>hai</i> cây song song — <code>/dev</code> để <b>dùng</b> thiết bị, và <code>/sys</code> để <b>xem và quản lý</b> nó — cộng với hiểu biết về <span lang="en">udev</span>, cơ chế đưa quyền quản lý tập tin thiết bị ra khỏi nhân và giao cho không gian người dùng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> có hai thư mục quan trọng. <code>/dev</code> là chỗ bạn <i>dùng</i> thiết bị. <code>/sys</code> là chỗ bạn <i>xem thông tin</i> về thiết bị. Và có một “người trực” tên là udev lo việc tạo tên cho thiết bị mới khi bạn cắm vào. <b>Nhớ nhé: /dev để dùng, /sys để xem, udev để sắp xếp.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> to master devices on Linux you must read <i>two</i> parallel trees — <code>/dev</code> to <b>use</b> a device and <code>/sys</code> to <b>view and manage</b> it — plus <span lang="en">udev</span>, the mechanism that moves device-file management out of the kernel and into user space.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: nhân trình thiết bị ra hai cây song song — /dev để dùng, /sys để xem — còn udev đứng giữa nhân và không gian người dùng. Diagram: the kernel presents devices as two parallel trees — /dev to use, /sys to view — with udev between the kernel and user space.">
+    <div class="core">
+      <b>Kernel device layer</b>
+      <small class="standard-copy">Thiết bị được trình ra dưới dạng tập tin</small>
+      <small class="easy-only">Nhân biến đồ thật thành tập tin</small>
+      <small class="en-only" lang="en">Devices presented as files</small>
+    </div>
+
+    <div class="node">
+      <b>udev / devtmpfs</b>
+      <small class="standard-copy">Nhân tạo nút thiết bị, <code>udevd</code> đặt quyền và tạo liên kết tượng trưng</small>
+      <small class="easy-only">Người trực: cắm vào là có tên ngay</small>
+      <small class="en-only" lang="en">The kernel creates the nodes; <code>udevd</code> sets permissions and adds symlinks</small>
+    </div>
+
+    <div class="node">
+      <b>/dev</b>
+      <small class="standard-copy">Để <i>dùng</i> thiết bị: <code>b</code>, <code>c</code>, <code>p</code>, <code>s</code> + số major/minor</small>
+      <small class="easy-only">Chỗ bạn đọc và ghi vào thiết bị</small>
+      <small class="en-only" lang="en">To <i>use</i> a device: <code>b</code>, <code>c</code>, <code>p</code>, <code>s</code> + major/minor numbers</small>
+    </div>
+
+    <div class="node">
+      <b>/sys/devices</b>
+      <small class="standard-copy">Để <i>xem và quản lý</i>: thuộc tính phần cứng thật, đường dẫn ổn định</small>
+      <small class="easy-only">Chỗ tra thông tin về thiết bị</small>
+      <small class="en-only" lang="en">To <i>view and manage</i>: real hardware attributes, a stable path</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#tap-tin-thiet-bi">
+    <span>01</span>
+    <b class="standard-copy">Tập tin thiết bị và bốn loại nút</b>
+    <b class="easy-only">Thiết bị cũng là tập tin</b>
+    <b class="en-only" lang="en">Device files and the four node types</b>
+  </a>
+  <a href="#sysfs-va-dd">
+    <span>02</span>
+    <b class="standard-copy">Đường dẫn sysfs và công cụ <code>dd</code></b>
+    <b class="easy-only">Tra thông tin và sao chép dữ liệu</b>
+    <b class="en-only" lang="en">The sysfs device path and <code>dd</code></b>
+  </a>
+  <a href="#ten-thiet-bi">
+    <span>03</span>
+    <b class="standard-copy">Bảng tên thiết bị thường gặp</b>
+    <b class="easy-only">Tên của từng loại đồ</b>
+    <b class="en-only" lang="en">The device name summary</b>
+  </a>
+  <a href="#udev">
+    <span>04</span>
+    <b class="standard-copy">udev: devtmpfs, luật, và <code>udevadm</code></b>
+    <b class="easy-only">Người trực tên là udev</b>
+    <b class="en-only" lang="en">udev: devtmpfs, rules and <code>udevadm</code></b>
+  </a>
+  <a href="#scsi">
+    <span>05</span>
+    <b class="standard-copy">Chuyên sâu: SCSI trong nhân Linux</b>
+    <b class="easy-only">Vì sao USB cũng là “đĩa SCSI”</b>
+    <b class="en-only" lang="en">In depth: SCSI and the Linux kernel</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>06</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="tap-tin-thiet-bi" aria-labelledby="tap-tin-thiet-bi-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="tap-tin-thiet-bi-title">
+      <span class="standard-copy">Tập tin thiết bị: bốn ký tự đầu dòng và hai con số</span>
+      <span class="easy-only">Nhìn một dòng <code>ls -l</code> là biết đó là đồ gì</span>
+      <span class="en-only" lang="en">Device files: four leading letters and two numbers</span>
+    </h2>
+    <p class="standard-copy">Tập tin thiết bị — đôi khi gọi là <span lang="en">device node</span> (nút thiết bị) — nằm trong thư mục <code>/dev</code>; chạy <code>ls /dev</code> sẽ thấy khá nhiều tệp ở đó.<span class="cite"><a href="#ref-1">1</a></span> Linux dùng đúng thiết kế tập tin thiết bị như các nhánh Unix khác.<span class="cite"><a href="#ref-1">1</a></span> Để nhận diện một thiết bị và xem quyền của nó, dùng <code>ls -l</code> và nhìn <b>ký tự đầu tiên</b> của chế độ tệp: nếu là <code>b</code>, <code>c</code>, <code>p</code> hoặc <code>s</code> thì tệp đó là một thiết bị.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Trong thư mục <code>/dev</code> có rất nhiều tệp lạ. Gõ <code>ls -l</code> rồi nhìn chữ cái đầu tiên của mỗi dòng là bạn biết đó là loại gì: <code>b</code>, <code>c</code>, <code>p</code> hay <code>s</code>. <b>Nhớ nhé: chữ cái đầu dòng chính là “nhãn dán” của thiết bị.</b></p>
+    <p class="en-only" lang="en">Device files — sometimes called <span lang="en">device nodes</span> — live in the <code>/dev</code> directory; running <code>ls /dev</code> reveals quite a few files there.<span class="cite"><a href="#ref-1">1</a></span> Linux uses the same design for device files as other Unix flavors do.<span class="cite"><a href="#ref-1">1</a></span> To identify a device and view its permissions, use <code>ls -l</code> and look at the <b>first character</b> of the file's mode: if it is <code>b</code>, <code>c</code>, <code>p</code> or <code>s</code>, the file is a device.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Một <i>tập tin thiết bị</i> không chứa dữ liệu. Nó là một điểm vào: khi bạn ghi vào nó, nhân <b>bỏ qua các thao tác tệp thông thường</b> và chuyển dữ liệu cho một trình điều khiển thiết bị.<span class="cite"><a href="#ref-1">1</a></span> Ward minh hoạ bằng <code>echo blah blah &gt; /dev/null</code>: trông như chuyển hướng đầu ra vào một tệp, nhưng vì đích là một thiết bị, nhân chỉ đơn giản nhận dữ liệu rồi vứt đi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Tập tin thiết bị là cái “cửa”, không phải cái “hộp”. Bạn đẩy chữ qua cửa <code>/dev/null</code> thì chữ biến mất luôn — đó là thùng rác của hệ thống. <b>Nhớ nhé: nó là cửa dẫn tới đồ thật, không phải nơi chứa đồ.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A <i>device file</i> holds no data. It is an entry point: when you write to it, the kernel <b>bypasses its usual file operations</b> and hands the data to a device driver.<span class="cite"><a href="#ref-1">1</a></span> Ward's illustration is <code>echo blah blah &gt; /dev/null</code>: it looks like redirecting output into a file, but because the target is a device, the kernel simply accepts the input and throws it away.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">brw-rw---- root disk <b>8, 1</b> sda1<br>crw-rw-rw- root root <b>1, 3</b> null<br>prw-r--r-- root root &nbsp;&nbsp;0 fdata<br>srw-rw-rw- root root &nbsp;&nbsp;0 log</p>
+      <p class="easy-only">b = khối (đĩa)<br>c = ký tự (dòng chữ)<br>p = ống dẫn<br>s = ổ cắm</p>
+      <p class="en-only" lang="en">brw-rw---- root disk <b>8, 1</b> sda1<br>crw-rw-rw- root root <b>1, 3</b> null<br>prw-r--r-- root root &nbsp;&nbsp;0 fdata<br>srw-rw-rw- root root &nbsp;&nbsp;0 log</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">block device</span>
+      <h3>
+        <span class="standard-copy">Thiết bị khối — dữ liệu theo từng khúc cố định</span>
+        <span class="easy-only">Thiết bị khối — như một cuốn sổ có đánh số trang</span>
+        <span class="en-only" lang="en">Block device — data in fixed chunks</span>
+      </h3>
+      <p class="standard-copy">Chương trình truy cập dữ liệu từ thiết bị khối theo <b>từng khúc có kích thước cố định</b>. <code>sda1</code> trong ví dụ của Ward là một thiết bị đĩa, tức một loại thiết bị khối; đĩa dễ chia thành các khối dữ liệu.<span class="cite"><a href="#ref-1">1</a></span> Vì tổng kích thước của thiết bị khối là cố định và dễ đánh chỉ mục, tiến trình có thể <b>truy cập ngẫu nhiên</b> rất nhanh tới bất kỳ khối nào, với sự trợ giúp của nhân.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Thiết bị khối giống một cuốn sổ đã đánh số trang sẵn. Bạn muốn đọc trang 57 thì lật thẳng tới trang 57, không cần đọc 56 trang trước đó. Ổ cứng và USB thuộc loại này. <b>Nhớ nhé: khối = có đánh số trang, nhảy tới đâu cũng được.</b></p>
+      <p class="en-only" lang="en">Programs access data from a block device in <b>fixed chunks</b>. The <code>sda1</code> in Ward's example is a disk device, a type of block device; disks split easily into blocks of data.<span class="cite"><a href="#ref-1">1</a></span> Because a block device's total size is fixed and easy to index, processes get quick <b>random access</b> to any block, with the kernel's help.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mọi phân vùng đĩa bạn gắn kết đều là thiết bị khối: <code>/dev/sda1</code>, <code>/dev/nvme0n1p2</code>, <code>/dev/dm-0</code>.</span>
+        <span class="easy-only">Mỗi lần bạn cắm USB rồi mở nó ra xem tệp.</span>
+        <span class="en-only" lang="en">Every disk partition you mount is a block device: <code>/dev/sda1</code>, <code>/dev/nvme0n1p2</code>, <code>/dev/dm-0</code>.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hai con số trước ngày tháng</h4>
+          <p>Trong danh sách <code>ls -l</code> của thiết bị khối và ký tự, các số đứng trước ngày tháng là <b>số major và số minor</b> mà nhân dùng để nhận diện thiết bị.<span class="cite"><a href="#ref-1">1</a></span> Các thiết bị tương tự nhau thường có cùng số major, ví dụ <code>sda3</code> và <code>sdb1</code> — cả hai đều là phân vùng ổ cứng.<span class="cite"><a href="#ref-1">1</a></span> Bảng chính thức của nhân xác nhận: đĩa SCSI mang major <b>8</b>, còn các thiết bị bộ nhớ như <code>/dev/null</code> mang major <b>1</b> với minor <b>3</b>.<span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Quy tắc minor của đĩa sd</h4>
+          <p>Trang man <code>sd(4)</code> ghi rõ công thức: đĩa SCSI có major 8 và minor dạng <code>(16 × số_ổ) + số_phân_vùng</code>; phân vùng 0 là toàn bộ ổ, 1–4 là các phân vùng “primary” kiểu DOS, 5–8 là các phân vùng “extended”.<span class="cite"><a href="#ref-4">4</a></span> Vì vậy <code>/dev/sda</code> là 8:0 còn <code>/dev/sdb3</code> là 8:19.<span class="cite"><a href="#ref-4">4</a></span> Con số 8:1 trong ví dụ <code>sda1</code> của Ward khớp chính xác với quy tắc này.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">character device</span>
+      <h3>
+        <span class="standard-copy">Thiết bị ký tự — dòng chảy không quay lại được</span>
+        <span class="easy-only">Thiết bị ký tự — như một vòi nước</span>
+        <span class="en-only" lang="en">Character device — a stream you cannot rewind</span>
+      </h3>
+      <p class="standard-copy">Thiết bị ký tự làm việc với <b>dòng dữ liệu</b>. Bạn chỉ có thể đọc ký tự từ nó hoặc ghi ký tự vào nó, như <code>/dev/null</code> đã minh hoạ.<span class="cite"><a href="#ref-1">1</a></span> Thiết bị ký tự <b>không có kích thước</b>; khi bạn đọc hoặc ghi, nhân thường thực hiện ngay một thao tác đọc hoặc ghi lên nó.<span class="cite"><a href="#ref-1">1</a></span> Ward nhấn một điểm dễ bỏ qua: trong lúc tương tác với thiết bị ký tự, <b>nhân không thể quay lại và xem lại dòng dữ liệu</b> sau khi đã chuyển dữ liệu cho thiết bị hoặc tiến trình.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Thiết bị ký tự giống một vòi nước: nước chảy ra là chảy luôn, không hứng lại được. Máy in nối thẳng vào máy tính là kiểu này. <b>Nhớ nhé: ký tự = chảy một chiều, không tua lại.</b></p>
+      <p class="en-only" lang="en">Character devices work with <b>data streams</b>. You can only read characters from or write characters to them, as <code>/dev/null</code> demonstrated.<span class="cite"><a href="#ref-1">1</a></span> Character devices have <b>no size</b>; when you read from or write to one, the kernel usually performs a read or write operation on it right away.<span class="cite"><a href="#ref-1">1</a></span> Ward stresses a point that is easy to miss: during character device interaction, <b>the kernel cannot back up and reexamine the data stream</b> after it has passed data to a device or process.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Máy in gắn trực tiếp vào máy tính được biểu diễn bằng thiết bị ký tự; <code>/dev/null</code>, <code>/dev/zero</code> và các terminal cũng vậy.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Cửa sổ dòng lệnh bạn đang gõ cũng là một thiết bị ký tự đấy.</span>
+        <span class="en-only" lang="en">Printers directly attached to your computer are represented by character devices; so are <code>/dev/null</code>, <code>/dev/zero</code> and terminals.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao “không tua lại được” lại quan trọng</h4>
+          <p>Đặc tính một chiều này quyết định điều bạn làm được. Với thiết bị khối, <code>dd</code> có thể bỏ qua phần đầu rồi xử lý một khúc ở giữa tệp (xem mục <code>skip</code>).<span class="cite"><a href="#ref-1">1</a></span> Với thiết bị ký tự, khái niệm “ở giữa” không tồn tại — chỉ có “tiếp theo”.</p>
+        </div>
+        <div class="info-block">
+          <h4>Thiết bị rỗng và nguồn byte 0</h4>
+          <p>Trang man <code>null(4)</code> mô tả cặp đôi mà chương này dùng liên tục: dữ liệu ghi vào <code>/dev/null</code> bị loại bỏ, còn đọc từ <code>/dev/zero</code> cho về một dòng byte 0 vô tận.<span class="cite"><a href="#ref-2">2</a></span> Bảng major/minor của nhân gán cho chúng major 1, minor 3 và 5.<span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">pipe device · socket device</span>
+      <h3>
+        <span class="standard-copy">Ống dẫn và ổ cắm — đầu kia là một tiến trình</span>
+        <span class="easy-only">Ống và ổ cắm — hai chương trình nói chuyện với nhau</span>
+        <span class="en-only" lang="en">Pipe and socket — a process at the other end</span>
+      </h3>
+      <p class="standard-copy">Ward xếp thêm hai loại nút nữa vào cùng bảng. <b>Ống dẫn có tên</b> (<span lang="en">named pipe</span>, ký tự <code>p</code>) giống thiết bị ký tự, chỉ khác là ở đầu kia của dòng nhập/xuất có <b>một tiến trình khác</b> thay vì một trình điều khiển của nhân.<span class="cite"><a href="#ref-1">1</a></span> <b>Ổ cắm</b> (<span lang="en">socket</span>, ký tự <code>s</code>) là giao diện chuyên dụng, thường dùng cho giao tiếp liên tiến trình, và thường nằm <i>ngoài</i> thư mục <code>/dev</code>; các tệp socket này biểu diễn <span lang="en">Unix domain socket</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ống dẫn giống một cái ống nối hai chương trình: một bên đổ vào, bên kia hứng ra. Ổ cắm cũng vậy nhưng “xịn” hơn, và thường không nằm trong <code>/dev</code>. <b>Nhớ nhé: p và s là để hai chương trình nói chuyện, không phải để nói với phần cứng.</b></p>
+      <p class="en-only" lang="en">Ward folds two more node types into the same table. <b>Named pipes</b> (the <code>p</code> character) are like character devices, except that there is <b>another process</b> at the other end of the I/O stream instead of a kernel driver.<span class="cite"><a href="#ref-1">1</a></span> <b>Sockets</b> (the <code>s</code> character) are special-purpose interfaces frequently used for interprocess communication, and are often found <i>outside</i> the <code>/dev</code> directory; socket files represent <span lang="en">Unix domain sockets</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong ví dụ <code>ls -l</code> của Ward, <code>fdata</code> là một ống dẫn có tên và <code>log</code> là một ổ cắm — cả hai đều hiện kích thước 0.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Nhiều dịch vụ trong máy nói chuyện với nhau qua các “ổ cắm” như vậy.</span>
+        <span class="en-only" lang="en">In Ward's <code>ls -l</code> sample, <code>fdata</code> is a named pipe and <code>log</code> is a socket — both showing size 0.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">not every device has a file</span>
+      <h3>
+        <span class="standard-copy">Ngoại lệ — giao diện mạng không có tập tin thiết bị</span>
+        <span class="easy-only">Có món đồ không có tập tin</span>
+        <span class="en-only" lang="en">The exception — network interfaces have no device file</span>
+      </h3>
+      <p class="standard-copy">Đây là chú thích quan trọng nhất của mục 3.1. Không phải thiết bị nào cũng có tập tin thiết bị, vì giao diện nhập/xuất khối và ký tự <b>không phù hợp trong mọi trường hợp</b>.<span class="cite"><a href="#ref-1">1</a></span> Giao diện mạng là ví dụ điển hình: về lý thuyết có thể tương tác với nó qua một thiết bị ký tự duy nhất, nhưng vì làm vậy sẽ rất khó, nhân cung cấp những giao diện nhập/xuất khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Không phải món đồ nào cũng hợp với kiểu “tập tin”. Card mạng chẳng hạn — bạn sẽ không tìm thấy <code>/dev/eth0</code> đâu. <b>Nhớ nhé: “mọi thứ là tập tin” đúng phần lớn, nhưng không phải tất cả.</b></p>
+      <p class="en-only" lang="en">This is the most important note in section 3.1. Not all devices have device files, because the block and character I/O interfaces <b>are not appropriate in all cases</b>.<span class="cite"><a href="#ref-1">1</a></span> Network interfaces are the standard example: it is theoretically possible to interact with one through a single character device, but because that would be difficult, the kernel offers other I/O interfaces.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lần đầu bạn tìm <code>/dev/eth0</code> và không thấy gì — đó không phải lỗi hệ thống, đó là thiết kế.</span>
+        <span class="easy-only">Tìm hoài không thấy card mạng trong <code>/dev</code>? Bình thường thôi.</span>
+        <span class="en-only" lang="en">The first time you look for <code>/dev/eth0</code> and find nothing — that isn't a broken system, it's the design.</span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Giao diện tập tin cho bạn <b>quyền dùng</b> thiết bị, nhưng nó nói rất ít về <b>thiết bị đó thực sự là gì</b>. Ward chuyển tiếp chính xác ở chỗ này: cái tên trong <code>/dev</code> cho bạn biết đôi chút về thiết bị, nhưng thường không đủ để hữu ích — và tệ hơn, nhân gán thiết bị <b>theo thứ tự phát hiện ra chúng</b>, nên một thiết bị có thể mang tên khác nhau giữa các lần khởi động.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Biết cách dùng rồi, nhưng làm sao biết đó là món đồ nào? Cái tên trong <code>/dev</code> nói rất ít, và tệ hơn: lần sau khởi động lại, tên có thể đổi. <b>Nhớ nhé: tên trong /dev không đáng tin, phải tra chỗ khác.</b></p>
+    <p class="en-only" lang="en">The file interface gives you the <b>right to use</b> a device, but says very little about <b>what the device actually is</b>. Ward pivots exactly here: the name in <code>/dev</code> tells you a little about a device, but usually not enough to be helpful — and worse, the kernel assigns devices <b>in the order it finds them</b>, so a device may have a different name between reboots.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="sysfs-va-dd" aria-labelledby="sysfs-va-dd-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="sysfs-va-dd-title">
+      <span class="standard-copy">sysfs trả lời “thiết bị này là gì”, còn <code>dd</code> là con dao mổ</span>
+      <span class="easy-only">Một chỗ để tra thông tin, một công cụ để sao chép</span>
+      <span class="en-only" lang="en">sysfs answers "what is this device", and <code>dd</code> is the scalpel</span>
+    </h2>
+    <p class="standard-copy">Thư mục <code>/dev</code> truyền thống của Unix là cách tiện lợi để tiến trình người dùng tham chiếu và giao tiếp với thiết bị, nhưng Ward gọi thẳng nó là <b>một lược đồ rất đơn giản</b>.<span class="cite"><a href="#ref-1">1</a></span> Để cung cấp một cái nhìn <i>thống nhất</i> về các thiết bị đang gắn, dựa trên <b>thuộc tính phần cứng thật</b> của chúng, nhân Linux đưa ra giao diện <span lang="en">sysfs</span> qua một hệ thống tệp và thư mục; đường dẫn gốc cho thiết bị là <code>/sys/devices</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    <p class="easy-only">Thư mục <code>/dev</code> giống cái nắm cửa: bạn mở ra dùng được. Còn <code>/sys</code> giống tấm biển dán trên cửa: ghi rõ phòng này là phòng gì, của ai, nối với đâu. <b>Nhớ nhé: /dev để mở cửa, /sys để đọc biển.</b></p>
+    <p class="en-only" lang="en">The traditional Unix <code>/dev</code> directory is a convenient way for user processes to reference and interface with devices, but Ward calls it plainly <b>a very simplistic scheme</b>.<span class="cite"><a href="#ref-1">1</a></span> To provide a <i>uniform</i> view of attached devices based on their <b>actual hardware attributes</b>, the Linux kernel offers the <span lang="en">sysfs</span> interface as a system of files and directories; the base path for devices is <code>/sys/devices</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>sysfs</i> là một hệ thống tệp ảo phản chiếu <b>mô hình thiết bị</b> của nhân ra không gian người dùng: mỗi đối tượng trong nhân là một thư mục, mỗi thuộc tính là một tệp đọc/ghi được.<span class="cite"><a href="#ref-5">5</a></span><span class="cite"><a href="#ref-6">6</a></span> Ward tóm gọn sự khác biệt bằng một câu: <b>tệp trong <code>/dev</code> cho tiến trình người dùng <i>dùng</i> thiết bị, còn đường dẫn <code>/sys/devices</code> dùng để <i>xem thông tin và quản lý</i> thiết bị</b> — nên không thể so sánh hai đường dẫn với nhau, vì chúng phục vụ mục đích khác nhau.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> <code>/sys</code> là một “hồ sơ” do nhân viết ra, kể chi tiết từng món đồ đang cắm trong máy: nó nối vào đâu, to bao nhiêu, có tháo ra được không. <b>Nhớ nhé: /sys là hồ sơ lý lịch của thiết bị.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <i>sysfs</i> is a virtual filesystem that exports the kernel's <b>device model</b> to user space: each kernel object is a directory, each attribute a readable/writable file.<span class="cite"><a href="#ref-5">5</a></span><span class="cite"><a href="#ref-6">6</a></span> Ward sums the difference up in one sentence: <b>the <code>/dev</code> file enables user processes to <i>use</i> the device, whereas the <code>/sys/devices</code> path is used to <i>view information and manage</i> it</b> — so the two paths cannot really be compared, because they have different purposes.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">/dev/sda<br>&nbsp;&nbsp;→ dùng thiết bị<br><br>/sys/devices/pci0000:00/<br>&nbsp;&nbsp;0000:00:17.0/ata3/host0/<br>&nbsp;&nbsp;target0:0:0/0:0:0:0/block/sda<br>&nbsp;&nbsp;→ xem &amp; quản lý</p>
+      <p class="easy-only">/dev/sda = nắm cửa<br>/sys/... = tấm biển<br>cat dev → 8:0</p>
+      <p class="en-only" lang="en">/dev/sda<br>&nbsp;&nbsp;→ use the device<br><br>/sys/devices/pci0000:00/<br>&nbsp;&nbsp;0000:00:17.0/ata3/host0/<br>&nbsp;&nbsp;target0:0:0/0:0:0:0/block/sda<br>&nbsp;&nbsp;→ view &amp; manage</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">sysfs device path</span>
+      <h3>
+        <span class="standard-copy">Đường dẫn sysfs — dài, nhưng nói đúng sự thật</span>
+        <span class="easy-only">Một địa chỉ dài kể cả đường đi</span>
+        <span class="en-only" lang="en">The sysfs device path — long, but truthful</span>
+      </h3>
+      <p class="standard-copy">Ward lấy ví dụ một ổ cứng SATA ở <code>/dev/sda</code>, trong sysfs có thể mang đường dẫn <code>/sys/devices/pci0000:00/0000:00:17.0/ata3/host0/target0:0:0/0:0:0:0/block/sda</code>.<span class="cite"><a href="#ref-1">1</a></span> Đường dẫn này dài hơn hẳn tên <code>/dev/sda</code>, và bản thân nó là <b>một thư mục</b>.<span class="cite"><a href="#ref-1">1</a></span> Liệt kê nội dung sẽ thấy các tệp như <code>dev</code>, <code>size</code>, <code>removable</code>, <code>queue</code>, <code>uevent</code>, cùng các thư mục con cho từng phân vùng <code>sda1</code>, <code>sda2</code>, <code>sda5</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Tên <code>/dev/sda</code> ngắn nhưng chẳng kể gì. Còn địa chỉ trong <code>/sys</code> thì dài loằng ngoằng — vì nó kể luôn cả đường đi: qua khe cắm nào, qua bộ điều khiển nào, mới tới cái đĩa. <b>Nhớ nhé: địa chỉ càng dài thì càng kể rõ nguồn gốc.</b></p>
+      <p class="en-only" lang="en">Ward's example is a SATA hard disk at <code>/dev/sda</code>, which in sysfs might carry the path <code>/sys/devices/pci0000:00/0000:00:17.0/ata3/host0/target0:0:0/0:0:0:0/block/sda</code>.<span class="cite"><a href="#ref-1">1</a></span> That is far longer than the <code>/dev/sda</code> filename, and it is itself <b>a directory</b>.<span class="cite"><a href="#ref-1">1</a></span> Listing it shows files such as <code>dev</code>, <code>size</code>, <code>removable</code>, <code>queue</code> and <code>uevent</code>, plus subdirectories for each partition — <code>sda1</code>, <code>sda2</code>, <code>sda5</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Chạy <code>cat dev</code> trong thư mục đó sẽ in ra <code>8:0</code> — đúng bằng số major và minor của <code>/dev/sda</code>. Đó là sợi chỉ nối hai cây lại với nhau.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Một tệp tên <code>dev</code> trong đó ghi <code>8:0</code> — chính là mã số của cái đĩa.</span>
+        <span class="en-only" lang="en">Running <code>cat dev</code> in that directory prints <code>8:0</code> — exactly the major and minor numbers of <code>/dev/sda</code>. That is the thread tying the two trees together.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Các lối tắt trong /sys</h4>
+          <p>Ward cảnh báo về một cái bẫy nhỏ: trong <code>/sys</code> có vài lối tắt — chẳng hạn <code>/sys/block</code> đáng lẽ chứa mọi thiết bị khối của hệ thống, nhưng chúng <b>chỉ là liên kết tượng trưng</b>; phải chạy <code>ls -l /sys/block</code> mới lộ ra đường dẫn sysfs thật.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đọc cho máy, không phải cho người</h4>
+          <p>Ông nói rõ các tệp và thư mục ở đây <b>chủ yếu dành cho chương trình đọc, không phải cho con người</b>; bạn chỉ nên nhìn vài ví dụ như tệp <code>dev</code> để hình dung chúng chứa gì.<span class="cite"><a href="#ref-1">1</a></span> Tài liệu nhân mô tả đúng nguyên tắc đó: sysfs là nơi xuất mô hình thiết bị, mỗi thuộc tính nên chứa <b>một giá trị duy nhất</b> dạng văn bản.<span class="cite"><a href="#ref-6">6</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">udevadm info</span>
+      <h3>
+        <span class="standard-copy">Cách bắc cầu từ <code>/dev</code> sang <code>/sys</code></span>
+        <span class="easy-only">Một câu lệnh tra ra tất cả</span>
+        <span class="en-only" lang="en">Bridging from <code>/dev</code> to <code>/sys</code></span>
+      </h3>
+      <p class="standard-copy">Ward thừa nhận việc tìm vị trí sysfs của một thiết bị trong <code>/dev</code> <b>có thể khó</b>, và đưa ra một lệnh duy nhất để hiện ra đường dẫn cùng nhiều thuộc tính thú vị khác: <code>udevadm info --query=all --name=/dev/sda</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <p class="easy-only">Không biết cái đĩa của mình nằm ở đâu trong <code>/sys</code>? Có một câu lệnh hỏi hộ bạn, và nó trả về cả một bản khai lý lịch. <b>Nhớ nhé: không biết thì hỏi udevadm.</b></p>
+      <p class="en-only" lang="en">Ward admits it can be difficult to find the sysfs location of a device in <code>/dev</code>, and gives one command that shows the path and several other interesting attributes: <code>udevadm info --query=all --name=/dev/sda</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đây là lệnh bạn sẽ gõ mỗi khi cần biết “cái <code>/dev/sdb</code> này thực ra cắm ở đâu, hãng nào, số sê-ri bao nhiêu”.</span>
+        <span class="easy-only">Khi bạn muốn biết cái USB vừa cắm là cái nào trong đống.</span>
+        <span class="en-only" lang="en">This is the command you reach for whenever you need to know "what is this <code>/dev/sdb</code>, really — where is it plugged, whose is it, what serial number".</span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">dd</span>
+      <h3>
+        <span class="standard-copy"><code>dd</code> — đọc một luồng, ghi một luồng, và cắt được khúc giữa</span>
+        <span class="easy-only"><code>dd</code> — cái xẻng xúc dữ liệu</span>
+        <span class="en-only" lang="en"><code>dd</code> — read a stream, write a stream, slice the middle</span>
+      </h3>
+      <p class="standard-copy">Ward mô tả <code>dd</code> là chương trình <b>cực kỳ hữu ích</b> khi làm việc với thiết bị khối và ký tự. Chức năng duy nhất của nó: đọc từ một tệp/luồng đầu vào và ghi ra một tệp/luồng đầu ra, có thể chuyển đổi mã hoá trên đường đi.<span class="cite"><a href="#ref-1">1</a></span> Một đặc tính đặc biệt hữu ích với thiết bị khối là bạn có thể <b>xử lý một khúc dữ liệu ở giữa tệp</b>, bỏ qua phần trước và sau nó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <p class="easy-only"><code>dd</code> là cái xẻng: xúc dữ liệu từ chỗ này đổ sang chỗ kia, từng xẻng một. Hay ở chỗ nó xúc được đúng khúc giữa mà không đụng vào phần trước sau. <b>Nhớ nhé: dd xúc dữ liệu theo từng xẻng, và xúc được khúc giữa.</b></p>
+      <p class="en-only" lang="en">Ward describes <code>dd</code> as <b>extremely useful</b> when working with block and character devices. Its sole function: read from an input file or stream and write to an output file or stream, possibly doing some encoding conversion on the way.<span class="cite"><a href="#ref-1">1</a></span> One particularly useful feature with block devices is that you can <b>process a chunk of data in the middle of a file</b>, ignoring what comes before or after.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Ví dụ của Ward: <code>dd if=/dev/zero of=new_file bs=1024 count=1</code> chép đúng một khối 1.024 byte từ <code>/dev/zero</code> — một dòng byte 0 liên tục — vào <code>new_file</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Tạo một tệp rỗng đúng 1.024 byte để thử nghiệm.</span>
+        <span class="en-only" lang="en">Ward's example: <code>dd if=/dev/zero of=new_file bs=1024 count=1</code> copies exactly one 1,024-byte block from <code>/dev/zero</code> — a continuous stream of zero bytes — into <code>new_file</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cú pháp kiểu JCL</h4>
+          <p>Ward giải thích vì sao <code>dd</code> trông lạ so với mọi lệnh Unix khác: định dạng tuỳ chọn của nó <b>dựa trên lối JCL (Job Control Language) cũ của IBM</b>. Thay vì dùng dấu gạch ngang <code>-</code> để báo hiệu một tuỳ chọn, bạn gọi tên tuỳ chọn rồi đặt giá trị bằng dấu <code>=</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Sáu tuỳ chọn Ward liệt kê</h4>
+          <p><code>if=</code> tệp đầu vào, mặc định là đầu vào chuẩn; <code>of=</code> tệp đầu ra, mặc định là đầu ra chuẩn; <code>bs=</code> kích thước khối, với <code>b</code> và <code>k</code> viết tắt cho 512 và 1.024 byte, nên <code>bs=1024</code> có thể viết <code>bs=1k</code>; <code>ibs=</code>/<code>obs=</code> khi đầu vào và đầu ra cần kích thước khối khác nhau; <code>count=</code> tổng số khối cần chép; <code>skip=</code> bỏ qua <i>num</i> khối đầu của đầu vào.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Cảnh báo của tác giả</h4>
+          <p>Ward đặt một <b>WARNING</b> hiếm hoi ở đây: <code>dd</code> rất mạnh, nên hãy chắc chắn bạn biết mình đang làm gì. Một sai sót cẩu thả rất dễ làm hỏng tệp và dữ liệu trên thiết bị; nếu chưa chắc, hãy ghi đầu ra ra một tệp mới.<span class="cite"><a href="#ref-1">1</a></span> Ông cũng nêu lý do kỹ thuật của <code>count</code>: với một tệp khổng lồ, hoặc một thiết bị cấp dòng dữ liệu vô tận như <code>/dev/zero</code>, bạn cần <code>dd</code> dừng ở một điểm cố định, nếu không sẽ phí rất nhiều dung lượng đĩa, thời gian CPU, hoặc cả hai.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Cả <code>/sys</code> lẫn <code>dd</code> đều giả định bạn <b>đã biết tên thiết bị</b>. Nhưng Ward thừa nhận việc tìm ra cái tên đó — chẳng hạn khi phân vùng một đĩa — <b>đôi khi khó</b>, nên ông dành hẳn mục tiếp theo cho năm cách tra và một bảng tên đầy đủ.<span class="cite"><a href="#ref-1">1</a></span> Trong năm cách đó, ông nói thẳng: <b>chỉ cách đầu tiên là đáng tin</b> — hỏi <code>udevd</code> qua <code>udevadm</code> — nhưng nó đòi hỏi udev phải có mặt.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Muốn dùng thì phải biết tên. Mà tìm tên đôi khi khó. Có năm cách tra, nhưng chỉ một cách thật sự đáng tin. <b>Nhớ nhé: cách đáng tin nhất là hỏi udev.</b></p>
+    <p class="en-only" lang="en">Both <code>/sys</code> and <code>dd</code> assume you <b>already know the device name</b>. But Ward concedes that finding that name — when partitioning a disk, say — <b>can sometimes be difficult</b>, so he devotes the next section to five ways of finding out plus a full naming table.<span class="cite"><a href="#ref-1">1</a></span> Of those five he says bluntly: <b>only the first is reliable</b> — query <code>udevd</code> with <code>udevadm</code> — but it does require udev.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="ten-thiet-bi" aria-labelledby="ten-thiet-bi-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="ten-thiet-bi-title">
+      <span class="standard-copy">Bảng tên thiết bị: đọc được <code>/dev</code> như đọc bản đồ</span>
+      <span class="easy-only">Mỗi loại đồ có một kiểu tên riêng</span>
+      <span class="en-only" lang="en">The device name summary: reading <code>/dev</code> like a map</span>
+    </h2>
+    <p class="standard-copy">Ward liệt kê năm cách tìm tên một thiết bị: hỏi <code>udevd</code> bằng <code>udevadm</code>; tìm trong <code>/sys</code>; đoán từ đầu ra của <code>journalctl -k</code> (in ra thông điệp nhân) hoặc nhật ký hệ thống của nhân; với đĩa đã hiện diện, xem đầu ra của <code>mount</code>; và chạy <code>cat /proc/devices</code> để thấy các thiết bị khối và ký tự mà hệ thống đang có trình điều khiển.<span class="cite"><a href="#ref-1">1</a></span> Trong <code>/proc/devices</code>, mỗi dòng gồm một con số và một cái tên — con số chính là <b>số major</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    <p class="easy-only">Có năm cách để tìm tên một món đồ. Cách chắc nhất là hỏi udev. Các cách còn lại giống như đoán: xem nhật ký của máy, xem danh sách đĩa đang gắn, hoặc mở bảng mã số ra dò. <b>Nhớ nhé: hỏi trước, đoán sau.</b></p>
+    <p class="en-only" lang="en">Ward lists five ways to find a device's name: query <code>udevd</code> with <code>udevadm</code>; look in <code>/sys</code>; guess from the output of <code>journalctl -k</code> (which prints kernel messages) or the kernel system log; for a disk already visible to the system, check the output of <code>mount</code>; and run <code>cat /proc/devices</code> to see the block and character devices for which your system currently has drivers.<span class="cite"><a href="#ref-1">1</a></span> In <code>/proc/devices</code>, each line is a number and a name — the number being the <b>major number</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    <p class="deep-only">Cảnh báo đi kèm rất đáng ghi nhớ: nếu bạn rơi vào tình huống <b>không có udev</b>, hãy thử các cách khác, nhưng nhớ rằng <b>nhân có thể không có tập tin thiết bị nào cho phần cứng của bạn cả</b>.<span class="cite"><a href="#ref-1">1</a></span> Nghĩa là sự vắng mặt của một tệp trong <code>/dev</code> không chứng minh thiết bị không tồn tại — nó chỉ chứng minh rằng chưa ai tạo nút cho nó.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Quy ước đặt tên</i> trong <code>/dev</code> không phải ngẫu nhiên: tiền tố cho biết <b>lớp trình điều khiển</b> đang phục vụ thiết bị, chữ cái cho biết <b>thứ tự phát hiện</b>, và con số cho biết <b>phân vùng</b> hoặc chỉ số thứ tự.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Tên thiết bị đọc như biển số xe: mấy chữ đầu cho biết loại xe, chữ tiếp theo cho biết chiếc thứ mấy, số cuối cho biết khoang nào. <b>Nhớ nhé: sda1 = đĩa loại sd, chiếc a, phân vùng 1.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> The <i>naming conventions</i> in <code>/dev</code> are not arbitrary: the prefix tells you which <b>driver class</b> serves the device, the letter records the <b>order of discovery</b>, and the number gives the <b>partition</b> or an ordinal index.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">/dev/sd*&nbsp;&nbsp;&nbsp;→ đĩa SCSI (kể cả SATA, USB)<br>/dev/nvme* → SSD giao diện NVMe<br>/dev/sr*&nbsp;&nbsp;&nbsp;→ ổ quang, chỉ đọc<br>/dev/hd*&nbsp;&nbsp;&nbsp;→ đĩa PATA (cũ)<br>/dev/dm-*&nbsp;&nbsp;→ device mapper / LVM<br>/dev/tty*&nbsp;&nbsp;→ terminal<br>/dev/lp*&nbsp;&nbsp;&nbsp;→ cổng song song</p>
+      <p class="easy-only">sd = đĩa<br>nvme = SSD nhanh<br>sr = ổ đĩa quang<br>tty = màn hình gõ lệnh<br>lp = máy in cổng cũ</p>
+      <p class="en-only" lang="en">/dev/sd*&nbsp;&nbsp;&nbsp;→ SCSI disks (incl. SATA, USB)<br>/dev/nvme* → NVMe solid-state storage<br>/dev/sr*&nbsp;&nbsp;&nbsp;→ optical drives, read only<br>/dev/hd*&nbsp;&nbsp;&nbsp;→ PATA disks (older)<br>/dev/dm-*&nbsp;&nbsp;→ device mapper / LVM<br>/dev/tty*&nbsp;&nbsp;→ terminals<br>/dev/lp*&nbsp;&nbsp;&nbsp;→ parallel ports</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">/dev/sd* · SCSI disk</span>
+      <h3>
+        <span class="standard-copy">Đĩa cứng <code>/dev/sd*</code> — chữ “sd” là một di sản</span>
+        <span class="easy-only">Ổ cứng tên là sda, sdb…</span>
+        <span class="en-only" lang="en">Hard disks <code>/dev/sd*</code> — "sd" is an inheritance</span>
+      </h3>
+      <p class="standard-copy">Phần lớn đĩa cứng gắn vào hệ Linux hiện nay tương ứng với tên thiết bị có tiền tố <code>sd</code>: <code>/dev/sda</code>, <code>/dev/sdb</code>… Những thiết bị này đại diện cho <b>toàn bộ đĩa</b>; nhân tạo các tệp riêng như <code>/dev/sda1</code>, <code>/dev/sda2</code> cho các phân vùng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> Phần <code>sd</code> viết tắt cho <b>SCSI disk</b>. <span lang="en">Small Computer System Interface</span> (SCSI) ban đầu được phát triển như một chuẩn phần cứng và giao thức để các thiết bị như đĩa và ngoại vi nói chuyện với nhau.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ổ cứng trong Linux thường tên là <code>sda</code>, cái thứ hai là <code>sdb</code>, cứ thế. Phân vùng thì thêm số: <code>sda1</code>, <code>sda2</code>. Hai chữ <code>sd</code> là chữ tắt của một chuẩn rất cũ tên SCSI. <b>Nhớ nhé: sd + chữ cái = cái đĩa thứ mấy; thêm số = phân vùng thứ mấy.</b></p>
+      <p class="en-only" lang="en">Most hard disks attached to current Linux systems correspond to device names with an <code>sd</code> prefix: <code>/dev/sda</code>, <code>/dev/sdb</code> and so on. These represent <b>entire disks</b>; the kernel makes separate files such as <code>/dev/sda1</code> and <code>/dev/sda2</code> for the partitions.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> The <code>sd</code> portion stands for <b>SCSI disk</b>. <span lang="en">Small Computer System Interface</span> (SCSI) was originally developed as a hardware and protocol standard for communication between devices such as disks and other peripherals.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Dù phần cứng SCSI truyền thống không còn được dùng trên hầu hết máy hiện đại, <b>giao thức SCSI thì ở khắp nơi</b> nhờ tính thích ứng của nó: thiết bị lưu trữ USB dùng nó để giao tiếp.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Cái USB bạn vừa cắm cũng đang “nói tiếng SCSI”.</span>
+        <span class="en-only" lang="en">Although traditional SCSI hardware isn't used in most modern machines, <b>the SCSI protocol is everywhere</b> thanks to its adaptability: USB storage devices use it to communicate.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>SATA thì sao?</h4>
+          <p>Ward nói câu chuyện SATA (<span lang="en">Serial ATA</span>, bus lưu trữ phổ biến trên PC) <b>phức tạp hơn một chút</b>, nhưng nhân Linux vẫn dùng lệnh SCSI ở một thời điểm nhất định khi nói chuyện với chúng.<span class="cite"><a href="#ref-1">1</a></span> Mục 3.6 của chương giải thích cơ chế dịch này qua thư viện <code>libata</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>lsscsi và thứ tự phát hiện</h4>
+          <p>Để liệt kê thiết bị SCSI, Ward giới thiệu <code>lsscsi</code> — công cụ đi qua các đường dẫn thiết bị do sysfs cung cấp, và là một trong những công cụ súc tích nhất.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span> Cột đầu là địa chỉ thiết bị, cột hai mô tả loại thiết bị, cột cuối chỉ ra tập tin thiết bị; phần còn lại là thông tin nhà sản xuất.<span class="cite"><a href="#ref-1">1</a></span> Ông cũng lưu ý bạn có thể phải <b>cài lsscsi như một gói bổ sung</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Cái bẫy đánh số lại</h4>
+          <p>Linux gán thiết bị cho tập tin thiết bị <b>theo thứ tự trình điều khiển gặp chúng</b>, và Ward nói thẳng rằng lược đồ này <b>vốn gây rắc rối</b> khi cấu hình lại phần cứng.<span class="cite"><a href="#ref-1">1</a></span> Ví dụ của ông: có ba đĩa <code>sda</code>, <code>sdb</code>, <code>sdc</code>; nếu <code>sdb</code> hỏng và bạn phải tháo nó ra, <code>sdc</code> cũ sẽ <b>dời thành <code>sdb</code></b> và không còn <code>sdc</code> nữa — buộc bạn phải sửa <code>fstab</code> nếu trong đó tham chiếu trực tiếp tên thiết bị.<span class="cite"><a href="#ref-1">1</a></span> Cách giải: nhiều hệ Linux dùng <b>UUID</b> và/hoặc ánh xạ thiết bị ổn định của <b>LVM</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">/dev/nvme* · /dev/xvd* · /dev/vd*</span>
+      <h3>
+        <span class="standard-copy">NVMe và đĩa ảo — hai nhánh tên không thuộc họ SCSI</span>
+        <span class="easy-only">SSD đời mới và đĩa của máy ảo</span>
+        <span class="en-only" lang="en">NVMe and virtual disks — two names outside the SCSI family</span>
+      </h3>
+      <p class="standard-copy">Một số hệ thống nay dùng giao diện <span lang="en">Non-Volatile Memory Express</span> (NVMe) để nói chuyện với vài loại lưu trữ thể rắn; trong Linux chúng xuất hiện ở <code>/dev/nvme*</code>, và lệnh <code>nvme list</code> cho bạn danh sách các thiết bị này.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> Riêng đĩa ảo: một số thiết bị đĩa được tối ưu cho máy ảo như các phiên bản AWS và VirtualBox — hệ ảo hoá Xen dùng tiền tố <code>/dev/xvd</code>, còn <code>/dev/vd</code> là một kiểu tương tự.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">SSD đời mới không tên là <code>sda</code> nữa, mà là <code>nvme0n1</code> — nhìn lạ nhưng đúng. Còn nếu bạn đang chạy trong một máy ảo, đĩa có thể tên là <code>xvda</code> hoặc <code>vda</code>. <b>Nhớ nhé: thấy tên lạ thì chưa chắc sai — có thể chỉ là loại khác.</b></p>
+      <p class="en-only" lang="en">Some systems now use the <span lang="en">Non-Volatile Memory Express</span> (NVMe) interface to talk to some kinds of solid-state storage; in Linux these show up at <code>/dev/nvme*</code>, and <code>nvme list</code> gives you a listing of them.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> As for virtual disks: some disk devices are optimised for virtual machines such as AWS instances and VirtualBox — the Xen virtualization system uses the <code>/dev/xvd</code> prefix, and <code>/dev/vd</code> is a similar type.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trên một laptop mua sau 2018, đĩa hệ thống của bạn gần như chắc chắn là <code>/dev/nvme0n1</code> chứ không phải <code>/dev/sda</code>.</span>
+        <span class="easy-only">Máy mới thì thường là nvme, máy cũ thì là sda.</span>
+        <span class="en-only" lang="en">On a laptop bought after 2018 your system disk is almost certainly <code>/dev/nvme0n1</code> rather than <code>/dev/sda</code>.</span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">/dev/dm-* · /dev/mapper/*</span>
+      <h3>
+        <span class="standard-copy">Device mapper — một tầng nữa phía trên đĩa</span>
+        <span class="easy-only">Một lớp trung gian phía trên đĩa</span>
+        <span class="en-only" lang="en">Device mapper — one level above the disk</span>
+      </h3>
+      <p class="standard-copy">Cao hơn đĩa và các dạng lưu trữ khối trực tiếp khác, một số hệ thống có <b>LVM</b>, thứ sử dụng một hệ thống của nhân gọi là <span lang="en">device mapper</span>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span> Nếu bạn thấy thiết bị khối bắt đầu bằng <code>/dev/dm-</code> và các liên kết tượng trưng trong <code>/dev/mapper</code>, hệ thống của bạn nhiều khả năng đang dùng nó.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Đôi khi cái “đĩa” bạn thấy không phải đĩa thật, mà là một cái đĩa giả do phần mềm ghép nhiều mảnh lại. Tên của nó bắt đầu bằng <code>dm-</code>. <b>Nhớ nhé: thấy dm- là biết có một lớp trung gian ở giữa.</b></p>
+      <p class="en-only" lang="en">A level up from disks and other direct block storage, some systems run <b>LVM</b>, which uses a kernel system called the <span lang="en">device mapper</span>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span> If you see block devices starting with <code>/dev/dm-</code> and symbolic links in <code>/dev/mapper</code>, your system probably uses it.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Phân vùng mã hoá bằng LUKS và các nhóm khối LVM đều hiện ra ở đây; Ward hẹn giải thích đầy đủ ở Chương 4.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Ổ đĩa được mã hoá cũng xuất hiện ở đây.</span>
+        <span class="en-only" lang="en">LUKS-encrypted partitions and LVM volume groups both surface here; Ward promises the full account in Chapter 4.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">/dev/sr* · /dev/hd*</span>
+      <h3>
+        <span class="standard-copy">Ổ quang và đĩa PATA — chỉ đọc, và chế độ tương thích</span>
+        <span class="easy-only">Ổ đĩa CD và đĩa cứng đời cũ</span>
+        <span class="en-only" lang="en">Optical and PATA — read only, and compatibility mode</span>
+      </h3>
+      <p class="standard-copy">Linux nhận phần lớn ổ lưu trữ quang là các thiết bị SCSI <code>/dev/sr0</code>, <code>/dev/sr1</code>…<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Các thiết bị <code>/dev/sr*</code> là <b>chỉ đọc</b> và chỉ dùng để đọc đĩa; để ghi và ghi lại, bạn dùng các thiết bị SCSI “generic” như <code>/dev/sg0</code>.<span class="cite"><a href="#ref-1">1</a></span> Riêng <span lang="en">PATA</span> (Parallel ATA) là loại bus lưu trữ cũ hơn: các thiết bị khối <code>/dev/hda</code> đến <code>/dev/hdd</code> phổ biến trên bản nhân Linux cũ và phần cứng cũ, với <b>gán cố định</b> dựa trên các cặp thiết bị trên giao diện 0 và 1.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only">Ổ đĩa CD/DVD tên là <code>sr0</code>. Nó chỉ đọc được thôi — muốn ghi đĩa thì phải dùng một cửa khác tên <code>sg0</code>. Còn <code>hda</code>, <code>hdb</code> là tên của đĩa cứng đời rất cũ. <b>Nhớ nhé: sr để đọc đĩa, sg để ghi đĩa.</b></p>
+      <p class="en-only" lang="en">Linux recognises most optical storage drives as the SCSI devices <code>/dev/sr0</code>, <code>/dev/sr1</code> and so on.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> The <code>/dev/sr*</code> devices are <b>read only</b> and are used only for reading discs; for the write and rewrite capabilities you use the "generic" SCSI devices such as <code>/dev/sg0</code>.<span class="cite"><a href="#ref-1">1</a></span> <span lang="en">PATA</span> (Parallel ATA) is an older storage bus: the block devices <code>/dev/hda</code> through <code>/dev/hdd</code> are common on older kernels and older hardware, with <b>fixed assignments</b> based on the device pairs on interfaces 0 and 1.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Nếu một ổ SATA hiện ra dưới tên <code>/dev/hd*</code>, Ward cảnh báo: nó đang chạy ở <b>chế độ tương thích</b>, điều này <b>làm giảm hiệu năng</b> — hãy kiểm tra thiết lập BIOS xem có chuyển bộ điều khiển SATA sang chế độ gốc được không.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Thấy tên <code>hda</code> trên máy đời mới là dấu hiệu máy đang chạy chậm hơn mức nó có thể.</span>
+        <span class="en-only" lang="en">If a SATA drive appears as <code>/dev/hd*</code>, Ward warns it is running in <b>compatibility mode</b>, which <b>hinders performance</b> — check your BIOS settings to see whether the SATA controller can be switched to its native mode.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">/dev/tty* · /dev/pts/*</span>
+      <h3>
+        <span class="standard-copy">Terminal — thiết bị chuyển ký tự giữa tiến trình và màn hình</span>
+        <span class="easy-only">Cửa sổ gõ lệnh cũng là một thiết bị</span>
+        <span class="en-only" lang="en">Terminals — devices that move characters</span>
+      </h3>
+      <p class="standard-copy">Terminal là thiết bị <b>chuyển ký tự giữa một tiến trình người dùng và một thiết bị nhập/xuất</b>, thường là để xuất văn bản ra màn hình terminal; giao diện này có lịch sử rất dài, từ thời terminal còn là thiết bị kiểu máy đánh chữ và nhiều cái cùng gắn vào một máy.<span class="cite"><a href="#ref-1">1</a></span> Ngày nay <b>phần lớn terminal là thiết bị giả lập</b> (<span lang="en">pseudoterminal</span>): thay vì nói chuyện với phần cứng thật, nhân trình giao diện nhập/xuất ra cho một phần mềm — chẳng hạn cửa sổ terminal bạn đang gõ lệnh vào.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+      <p class="easy-only">Cái cửa sổ đen bạn gõ lệnh vào cũng là một thiết bị. Ngày xưa nó là cái máy đánh chữ thật, giờ chỉ là phần mềm giả làm máy đánh chữ. <b>Nhớ nhé: terminal ngày nay là đồ giả, nhưng nhân vẫn đối xử với nó như đồ thật.</b></p>
+      <p class="en-only" lang="en">Terminals are devices for <b>moving characters between a user process and an I/O device</b>, usually for text output to a terminal screen; the interface goes back a long way, to the days when terminals were typewriter-based devices and many were attached to a single machine.<span class="cite"><a href="#ref-1">1</a></span> Today <b>most terminals are pseudoterminal devices</b>: rather than talk to a real piece of hardware, the kernel presents the I/O interface to a piece of software, such as the shell terminal window you type most of your commands into.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Hai thiết bị terminal thường gặp là <code>/dev/tty1</code> (console ảo đầu tiên) và <code>/dev/pts/0</code> (thiết bị giả lập đầu tiên); bản thân thư mục <code>/dev/pts</code> là <b>một hệ thống tệp riêng</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-25">25</a></span></span>
+        <span class="easy-only">Mở hai cửa sổ terminal là bạn có <code>pts/0</code> và <code>pts/1</code>.</span>
+        <span class="en-only" lang="en">Two common terminal devices are <code>/dev/tty1</code> (the first virtual console) and <code>/dev/pts/0</code> (the first pseudoterminal); the <code>/dev/pts</code> directory itself is <b>a dedicated filesystem</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-25">25</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>/dev/tty — cái tên trỏ vào chính mình</h4>
+          <p>Thiết bị <code>/dev/tty</code> là <b>terminal điều khiển của tiến trình hiện tại</b>: nếu một chương trình đang đọc và ghi lên một terminal, thiết bị này là tên đồng nghĩa của terminal đó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Ward thêm một câu ngắn mà quan trọng: <b>một tiến trình không nhất thiết phải gắn với terminal nào cả</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Console ảo và hai chế độ hiển thị</h4>
+          <p>Linux có hai chế độ hiển thị chính: chế độ văn bản và chế độ đồ hoạ.<span class="cite"><a href="#ref-1">1</a></span> Hệ thống Linux theo truyền thống khởi động ở chế độ văn bản, nhưng phần lớn bản phân phối nay dùng tham số nhân và các cơ chế hiển thị trung gian (<span lang="en">bootsplash</span> như <code>plymouth</code>) để <b>giấu hoàn toàn chế độ văn bản</b> trong lúc khởi động.<span class="cite"><a href="#ref-1">1</a></span> Ở chế độ văn bản, bạn chuyển console bằng tổ hợp ALT–phím chức năng: ALT-F1 đưa bạn tới <code>/dev/tty1</code>, ALT-F2 tới <code>/dev/tty2</code>.<span class="cite"><a href="#ref-1">1</a></span> Nhiều console trong số đó có thể đang bị một tiến trình <code>getty</code> chiếm để chạy dấu nhắc đăng nhập.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Khi ở chế độ đồ hoạ thì khác</h4>
+          <p>Một console ảo dùng ở chế độ đồ hoạ hơi khác: thay vì nhận phân bổ từ cấu hình init, môi trường đồ hoạ <b>chiếm lấy một console ảo còn trống</b> trừ khi được chỉ định cụ thể — ví dụ nếu <code>getty</code> đang chạy trên <code>tty1</code> và <code>tty2</code> thì môi trường đồ hoạ mới sẽ chiếm <code>tty3</code>.<span class="cite"><a href="#ref-1">1</a></span> Và khi đã ở chế độ đồ hoạ, bạn thường phải bấm <b>CTRL-ALT–phím chức năng</b> thay vì chỉ ALT.<span class="cite"><a href="#ref-1">1</a></span> Nếu cơ chế nhập bị trục trặc, có thể ép hệ thống đổi console bằng lệnh <code>chvt</code> chạy với quyền root — ví dụ <code>chvt 1</code> để sang <code>tty1</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span> Ward cũng chú thích rằng <b>một số bản phân phối dùng <code>tty1</code> ở chế độ đồ hoạ</b>, khi đó bạn phải thử các console khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">/dev/ttyS* · /dev/ttyUSB* · /dev/ttyACM*</span>
+      <h3>
+        <span class="standard-copy">Cổng nối tiếp — nơi bo mạch vi điều khiển xuất hiện</span>
+        <span class="easy-only">Cổng nối tiếp — cắm bo mạch nhỏ vào đây</span>
+        <span class="en-only" lang="en">Serial ports — where microcontroller boards show up</span>
+      </h3>
+      <p class="standard-copy">Các cổng nối tiếp kiểu RS-232 cũ và tương tự được biểu diễn như <b>thiết bị terminal thật</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Ward nói bạn <b>không làm được nhiều</b> trên dòng lệnh với chúng vì có quá nhiều thiết lập phải lo — tốc độ baud, kiểm soát luồng — nhưng bạn có thể dùng lệnh <code>screen</code> để kết nối tới một terminal bằng cách thêm đường dẫn thiết bị làm tham số.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span> Bạn có thể cần quyền đọc/ghi trên thiết bị; đôi khi đạt được bằng cách <b>thêm chính mình vào một nhóm</b> như <code>dialout</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Cổng nối tiếp là kiểu cổng rất cũ, nhưng vẫn còn dùng — nhất là khi bạn cắm một bo mạch nhỏ để học lập trình. Dùng lệnh <code>screen</code> là nói chuyện được với nó. <b>Nhớ nhé: cắm bo mạch vào, tìm ttyACM0, rồi gọi screen.</b></p>
+      <p class="en-only" lang="en">Older RS-232-type and similar serial ports are represented as <b>true terminal devices</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Ward says you <b>can't do much</b> on the command line with them because there are too many settings to worry about — baud rate, flow control — but you can use the <code>screen</code> command to connect to a terminal by adding the device path as an argument.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span> You may need read and write permission on the device; sometimes you get it by <b>adding yourself to a group</b> such as <code>dialout</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Cổng gọi là COM1 trên Windows chính là <code>/dev/ttyS0</code>, COM2 là <code>/dev/ttyS1</code>; bộ chuyển đổi nối tiếp USB cắm thêm hiện ra dưới tên <code>/dev/ttyUSB0</code> và <code>/dev/ttyACM0</code>.<span class="cite"><a href="#ref-1">1</a></span> Ví dụ tác giả thích nhất: truy cập console và vòng lặp đọc–tính–in của bo mạch <span lang="en">CircuitPython</span> qua giao diện nối tiếp USB — cắm vào, tìm thiết bị (thường là <code>/dev/ttyACM0</code>), rồi kết nối bằng <code>screen</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-24">24</a></span></span>
+        <span class="easy-only">Cắm một bo mạch học lập trình vào là thấy ngay <code>/dev/ttyACM0</code>.</span>
+        <span class="en-only" lang="en">The port known as COM1 on Windows is <code>/dev/ttyS0</code>, COM2 is <code>/dev/ttyS1</code>; plug-in USB serial adapters show up as <code>/dev/ttyUSB0</code> and <code>/dev/ttyACM0</code>.<span class="cite"><a href="#ref-1">1</a></span> The author's favourite example: reaching the console and read-eval-print loop of a <span lang="en">CircuitPython</span> board through a USB serial interface — plug one in, look for the device (usually <code>/dev/ttyACM0</code>), and connect with <code>screen</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-24">24</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">/dev/lp* · /dev/snd/* · /dev/dsp</span>
+      <h3>
+        <span class="standard-copy">Cổng song song và thiết bị âm thanh — hai di tích còn sống</span>
+        <span class="easy-only">Máy in cổng cũ và cái loa</span>
+        <span class="en-only" lang="en">Parallel ports and audio — two living relics</span>
+      </h3>
+      <p class="standard-copy">Cổng song song đại diện cho một loại giao diện <b>phần lớn đã bị USB và mạng thay thế</b>: các thiết bị một chiều <code>/dev/lp0</code> và <code>/dev/lp1</code> tương ứng với LPT1: và LPT2: trong Windows.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span> Bạn có thể gửi thẳng tệp tới cổng song song bằng <code>cat</code>, nhưng có thể phải cấp thêm cho máy in một lệnh xuống dòng trang hoặc đặt lại sau đó; một máy chủ in như <b>CUPS</b> làm việc này tốt hơn nhiều.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span> Cổng song song hai chiều là <code>/dev/parport0</code> và <code>/dev/parport1</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ngày xưa máy in cắm vào một cổng to bè gọi là cổng song song, tên là <code>lp0</code>. Còn âm thanh thì có hai bộ tên: bộ mới nằm trong <code>/dev/snd</code>, bộ cũ là <code>/dev/dsp</code>. <b>Nhớ nhé: lp là máy in cổ, snd là loa đời mới.</b></p>
+      <p class="en-only" lang="en">Parallel ports represent an interface type <b>largely replaced by USB and networks</b>: the unidirectional devices <code>/dev/lp0</code> and <code>/dev/lp1</code> correspond to LPT1: and LPT2: in Windows.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span> You can send files directly to a parallel port with <code>cat</code>, but you might need to give the printer an extra form feed or reset afterwards; a print server such as <b>CUPS</b> is much better at handling printer interaction.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span> The bidirectional parallel ports are <code>/dev/parport0</code> and <code>/dev/parport1</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Linux có <b>hai bộ thiết bị âm thanh</b>: bộ của <span lang="en">Advanced Linux Sound Architecture</span> (ALSA) nằm trong <code>/dev/snd</code> nhưng khó làm việc trực tiếp, và bộ <span lang="en">Open Sound System</span> (OSS) cũ hơn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span> Hệ Linux dùng ALSA vẫn hỗ trợ thiết bị OSS tương thích ngược nếu phần hỗ trợ OSS trong nhân đang được nạp.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Muốn nghe thử? Máy sẽ phát bất kỳ tệp WAV nào bạn gửi tới <code>/dev/dsp</code>.</span>
+        <span class="en-only" lang="en">Linux has <b>two sets of audio devices</b>: the <span lang="en">Advanced Linux Sound Architecture</span> (ALSA) devices in <code>/dev/snd</code>, which are difficult to work with directly, and the older <span lang="en">Open Sound System</span> (OSS).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span> Linux systems using ALSA support OSS backward-compatible devices if the OSS kernel support is currently loaded.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao gửi WAV vào /dev/dsp thường thất bại</h4>
+          <p>Vài thao tác sơ đẳng vẫn làm được với thiết bị <code>dsp</code> và <code>audio</code> của OSS — máy sẽ phát bất kỳ tệp WAV nào bạn gửi tới <code>/dev/dsp</code>.<span class="cite"><a href="#ref-1">1</a></span> Nhưng Ward liệt kê hai lý do nó thường không như bạn mong: phần cứng có thể phát sai <b>do lệch tần số</b>, và trên hầu hết hệ thống, thiết bị <b>thường bận ngay khi bạn vừa đăng nhập</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Âm thanh Linux có nhiều tầng</h4>
+          <p>Ward thừa nhận thẳng rằng <b>âm thanh trên Linux là một chủ đề lộn xộn vì có quá nhiều tầng liên quan</b>: chương này mới chỉ nói về thiết bị ở mức nhân, còn thông thường còn có các máy chủ trong không gian người dùng như <code>pulseaudio</code> quản lý âm thanh từ nhiều nguồn và làm trung gian giữa thiết bị âm thanh với các tiến trình người dùng khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">mknod</span>
+      <h3>
+        <span class="standard-copy">Tạo tập tin thiết bị — việc bạn gần như không còn phải làm</span>
+        <span class="easy-only">Tự tay tạo tập tin thiết bị (hiếm khi cần)</span>
+        <span class="en-only" lang="en">Creating device files — something you barely ever do now</span>
+      </h3>
+      <p class="standard-copy">Trên bất kỳ hệ Linux tương đối mới nào, <b>bạn không tự tạo tập tin thiết bị</b>; chúng được tạo bởi <code>devtmpfs</code> và udev.<span class="cite"><a href="#ref-1">1</a></span> Nhưng Ward nói việc biết cách làm vẫn <b>có tính giáo dục</b>, và trong những dịp hiếm hoi bạn có thể cần tạo một ống dẫn có tên hoặc một tệp socket.<span class="cite"><a href="#ref-1">1</a></span> Lệnh <code>mknod</code> tạo một thiết bị; bạn phải biết tên thiết bị cùng số major và minor của nó — ví dụ tạo <code>/dev/sda1</code> là <code>mknod /dev/sda1 b 8 1</code>, trong đó <code>b 8 1</code> chỉ định một thiết bị khối với major 8 và minor 1.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+      <p class="easy-only">Ngày xưa người ta phải tự tay tạo từng tập tin thiết bị. Giờ máy tự làm hết. Nhưng biết cách làm vẫn hay, để hiểu rằng cái tệp đó chỉ là một cái tên gắn với hai con số. <b>Nhớ nhé: một tập tin thiết bị = một cái tên + hai con số + một chữ cái loại.</b></p>
+      <p class="en-only" lang="en">On any reasonably recent Linux system <b>you do not create your own device files</b>; they're created by <code>devtmpfs</code> and udev.<span class="cite"><a href="#ref-1">1</a></span> But Ward says it is still <b>instructive</b> to see how, and on rare occasions you might need to create a named pipe or socket file.<span class="cite"><a href="#ref-1">1</a></span> The <code>mknod</code> command creates one device; you must know the device name as well as its major and minor numbers — creating <code>/dev/sda1</code> is <code>mknod /dev/sda1 b 8 1</code>, where <code>b 8 1</code> specifies a block device with major 8 and minor 1.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Với thiết bị ký tự hoặc ống dẫn có tên, dùng <code>c</code> hoặc <code>p</code> thay cho <code>b</code> — và <b>bỏ số major/minor với ống dẫn có tên</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></span>
+        <span class="easy-only">Chữ cái quyết định loại: b, c hay p.</span>
+        <span class="en-only" lang="en">For character or named pipe devices, use <code>c</code> or <code>p</code> instead of <code>b</code> — and <b>omit the major and minor numbers for named pipes</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>MAKEDEV và vì sao nó chết</h4>
+          <p>Ward kể lại lịch sử: trong các bản Unix và Linux cũ, <b>duy trì thư mục <code>/dev</code> là một thách thức</b>. Mỗi lần nâng cấp nhân hay thêm trình điều khiển đáng kể, nhân lại hỗ trợ thêm loại thiết bị mới, nghĩa là có thêm một bộ số major/minor phải gán cho tên tệp.<span class="cite"><a href="#ref-1">1</a></span> Để đối phó, mỗi hệ thống có một chương trình <code>MAKEDEV</code> trong <code>/dev</code> để tạo hàng loạt thiết bị; khi nâng cấp, bạn phải tìm bản cập nhật của <code>MAKEDEV</code> rồi chạy nó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>devfs — nỗ lực đầu tiên, và thất bại</h4>
+          <p>Hệ thống tĩnh đó trở nên cồng kềnh nên cần một thứ thay thế. Nỗ lực đầu tiên là <b>devfs</b>, một hiện thực <code>/dev</code> <b>nằm trong không gian nhân</b> chứa mọi thiết bị mà nhân hiện tại hỗ trợ.<span class="cite"><a href="#ref-1">1</a></span> Nhưng nó có một số giới hạn, và chính điều đó dẫn tới sự ra đời của <b>udev</b> và <b>devtmpfs</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Bảng tên này giải thích <i>cái gì có tên gì</i>, nhưng chưa trả lời <i>ai đặt tên</i>. Ward đặt câu hỏi then chốt ở đầu mục kế tiếp bằng chính lập luận của Chương 1: <b>sự phức tạp không cần thiết trong nhân là nguy hiểm</b> vì rất dễ gây mất ổn định hệ thống — và quản lý tập tin thiết bị là một ví dụ điển hình. Bạn <i>có thể</i> tạo tập tin thiết bị trong không gian người dùng, vậy tại sao lại làm việc đó trong nhân?<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Biết tên rồi, nhưng ai là người đặt tên? Câu trả lời là udev. Và lý do rất hay: việc gì làm được ở ngoài thì đừng nhét vào nhân, kẻo làm hỏng cả máy. <b>Nhớ nhé: nhân càng gọn thì máy càng vững.</b></p>
+    <p class="en-only" lang="en">This naming table explains <i>what is called what</i>, but not <i>who does the naming</i>. Ward opens the next section with Chapter 1's own argument: <b>unnecessary complexity in the kernel is dangerous</b> because you can too easily introduce system instability — and device file management is a case in point. You <i>can</i> create device files in user space, so why would you do it in the kernel?<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="udev" aria-labelledby="udev-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="udev-title">
+      <span class="standard-copy">udev: nhân gửi tin, không gian người dùng quyết định</span>
+      <span class="easy-only">Người trực tên udev: cắm vào là có tên</span>
+      <span class="en-only" lang="en">udev: the kernel sends word, user space decides</span>
+    </h2>
+    <p class="standard-copy">Nhân Linux có thể <b>gửi thông báo tới một tiến trình trong không gian người dùng tên là <code>udevd</code></b> khi phát hiện một thiết bị mới trên hệ thống — ví dụ khi ai đó cắm một USB flash vào.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span> Tiến trình <code>udevd</code> này có thể khảo sát đặc tính của thiết bị mới, tạo một tập tin thiết bị, rồi thực hiện mọi khởi tạo cần thiết.<span class="cite"><a href="#ref-1">1</a></span> Ward chú thích: bạn gần như chắc chắn sẽ thấy <code>udevd</code> chạy trên máy mình dưới tên <code>systemd-udevd</code>, vì nó là một phần của cơ chế khởi động.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span></p>
+    <p class="easy-only">Khi bạn cắm một cái USB vào, nhân không tự lo hết. Nó chỉ nhắn ra ngoài: “có đồ mới nè!”. Một chương trình tên <code>udevd</code> nhận tin, xem đó là đồ gì, rồi đặt tên và đặt quyền cho nó. <b>Nhớ nhé: nhân báo tin, udev làm việc.</b></p>
+    <p class="en-only" lang="en">The Linux kernel can <b>send notifications to a user-space process called <code>udevd</code></b> upon detecting a new device on the system — when someone attaches a USB flash drive, say.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span> That <code>udevd</code> process can examine the new device's characteristics, create a device file, and then perform any device initialization.<span class="cite"><a href="#ref-1">1</a></span> Ward notes you'll almost certainly see <code>udevd</code> running on your system as <code>systemd-udevd</code>, because it is part of the startup mechanism.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span></p>
+    <p class="deep-only">Ward gọi đó là “lý thuyết” — và lập tức nêu <b>vấn đề</b> làm lý thuyết đó không chạy được nguyên vẹn. Tập tin thiết bị <b>cần thiết từ rất sớm trong quy trình khởi động</b>, nên <code>udevd</code> cũng phải khởi động rất sớm. Nhưng để tạo tập tin thiết bị, <code>udevd</code> <b>không thể phụ thuộc vào bất kỳ thiết bị nào mà chính nó phải tạo ra</b>, và nó phải khởi động ban đầu thật nhanh để phần còn lại của hệ thống không bị giữ lại chờ.<span class="cite"><a href="#ref-1">1</a></span> Toàn bộ thiết kế <code>devtmpfs</code> là câu trả lời cho cái vòng luẩn quẩn này.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>devtmpfs</i> là hệ thống tệp được phát triển để đáp lại chính vấn đề <b>thiết bị phải có sẵn trong lúc khởi động</b>. Nó giống devfs cũ nhưng đơn giản hơn: <b>nhân tạo tập tin thiết bị khi cần</b>, đồng thời <b>báo cho <code>udevd</code></b> rằng có thiết bị mới.<span class="cite"><a href="#ref-1">1</a></span> Nhận được tín hiệu đó, <code>udevd</code> <b>không tạo tập tin thiết bị</b>, mà thực hiện khởi tạo thiết bị, đặt quyền, báo cho các tiến trình khác, và tạo thêm một số liên kết tượng trưng trong <code>/dev</code> để nhận diện thiết bị rõ hơn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Có một mẹo chia việc: nhân lo tạo tệp ngay lập tức để máy khởi động được, còn udev lo phần “trang trí” — đặt quyền, gắn thêm tên dễ nhớ. <b>Nhớ nhé: nhân tạo tệp, udev đặt quyền và thêm tên phụ.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <i>devtmpfs</i> is the filesystem developed in response to exactly the problem of <b>device availability during boot</b>. It is similar to the older devfs but simplified: <b>the kernel creates device files as necessary</b> and also <b>notifies <code>udevd</code></b> that a new device is available.<span class="cite"><a href="#ref-1">1</a></span> On receiving that signal, <code>udevd</code> <b>does not create the device files</b>; it performs device initialization, sets permissions, notifies other processes, and additionally creates a number of symbolic links in <code>/dev</code> to further identify devices.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">kernel ── uevent ──&gt; udevd<br>&nbsp;&nbsp;1. nạp mọi thuộc tính<br>&nbsp;&nbsp;2. phân tích luật<br>&nbsp;&nbsp;3. lọc, cập nhật, hành động<br><br>/lib/udev/rules.d → mặc định<br>/etc/udev/rules.d → ghi đè</p>
+      <p class="easy-only">nhân → nhắn tin → udevd<br>udevd đọc luật<br>udevd đặt tên + quyền</p>
+      <p class="en-only" lang="en">kernel ── uevent ──&gt; udevd<br>&nbsp;&nbsp;1. load all attributes<br>&nbsp;&nbsp;2. parse the rules<br>&nbsp;&nbsp;3. filter, update, act<br><br>/lib/udev/rules.d → defaults<br>/etc/udev/rules.d → overrides</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">uevent</span>
+      <h3>
+        <span class="standard-copy">uevent — bức điện tín ba bước từ nhân</span>
+        <span class="easy-only">uevent — tin nhắn báo có đồ mới</span>
+        <span class="en-only" lang="en">uevent — the kernel's three-step telegram</span>
+      </h3>
+      <p class="standard-copy">Ward mô tả hoạt động của <code>udevd</code> trong đúng ba bước. <b>Một:</b> nhân gửi cho <code>udevd</code> một sự kiện thông báo, gọi là <b>uevent</b>, qua một liên kết mạng nội bộ. <b>Hai:</b> <code>udevd</code> nạp tất cả thuộc tính trong uevent đó. <b>Ba:</b> <code>udevd</code> phân tích các luật của nó, lọc và cập nhật uevent theo luật, rồi thực hiện hành động hoặc đặt thêm thuộc tính cho phù hợp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span></p>
+      <p class="easy-only">Ba bước thôi: nhân nhắn tin → udev đọc tin → udev tra sổ luật rồi làm theo. <b>Nhớ nhé: nhắn tin, đọc tin, tra sổ.</b></p>
+      <p class="en-only" lang="en">Ward describes <code>udevd</code>'s operation in exactly three steps. <b>One:</b> the kernel sends <code>udevd</code> a notification event, called a <b>uevent</b>, through an internal network link. <b>Two:</b> <code>udevd</code> loads all of the attributes in the uevent. <b>Three:</b> <code>udevd</code> parses its rules, filters and updates the uevent based on those rules, and takes actions or sets more attributes accordingly.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Một uevent đến từ nhân trông như một khối cặp khoá–giá trị: <code>ACTION=change</code>, <code>DEVNAME=sde</code>, <code>DEVPATH=…</code>, <code>DEVTYPE=disk</code>, <code>MAJOR=8</code>, <code>MINOR=64</code>, <code>SEQNUM=2752</code>, <code>SUBSYSTEM=block</code>.<span class="cite"><a href="#ref-1">1</a></span> Sau khi nhận nó, <code>udevd</code> đã biết tên thiết bị, đường dẫn sysfs và nhiều thuộc tính khác — đủ để bắt đầu xử lý luật.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Tin nhắn đó ghi rõ: tên gì, ở đâu, loại gì, số mấy.</span>
+        <span class="en-only" lang="en">An incoming uevent looks like a block of key-value pairs: <code>ACTION=change</code>, <code>DEVNAME=sde</code>, <code>DEVPATH=…</code>, <code>DEVTYPE=disk</code>, <code>MAJOR=8</code>, <code>MINOR=64</code>, <code>SEQNUM=2752</code>, <code>SUBSYSTEM=block</code>.<span class="cite"><a href="#ref-1">1</a></span> After receiving it, <code>udevd</code> knows the device name, the sysfs device path and a number of other attributes — enough to start processing rules.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Liên kết tượng trưng ổn định trong /dev/disk/by-id</h4>
+          <p>Kết quả nhìn thấy được của bước ba là thư mục <code>/dev/disk/by-id</code>, nơi mỗi đĩa đang gắn có một hoặc nhiều mục.<span class="cite"><a href="#ref-1">1</a></span> <code>udevd</code> <b>đặt tên các liên kết theo loại giao diện, rồi tới thông tin nhà sản xuất và model, số sê-ri, và phân vùng</b> nếu có — ví dụ <code>scsi-SATA_WDC_WD3200AAJS-_WD-WMAV2FU80671-part1 -&gt; ../../sda1</code>.<span class="cite"><a href="#ref-1">1</a></span> Đây chính là lời giải cho cái bẫy đánh số lại ở mục trước: liên kết này <b>không đổi</b> khi bạn tháo một đĩa khác.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao chữ “tmp” trong devtmpfs</h4>
+          <p>Ward giải thích: chữ “tmp” cho biết hệ thống tệp này <b>nằm trong bộ nhớ chính</b> và <b>đọc/ghi được bởi tiến trình không gian người dùng</b> — chính đặc tính đó cho phép <code>udevd</code> tạo các liên kết tượng trưng nói trên.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">udev rules</span>
+      <h3>
+        <span class="standard-copy">Luật udev — điều kiện dùng <code>==</code>, chỉ thị dùng <code>=</code></span>
+        <span class="easy-only">Sổ luật: nếu… thì…</span>
+        <span class="en-only" lang="en">udev rules — conditions use <code>==</code>, directives use <code>=</code></span>
+      </h3>
+      <p class="standard-copy">Các tệp luật nằm trong hai thư mục <code>/lib/udev/rules.d</code> và <code>/etc/udev/rules.d</code>: luật trong <code>/lib</code> là <b>mặc định</b>, luật trong <code>/etc</code> là <b>ghi đè</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span> Ward thừa nhận giải thích đầy đủ hệ luật sẽ rất dài dòng và chỉ bạn tới trang man <code>udev(7)</code>, nhưng nêu ba nguyên tắc đọc: <code>udevd</code> <b>đọc luật từ đầu đến cuối</b> tệp; sau khi đọc một luật và có thể đã thi hành hành động của nó, nó <b>tiếp tục đọc</b> tệp hiện tại để tìm các luật áp dụng được khác; và có những chỉ thị như <code>GOTO</code> để <b>bỏ qua từng phần</b> của tệp luật, thường đặt ở đầu tệp để nhảy qua cả tệp nếu nó không liên quan tới thiết bị đang xét.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Luật udev là một cuốn sổ kiểu “nếu… thì…”. Máy đọc từ đầu tới cuối, gặp luật nào đúng thì làm theo, rồi vẫn đọc tiếp. Có luật ghi sẵn của hệ thống, và luật riêng của bạn thì đè lên. <b>Nhớ nhé: /lib là luật gốc, /etc là luật của bạn.</b></p>
+      <p class="en-only" lang="en">The rules files live in <code>/lib/udev/rules.d</code> and <code>/etc/udev/rules.d</code>: the rules in <code>/lib</code> are the <b>defaults</b>, those in <code>/etc</code> are <b>overrides</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span> Ward admits a full explanation of the rules would be tedious and points to the <code>udev(7)</code> manual page, but gives three reading principles: <code>udevd</code> <b>reads rules from start to finish</b> of a rules file; after reading a rule and possibly executing its action it <b>continues reading</b> the current file for more applicable rules; and there are directives such as <code>GOTO</code> to <b>skip over parts</b> of rules files, usually placed at the top to skip an entire file irrelevant to the device being configured.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Cách phân biệt quan trọng nhất, theo Ward: <b>điều kiện</b> được ký hiệu bằng hai dấu bằng <code>==</code> hoặc dấu chấm than bằng <code>!=</code>, còn <b>chỉ thị</b> bằng một dấu bằng <code>=</code>, một dấu cộng bằng <code>+=</code>, hoặc dấu hai chấm bằng <code>:=</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span></span>
+        <span class="easy-only">Hai dấu bằng là “hỏi”, một dấu bằng là “bảo”.</span>
+        <span class="en-only" lang="en">The distinction Ward flags as most important: <b>conditionals</b> are denoted by two equal signs <code>==</code> or a bang equal <code>!=</code>, and <b>directives</b> by a single equal sign <code>=</code>, a plus equal <code>+=</code>, or a colon equal <code>:=</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Nguồn khác nhau về số thư mục luật</h4>
+          <p>Sách nêu <b>hai</b> thư mục luật: <code>/lib/udev/rules.d</code> (mặc định) và <code>/etc/udev/rules.d</code> (ghi đè).<span class="cite"><a href="#ref-1">1</a></span> Trang man <code>udev(7)</code> hiện hành liệt kê <b>bốn</b> nguồn được sắp xếp chung theo thứ tự từ điển bất kể nằm ở thư mục nào: <code>/usr/lib/udev/rules.d</code>, <code>/usr/local/lib/udev/rules.d</code>, thư mục chạy thời <code>/run/udev/rules.d</code>, và thư mục quản trị cục bộ <code>/etc/udev/rules.d</code> — trong đó tệp ở <code>/etc/</code> có ưu tiên cao nhất.<span class="cite"><a href="#ref-19">19</a></span> Bản văn không sai: trên nhiều bản phân phối <code>/lib</code> là liên kết tới <code>/usr/lib</code>, và thứ tự ưu tiên “mặc định rồi ghi đè” vẫn đúng; chỉ là bản đồ đầy đủ rộng hơn hai mục.</p>
+        </div>
+        <div class="info-block">
+          <h4>Đọc một luật thật: 60-persistent-storage.rules</h4>
+          <p>Các liên kết trong ví dụ <code>/dev/sda</code> được định nghĩa bởi luật trong <code>/lib/udev/rules.d/60-persistent-storage.rules</code>.<span class="cite"><a href="#ref-1">1</a></span> Ý tưởng của luật ATA đầu tiên: <code>udevd</code> tìm thiết bị bắt đầu bằng <code>sd</code> hoặc <code>sr</code> nhưng không có số — biểu thức <code>KERNEL=="sd*[!0-9]|sr*"</code> — cộng với hệ con <code>SUBSYSTEMS=="scsi"</code> và vài thuộc tính khác tuỳ loại thiết bị.<span class="cite"><a href="#ref-1">1</a></span> Nếu mọi điều kiện đúng, <code>udevd</code> chuyển tới biểu thức cuối — <b>không phải điều kiện mà là chỉ thị</b>: <code>IMPORT{program}="ata_id --export $devnode"</code>, tức nhập biến từ lệnh <code>/lib/udev/ata_id</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Mẹo ID_SERIAL — luật tự vô hiệu hoá chính mình</h4>
+          <p>Trong cả hai luật ATA, điều kiện thứ hai là <code>ENV{ID_SERIAL}!="?*"</code>, biểu thức này <b>đúng khi <code>ID_SERIAL</code> chưa được đặt</b>; nếu nó đã được đặt thì điều kiện sai, cả luật không áp dụng, và <code>udevd</code> chuyển sang luật kế tiếp.<span class="cite"><a href="#ref-1">1</a></span> Mục đích của hai luật này là <b>chạy <code>ata_id</code> để tìm số sê-ri</b> rồi thêm các thuộc tính đó vào bản sao đang làm việc của uevent — Ward nói bạn sẽ gặp <b>khuôn mẫu chung này trong rất nhiều luật udev</b>.<span class="cite"><a href="#ref-1">1</a></span> Kết quả nhập vào đặt sẵn các biến như <code>ID_TYPE=disk</code>, <code>ID_BUS=ata</code>, <code>ID_MODEL=WDC_WD3200AAJS-22L7A0</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Và đây là nơi liên kết tượng trưng ra đời</h4>
+          <p>Với <code>ENV{ID_SERIAL}</code> đã được đặt, <code>udevd</code> nay có thể khớp một luật ở phần sau tệp, tìm mọi đĩa SCSI đang gắn; luật đó đòi <code>ENV{ID_SERIAL}</code> phải có giá trị và mang đúng một chỉ thị: <code>SYMLINK+="disk/by-id/$env{ID_BUS}-$env{ID_SERIAL}"</code>.<span class="cite"><a href="#ref-1">1</a></span> Chỉ thị này bảo <code>udevd</code> <b>thêm một liên kết tượng trưng cho thiết bị đang đến</b> — và đó chính là nguồn gốc của các liên kết bạn thấy trong <code>/dev/disk/by-id</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">udevadm info · udevadm monitor</span>
+      <h3>
+        <span class="standard-copy"><code>udevadm</code> — tra cứu và theo dõi thời gian thực</span>
+        <span class="easy-only"><code>udevadm</code> — vừa tra vừa xem trực tiếp</span>
+        <span class="en-only" lang="en"><code>udevadm</code> — query and live monitoring</span>
+      </h3>
+      <p class="standard-copy"><code>udevadm</code> là công cụ quản trị cho <code>udevd</code>: bạn có thể nạp lại luật và kích hoạt sự kiện, nhưng theo Ward, <b>hai tính năng mạnh nhất</b> là khả năng <b>tìm và khám phá thiết bị hệ thống</b> và khả năng <b>theo dõi uevent</b> ngay khi <code>udevd</code> nhận chúng từ nhân.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Ông cũng thừa nhận cú pháp lệnh <b>có thể khá phức tạp</b>, với dạng dài và dạng ngắn cho hầu hết tuỳ chọn — trong sách ông dùng dạng dài.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Một lệnh, hai việc: tra thông tin một món đồ, và ngồi xem trực tiếp mỗi khi có đồ mới cắm vào. Cắm USB rồi nhìn màn hình chạy chữ — rất vui. <b>Nhớ nhé: info để tra, monitor để xem.</b></p>
+      <p class="en-only" lang="en"><code>udevadm</code> is the administration tool for <code>udevd</code>: you can reload rules and trigger events, but Ward says its <b>two most powerful features</b> are the ability to <b>search for and explore system devices</b> and the ability to <b>monitor uevents</b> as <code>udevd</code> receives them from the kernel.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> He also grants that the command syntax <b>can be somewhat complicated</b>, with long and short forms for most options — the book uses the long ones.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+      <div class="loop-diagram" role="img" aria-label="Chuỗi xử lý một thiết bị mới: nhân phát uevent, devtmpfs tạo nút thiết bị, udevd khớp luật, rồi tạo liên kết tượng trưng ổn định. Processing a new device: the kernel emits a uevent, devtmpfs creates the node, udevd matches rules, then adds a stable symlink.">
+        <span>kernel</span><em>→ uevent</em><span>devtmpfs</span><em>→ node</em><span>udevd</span><em>→ rules</em><span>/dev/disk/by-id</span>
+      </div>
+
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đầu ra của <code>udevadm info --query=all --name=/dev/sda</code> dùng tiền tố để phân loại từng dòng: <code>P:</code> là đường dẫn thiết bị sysfs, <code>N:</code> là nút thiết bị (tên của tệp trong <code>/dev</code>), <code>S:</code> là liên kết tượng trưng mà <code>udevd</code> đặt trong <code>/dev</code> theo luật của nó, và <code>E:</code> là thông tin thiết bị bổ sung được trích ra trong luật.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span>
+        <span class="easy-only">P là đường dẫn, N là tên, S là tên phụ, E là thông tin thêm.</span>
+        <span class="en-only" lang="en">The output of <code>udevadm info --query=all --name=/dev/sda</code> uses prefixes to classify each line: <code>P:</code> is the sysfs device path, <code>N:</code> the device node (the name given to the <code>/dev</code> file), <code>S:</code> a symbolic link to the node that <code>udevd</code> placed in <code>/dev</code> according to its rules, and <code>E:</code> additional device information extracted in the rules.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao monitor in mỗi thông điệp hai lần</h4>
+          <p>Chạy <code>udevadm monitor</code> rồi cắm một thẻ nhớ, bạn thấy mỗi thông điệp <b>xuất hiện hai bản</b>. Lý do: hành vi mặc định là in <b>cả</b> thông điệp đến từ nhân (đánh dấu <code>KERNEL</code>) <b>lẫn</b> thông điệp xử lý từ <code>udevd</code> (đánh dấu <code>UDEV</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Muốn chỉ xem sự kiện nhân, thêm <code>--kernel</code>; chỉ xem xử lý của udevd, dùng <code>--udev</code>; muốn thấy toàn bộ uevent kèm thuộc tính, dùng <code>--property</code>; và <code>--udev</code> cùng <code>--property</code> cho bạn uevent <b>sau khi đã xử lý</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Lọc theo hệ con</h4>
+          <p>Bạn cũng có thể lọc sự kiện theo hệ con — ví dụ để chỉ thấy thông điệp nhân liên quan tới thay đổi trong hệ con SCSI: <code>udevadm monitor --kernel --subsystem-match=scsi</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Ward đóng mục bằng một gợi ý về hệ sinh thái rộng hơn: còn có một dịch vụ nền tên <code>udisksd</code> lắng nghe sự kiện để <b>tự động gắn đĩa</b> và báo cho các tiến trình khác rằng có đĩa mới.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Ward chèn một lời khuyên hiếm gặp ngay giữa chương: sau phần <code>devtmpfs</code>, ông nói bạn <b>không cần biết bất kỳ nội dung nào còn lại của chương này</b> để đọc tiếp quyển sách — và nếu đây là lần đầu bạn nhìn vào thiết bị Linux, ông <b>khuyến khích mạnh mẽ</b> bạn nhảy sang chương sau để bắt đầu học cách dùng đĩa.<span class="cite"><a href="#ref-1">1</a></span> Phần còn lại dưới đây là dành cho lượt đọc thứ hai.</p>
+    <p class="easy-only">Tác giả nói thẳng: phần còn lại khó hơn, và bạn có thể bỏ qua, đọc chương sau trước cũng được. <b>Nhớ nhé: bỏ qua phần khó không phải là thua — là biết chọn thứ tự.</b></p>
+    <p class="en-only" lang="en">Ward slips in a rare piece of advice mid-chapter: after the <code>devtmpfs</code> section he says you <b>don't need to know any of the remaining material in this chapter</b> to continue with the book — and if this is your first look at Linux devices, you're <b>highly encouraged</b> to skip to the next chapter and start learning about disks.<span class="cite"><a href="#ref-1">1</a></span> What follows is for a second reading.</p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 5 ===================== -->
+<section class="section" id="scsi" aria-labelledby="scsi-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 05</span>
+      <span class="en-only" lang="en">Concept cluster 05</span>
+    </p>
+    <h2 id="scsi-title">
+      <span class="standard-copy">SCSI trong nhân: ba tầng trình điều khiển và những cây cầu</span>
+      <span class="easy-only">Vì sao USB, SATA, CD đều đi chung một đường</span>
+      <span class="en-only" lang="en">SCSI in the kernel: three driver layers and their bridges</span>
+    </h2>
+    <p class="standard-copy">Ward dùng hệ con SCSI làm <b>cửa sổ nhìn vào kiến trúc nhân Linux</b>, và nói trước hai điều: bạn <b>không cần biết gì trong mục này để dùng đĩa</b>, và nội dung ở đây <b>nâng cao và thiên về lý thuyết</b> hơn mọi thứ trước đó.<span class="cite"><a href="#ref-1">1</a></span> Bối cảnh lịch sử: cấu hình SCSI phần cứng truyền thống là <b>một bộ điều hợp chủ</b> (<span lang="en">host adapter</span>) nối với một chuỗi thiết bị qua một <b>bus SCSI</b>; bộ điều hợp chủ gắn vào máy tính, và cả bộ điều hợp lẫn các thiết bị đều có một <b>SCSI ID</b> — có thể có <b>8 hoặc 16 ID trên mỗi bus, tuỳ phiên bản SCSI</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Phần này là phần khó nhất chương — chính tác giả cũng bảo thế. Ý chính rất gọn: trong nhân có một “trạm trung chuyển” tên SCSI, và gần như mọi loại ổ đĩa đều được dịch sang tiếng SCSI để đi qua trạm này. <b>Nhớ nhé: SCSI là ngôn ngữ chung của các ổ đĩa trong Linux.</b></p>
+    <p class="en-only" lang="en">Ward uses the SCSI subsystem as <b>a window onto Linux kernel architecture</b>, and says two things up front: you <b>don't need any of this to use disks</b>, and the material here is <b>more advanced and theoretical</b> than anything before it.<span class="cite"><a href="#ref-1">1</a></span> The historical background: a traditional SCSI hardware setup is <b>a host adapter</b> linked with a chain of devices over a <b>SCSI bus</b>; the host adapter attaches to the computer, and the adapter and devices each have a <b>SCSI ID</b> — there can be <b>8 or 16 IDs per bus, depending on the SCSI version</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Một thuật ngữ đáng nhớ trước khi đi tiếp: một số quản trị viên dùng từ <b>SCSI target</b> để chỉ một thiết bị cùng SCSI ID của nó, vì <b>một đầu của phiên làm việc trong giao thức SCSI được gọi là <i>target</i></b>.<span class="cite"><a href="#ref-1">1</a></span> Trong thuật ngữ chính thức của SCSI, đầu kia — bên phát lệnh — là <b>initiator</b>; tài liệu nhân định nghĩa một “host” là cầu nối giữa một bus nhập/xuất của máy tính (ví dụ PCI) với một cổng initiator SCSI.<span class="cite"><a href="#ref-21">21</a></span> Chính quan hệ ngang hàng đó cho phép bất kỳ thiết bị nào cũng giao tiếp được với thiết bị khác qua bộ lệnh SCSI; máy tính <b>không gắn trực tiếp vào chuỗi thiết bị</b>, nên nó phải đi qua bộ điều hợp chủ để nói chuyện với đĩa.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Hệ con SCSI trong nhân có <b>ba tầng trình điều khiển</b>. <b>Tầng trên</b> xử lý thao tác cho một <i>lớp thiết bị</i> — ví dụ trình điều khiển <code>sd</code> (SCSI disk) biết cách dịch yêu cầu từ giao diện thiết bị khối của nhân thành lệnh SCSI đặc thù cho đĩa, và ngược lại. <b>Tầng giữa</b> điều phối và định tuyến thông điệp SCSI giữa tầng trên và tầng dưới, đồng thời theo dõi mọi bus và thiết bị SCSI gắn vào hệ thống. <b>Tầng dưới</b> xử lý hành động đặc thù phần cứng: gửi thông điệp giao thức SCSI đi tới bộ điều hợp chủ cụ thể, và trích thông điệp đến từ phần cứng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Ba tầng giống ba người trong một bưu điện: người trên cùng biết gói hàng là loại gì, người giữa biết chuyển cho ai, người dưới cùng biết nhét gói vào đúng xe. <b>Nhớ nhé: trên hiểu hàng, giữa chia đường, dưới chạy xe.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> The kernel's SCSI subsystem has <b>three layers of drivers</b>. <b>The top layer</b> handles operations for a <i>class of device</i> — the <code>sd</code> (SCSI disk) driver, for instance, knows how to translate requests from the kernel block device interface into disk-specific SCSI commands, and back. <b>The middle layer</b> moderates and routes SCSI messages between the top and bottom layers and keeps track of all the SCSI buses and devices attached to the system. <b>The bottom layer</b> handles hardware-specific actions: sending outgoing SCSI protocol messages to specific host adapters, and extracting incoming messages from the hardware.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">[0:0:0:0] disk ATA … /dev/sda<br>[2:0:0:3] disk USB2.0 … /dev/sde<br><br>= host adapter : bus<br>&nbsp;&nbsp;: SCSI ID : LUN</p>
+      <p class="easy-only">4 số trong ngoặc =<br>bộ điều hợp : bus<br>: mã thiết bị : khoang</p>
+      <p class="en-only" lang="en">[0:0:0:0] disk ATA … /dev/sda<br>[2:0:0:3] disk USB2.0 … /dev/sde<br><br>= host adapter : bus<br>&nbsp;&nbsp;: SCSI ID : LUN</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">lsscsi · LUN</span>
+      <h3>
+        <span class="standard-copy">Bốn con số trong ngoặc vuông — đọc được là hiểu cả cây</span>
+        <span class="easy-only">Bốn con số như địa chỉ nhà</span>
+        <span class="en-only" lang="en">The four bracketed numbers — read them and you read the tree</span>
+      </h3>
+      <p class="standard-copy">Các con số trong ngoặc vuông của <code>lsscsi</code>, từ trái sang phải, là: <b>số bộ điều hợp chủ SCSI</b>, <b>số bus SCSI</b>, <b>SCSI ID của thiết bị</b>, và <b>LUN</b> (<span lang="en">logical unit number</span>) — một phân chia nhỏ hơn nữa của một thiết bị.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span> Trong ví dụ của Ward có <b>bốn bộ điều hợp</b> (<code>scsi0</code> đến <code>scsi3</code>), mỗi bộ có một bus duy nhất (đều mang số bus 0), và chỉ một thiết bị trên mỗi bus (đều là target 0).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bốn con số giống địa chỉ: quận, phường, số nhà, tầng. Nhìn vào là biết món đồ nằm ở đâu trong hệ thống. <b>Nhớ nhé: bốn số = bốn cấp địa chỉ.</b></p>
+      <p class="en-only" lang="en">The numbers in <code>lsscsi</code>'s square brackets are, left to right: the <b>SCSI host adapter number</b>, the <b>SCSI bus number</b>, the <b>device SCSI ID</b>, and the <b>LUN</b> (<span lang="en">logical unit number</span>), a further subdivision of a device.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span> In Ward's example there are <b>four attached adapters</b> (<code>scsi0</code> through <code>scsi3</code>), each with a single bus (all bus number 0), and just one device per bus (all target 0).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đầu đọc thẻ USB ở địa chỉ <code>2:0:0</code> trong ví dụ có <b>bốn đơn vị logic</b> — mỗi loại thẻ nhớ cắm vào được một đơn vị — và nhân gán <b>một tập tin thiết bị khác nhau cho mỗi đơn vị logic</b>: <code>/dev/sdb</code> tới <code>/dev/sde</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Một đầu đọc thẻ bốn khe sẽ hiện ra thành bốn ổ khác nhau.</span>
+        <span class="en-only" lang="en">The USB card reader at <code>2:0:0</code> in the example has <b>four logical units</b> — one for each kind of flash card that can be inserted — and the kernel assigns <b>a different device file to each logical unit</b>: <code>/dev/sdb</code> through <code>/dev/sde</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ngoại lệ NVMe</h4>
+          <p>Ward ghi một ngoại lệ dễ gây bối rối: <b>dù không phải thiết bị SCSI, thiết bị NVMe đôi khi vẫn hiện ra trong đầu ra <code>lsscsi</code> với chữ <code>N</code> làm số bộ điều hợp</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Thứ tự dòng = thứ tự phát hiện</h4>
+          <p>Nhắc lại từ mục 3.4.1 và nay có ý nghĩa rõ hơn: Linux gán thiết bị cho tập tin thiết bị <b>theo thứ tự trình điều khiển gặp chúng</b>, nên trong ví dụ đầu chương, nhân tìm thấy đĩa trước và ổ flash sau.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">USB storage bridge</span>
+      <h3>
+        <span class="standard-copy">USB và SCSI — hai hệ con ba tầng soi gương nhau</span>
+        <span class="easy-only">USB cũng có ba tầng y hệt</span>
+        <span class="en-only" lang="en">USB and SCSI — two three-layer subsystems mirroring each other</span>
+      </h3>
+      <p class="standard-copy">Một ổ USB flash hiện ra ở <code>/dev/sdf</code> <b>hiểu lệnh SCSI</b>, nhưng để thật sự giao tiếp với nó, nhân cần biết cách nói qua hệ thống USB.<span class="cite"><a href="#ref-1">1</a></span> Ward chỉ ra rằng <b>ở mức trừu tượng, USB khá giống SCSI</b> — cũng có lớp thiết bị, bus, và bộ điều khiển chủ — nên không ngạc nhiên khi nhân Linux có một <b>hệ con USB ba tầng</b> rất giống hệ con SCSI: trình điều khiển theo lớp thiết bị ở trên, lõi quản lý bus ở giữa, trình điều khiển bộ điều khiển chủ ở dưới.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-22">22</a></span> Thậm chí có cả lệnh <code>lsusb</code> tương tự <code>lsscsi</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">USB và SCSI được xây theo cùng một kiểu ba tầng. Nên nhân chỉ cần một “người phiên dịch” nhỏ là hai bên hiểu nhau. <b>Nhớ nhé: giống cấu trúc thì dễ bắc cầu.</b></p>
+      <p class="en-only" lang="en">A USB flash drive appearing as <code>/dev/sdf</code> <b>understands SCSI commands</b>, but to actually talk to it the kernel needs to know how to speak through the USB system.<span class="cite"><a href="#ref-1">1</a></span> Ward points out that <b>in the abstract USB is quite similar to SCSI</b> — it too has device classes, buses and host controllers — so it's no surprise the Linux kernel includes a <b>three-layer USB subsystem</b> closely resembling the SCSI one: device-class drivers at the top, a bus management core in the middle, host controller drivers at the bottom.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-22">22</a></span> There is even an <code>lsusb</code> command similar to <code>lsscsi</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trình điều khiển lưu trữ USB ở tầng trên <b>hoạt động như một người phiên dịch</b>: một đầu nói SCSI, đầu kia nói USB. Vì phần cứng lưu trữ <b>gói sẵn lệnh SCSI bên trong thông điệp USB</b>, công việc của nó tương đối nhẹ — chủ yếu là đóng gói lại dữ liệu.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Nó chỉ bóc gói ra rồi gói lại thôi, không phải dịch từng chữ.</span>
+        <span class="en-only" lang="en">The USB storage driver at the top <b>acts as a translator</b>: on one end it speaks SCSI, on the other USB. Because the storage hardware <b>includes SCSI commands inside its USB messages</b>, the driver has a relatively easy job — it mostly repackages data.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Mắt xích cuối cùng: cây cầu SCSI tầng dưới</h4>
+          <p>Với cả hệ con SCSI lẫn USB đã sẵn sàng, bạn gần như có đủ mọi thứ để nói chuyện với ổ flash — nhưng vẫn thiếu <b>trình điều khiển tầng dưới trong hệ con SCSI</b>, vì trình điều khiển lưu trữ USB thuộc hệ con USB chứ không thuộc SCSI.<span class="cite"><a href="#ref-1">1</a></span> Ward nêu lý do rất thẳng: <b>vì lý do tổ chức, hai hệ con không nên dùng chung một trình điều khiển</b>.<span class="cite"><a href="#ref-1">1</a></span> Cách nối: một <b>trình điều khiển cầu SCSI tầng dưới đơn giản</b> kết nối sang trình điều khiển lưu trữ của hệ con USB.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một thiết bị, một trên, một dưới</h4>
+          <p>Tầng trên và tầng dưới chứa nhiều trình điều khiển khác nhau, nhưng Ward nhấn mạnh điều cần nhớ: với <b>bất kỳ tập tin thiết bị nào</b> trên hệ thống, nhân (gần như luôn luôn) dùng <b>một trình điều khiển tầng trên và một trình điều khiển tầng dưới</b>.<span class="cite"><a href="#ref-1">1</a></span> Với đĩa <code>/dev/sda</code> trong ví dụ, đó là trình điều khiển tầng trên <code>sd</code> và cây cầu ATA ở tầng dưới.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">libata</span>
+      <h3>
+        <span class="standard-copy">SCSI và ATA — dịch nguyên văn so với dịch thật sự</span>
+        <span class="easy-only">Ổ CD chỉ cần chép lại, ổ cứng thì phải dịch</span>
+        <span class="en-only" lang="en">SCSI and ATA — transcription versus real translation</span>
+      </h3>
+      <p class="standard-copy">Đĩa cứng SATA và ổ quang trong sơ đồ của Ward <b>dùng chung một giao diện SATA</b>, nhưng để nối các trình điều khiển SATA của nhân với hệ con SCSI, nhân dùng một trình điều khiển cầu — như với USB, nhưng <b>bằng cơ chế khác và phức tạp hơn</b>.<span class="cite"><a href="#ref-1">1</a></span> Lý do: ổ quang nói <span lang="en">ATAPI</span>, một phiên bản lệnh SCSI được mã hoá trong giao thức ATA; còn <b>đĩa cứng thì không dùng ATAPI và không mã hoá bất kỳ lệnh SCSI nào cả</b>.<span class="cite"><a href="#ref-1">1</a></span> Nhân dùng một phần của thư viện <code>libata</code> để hoà giải các ổ SATA (và ATA) với hệ con SCSI.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+      <p class="easy-only">Ổ CD đã nói sẵn “tiếng SCSI” rồi, chỉ cần bóc gói ra là xong. Còn ổ cứng SATA nói một thứ tiếng hoàn toàn khác, phải dịch thật. Có một thư viện tên <code>libata</code> làm người dịch đó. <b>Nhớ nhé: cùng một sợi cáp, nhưng hai mức khó khác hẳn nhau.</b></p>
+      <p class="en-only" lang="en">The SATA hard disk and the optical drive in Ward's schematic <b>use the same SATA interface</b>, but to connect the kernel's SATA-specific drivers to the SCSI subsystem, the kernel employs a bridge driver — as with USB, but <b>by a different mechanism and with additional complications</b>.<span class="cite"><a href="#ref-1">1</a></span> The reason: the optical drive speaks <span lang="en">ATAPI</span>, a version of SCSI commands encoded in the ATA protocol; the <b>hard disk does not use ATAPI and does not encode any SCSI commands</b>.<span class="cite"><a href="#ref-1">1</a></span> The kernel uses part of a library called <code>libata</code> to reconcile SATA (and ATA) drives with the SCSI subsystem.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Phép so sánh của chính tác giả: công việc với ổ quang giống <b>gõ lại một quyển sách tiếng Anh vào máy tính</b> — bạn không cần hiểu quyển sách nói gì, thậm chí không cần biết tiếng Anh. Còn công việc với đĩa cứng giống <b>đọc một quyển sách tiếng Đức rồi gõ vào máy dưới dạng bản dịch tiếng Anh</b>: bạn phải hiểu cả hai thứ tiếng lẫn nội dung quyển sách.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Một bên là chép lại, một bên là dịch — khó hơn hẳn.</span>
+        <span class="en-only" lang="en">The author's own comparison: the optical drive's job is like <b>typing an English book into a computer</b> — you need not understand what the book is about, nor even English. The hard disk's job is more like <b>reading a German book and typing it in as an English translation</b>: you need both languages and the book's content.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Khi phần cứng tự dịch</h4>
+          <p>Ward lưu ý đĩa SATA <b>cũng xuất hiện trên hệ thống như thiết bị SCSI</b>, nhưng hơi khác vì phần lớn chúng giao tiếp qua một tầng dịch trong thư viện <code>libata</code>; <b>một số bộ điều khiển SATA — đặc biệt là bộ điều khiển RAID hiệu năng cao — thực hiện phép dịch này ngay trong phần cứng</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Sơ đồ đã được giản lược</h4>
+          <p>Ông thừa nhận <code>libata</code> làm được việc này và nhờ đó gắn được giao diện và thiết bị ATA/SATA vào hệ con SCSI — nhưng <b>thường có nhiều trình điều khiển tham gia hơn là chỉ một trình điều khiển chủ SATA</b> như trong hình; chúng không được vẽ ra cho đơn giản.<span class="cite"><a href="#ref-1">1</a></span> Đây là lời nhắc rằng sơ đồ trong sách là một <i>trừu tượng hoá</i>, đúng tinh thần Chương 1.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">generic SCSI device (sg)</span>
+      <h3>
+        <span class="standard-copy">Thiết bị generic — cửa sau để bỏ qua lớp thiết bị</span>
+        <span class="easy-only">Một cửa phụ nói thẳng với ổ đĩa</span>
+        <span class="en-only" lang="en">Generic devices — the back door past the class driver</span>
+      </h3>
+      <p class="standard-copy">Khi một tiến trình người dùng giao tiếp với hệ con SCSI, thông thường nó đi qua <b>tầng thiết bị khối</b> và/hoặc một dịch vụ nhân khác nằm trên một trình điều khiển lớp thiết bị SCSI (như <code>sd</code> hoặc <code>sr</code>); nói cách khác, <b>phần lớn tiến trình người dùng không bao giờ cần biết gì về thiết bị SCSI hay lệnh của chúng</b>.<span class="cite"><a href="#ref-1">1</a></span> Nhưng tiến trình người dùng <b>có thể bỏ qua trình điều khiển lớp thiết bị</b> và đưa lệnh giao thức SCSI thẳng tới thiết bị qua <b>thiết bị generic</b> của chúng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-26">26</a></span></p>
+      <p class="easy-only">Bình thường bạn đi cửa chính: mở tệp, đọc, ghi. Nhưng có một cửa phụ cho phép chương trình ra lệnh thẳng cho ổ đĩa. Cửa phụ đó tên là <code>/dev/sg*</code>. <b>Nhớ nhé: sg là cửa phụ dành cho việc khó.</b></p>
+      <p class="en-only" lang="en">When a user-space process communicates with the SCSI subsystem it normally does so through the <b>block device layer</b> and/or another kernel service sitting on top of a SCSI device class driver (such as <code>sd</code> or <code>sr</code>); in other words, <b>most user processes never need to know anything about SCSI devices or their commands</b>.<span class="cite"><a href="#ref-1">1</a></span> But user processes <b>can bypass the device class drivers</b> and give SCSI protocol commands directly to devices through their <b>generic devices</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-26">26</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Thêm tuỳ chọn <code>-g</code> vào <code>lsscsi</code> để hiện các thiết bị generic: ngoài tập tin thiết bị khối quen thuộc, mỗi mục liệt kê thêm một tập tin thiết bị SCSI generic ở cột cuối — ví dụ thiết bị generic của ổ quang <code>/dev/sr0</code> là <code>/dev/sg1</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span></span>
+        <span class="easy-only">Mỗi ổ đĩa có hai tên: một tên thường và một tên “cửa phụ”.</span>
+        <span class="en-only" lang="en">Add the <code>-g</code> option to <code>lsscsi</code> to show generic devices: alongside the usual block device file, each entry lists a SCSI generic device file in the last column — the generic device for the optical drive at <code>/dev/sr0</code> is <code>/dev/sg1</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Lý do thật sự: giữ nhân cho gọn</h4>
+          <p>Ward đặt câu hỏi “vì sao lại muốn dùng thiết bị generic?” và trả lời bằng <b>độ phức tạp của mã trong nhân</b>: tác vụ càng phức tạp thì càng nên để nó ra ngoài nhân.<span class="cite"><a href="#ref-1">1</a></span> Đọc một đĩa quang là thao tác khá đơn giản và có một trình điều khiển chuyên dụng trong nhân. Nhưng <b>ghi một đĩa quang khó hơn đọc rất nhiều, và không có dịch vụ hệ thống thiết yếu nào phụ thuộc vào hành động ghi</b> — không có lý do gì đe doạ không gian nhân bằng hoạt động đó.<span class="cite"><a href="#ref-1">1</a></span> Vì vậy, để ghi đĩa trong Linux, bạn chạy một chương trình không gian người dùng nói chuyện với một thiết bị SCSI generic như <code>/dev/sg1</code>; chương trình này <b>có thể kém hiệu quả hơn một trình điều khiển nhân, nhưng dễ xây dựng và bảo trì hơn nhiều</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>sg là một trong bốn trình điều khiển mức cao</h4>
+          <p>Tài liệu nhân xác nhận vị trí của <code>sg</code>: nó là <b>một trong bốn trình điều khiển thiết bị SCSI “mức cao”</b>, cùng với <code>sd</code>, <code>st</code> và <code>sr</code> (đĩa, băng từ và CD-ROM); <code>sg</code> tổng quát hơn các anh em của nó và thường dùng cho thiết bị không khớp vào các hạng mục đã có — máy quét, đầu ghi CD, và đọc CD nhạc dưới dạng số.<span class="cite"><a href="#ref-26">26</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">multiple access methods</span>
+      <h3>
+        <span class="standard-copy">Hai lối vào một thiết bị — <code>sr</code> để đọc, <code>sg</code> để ghi</span>
+        <span class="easy-only">Một cái ổ, hai lối đi vào</span>
+        <span class="en-only" lang="en">Two ways into one device — <code>sr</code> reads, <code>sg</code> writes</span>
+      </h3>
+      <p class="standard-copy">Đây là hình cuối của chương và cũng là ý chốt: một ổ quang có <b>hai điểm truy cập từ không gian người dùng</b>. Tiến trình A đọc từ ổ bằng trình điều khiển <code>sr</code>, còn tiến trình B ghi đĩa bằng trình điều khiển <code>sg</code>.<span class="cite"><a href="#ref-1">1</a></span> Ward thêm một cảnh báo thực tế: <b>những tiến trình như vậy thường không chạy đồng thời để truy cập cùng một thiết bị</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Một cái ổ đĩa CD có hai lối vào: lối đọc và lối ghi. Nhưng đừng dùng cả hai cùng lúc nhé. <b>Nhớ nhé: hai lối vào, nhưng đi một lối thôi.</b></p>
+      <p class="en-only" lang="en">This is the chapter's final figure and its closing point: an optical drive has <b>two points of access from user space</b>. Process A reads from the drive using the <code>sr</code> driver, while process B writes discs with the <code>sg</code> driver.<span class="cite"><a href="#ref-1">1</a></span> Ward adds a practical caveat: <b>processes like these would not normally run simultaneously to access the same device</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Câu hỏi Ward tự đặt rồi tự trả lời: trong hình, tiến trình A đọc từ thiết bị khối — nhưng tiến trình người dùng có thật sự đọc dữ liệu kiểu đó không? <b>Thông thường là không, không trực tiếp</b>: còn nhiều tầng nữa phía trên thiết bị khối và thậm chí nhiều điểm truy cập hơn nữa với đĩa cứng, như chương sau sẽ chỉ ra.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Thật ra vẫn còn mấy tầng nữa ở trên — chương sau sẽ kể.</span>
+        <span class="en-only" lang="en">The question Ward poses and answers himself: in the figure, process A reads from the block device — but do user processes really read data this way? <b>Normally no, not directly</b>: there are more layers on top of the block devices, and even more points of access for hard disks, as the next chapter shows.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Cả mục 3.6 là một bài học kiến trúc gói trong một ví dụ: <b>cấu trúc lớn nhưng dòng dữ liệu rất tuyến tính</b> — đó chính là lời Ward dùng để trấn an người đọc trước sơ đồ hệ con SCSI.<span class="cite"><a href="#ref-1">1</a></span> Cứ đi theo dòng đó từ phần cứng lên tới tập tin trong <code>/dev</code>, bạn sẽ thấy mọi nhánh — USB, SATA, ATAPI — đều hội tụ vào cùng một hành lang giữa.</p>
+    <p class="easy-only">Sơ đồ trông rối, nhưng dữ liệu chỉ chạy theo một đường thẳng từ dưới lên trên. <b>Nhớ nhé: nhìn rối thì cứ lần theo một đường, đừng nhìn cả hình.</b></p>
+    <p class="en-only" lang="en">Section 3.6 is an architecture lesson wrapped in one example: <b>a large structure whose data flow is very linear</b> — Ward's own reassurance to the reader facing the SCSI subsystem schematic.<span class="cite"><a href="#ref-1">1</a></span> Follow that flow from hardware up to the file in <code>/dev</code> and every branch — USB, SATA, ATAPI — converges on the same middle corridor.</p>
+  </aside>
+</section>
+
+<!-- ===================== MISCONCEPTIONS ===================== -->
+<section class="section" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Đính chính</span>
+      <span class="en-only" lang="en">Corrections</span>
+    </p>
+    <h2 id="ngo-nhan-title">
+      <span class="standard-copy">Ba ngộ nhận mà người đọc lần đầu hay mắc</span>
+      <span class="easy-only">Ba chỗ hay hiểu nhầm</span>
+      <span class="en-only" lang="en">Three misconceptions first readers hit</span>
+    </h2>
+    <p class="standard-copy">Phần này thuộc mức đọc <b>Đầy đủ</b>: nó đối chiếu điều người đọc thường nghĩ với điều bản văn thật sự nói.</p>
+    <p class="easy-only">Phần này hơi khó, bạn có thể bỏ qua và quay lại sau. <b>Nhớ nhé: hiểu chậm mà chắc vẫn hơn.</b></p>
+    <p class="en-only" lang="en">This block belongs to the <b>Đầy đủ</b> (full) reading level: it sets what readers usually assume against what the text actually says.</p>
+  </div>
+
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Trong Linux, mọi thứ đều là tập tin”</span>
+          <span class="en-only" lang="en">"In Linux, everything is a file"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> mọi phần cứng trong máy đều có một tệp tương ứng trong <code>/dev</code>.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> <b>không phải thiết bị nào cũng có tập tin thiết bị</b>, vì giao diện nhập/xuất khối và ký tự không phù hợp trong mọi trường hợp; giao diện mạng là ví dụ Ward nêu đích danh.<span class="cite"><a href="#ref-1">1</a></span> Ông còn nói rõ ngay ở mục 3.1 rằng <b>có giới hạn cho những gì bạn làm được với giao diện tập tin</b>, nên không phải mọi khả năng của thiết bị đều với tới được bằng nhập/xuất tệp tiêu chuẩn.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> every piece of hardware in the machine has a corresponding file in <code>/dev</code>.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> <b>not all devices have device files</b>, because the block and character I/O interfaces are not appropriate in all cases; network interfaces are the example Ward names.<span class="cite"><a href="#ref-1">1</a></span> He states plainly in section 3.1 that <b>there is a limit to what you can do with a file interface</b>, so not all device capabilities are reachable with standard file I/O.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“<code>/dev/sda</code> luôn là cùng một cái đĩa”</span>
+          <span class="en-only" lang="en">"<code>/dev/sda</code> is always the same disk"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> tên thiết bị trong <code>/dev</code> gắn chặt với một phần cứng cụ thể, nên dùng nó trong <code>fstab</code> là an toàn.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> <b>nhân gán thiết bị theo thứ tự nó tìm thấy chúng</b>, nên một thiết bị có thể mang tên khác nhau giữa các lần khởi động.<span class="cite"><a href="#ref-1">1</a></span> Ward dựng hẳn một kịch bản: nếu <code>/dev/sdb</code> hỏng và bị tháo ra, <code>/dev/sdc</code> cũ <b>dời thành <code>/dev/sdb</code></b> và bạn phải sửa <code>fstab</code> nếu đã tham chiếu trực tiếp tên thiết bị.<span class="cite"><a href="#ref-1">1</a></span> Lời giải mà nhiều hệ Linux dùng: <b>UUID</b> và/hoặc ánh xạ thiết bị ổn định của <b>LVM</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span> Cùng tinh thần đó, trang man <code>udev(7)</code> nói thẳng rằng <b>nhân thường chỉ gán những cái tên khó đoán dựa trên thứ tự phát hiện</b>, và các liên kết tượng trưng có nghĩa mới là cách nhận diện thiết bị đáng tin cậy.<span class="cite"><a href="#ref-19">19</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> a name in <code>/dev</code> is bound to one specific piece of hardware, so using it in <code>fstab</code> is safe.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> <b>the kernel assigns devices in the order in which they are found</b>, so a device may have a different name between reboots.<span class="cite"><a href="#ref-1">1</a></span> Ward builds the scenario out: if <code>/dev/sdb</code> dies and you remove it, the former <code>/dev/sdc</code> <b>moves to <code>/dev/sdb</code></b> and you must edit <code>fstab</code> if you referred to device names directly.<span class="cite"><a href="#ref-1">1</a></span> The fix many Linux systems use: <b>UUIDs</b> and/or LVM's stable disk device mapping.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span> In the same spirit, the <code>udev(7)</code> page states that <b>the kernel usually just assigns unpredictable names based on the order of discovery</b>, and meaningful symlinks are what make devices reliably identifiable.<span class="cite"><a href="#ref-19">19</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“udev tạo ra các tập tin trong <code>/dev</code>”</span>
+          <span class="en-only" lang="en">"udev creates the files in <code>/dev</code>"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> <code>udevd</code> là chương trình sinh ra nút thiết bị; không có nó thì <code>/dev</code> rỗng.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> trong thiết kế <code>devtmpfs</code>, <b>nhân tạo tập tin thiết bị khi cần</b> và báo cho <code>udevd</code>; nhận tín hiệu đó, <b><code>udevd</code> <i>không</i> tạo tập tin thiết bị</b> mà thực hiện khởi tạo, đặt quyền, báo cho tiến trình khác, và tạo thêm liên kết tượng trưng.<span class="cite"><a href="#ref-1">1</a></span> Sự phân vai này tồn tại chính vì cái vòng luẩn quẩn Ward mô tả: <code>udevd</code> phải chạy rất sớm, nhưng <b>không thể phụ thuộc vào bất kỳ thiết bị nào mà chính nó phải tạo</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> <code>udevd</code> is the program that brings device nodes into being; without it <code>/dev</code> is empty.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> under <code>devtmpfs</code>, <b>the kernel creates device files as necessary</b> and notifies <code>udevd</code>; on receiving that signal <b><code>udevd</code> does <i>not</i> create the device files</b> — it performs initialization, sets permissions, notifies other processes and adds symbolic links.<span class="cite"><a href="#ref-1">1</a></span> The split exists precisely because of the circularity Ward describes: <code>udevd</code> must start very early, yet <b>cannot depend on any devices that it is supposed to create</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="tu-kiem-tra" aria-labelledby="tu-kiem-tra-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm tra</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="tu-kiem-tra-title">
+      <span class="standard-copy">Bạn đã đọc được <code>/dev</code> chưa?</span>
+      <span class="easy-only">Thử trả lời xem nào</span>
+      <span class="en-only" lang="en">Can you read <code>/dev</code> yet?</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Trả lời bằng lời của bạn, không tra sách. Nếu một câu khiến bạn ngập ngừng, đó chính là mục bạn nên đọc lại.</p>
+      <p class="easy-only">Thử trả lời miệng thôi, không cần giở lại. Câu nào bí thì quay lại đọc phần đó nhé. <b>Nhớ nhé: chỗ bí chính là chỗ cần học.</b></p>
+      <p class="en-only" lang="en">Answer in your own words, without looking back. Whichever question makes you hesitate points at the section you should reread.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Bốn ký tự đầu dòng nào cho bạn biết một tệp là thiết bị, và mỗi ký tự nghĩa là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: loại nào <i>không</i> mang số major và minor trong danh sách <code>ls -l</code>?</p>
+      </li>
+      <li>
+        <p>Khác biệt về <i>mục đích</i> giữa <code>/dev/sda</code> và đường dẫn <code>/sys/devices/...</code> tương ứng là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: tệp nào trong thư mục sysfs của thiết bị nối hai cây lại với nhau, và nó chứa gì?</p>
+      </li>
+      <li>
+        <p>Vì sao Ward đặt cảnh báo cho <code>dd</code>, và tuỳ chọn nào giữ bạn khỏi việc chép vô tận từ <code>/dev/zero</code>?</p>
+        <p class="deep-only">Gợi ý sâu hơn: cú pháp <code>if=</code>/<code>of=</code> bắt nguồn từ đâu, và vì sao nó không giống mọi lệnh Unix khác?</p>
+      </li>
+      <li>
+        <p>Trong lược đồ <code>devtmpfs</code>, ai tạo tập tin thiết bị — nhân hay <code>udevd</code>? Và bên còn lại làm gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: nêu cái vòng luẩn quẩn về thời điểm khởi động mà thiết kế này giải quyết.</p>
+      </li>
+      <li>
+        <p>Trong một luật udev, làm sao phân biệt một điều kiện với một chỉ thị chỉ bằng mắt?</p>
+        <p class="deep-only">Gợi ý sâu hơn: biểu thức <code>ENV{ID_SERIAL}!="?*"</code> đúng khi nào, và vì sao luật lại cần nó?</p>
+      </li>
+      <li>
+        <p>Vì sao một ổ USB flash lại hiện ra với tên bắt đầu bằng <code>sd</code>, dù nó không phải đĩa SCSI?</p>
+        <p class="deep-only">Gợi ý sâu hơn: mắt xích nào nối hệ con USB với hệ con SCSI, và vì sao hai hệ không dùng chung một trình điều khiển?</p>
+      </li>
+      <li>
+        <p>Vì sao Linux ghi đĩa quang bằng chương trình không gian người dùng qua <code>/dev/sg*</code> thay vì một trình điều khiển trong nhân?</p>
+        <p class="deep-only">Gợi ý sâu hơn: lập luận này lặp lại nguyên tắc nào của Chương 1 về độ phức tạp trong nhân?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Thư mục <code>/dev</code> dùng để làm gì, và <code>/sys</code> dùng để làm gì?</p></li>
+      <li><p>Chữ cái đầu dòng trong <code>ls -l</code> cho bạn biết điều gì?</p></li>
+      <li><p>Ghi vào <code>/dev/null</code> thì dữ liệu đi đâu?</p></li>
+      <li><p>Khi bạn cắm một cái USB vào máy, ai là người đặt tên cho nó?</p></li>
+      <li><p>Vì sao tên <code>sda</code>, <code>sdb</code> có thể đổi giữa các lần khởi động?</p></li>
+      <li><p><code>dd</code> dùng để làm gì, và vì sao phải cẩn thận với nó?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>
+        <p>Which four leading characters tell you a file is a device, and what does each mean?</p>
+      </li>
+      <li>
+        <p>What is the difference in <i>purpose</i> between <code>/dev/sda</code> and its corresponding <code>/sys/devices/...</code> path?</p>
+      </li>
+      <li>
+        <p>Why does Ward attach a warning to <code>dd</code>, and which option keeps you from copying endlessly from <code>/dev/zero</code>?</p>
+      </li>
+      <li>
+        <p>Under <code>devtmpfs</code>, who creates the device files — the kernel or <code>udevd</code>? And what does the other one do?</p>
+      </li>
+      <li>
+        <p>In a udev rule, how do you tell a conditional from a directive at a glance?</p>
+      </li>
+      <li>
+        <p>Why does a USB flash drive show up with an <code>sd</code> name when it isn't a SCSI disk?</p>
+      </li>
+      <li>
+        <p>Why does Linux burn optical discs with a user-space program through <code>/dev/sg*</code> rather than a kernel driver?</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Nhân trình thiết bị ra như tập tin để bạn <span class="closing-accent">dùng được chúng mà không cần là lập trình viên</span>; sysfs trình chúng ra như thuộc tính để bạn <span class="closing-accent">biết chúng thực sự là gì</span>; và udev đứng giữa, <span class="closing-accent">đưa quyết định ra khỏi nhân và trao cho không gian người dùng</span>.<span class="cite"><a href="#ref-1">1</a></span> Nhưng ngay cả hình cuối cùng của chương cũng chưa phải toàn cảnh — <span class="closing-accent">còn nhiều tầng nữa phía trên thiết bị khối</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Nhân biến đồ thật thành tập tin để bạn <span class="closing-accent">dùng được mà không cần biết lập trình</span>; <code>/sys</code> kể cho bạn <span class="closing-accent">đó là đồ gì</span>; udev thì <span class="closing-accent">đặt tên và đặt quyền</span>. Và phía trên tất cả vẫn còn mấy tầng nữa. <b>Nhớ nhé: /dev để dùng, /sys để xem, udev để sắp xếp — và chương sau còn hay hơn.</b></p>
+    <p class="en-only" lang="en">The kernel presents devices as files so you can <span class="closing-accent">use them without being a programmer</span>; sysfs presents them as attributes so you can <span class="closing-accent">know what they really are</span>; and udev stands between, <span class="closing-accent">moving the decisions out of the kernel and into user space</span>.<span class="cite"><a href="#ref-1">1</a></span> Yet even the chapter's last figure is not the whole picture — <span class="closing-accent">there are more layers on top of the block devices</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START -->
+<!-- Region owned by book-cover-curator; body authored by book-chapter-author.
+     Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-2-basic-commands.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 2 · Lệnh và cấu trúc thư mục cơ bản</span>
+    <span class="nav-title en-only" lang="en">Chapter 2 · Basic Commands and Directory Hierarchy</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-4-disks-filesystems.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 4 · Đĩa và hệ thống tập tin</span>
+    <span class="nav-title en-only" lang="en">Chapter 4 · Disks and Filesystems</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, tái bản lần thứ 3, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chương 3, “Devices”, trang 47–67.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd edition, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chapter 3, "Devices", pp. 47–67.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd ed., No Starch Press, 2021, ch. 3 “Devices”, pp. 47–67. — <a href="https://openlibrary.org/books/OL29462444M" target="_blank" rel="noopener noreferrer">openlibrary.org/books/OL29462444M</a></li>
+      <li id="ref-2"><code>null(4)</code> — <code>/dev/null</code>, <code>/dev/zero</code>, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man4/null.4.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man4/null.4.html</a></li>
+      <li id="ref-3">“Linux allocated devices (4.x+ version)” — the official major/minor number table, The Linux Kernel documentation. <a href="https://docs.kernel.org/admin-guide/devices.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/admin-guide/devices.html</a></li>
+      <li id="ref-4"><code>sd(4)</code> — driver for SCSI disk drives, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man4/sd.4.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man4/sd.4.html</a></li>
+      <li id="ref-5"><code>sysfs(5)</code> — a filesystem for exporting kernel objects, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man5/sysfs.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/sysfs.5.html</a></li>
+      <li id="ref-6">“sysfs — The filesystem for exporting kernel objects”, The Linux Kernel documentation. <a href="https://docs.kernel.org/filesystems/sysfs.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/filesystems/sysfs.html</a></li>
+      <li id="ref-7"><code>udevadm(8)</code> — udev management tool, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man8/udevadm.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/udevadm.8.html</a></li>
+      <li id="ref-8"><code>dd(1)</code> — convert and copy a file, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/dd.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/dd.1.html</a></li>
+      <li id="ref-9">NVM Express — published specifications, NVM Express, Inc. <a href="https://nvmexpress.org/specifications/" target="_blank" rel="noopener noreferrer">nvmexpress.org/specifications</a>; the <code>nvme</code> command-line tool: <a href="https://github.com/linux-nvme/nvme-cli" target="_blank" rel="noopener noreferrer">github.com/linux-nvme/nvme-cli</a></li>
+      <li id="ref-10">“Device Mapper” — kernel documentation for the <code>dm</code> subsystem used by LVM, The Linux Kernel documentation. <a href="https://docs.kernel.org/admin-guide/device-mapper/index.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/admin-guide/device-mapper</a></li>
+      <li id="ref-11"><code>pty(7)</code> — pseudoterminal interfaces, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man7/pty.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/pty.7.html</a></li>
+      <li id="ref-12"><code>chvt(1)</code> — change foreground virtual terminal, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/chvt.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/chvt.1.html</a></li>
+      <li id="ref-13"><code>screen(1)</code> — screen manager with VT100/ANSI terminal emulation, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/screen.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/screen.1.html</a></li>
+      <li id="ref-14"><code>lp(4)</code> — line printer devices, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man4/lp.4.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man4/lp.4.html</a></li>
+      <li id="ref-15">ALSA — Advanced Linux Sound Architecture project. <a href="https://www.alsa-project.org/wiki/Main_Page" target="_blank" rel="noopener noreferrer">alsa-project.org</a>; kernel sound subsystem documentation: <a href="https://docs.kernel.org/sound/index.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/sound</a></li>
+      <li id="ref-16"><code>mknod(1)</code> — make block or character special files, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/mknod.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/mknod.1.html</a></li>
+      <li id="ref-17"><code>systemd-udevd.service(8)</code> — the device event managing daemon, freedesktop.org systemd documentation. <a href="https://www.freedesktop.org/software/systemd/man/latest/systemd-udevd.service.html" target="_blank" rel="noopener noreferrer">freedesktop.org/software/systemd/man/latest/systemd-udevd.service.html</a></li>
+      <li id="ref-18"><code>lsscsi</code> — list SCSI devices (or hosts) and their attributes, Douglas Gilbert. <a href="https://sg.danny.cz/scsi/lsscsi.html" target="_blank" rel="noopener noreferrer">sg.danny.cz/scsi/lsscsi.html</a></li>
+      <li id="ref-19"><code>udev(7)</code> — dynamic device management, rules syntax and operators, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man7/udev.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/udev.7.html</a></li>
+      <li id="ref-20">“libATA Developer's Guide” — the ATA/SATA library that bridges to the SCSI subsystem, The Linux Kernel documentation. <a href="https://docs.kernel.org/driver-api/libata.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/driver-api/libata.html</a></li>
+      <li id="ref-21">“SCSI mid_level — lower_level driver interface” — the mid level, LLDs, initiators and targets, The Linux Kernel documentation. <a href="https://docs.kernel.org/scsi/scsi_mid_low_api.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/scsi/scsi_mid_low_api.html</a></li>
+      <li id="ref-22">“The Linux-USB Host Side API” — the kernel's USB subsystem, The Linux Kernel documentation. <a href="https://docs.kernel.org/driver-api/usb/usb.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/driver-api/usb/usb.html</a></li>
+      <li id="ref-23">CUPS — the standards-based, open source printing system referenced as the better way to drive a printer. <a href="https://www.cups.org/" target="_blank" rel="noopener noreferrer">cups.org</a></li>
+      <li id="ref-24">CircuitPython — the microcontroller platform whose REPL Ward reaches over a USB serial device. <a href="https://circuitpython.org/" target="_blank" rel="noopener noreferrer">circuitpython.org</a></li>
+      <li id="ref-25">“The Devpts Filesystem” — the dedicated filesystem behind <code>/dev/pts</code>, The Linux Kernel documentation. <a href="https://docs.kernel.org/filesystems/devpts.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/filesystems/devpts.html</a></li>
+      <li id="ref-26">“SCSI Generic (sg) driver” — one of the four high-level SCSI drivers alongside sd, st and sr, The Linux Kernel documentation. <a href="https://docs.kernel.org/scsi/scsi-generic.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/scsi/scsi-generic.html</a></li>
+    </ol>
+
+    <!-- NAV:START -->
+    <!-- Footer neighbour row — owned by book-cover-curator, body authored by
+         book-chapter-author. Absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-2-basic-commands.html">chapter 2</a>
+      <a href="chapter-4-disks-filesystems.html">chapter 4</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('hlw-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('hlw-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('hlw-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

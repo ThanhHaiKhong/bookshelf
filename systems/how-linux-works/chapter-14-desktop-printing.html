@@ -1,0 +1,1710 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 14 · Khảo sát nhanh desktop Linux và in ấn — How Linux Works</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 14 “A Brief Survey of the Linux Desktop and Printing” trong How Linux Works (Brian Ward, No Starch Press, 3rd ed., 2021): framebuffer, X Window System, Wayland và compositor, libinput, Xwayland, D-Bus, CUPS và đường ống in ấn.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('hlw-reading-mode'),
+l=localStorage.getItem('hlw-lang'),
+t=localStorage.getItem('hlw-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"HOW LINUX WORKS / 14";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    How Linux Works
+    <span>Chương 14 · A Brief Survey of the Linux Desktop and Printing</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 14 · Khảo sát nhanh desktop Linux và in ấn</span>
+      <span class="en-only" lang="en">Chapter 14 · A Brief Survey of the Linux Desktop and Printing</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Desktop không phải một tháp tầng — nó là một nhóm thành phần nói chuyện với nhau</span>
+      <span class="easy-only">Màn hình của bạn là một nhóm thợ làm việc chung</span>
+      <span class="en-only" lang="en">The desktop is not a tower of layers — it is a set of components talking to each other</span>
+    </h1>
+
+    <p class="standard-copy">Ward mở chương này bằng một lời cảnh báo về hình dung sai: khác với lưu trữ hay mạng, dựng một cấu trúc desktop <i>không</i> đòi hỏi một hệ thống phân tầng đồ sộ. Thay vào đó, mỗi thành phần làm một việc cụ thể và trao đổi với các thành phần khác khi cần.<span class="cite"><a href="#ref-1">1</a></span> Một số thành phần có dùng chung các khối xây dựng — đặc biệt là thư viện của các <span lang="en">graphical toolkit</span> — và bạn có thể xem chúng như những lớp trừu tượng đơn giản, nhưng sâu đến đó là hết.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Ở các chương trước, mọi thứ đều xếp tầng: tầng trên gọi tầng dưới. Phần màn hình thì khác. Nó giống một nhóm thợ trong xưởng hơn: mỗi người làm một việc, ai cần gì thì gọi người kia. Không có ông chủ ngồi trên đỉnh tháp. <b>Nhớ nhé: desktop là một nhóm bạn làm chung, không phải một cái tháp.</b></p>
+    <p class="en-only" lang="en">Ward opens this chapter by warning against the wrong mental picture: unlike storage or networking, creating a desktop structure does <i>not</i> involve an extensive hierarchy of layers. Instead, each component performs a specific task, communicating with other components as necessary.<span class="cite"><a href="#ref-1">1</a></span> Some components do share common building blocks — in particular the libraries behind graphical toolkits — and you can think of those as simple abstraction layers, but that is about as deep as it goes.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Ông cũng nói thẳng rằng chương này sẽ giới hạn phần thực hành ở vài tiện ích chẩn đoán — những công cụ “không hữu ích lắm trong công việc hằng ngày”, vì phần lớn giao diện đồ hoạ đâu bắt bạn gõ lệnh để dùng chúng — nhưng chúng giúp bạn hiểu cơ chế bên dưới, và đôi khi còn vui nữa.<span class="cite"><a href="#ref-1">1</a></span> Đọc chương 14 mà kỳ vọng một bộ công cụ quản trị desktop là đọc sai ý định của tác giả: đây là chuyến tham quan có hướng dẫn viên, không phải sổ tay vận hành.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> tại thời điểm sách được viết, lõi của desktop Linux đang <i>ở trạng thái chuyển tiếp</i> — từ đầu cho tới gần đây, desktop Linux dùng X (X Window System, còn gọi là Xorg theo tên tổ chức bảo trì), nhưng nhiều bản phân phối đã chuyển sang bộ phần mềm dựa trên giao thức Wayland để dựng hệ thống cửa sổ.<span class="cite"><a href="#ref-1">1</a></span> Hiểu hai lõi đó, cộng với D-Bus và CUPS, là đủ để định vị gần như mọi trục trặc trên màn hình và ở máy in.</p>
+      <p class="easy-only"><b>Ý chính:</b> phần vẽ cửa sổ trên Linux đang đổi từ cách cũ (tên là X) sang cách mới (tên là Wayland). Ngoài ra còn hai cái tên nên nhớ: D-Bus để các chương trình nhắn tin cho nhau, và CUPS để in. <b>Nhớ nhé: X cũ, Wayland mới, D-Bus để nhắn tin, CUPS để in.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> at the time of writing, the core of the Linux desktop is <i>in a transitional state</i> — from the beginning until recently Linux desktops used X (the X Window System, also known as Xorg after its maintaining organization), but many distributions have moved to a software set based on the Wayland protocol to build a windowing system.<span class="cite"><a href="#ref-1">1</a></span> Understanding those two cores, plus D-Bus and CUPS, is enough to locate almost any trouble on the screen or at the printer.</p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: các thành phần của desktop Linux xếp quanh framebuffer — ứng dụng và toolkit, trình quản lý cửa sổ, và lõi X hoặc Wayland. Diagram: Linux desktop components around the framebuffer — applications and toolkits, the window manager, and the X or Wayland core.">
+    <div class="core">
+      <b>Framebuffer</b>
+      <small class="standard-copy">Vùng nhớ phần cứng đồ hoạ đọc rồi truyền ra màn hình</small>
+      <small class="easy-only">Tấm giấy mà máy vẽ lên rồi đưa ra màn hình</small>
+      <small class="en-only" lang="en">Memory the graphics hardware reads and transmits to the screen</small>
+    </div>
+
+    <div class="node">
+      <b>Applications + toolkits</b>
+      <small class="standard-copy">Trình duyệt, cửa sổ terminal; <span lang="en">widget</span> dựng bằng GTK+ hoặc Qt</small>
+      <small class="easy-only">Chương trình bạn mở và các nút bấm của chúng</small>
+      <small class="en-only" lang="en">Browsers, terminal windows; widgets built with GTK+ or Qt</small>
+    </div>
+
+    <div class="node">
+      <b>Window manager</b>
+      <small class="standard-copy">Sắp xếp cửa sổ; trong X là một client, trong Wayland gần như <i>là</i> server</small>
+      <small class="easy-only">Người sắp chỗ cho từng cửa sổ</small>
+      <small class="en-only" lang="en">Arranges windows; a client under X, and more or less the server under Wayland</small>
+    </div>
+
+    <div class="node">
+      <b>X server / Wayland compositor</b>
+      <small class="standard-copy">Một bên tập trung mọi thứ ở X server, bên kia ghép các buffer của từng client</small>
+      <small class="easy-only">Hai cách làm: một người gánh hết, hoặc mỗi người tự vẽ rồi ghép lại</small>
+      <small class="en-only" lang="en">One centralizes everything in the X server; the other composites each client's own buffer</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#thanh-phan-desktop">
+    <span>01</span>
+    <b class="standard-copy">Các thành phần của desktop</b>
+    <b class="easy-only">Ai làm việc gì trên màn hình</b>
+    <b class="en-only" lang="en">Desktop components</b>
+  </a>
+  <a href="#wayland">
+    <span>02</span>
+    <b class="standard-copy">Nhìn gần Wayland</b>
+    <b class="easy-only">Cách mới: Wayland</b>
+    <b class="en-only" lang="en">A closer look at Wayland</b>
+  </a>
+  <a href="#x-window-system">
+    <span>03</span>
+    <b class="standard-copy">Nhìn gần X Window System</b>
+    <b class="easy-only">Cách cũ: X</b>
+    <b class="en-only" lang="en">A closer look at the X Window System</b>
+  </a>
+  <a href="#d-bus">
+    <span>04</span>
+    <b class="standard-copy">D-Bus — đường truyền thông điệp</b>
+    <b class="easy-only">D-Bus: các chương trình nhắn tin</b>
+    <b class="en-only" lang="en">D-Bus — the message bus</b>
+  </a>
+  <a href="#in-an">
+    <span>05</span>
+    <b class="standard-copy">In ấn: CUPS và bộ lọc in</b>
+    <b class="easy-only">In giấy thì máy làm gì</b>
+    <b class="en-only" lang="en">Printing: CUPS and print filters</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>06</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="thanh-phan-desktop" aria-labelledby="thanh-phan-desktop-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="thanh-phan-desktop-title">
+      <span class="standard-copy">Các thành phần của desktop: từ framebuffer lên tới ứng dụng</span>
+      <span class="easy-only">Trên màn hình, ai làm việc gì</span>
+      <span class="en-only" lang="en">Desktop components: from the framebuffer up to applications</span>
+    </h2>
+    <p class="standard-copy">Cấu hình desktop trên Linux có độ linh hoạt rất lớn: phần lớn thứ người dùng cảm nhận — cái “<span lang="en">look and feel</span>” — đến từ các ứng dụng hoặc từ những khối xây dựng của ứng dụng. Không thích một ứng dụng thì thường có cái khác thay thế; không có thứ bạn cần thì bạn tự viết.<span class="cite"><a href="#ref-1">1</a></span> Nhưng để phối hợp được với nhau, mọi ứng dụng phải có một điểm chung — và điểm chung đó chính là thứ đang thay đổi.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Trên Linux, bạn được chọn gần như mọi thứ trên màn hình: kiểu cửa sổ, kiểu nút, kiểu thanh menu. Nhưng muốn các chương trình chơi chung với nhau thì phải có một luật chung. Luật chung đó đang được thay mới. <b>Nhớ nhé: chọn gì cũng được, nhưng luật chung thì phải có một.</b></p>
+    <p class="en-only" lang="en">Linux desktop configurations offer a great deal of flexibility: most of what the user experiences — the "look and feel" — comes from applications or from the building blocks of applications. If you dislike a particular application you can usually find an alternative; if what you want doesn't exist, you can write it yourself.<span class="cite"><a href="#ref-1">1</a></span> But to work together, all applications need something in common — and that common thing is exactly what is changing.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Framebuffer</i> là mảng bộ nhớ mà phần cứng đồ hoạ đọc rồi truyền ra màn hình để hiển thị; mỗi điểm ảnh được biểu diễn bằng vài byte trong đó. Muốn đổi hình ảnh, bạn phải ghi giá trị mới vào bộ nhớ framebuffer.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Framebuffer là tấm bảng nhớ chứa màu của từng chấm trên màn hình. Muốn đổi hình thì sửa màu các chấm. <b>Nhớ nhé: màn hình chỉ là một bảng màu nằm trong bộ nhớ.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A <i>framebuffer</i> is a chunk of memory that the graphics hardware reads and transmits to the screen for display; a few bytes in it represent each pixel. To change how something looks, you write new values into framebuffer memory.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">câu hỏi lõi của mọi<br>hệ thống cửa sổ:<br>&nbsp;&nbsp;ai được ghi vào<br>&nbsp;&nbsp;framebuffer, và ở đâu?<br>X → server quyết định<br>Wayland → compositor ghép</p>
+      <p class="easy-only">câu hỏi chính:<br>&nbsp;&nbsp;ai được vẽ lên bảng?<br>X → một người vẽ hộ<br>Wayland → mỗi người<br>&nbsp;&nbsp;vẽ rồi dán lại</p>
+      <p class="en-only" lang="en">the core question of any<br>windowing system:<br>&nbsp;&nbsp;who may write to the<br>&nbsp;&nbsp;framebuffer, and where?<br>X → the server decides<br>Wayland → a compositor merges</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">framebuffer</span>
+      <h3>
+        <span class="standard-copy">Framebuffer — bài toán gốc của hệ thống cửa sổ</span>
+        <span class="easy-only">Framebuffer — tấm bảng màu chung</span>
+        <span class="en-only" lang="en">Framebuffer — the founding problem of a windowing system</span>
+      </h3>
+      <p class="standard-copy">Ward đặt bài toán rất sắc: trên mọi hệ thống hiện đại, các cửa sổ thuộc về những tiến trình riêng biệt, mỗi tiến trình cập nhật đồ hoạ của mình một cách độc lập. Vậy nếu người dùng được phép di chuyển và chồng cửa sổ lên nhau, làm sao một ứng dụng biết phải vẽ ở đâu, và làm sao bảo đảm nó không ghi đè lên đồ hoạ của cửa sổ khác?<span class="cite"><a href="#ref-1">1</a></span> Mọi kiến trúc trong chương này — X cũng như Wayland — chỉ là hai câu trả lời khác nhau cho đúng câu hỏi đó.</p>
+      <p class="easy-only">Nhiều chương trình cùng muốn vẽ lên một tấm bảng. Ai vẽ chỗ nào? Vẽ chồng lên bạn thì sao? Đó là bài toán duy nhất mà mọi hệ thống cửa sổ phải giải. <b>Nhớ nhé: chung một tấm bảng thì phải có luật chia chỗ.</b></p>
+      <p class="en-only" lang="en">Ward states the problem crisply: on any contemporary system, windows belong to individual processes that update their graphics independently. So if the user may move windows around and overlap them, how does an application know where to draw, and how do you ensure it isn't allowed to overwrite the graphics of other windows?<span class="cite"><a href="#ref-1">1</a></span> Every architecture in this chapter — X as well as Wayland — is just a different answer to that one question.</p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi lần bạn kéo một cửa sổ đè lên cửa sổ khác mà nội dung phía dưới vẫn nguyên vẹn khi bạn kéo ra.</span>
+        <span class="easy-only">Khi bạn kéo cửa sổ che cửa sổ khác, rồi kéo ra thì cái dưới vẫn còn nguyên.</span>
+        <span class="en-only" lang="en">Every time you drag one window over another and the content underneath is still intact when you drag away.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao chương này không có tháp tầng</h4>
+          <p>Ward nói rõ rằng dựng cấu trúc desktop không kéo theo một hệ phân tầng rộng như lưu trữ hay mạng; thay vào đó, mỗi thành phần làm một việc và trao đổi khi cần.<span class="cite"><a href="#ref-1">1</a></span> Điểm chung sâu nhất chỉ nằm ở các thư viện toolkit dùng chung.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một byte, một điểm ảnh</h4>
+          <p>Vì “vài byte” trong framebuffer đại diện cho mỗi điểm ảnh, mọi hiệu ứng bạn thấy — bóng đổ, trong suốt, hoạt ảnh — cuối cùng đều quy về việc ai đó ghi số vào vùng nhớ đó đủ nhanh.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">x window system</span>
+      <h3>
+        <span class="standard-copy">X — một “nhân của desktop” đứng giữa mọi thứ</span>
+        <span class="easy-only">X — một người làm hết mọi việc</span>
+        <span class="en-only" lang="en">X — a "kernel of the desktop" standing in the middle</span>
+      </h3>
+      <p class="standard-copy">Cách tiếp cận của X Window System là có một server (gọi là <i>X server</i>) đóng vai trò như một thứ “nhân” của desktop: nó quản lý từ việc dựng cửa sổ, cấu hình màn hình, cho tới xử lý đầu vào từ bàn phím và chuột.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> X server không áp đặt mọi thứ phải trông ra sao hay hành xử thế nào; phần giao diện là việc của các chương trình <i>X client</i>. Client kết nối tới server và xin vẽ cửa sổ; server quyết định đặt cửa sổ ở đâu, vẽ đồ hoạ client ở đâu, và chuyển đầu vào tới client khi thích hợp.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Trong cách cũ, có một anh trung gian tên là X. Ai muốn vẽ gì cũng phải nhờ anh ấy. Anh ấy quyết định cửa sổ nào nằm đâu và ai nhận phím bạn vừa bấm. <b>Nhớ nhé: X là anh trung gian — mọi việc đều đi qua anh ấy.</b></p>
+      <p class="en-only" lang="en">The X Window System's approach is to have a server (the <i>X server</i>) that acts as a sort of "kernel" of the desktop, managing everything from rendering windows to configuring displays to handling input from devices such as keyboards and mice.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> The X server does not dictate how anything should act or appear; the user interface is handled by <i>X client</i> programs. Clients connect to the server and ask to draw windows; the server figures out where to place them, where to render client graphics, and channels input to a client when appropriate.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong danh sách tiến trình, dưới cái tên <code>X</code> hoặc <code>Xorg</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Trong danh sách chương trình đang chạy, tên nó là <code>Xorg</code>.</span>
+        <span class="en-only" lang="en">In a process listing, under the name <code>X</code> or <code>Xorg</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cái giá của vị trí trung gian</h4>
+          <p>Ward không giấu nhược điểm: vì làm trung gian cho mọi thứ, X server có thể trở thành một nút thắt cổ chai đáng kể. Thêm vào đó nó chứa rất nhiều chức năng không còn được dùng, và nó khá già — có từ thập niên 1980.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Nhưng nó đã sống rất lâu</h4>
+          <p>Ông công nhận bằng một câu gần như nể phục: bằng cách nào đó, X đã đủ linh hoạt để hấp thụ nhiều tính năng mới, và điều đó kéo dài tuổi thọ của nó.<span class="cite"><a href="#ref-1">1</a></span> Kho phần mở rộng như RandR là bằng chứng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">wayland</span>
+      <h3>
+        <span class="standard-copy">Wayland — phi tập trung ngay từ thiết kế</span>
+        <span class="easy-only">Wayland — mỗi người tự vẽ phần của mình</span>
+        <span class="en-only" lang="en">Wayland — decentralized by design</span>
+      </h3>
+      <p class="standard-copy">Khác với X, Wayland phi tập trung một cách đáng kể ngay trong thiết kế: không có một display server lớn quản lý framebuffer cho nhiều client đồ hoạ, và không có cơ quan trung ương nào lo việc dựng đồ hoạ. Thay vào đó, mỗi client nhận một vùng đệm bộ nhớ riêng cho cửa sổ của nó, và một phần mềm gọi là <i>compositor</i> ghép các buffer của tất cả client thành dạng cần thiết để chép vào framebuffer của màn hình.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Vì việc ghép này thường có hỗ trợ phần cứng, compositor có thể chạy rất hiệu quả.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Cách mới bỏ anh trung gian. Mỗi chương trình tự vẽ tranh của mình lên một tờ giấy riêng, rồi có một người dán tất cả các tờ lên bảng lớn. Người dán đó tên là compositor. <b>Nhớ nhé: Wayland = mỗi người một tờ giấy, rồi dán chung lên bảng.</b></p>
+      <p class="en-only" lang="en">Unlike X, Wayland is significantly decentralized by design: there is no large display server managing the framebuffer for a number of graphical clients, and no centralized authority for rendering graphics. Instead each client gets its own memory buffer for its own window, and a piece of software called a <i>compositor</i> combines all of the clients' buffers into the form needed for copying to the screen's framebuffer.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Because there is normally hardware support for this task, the compositor can be quite efficient.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong biến môi trường <code>$WAYLAND_DISPLAY</code>: nếu giá trị giống <code>wayland-0</code>, bạn đang chạy Wayland.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Gõ một câu lệnh xem biến <code>$WAYLAND_DISPLAY</code>; có chữ <code>wayland-0</code> là đang dùng Wayland.</span>
+        <span class="en-only" lang="en">In the <code>$WAYLAND_DISPLAY</code> environment variable: if its value looks like <code>wayland-0</code>, you are running Wayland.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Không mới như ta tưởng</h4>
+          <p>Ward chỉ ra rằng mô hình đồ hoạ của Wayland không khác lắm với thực tế mà phần lớn X client đã làm nhiều năm: thay vì nhờ X server hỗ trợ, đa số client tự dựng toàn bộ dữ liệu của mình thành một bitmap rồi gửi bitmap ấy cho X server.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>X cũng đã có compositing</h4>
+          <p>Để ghi nhận thực tế đó, bản thân X đã có một phần mở rộng compositing được dùng suốt vài năm nay.<span class="cite"><a href="#ref-1">1</a></span> Nói cách khác, ranh giới kỹ thuật giữa hai bên hẹp hơn ranh giới chính trị.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">window manager</span>
+      <h3>
+        <span class="standard-copy">Window manager — khác biệt lớn nhất giữa X và Wayland</span>
+        <span class="easy-only">Người sắp chỗ cho cửa sổ</span>
+        <span class="en-only" lang="en">The window manager — the biggest difference between X and Wayland</span>
+      </h3>
+      <p class="standard-copy">Theo Ward, khác biệt lớn giữa hệ thống X và hệ thống Wayland nằm ở <i>window manager</i> — phần mềm quyết định sắp xếp cửa sổ trên màn hình thế nào, và là trung tâm của trải nghiệm người dùng. Trong X, window manager là một <b>client</b> đóng vai trợ thủ cho server: nó vẽ phần trang trí cửa sổ (thanh tiêu đề, nút đóng), xử lý sự kiện đầu vào cho các trang trí đó, và bảo server dời cửa sổ đi đâu.<span class="cite"><a href="#ref-1">1</a></span> Trong Wayland, window manager gần như <b>chính là server</b>: nó ghép mọi buffer cửa sổ vào framebuffer hiển thị và lo việc chuyển sự kiện thiết bị đầu vào.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Người sắp chỗ cho cửa sổ gọi là window manager. Ở cách cũ, anh ấy chỉ là trợ lý cho anh trung gian. Ở cách mới, anh ấy <i>là</i> người chính, gánh luôn việc dán tranh và chia phím. <b>Nhớ nhé: cách cũ anh ấy là trợ lý, cách mới anh ấy là sếp.</b></p>
+      <p class="en-only" lang="en">For Ward, the major difference between X and Wayland systems lies in the <i>window manager</i> — the software that determines how windows are arranged on screen and is central to the user experience. In X the window manager is a <b>client</b> acting as a helper to the server: it draws the windows' decorations (title bars, close buttons), handles input events on those decorations, and tells the server where to move windows.<span class="cite"><a href="#ref-1">1</a></span> In Wayland the window manager <b>is the server</b>, more or less: it composites all client window buffers into the display framebuffer and handles the channeling of input device events.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mutter (trong GNOME) và Kwin (của KDE) — hai window manager phổ biến đã được mở rộng để hỗ trợ compositing của Wayland.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mutter của GNOME và Kwin của KDE là hai cái tên bạn hay gặp.</span>
+        <span class="en-only" lang="en">Mutter (in GNOME) and Kwin (from KDE) — two popular window managers that have been extended to include Wayland compositing support.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Nhiều việc hơn, nhưng mã dùng chung</h4>
+          <p>Ward nhận xét: window manager của Wayland phải làm nhiều việc hơn bản X, nhưng phần lớn mã đó có thể dùng chung giữa các bản hiện thực.<span class="cite"><a href="#ref-1">1</a></span> Đó là lý do việc bổ sung compositing cho Mutter và Kwin khả thi.</p>
+        </div>
+        <div class="info-block">
+          <h4>Sẽ không có chuẩn</h4>
+          <p>Ông kết luận thẳng: bất kể công nghệ nền là gì, khó có chuyện xuất hiện một window manager chuẩn cho Linux — vì khẩu vị và nhu cầu người dùng rất đa dạng và liên tục thay đổi, window manager mới xuất hiện suốt.<span class="cite"><a href="#ref-1">1</a></span> X có nhiều bản hơn, đơn giản vì nó sống lâu hơn.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">toolkit</span>
+      <h3>
+        <span class="standard-copy">Toolkit và desktop environment — cái chung của giao diện</span>
+        <span class="easy-only">Bộ nút bấm dùng chung</span>
+        <span class="en-only" lang="en">Toolkits and desktop environments — the shared part of the interface</span>
+      </h3>
+      <p class="standard-copy">Ứng dụng desktop nào cũng có những phần tử chung — nút bấm, trình đơn — gọi là <i>widget</i>. Để phát triển nhanh và có vẻ ngoài thống nhất, lập trình viên dùng <i>graphical toolkit</i>. Trên Windows hay macOS, nhà cung cấp đưa sẵn một toolkit chung; trên Linux, GTK+ là một trong những toolkit phổ biến nhất, nhưng bạn cũng sẽ thường gặp widget dựng trên framework Qt và những thứ khác.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span><span class="cite"><a href="#ref-5">5</a></span> Toolkit thường gồm các thư viện chia sẻ cùng những tệp hỗ trợ như hình ảnh và thông tin chủ đề.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nút bấm, thanh trượt, menu — chúng được làm sẵn thành bộ để lập trình viên lấy dùng. Bộ đó gọi là toolkit. Trên Linux có hai bộ hay gặp: GTK+ và Qt. <b>Nhớ nhé: toolkit là hộp nút bấm làm sẵn.</b></p>
+      <p class="en-only" lang="en">Desktop applications share certain common elements — buttons and menus — called <i>widgets</i>. To speed development and provide a common look, programmers use <i>graphical toolkits</i>. On Windows or macOS the vendor supplies a common toolkit; on Linux, GTK+ is one of the most common, but you will also frequently see widgets built on the Qt framework and others.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span><span class="cite"><a href="#ref-5">5</a></span> Toolkits usually consist of shared libraries plus support files such as images and theme information.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">GNOME, KDE và Xfce — những <i>desktop environment</i> gói toolkit cùng thư viện khác thành một gói lớn hơn.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">GNOME, KDE, Xfce — ba bộ desktop hay gặp nhất.</span>
+        <span class="en-only" lang="en">GNOME, KDE and Xfce — <i>desktop environments</i> that bundle toolkits and other libraries into larger packages.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao cần thêm một tầng gói</h4>
+          <p>Toolkit cho người dùng vẻ ngoài đồng nhất, nhưng một số chi tiết của desktop đòi hỏi các ứng dụng phải <i>hợp tác</i> với nhau: ứng dụng này muốn chia sẻ dữ liệu với ứng dụng kia, hoặc cùng cập nhật một thanh thông báo chung.<span class="cite"><a href="#ref-1">1</a></span> Nhu cầu đó sinh ra desktop environment.</p>
+        </div>
+        <div class="info-block">
+          <h4>Không chỉ là mã nguồn</h4>
+          <p>Để tạo một desktop thống nhất, môi trường còn phải chứa nhiều tệp hỗ trợ — biểu tượng, cấu hình — hợp thành <i>theme</i>, và tất cả được ràng buộc bằng những tài liệu mô tả quy ước thiết kế: trình đơn và tiêu đề nên hiện ra sao, ứng dụng nên phản ứng thế nào với một số sự kiện hệ thống.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">applications</span>
+      <h3>
+        <span class="standard-copy">Ứng dụng — đứng riêng, nhưng vẫn cần nghe ngóng</span>
+        <span class="easy-only">Chương trình ở tầng trên cùng</span>
+        <span class="en-only" lang="en">Applications — standalone, yet still listening</span>
+      </h3>
+      <p class="standard-copy">Trên cùng của desktop là các ứng dụng: trình duyệt web, cửa sổ terminal. Ward xếp chúng trên một trục từ thô sơ (như chương trình <code>xclock</code> cổ xưa) tới phức tạp (như trình duyệt Chrome hay bộ LibreOffice).<span class="cite"><a href="#ref-1">1</a></span> Chúng thường đứng riêng, nhưng vẫn hay dùng cơ chế liên lạc liên tiến trình để biết về những sự kiện liên quan — chẳng hạn khi bạn gắn một thiết bị lưu trữ mới, hay khi có thư mới. Liên lạc đó thường đi qua D-Bus.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Trên cùng là các chương trình bạn mở: trình duyệt, cửa sổ gõ lệnh. Chúng chạy riêng, nhưng vẫn muốn biết tin tức — ví dụ “vừa có người cắm USB”. Tin tức đó chạy trên một đường riêng gọi là D-Bus. <b>Nhớ nhé: chương trình chạy riêng nhưng vẫn nghe tin chung.</b></p>
+      <p class="en-only" lang="en">At the top of the desktop sit the applications: web browsers, the terminal window. Ward places them on a range from crude (the ancient <code>xclock</code> program) to complex (the Chrome web browser, the LibreOffice suite).<span class="cite"><a href="#ref-1">1</a></span> They normally stand alone, yet often use interprocess communication to become aware of pertinent events — when you attach a new storage device, say, or when new email arrives. That communication usually occurs over D-Bus.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi cắm USB và trình quản lý tệp tự bật lên — đó là một chuỗi thông điệp, không phải phép màu.</span>
+        <span class="easy-only">Cắm USB vào, cửa sổ thư mục tự hiện ra.</span>
+        <span class="en-only" lang="en">When you plug in a USB stick and the file manager pops up by itself — that is a chain of messages, not magic.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Tại sao “đứng riêng” lại quan trọng</h4>
+          <p>Vì ứng dụng đứng riêng, bạn có thể thay thế gần như bất cứ mảnh nào mà không sập cả desktop. Ward gọi đó là đặc điểm thú vị của môi trường desktop Linux: bạn thường có thể chọn dùng mảnh nào và ngừng dùng mảnh nào mình không thích.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đường đi tiếp theo</h4>
+          <p>Vì phần lớn sự phối hợp giữa các ứng dụng chạy qua D-Bus, chính D-Bus — chứ không phải X hay Wayland — mới là nơi bạn nên nhìn khi “máy biết chuyện gì đó vừa xảy ra”.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Nếu mọi thứ đều quy về câu hỏi “ai ghi vào framebuffer”, thì câu hỏi thực dụng kế tiếp là: <b>máy của tôi đang trả lời câu đó theo kiểu nào?</b> Ward đưa một phép thử một dòng: mở shell và xem giá trị biến môi trường <code>$WAYLAND_DISPLAY</code>. Nếu nó giống <code>wayland-0</code>, bạn đang chạy Wayland; nếu nó không được đặt, bạn đang chạy X — “có lẽ vậy”, vì vẫn có ngoại lệ, dù bạn khó gặp chúng với phép thử này.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Muốn biết máy mình đang dùng cách cũ hay cách mới? Mở cửa sổ gõ lệnh, xem biến <code>$WAYLAND_DISPLAY</code>. Có chữ là cách mới, trống là cách cũ. <b>Nhớ nhé: một dòng lệnh là biết mình đang ở phe nào.</b></p>
+    <p class="en-only" lang="en">If everything comes down to "who writes to the framebuffer," the next practical question is: <b>which way is my machine answering it?</b> Ward gives a one-line test: open a shell and check the value of <code>$WAYLAND_DISPLAY</code>. If the value is something like <code>wayland-0</code> you're running Wayland; if it isn't set, you're running X — "probably," since there are exceptions, though you're unlikely to meet them with this test.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Điểm dễ bỏ sót: hai hệ thống này <i>không</i> loại trừ nhau. Nếu máy bạn dùng Wayland, nó nhiều khả năng cũng đang chạy một X compatibility server; và ngược lại, bạn vẫn có thể khởi động một compositor Wayland bên trong X — chỉ là mọi thứ sẽ hơi kỳ quặc.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="wayland" aria-labelledby="wayland-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="wayland-title">
+      <span class="standard-copy">Nhìn gần Wayland: một giao thức, một compositor, và một cây cầu tên Xwayland</span>
+      <span class="easy-only">Wayland: luật chơi mới và cây cầu nối về quá khứ</span>
+      <span class="en-only" lang="en">A closer look at Wayland: a protocol, a compositor, and a bridge called Xwayland</span>
+    </h2>
+    <p class="standard-copy">Ward bắt đầu bằng việc gỡ một hiểu lầm về danh từ: cái tên <i>Wayland</i> chỉ một <b>giao thức truyền thông</b> giữa một compositing window manager và chương trình client đồ hoạ. Nếu bạn đi tìm một gói lõi Wayland to đùng, bạn sẽ không thấy — cái bạn sẽ thấy là thư viện Wayland mà phần lớn client dùng để nói giao thức đó, ít nhất là ở thời điểm hiện tại.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    <p class="easy-only">Wayland không phải một chương trình. Nó là <i>bộ luật</i> để hai bên nói chuyện với nhau. Giống luật giao thông: bạn không cài luật vào máy, bạn chỉ làm theo. <b>Nhớ nhé: Wayland là luật, không phải phần mềm.</b></p>
+    <p class="en-only" lang="en">Ward starts by clearing up a noun: the name <i>Wayland</i> refers to a <b>communications protocol</b> between a compositing window manager and a graphical client program. If you go looking for a big Wayland core package you won't find one — what you will find is the Wayland library that most clients use to speak the protocol, at least for now.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    <p class="deep-only">Ông thành thật về giới hạn của phần thực hành: một phần do thiết kế, một phần do còn non trẻ, Wayland không có nhiều công cụ để chọc ngoáy như X. “Chúng ta sẽ làm được gì thì làm.”<span class="cite"><a href="#ref-1">1</a></span> Đây là lý do các lệnh trong mục này chủ yếu là <i>quan sát gián tiếp</i> — lần theo socket, đọc sự kiện đầu vào — thay vì hỏi thẳng compositor.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Weston</i> là một compositing window manager <b>tham chiếu</b>. “Tham chiếu” ở đây nghĩa là Weston chứa đủ chức năng cần thiết của một compositor, nhưng không nhằm cho công chúng dùng vì giao diện của nó rất trơ trụi; ý tưởng là người phát triển compositing window manager có thể đọc mã nguồn Weston để biết cách hiện thực các chức năng then chốt cho đúng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Weston là “bản mẫu” — như căn nhà mẫu ở công trường: đủ tường đủ cửa để xem cách xây, nhưng không ai ở. <b>Nhớ nhé: Weston là nhà mẫu, không phải nhà ở.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <i>Weston</i> is a <b>reference</b> compositing window manager. "Reference" means Weston contains the necessary functionality of a compositor but isn't meant for general public use, because its interface is bare-bones; the idea is that developers of compositing window managers can read Weston's source to see how to implement critical functions correctly.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">tìm compositor đang chạy:<br># ss -xlp | grep wayland-<br>socket → /run/user/&lt;uid&gt;/wayland-0<br>liệt kê thiết bị nhập:<br># libinput list-devices<br>xem sự kiện:<br># libinput debug-events</p>
+      <p class="easy-only">xem ai đang dán tranh:<br># ss -xlp | grep wayland-<br>xem bàn phím chuột:<br># libinput list-devices</p>
+      <p class="en-only" lang="en">find the running compositor:<br># ss -xlp | grep wayland-<br>socket → /run/user/&lt;uid&gt;/wayland-0<br>list input devices:<br># libinput list-devices<br>watch events:<br># libinput debug-events</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">compositing window manager</span>
+      <h3>
+        <span class="standard-copy">Lần theo socket để biết ai đang là compositor</span>
+        <span class="easy-only">Tìm xem ai đang dán tranh lên bảng</span>
+        <span class="en-only" lang="en">Tracking the socket to find out who the compositor is</span>
+      </h3>
+      <p class="standard-copy">Nghe kỳ lạ, nhưng Ward thừa nhận: bạn có thể <i>không biết</i> mình đang chạy compositing window manager nào của Wayland; đôi khi tìm được tên trong một mục thông tin của giao diện, nhưng không có chỗ cố định để nhìn.<span class="cite"><a href="#ref-1">1</a></span> Cách gần như luôn được là lần theo <span lang="en">Unix domain socket</span> mà nó dùng để nói chuyện với client. Socket chính là tên display trong biến <code>WAYLAND_DISPLAY</code>, thường là <code>wayland-0</code>, và thường nằm ở <code>/run/user/&lt;uid&gt;</code> với <code>&lt;uid&gt;</code> là ID người dùng của bạn — nếu không, xem biến <code>$XDG_RUNTIME_DIR</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Muốn biết ai đang dán tranh lên bảng? Tìm cái “ống nói” mà các chương trình dùng để gọi người đó. Ống nói nằm trong thư mục riêng của bạn, tên là <code>wayland-0</code>. <b>Nhớ nhé: không hỏi thẳng được thì lần theo ống nói.</b></p>
+      <p class="en-only" lang="en">Odd as it sounds, Ward admits you might not know which Wayland compositing window manager you are running; you may find the name in an information option in the interface, but there is no set place to look.<span class="cite"><a href="#ref-1">1</a></span> What nearly always works is tracking down the Unix domain socket it uses to talk to clients. The socket is the display name in <code>WAYLAND_DISPLAY</code>, usually <code>wayland-0</code>, and typically found in <code>/run/user/&lt;uid&gt;</code> where <code>&lt;uid&gt;</code> is your user ID — if not, check <code>$XDG_RUNTIME_DIR</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Chạy với quyền root, <code>ss -xlp | grep wayland-</code> tìm tiến trình đang lắng nghe trên socket đó — Ward báo trước rằng kết quả “trông hơi điên rồ”.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></span>
+        <span class="easy-only">Một lệnh tên <code>ss</code> sẽ in ra tên chương trình đang giữ ống nói đó.</span>
+        <span class="en-only" lang="en">Running as root, <code>ss -xlp | grep wayland-</code> finds the process listening on that socket — Ward warns the output "will look a little crazy."<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Một lớp gián tiếp nữa</h4>
+          <p>Trong ví dụ của Ward, tiến trình compositor hiện ra là <code>gnome-shell</code>, PID 1522. Nhưng còn một lớp gián tiếp nữa: GNOME shell là một plug-in của Mutter, tức compositing window manager được dùng trong GNOME — và gọi nó là plug-in chỉ là cách nói hoa mỹ cho việc nó gọi Mutter như một thư viện.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Nhiều compositor cùng lúc</h4>
+          <p>Hiếm, nhưng được: một cách là chạy các compositor trên những virtual terminal riêng. Khi đó compositor đầu thường có tên display là <code>wayland-0</code>, cái thứ hai là <code>wayland-1</code>, và cứ thế.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Display là gì trong ngữ cảnh này</h4>
+          <p>Với một compositor Wayland, bạn có thể hình dung <i>display</i> là vùng nhìn thấy được, biểu diễn bởi framebuffer — và một display có thể trải trên nhiều màn hình nếu máy có nhiều màn hình cắm vào.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đừng kỳ vọng nhiều ở weston-info</h4>
+          <p>Lệnh <code>weston-info</code> cho bạn chút hiểu biết về compositor bằng cách hiện vài đặc tính của các interface mà nó cung cấp — nhưng Ward nói thẳng: đừng mong nhiều hơn thông tin về display và vài thiết bị nhập.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">xdg-decoration</span>
+      <h3>
+        <span class="standard-copy">Ai vẽ thanh tiêu đề? Một câu hỏi phải đem ra thương lượng</span>
+        <span class="easy-only">Ai vẽ cái viền quanh cửa sổ?</span>
+        <span class="en-only" lang="en">Who draws the title bar? A question that has to be negotiated</span>
+      </h3>
+      <p class="standard-copy">Ward gọi đây là một trong những khía cạnh khác thường nhất của hệ thống Wayland: cơ chế vẽ phần trang trí cửa sổ, chẳng hạn thanh tiêu đề. Trong X, window manager làm hết. Nhưng trong các bản hiện thực Wayland ban đầu, việc này bị đẩy cho ứng dụng client — đôi khi dẫn tới cảnh trên cùng một màn hình có nhiều kiểu trang trí cửa sổ khác nhau.<span class="cite"><a href="#ref-1">1</a></span> Nay đã có một phần của giao thức tên là <span lang="en">XDG-Decoration</span>, cho phép client thương lượng với window manager xem window manager có sẵn lòng vẽ trang trí hay không.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+      <p class="easy-only">Cái viền và thanh tiêu đề quanh cửa sổ — ai vẽ? Ở cách cũ, người sắp chỗ vẽ hết, nên nhìn đều nhau. Ở cách mới lúc đầu, mỗi chương trình tự vẽ viền của mình, nên nhìn mỗi cái một kiểu. Bây giờ hai bên hỏi nhau trước. <b>Nhớ nhé: viền cửa sổ giờ là chuyện hai bên bàn bạc.</b></p>
+      <p class="en-only" lang="en">Ward calls this one of the more unusual aspects of Wayland systems: the mechanism for drawing window decorations such as title bars. In X, the window manager did it all. In the initial implementations of Wayland this was left up to the client applications, which sometimes led to windows having many different kinds of decorations on the same screen.<span class="cite"><a href="#ref-1">1</a></span> Now there is a part of the protocol called <span lang="en">XDG-Decoration</span> that lets the client negotiate with the window manager to see whether the window manager is willing to draw decorations.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một ứng dụng GTK và một ứng dụng Qt mở cạnh nhau mà thanh tiêu đề trông khác hẳn nhau.</span>
+        <span class="easy-only">Khi hai cửa sổ cạnh nhau mà viền trông không giống nhau.</span>
+        <span class="en-only" lang="en">When a GTK application and a Qt application sit side by side with visibly different title bars.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Thuật ngữ bạn sẽ gặp</h4>
+          <p>Tài liệu giao thức gọi hai phía là trang trí phía client và trang trí phía server; XDG-Decoration là phần mở rộng cho phép hai bên thoả thuận chọn kiểu nào.<span class="cite"><a href="#ref-10">10</a></span> Đây là ví dụ rõ nhất cho thấy Wayland đẩy quyết định ra các phần mở rộng thay vì gom vào lõi.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao lại quan trọng với người dùng</h4>
+          <p>Trang trí không chỉ là thẩm mỹ: nó là nơi bạn bấm để đóng, phóng to, kéo cửa sổ. Khi trách nhiệm vẽ không rõ ràng, trải nghiệm rạn nứt ngay ở chỗ tay bạn chạm vào nhiều nhất.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">libinput</span>
+      <h3>
+        <span class="standard-copy">libinput — gom sự kiện từ nhân rồi chuẩn hoá</span>
+        <span class="easy-only">libinput — người phiên dịch bàn phím và chuột</span>
+        <span class="en-only" lang="en">libinput — collecting kernel events and standardizing them</span>
+      </h3>
+      <p class="standard-copy">Để đưa đầu vào từ thiết bị — bàn phím chẳng hạn — từ nhân tới client, một compositor Wayland phải thu thập đầu vào đó và hướng nó tới client thích hợp dưới một dạng chuẩn hoá. Thư viện <i>libinput</i> chứa phần hỗ trợ cần thiết để gom đầu vào từ các thiết bị <code>/dev/input</code> của nhân và nhào nặn chúng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span> Trong Wayland, compositor thường không chuyển thẳng sự kiện đầu vào nguyên trạng: nó dịch sự kiện sang giao thức Wayland trước khi gửi cho client.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bàn phím và chuột nói một thứ tiếng của riêng chúng. libinput là người phiên dịch: nghe tiếng của thiết bị, dịch ra tiếng chung, rồi đưa cho chương trình đang cần. <b>Nhớ nhé: libinput là người phiên dịch cho bàn phím và chuột.</b></p>
+      <p class="en-only" lang="en">To get input from devices such as a keyboard from the kernel to clients, a Wayland compositor must collect that input and direct it to the appropriate client in a standardized form. The <i>libinput</i> library includes the support needed to collect input from the various <code>/dev/input</code> kernel devices and massage it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span> In Wayland the compositor doesn't usually pass an input event as is; it translates the event into the Wayland protocol before sending it to a client.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy"><code>libinput list-devices</code> liệt kê thiết bị kèm loại và đường dẫn evdev của nhân, ví dụ <code>/dev/input/event3</code> cho một bàn phím USB.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></span>
+        <span class="easy-only">Một lệnh in ra danh sách bàn phím, chuột đang cắm vào máy.</span>
+        <span class="en-only" lang="en"><code>libinput list-devices</code> lists devices with their type and the kernel evdev path, e.g. <code>/dev/input/event3</code> for a USB keyboard.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Xem sự kiện trực tiếp</h4>
+          <p><code>libinput debug-events --show-keycodes</code> in ra dòng <code>DEVICE_ADDED</code> cho từng thiết bị rồi các dòng <code>KEYBOARD_KEY</code> khi bạn gõ — kèm tên phím và mã, chẳng hạn <code>KEY_H (35) pressed</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Không chỉ dành cho Wayland</h4>
+          <p>Ward nhắc một điều hay bị quên: libinput chỉ là hệ thống bắt sự kiện của nhân, nên nó được dùng không chỉ dưới Wayland mà cả dưới X Window System.<span class="cite"><a href="#ref-1">1</a></span> Thư viện này cũng không bắt buộc theo giao thức Wayland, nhưng trên hệ thống desktop thì gần như phổ quát.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">xwayland</span>
+      <h3>
+        <span class="standard-copy">Xwayland — một X server chạy như một Wayland client</span>
+        <span class="easy-only">Cây cầu cho chương trình cũ</span>
+        <span class="en-only" lang="en">Xwayland — an X server running as a Wayland client</span>
+      </h3>
+      <p class="standard-copy">Có vô số ứng dụng viết cho X, nên mọi nỗ lực rời X sẽ bị cản trở nặng nếu thiếu hỗ trợ X. Ward mô tả hai hướng tiếp cận diễn ra song song. Hướng thứ nhất là thêm hỗ trợ Wayland vào chính ứng dụng, biến nó thành ứng dụng Wayland thuần; vì phần việc thêm hỗ trợ Wayland cho các toolkit của GNOME và KDE đã xong, việc này không quá xa vời.<span class="cite"><a href="#ref-1">1</a></span> Hướng thứ hai là chạy ứng dụng X qua một lớp tương thích: một X server đầy đủ chạy như một Wayland client, tên là <b>Xwayland</b>, được phần lớn chuỗi khởi động compositor chạy mặc định.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+      <p class="easy-only">Rất nhiều chương trình cũ chỉ biết nói tiếng X. Nên người ta dựng một cây cầu: một anh X thu nhỏ chạy <i>bên trong</i> thế giới mới, chuyên dịch giúp mấy chương trình cũ. Cây cầu đó tên là Xwayland. <b>Nhớ nhé: chương trình cũ vẫn chạy được, nhờ một cây cầu.</b></p>
+      <p class="en-only" lang="en">There are countless applications for X, so any effort to move away from it would be greatly hindered without X support. Ward describes two simultaneous approaches. The first is to add Wayland support to the application itself, making it a native Wayland application; since the work of adding Wayland support to the GNOME and KDE toolkits is already done, this isn't much of a stretch.<span class="cite"><a href="#ref-1">1</a></span> The alternative is to run the X application through a compatibility layer: an entire X server running as a Wayland client, called <b>Xwayland</b>, run by default by most compositor startup sequences.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một ứng dụng cũ vẫn chạy mượt trên phiên Wayland mà bạn không phải làm gì cả.</span>
+        <span class="easy-only">Khi chương trình cũ vẫn mở được bình thường trên máy mới.</span>
+        <span class="en-only" lang="en">When an older application still runs smoothly in a Wayland session and you had to do nothing at all.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cái giá của lớp trung gian</h4>
+          <p>Xwayland phải dịch sự kiện đầu vào và duy trì các buffer cửa sổ của riêng nó. Ward nói thêm một người trung gian như vậy thì bao giờ cũng chậm đi một chút — nhưng “phần lớn là không đáng kể”.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Chiều ngược lại không chạy</h4>
+          <p>Bạn không thể chạy Wayland client trên X theo cách tương tự; về lý thuyết viết được một hệ như vậy, nhưng chẳng để làm gì.<span class="cite"><a href="#ref-1">1</a></span> Bạn <i>có thể</i> chạy một compositor bên trong một cửa sổ X — ví dụ đang ở X thì gõ <code>weston</code> là có compositor.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Cái bẫy của compositor lồng trong X</h4>
+          <p>Nếu bạn để compositor đó chạy rồi quay lại phiên X thường, một số tiện ích có thể hoạt động không như mong đợi, thậm chí hiện ra trong cửa sổ compositor. Lý do: nhiều ứng dụng trên GNOME và KDE nay được dựng với cả hỗ trợ X lẫn Wayland; chúng tìm compositor Wayland trước, và mặc định mã trong <code>libwayland</code> tìm display sẽ lấy <code>wayland-0</code> nếu biến <code>WAYLAND_DISPLAY</code> chưa được đặt.<span class="cite"><a href="#ref-1">1</a></span> Lời khuyên của Ward rất gọn: đừng chạy compositor bên trong X hoặc cùng lúc với một X server.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Cây cầu Xwayland cho thấy điều Ward nhấn mạnh xuyên suốt: đây là một giai đoạn <b>chuyển tiếp</b>, không phải một cuộc đảo chính. Nhưng bức tranh đã dịch chuyển kể từ khi sách in năm 2021 — ngoài phạm vi bản văn, GNOME 49 (phát hành 2025) đã bỏ phiên GNOME chạy trên Xorg, trong khi XWayland vẫn được giữ để ứng dụng X tiếp tục chạy.<span class="cite"><a href="#ref-13">13</a></span> Fedora cũng đã duyệt việc gỡ phiên GNOME-on-Xorg cho Fedora 43.<span class="cite"><a href="#ref-14">14</a></span> Đây là thông tin cập nhật, không phải lời của Ward.</p>
+    <p class="easy-only">Sách viết năm 2021 nói “đang chuyển”. Đến nay, một số bản Linux đã bỏ hẳn cách cũ, nhưng vẫn giữ cây cầu để chương trình cũ chạy được. <b>Nhớ nhé: cách cũ đang lui dần, nhưng cây cầu thì vẫn còn.</b></p>
+    <p class="en-only" lang="en">The Xwayland bridge illustrates what Ward stresses throughout: this is a <b>transition</b>, not a coup. But the picture has shifted since the book's 2021 printing — beyond the text, GNOME 49 (released 2025) dropped the GNOME session on Xorg while keeping XWayland so X applications keep running.<span class="cite"><a href="#ref-13">13</a></span> Fedora likewise approved removing the GNOME-on-Xorg session for Fedora 43.<span class="cite"><a href="#ref-14">14</a></span> This is current information, not Ward's words.</p>
+    <p class="deep-only">Ghi chú về cách đọc: khi nguồn hiện tại và bản văn 2021 lệch nhau, trang này giữ khung của sách trong thân bài và ghi chú biến động ở lớp Đầy đủ, kèm nguồn. Bản văn nói “nhiều bản phân phối đã chuyển sang Wayland”<span class="cite"><a href="#ref-1">1</a></span>; nguồn hiện tại cho thấy quá trình đó đã đi xa hơn một bậc, tới mức gỡ bỏ phiên X ở tầng môi trường desktop.<span class="cite"><a href="#ref-13">13</a></span><span class="cite"><a href="#ref-14">14</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="x-window-system" aria-labelledby="x-window-system-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="x-window-system-title">
+      <span class="standard-copy">Nhìn gần X Window System: display, display manager, sự kiện và thiết lập</span>
+      <span class="easy-only">Cách cũ: X làm việc thế nào</span>
+      <span class="en-only" lang="en">A closer look at the X Window System: displays, display managers, events and settings</span>
+    </h2>
+    <p class="standard-copy">Đối lập với hệ thống dựa trên Wayland, X Window System trong lịch sử rất đồ sộ: bản phân phối gốc gồm cả X server, thư viện hỗ trợ client, và các client. Nhưng do sự nổi lên của các desktop environment như GNOME và KDE, vai trò của X đã đổi theo thời gian — trọng tâm nay nghiêng về phần server lõi lo dựng hình và thiết bị nhập, cùng một thư viện client đơn giản hoá.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    <p class="easy-only">X ngày xưa rất to: nó gói cả người trung gian lẫn đủ thứ phụ tùng. Giờ nó gọn lại, chỉ còn phần lõi lo vẽ hình và nhận phím. <b>Nhớ nhé: X từng rất to, giờ đã gọn lại.</b></p>
+    <p class="en-only" lang="en">In contrast with Wayland-based systems, the X Window System has historically been very large: the base distribution includes the X server, client support libraries and clients. But with the emergence of desktop environments such as GNOME and KDE, X's role has changed over time — the focus is now more on the core server that manages rendering and input devices, plus a simplified client library.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    <p class="deep-only">X server dễ nhận ra trên máy bạn: nó tên là <code>X</code> hoặc <code>Xorg</code>, và trong danh sách tiến trình thường chạy kèm một loạt tuỳ chọn, ví dụ <code>Xorg -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Mỗi mảnh trong dòng đó là một câu chuyện: <code>:0</code> là display, <code>lightdm</code> là display manager, <code>-nolisten tcp</code> là quyết định bảo mật, <code>vt7</code> là virtual terminal.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>X display</i> — ký hiệu <code>:0</code> trong dòng lệnh trên — là một định danh biểu diễn một hoặc nhiều màn hình mà bạn truy cập bằng chung một bàn phím và/hoặc chuột. Thường display chỉ tương ứng với một màn hình gắn vào máy, nhưng bạn có thể đặt nhiều màn hình dưới cùng một display. Với các tiến trình chạy trong một phiên X, biến môi trường <code>DISPLAY</code> được đặt bằng định danh đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Display là “bộ bàn làm việc”: một hay nhiều màn hình dùng chung một bàn phím và một con chuột. Nó có số hiệu, thường là <code>:0</code>. <b>Nhớ nhé: một bàn phím + màn hình = một display.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> An <i>X display</i> — the <code>:0</code> in the command line above — is an identifier representing one or more monitors that you access with a common keyboard and/or mouse. Usually a display corresponds to the single monitor attached to your computer, but you can put multiple monitors under one display. For processes running in an X session, the <code>DISPLAY</code> environment variable is set to that identifier.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">công cụ soi X client:<br>$ xwininfo&nbsp;&nbsp;→ bấm vào cửa sổ<br>$ xlsclients -l&nbsp;→ mọi window ID<br>$ xev&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ dòng sự kiện<br>$ xinput --list → thiết bị nhập<br>$ xset q&nbsp;&nbsp;&nbsp;→ trạng thái vài tính năng</p>
+      <p class="easy-only">soi cửa sổ: xwininfo<br>xem sự kiện: xev<br>xem chuột phím: xinput --list</p>
+      <p class="en-only" lang="en">tools for probing X clients:<br>$ xwininfo&nbsp;&nbsp;→ click a window<br>$ xlsclients -l → all window IDs<br>$ xev&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ a stream of events<br>$ xinput --list → input devices<br>$ xset q&nbsp;&nbsp;&nbsp;→ status of a few features</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">display manager</span>
+      <h3>
+        <span class="standard-copy">Display manager — thứ thật sự khởi động phiên của bạn</span>
+        <span class="easy-only">Ô đăng nhập lúc bật máy</span>
+        <span class="en-only" lang="en">The display manager — what actually starts your session</span>
+      </h3>
+      <p class="standard-copy">Thường bạn sẽ không khởi động X server từ dòng lệnh, vì khởi động server không định nghĩa bất kỳ client nào được cho là sẽ chạy trên đó; tự chạy server một mình thì bạn chỉ được một màn hình trống. Cách phổ biến nhất là dùng <i>display manager</i> — chương trình khởi động server và đặt một ô đăng nhập lên màn hình. Khi bạn đăng nhập, display manager khởi động một bộ client như window manager và trình quản lý tệp để bạn bắt đầu dùng máy.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bật máy lên, bạn thấy ô nhập mật khẩu. Người dựng ô đó gọi là display manager. Nhập xong, nó mở sẵn cho bạn các chương trình cần thiết. <b>Nhớ nhé: display manager là người mở cửa và bật đèn.</b></p>
+      <p class="en-only" lang="en">You normally wouldn't start the X server from the command line, because starting the server doesn't define any clients that are supposed to run on it; start it by itself and you just get a blank screen. The usual way is a <i>display manager</i> — a program that starts the server and puts a login box on the screen. When you log in, the display manager starts a set of clients such as a window manager and file manager so you can begin using the machine.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy"><code>gdm</code> (cho GNOME), <code>kdm</code> (cho KDE), và <code>lightdm</code> — bản đa nền tảng có thể khởi động phiên GNOME hoặc KDE.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Ba cái tên hay gặp: <code>gdm</code>, <code>kdm</code>, <code>lightdm</code>.</span>
+        <span class="en-only" lang="en"><code>gdm</code> (for GNOME), <code>kdm</code> (for KDE), and <code>lightdm</code> — a cross-platform one meant to start GNOME or KDE sessions.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Nếu bạn cố tình làm theo cách thủ công</h4>
+          <p>Ward nói: nếu bạn nhất quyết khởi động phiên X từ một console ảo thay vì dùng display manager, bạn có thể chạy lệnh <code>startx</code> hoặc <code>xinit</code>. Nhưng phiên bạn nhận được nhiều khả năng rất đơn sơ và trông hoàn toàn khác phiên của display manager, vì cơ chế và các tệp khởi động khác nhau.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Virtual terminal</h4>
+          <p>Trên Linux, X server chạy trên một virtual terminal. Trong ví dụ của Ward, tham số <code>vt7</code> cho thấy nó được bảo chạy trên <code>/dev/tty7</code> — bình thường server khởi động trên virtual terminal đầu tiên còn trống.<span class="cite"><a href="#ref-1">1</a></span> Bạn có thể chạy nhiều X server cùng lúc trên các virtual terminal riêng, mỗi server một định danh display, và chuyển qua lại bằng CTRL-ALT-F<i>n</i> hoặc lệnh <code>chvt</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">network transparency</span>
+      <h3>
+        <span class="standard-copy">Trong suốt mạng — một tính năng đã bị tắt vì lý do bảo mật</span>
+        <span class="easy-only">Chạy cửa sổ từ máy khác</span>
+        <span class="en-only" lang="en">Network transparency — a feature now switched off for security</span>
+      </h3>
+      <p class="standard-copy">Một đặc tính của X là <i>network transparency</i>: vì client nói chuyện với server qua một giao thức, ta có thể chạy client qua mạng tới một server chạy trên máy khác, với X server lắng nghe kết nối TCP ở cổng <b>6000</b>; client nối tới cổng đó có thể xác thực rồi gửi cửa sổ sang server.<span class="cite"><a href="#ref-1">1</a></span> Rắc rối là phương pháp này thường không có mã hoá nên mất an toàn, vì vậy phần lớn bản phân phối nay tắt phần lắng nghe mạng của X server bằng tuỳ chọn <code>-nolisten tcp</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">X có thể hiện cửa sổ của một máy này lên màn hình của máy khác qua mạng. Nghe hay, nhưng đường truyền không được khoá kín, nên ngày nay người ta tắt đi. Muốn dùng thì đi đường an toàn hơn là SSH. <b>Nhớ nhé: tính năng hay nhưng không an toàn thì bị tắt.</b></p>
+      <p class="en-only" lang="en">One feature of X is <i>network transparency</i>: because clients talk to the server using a protocol, you can run clients across a network to a server on a different machine, with the X server listening for TCP connections on port <b>6000</b>; clients connecting to that port could authenticate and then send windows to the server.<span class="cite"><a href="#ref-1">1</a></span> The trouble is that this method normally offers no encryption and is insecure as a result, so most distributions now disable the X server's network listener with the <code>-nolisten tcp</code> option.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Bạn vẫn có thể chạy X client từ máy ở xa bằng SSH tunneling, như Chương 10 mô tả, bằng cách nối Unix domain socket của X server tới một socket trên máy kia.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Muốn mở cửa sổ từ máy khác thì dùng SSH — đường có khoá.</span>
+        <span class="en-only" lang="en">You can still run X clients from a remote machine via SSH tunneling, as described in Chapter 10, by connecting the X server's Unix domain socket to a socket on the remote machine.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Wayland thì sao?</h4>
+          <p>Ward ghi chú rõ: không có cách đơn giản để chạy từ xa với Wayland, vì client có bộ nhớ màn hình riêng mà compositor phải truy cập trực tiếp mới hiển thị được. Tuy vậy nhiều hệ thống đang nổi lên, chẳng hạn RDP (Remote Desktop Protocol), có thể phối hợp với compositor để cung cấp chức năng từ xa.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Display còn chia nhỏ được</h4>
+          <p>Display có thể được chia tiếp thành <i>screen</i>, như <code>:0.0</code> và <code>:0.1</code>, nhưng chuyện này khá hiếm vì các phần mở rộng của X như RandR có thể gộp nhiều màn hình thành một screen ảo lớn hơn.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">x events</span>
+      <h3>
+        <span class="standard-copy">Sự kiện X — cách client biết chuyện gì đang xảy ra</span>
+        <span class="easy-only">Tin nhắn “bạn vừa bấm gì”</span>
+        <span class="en-only" lang="en">X events — how clients learn what is happening</span>
+      </h3>
+      <p class="standard-copy">X client nhận đầu vào và các thông tin khác về trạng thái server qua một hệ thống <i>sự kiện</i>. Ward xếp chúng cùng họ với những sự kiện liên tiến trình bất đồng bộ khác như sự kiện udev và sự kiện D-Bus: X server nhận thông tin từ một nguồn — chẳng hạn thiết bị nhập — rồi phân phát lại thông tin đó dưới dạng sự kiện cho bất kỳ X client nào quan tâm.<span class="cite"><a href="#ref-1">1</a></span> Bạn thử nghiệm được bằng lệnh <code>xev</code>: nó mở một cửa sổ mới, và khi bạn rê chuột, bấm, gõ phím, nó in ra mô tả các sự kiện X nhận được từ server.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+      <p class="easy-only">Mỗi lần bạn bấm phím hay rê chuột, máy gửi một tờ giấy nhỏ ghi “vừa có chuyện này” cho chương trình đang cần biết. Tờ giấy đó gọi là sự kiện. Có một lệnh cho bạn xem tận mắt các tờ giấy ấy. <b>Nhớ nhé: mỗi cú bấm là một tờ tin nhắn.</b></p>
+      <p class="en-only" lang="en">X clients get their input and other information about server state through a system of <i>events</i>. Ward groups them with other asynchronous interprocess communication events such as udev events and D-Bus events: the X server receives information from a source — an input device, say — and redistributes it as an event to any interested X client.<span class="cite"><a href="#ref-1">1</a></span> You can experiment with <code>xev</code>: it opens a new window, and as you mouse into it, click and type, it prints descriptions of the X events it receives from the server.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Một công dụng phổ biến của <code>xev</code> là lấy keycode và ký hiệu phím cho các bàn phím khác nhau khi cần ánh xạ lại; trong ví dụ của Ward, bấm phím L cho keycode 46.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Dùng để biết một phím có số hiệu là bao nhiêu — ví dụ phím L là số 46.</span>
+        <span class="en-only" lang="en">A common use of <code>xev</code> is to extract keycodes and key symbols for different keyboards when remapping; in Ward's example, pressing the L key gives keycode 46.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đọc một dòng MotionNotify</h4>
+          <p>Trong đầu ra cho chuyển động chuột, hãy chú ý các toạ độ trong ngoặc: cặp đầu là toạ độ x và y của con trỏ <i>bên trong cửa sổ</i>, còn cặp sau (có tiền tố <code>root:</code>) là vị trí con trỏ trên toàn bộ display.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Sự kiện mức cao hơn</h4>
+          <p>Ngoài sự kiện mức thấp như nhấn phím và bấm nút, còn có những sự kiện cao hơn cho biết chuột đã vào hay rời cửa sổ, hoặc cửa sổ vừa nhận hay mất focus từ window manager — trong sách là các dòng <code>LeaveNotify</code> và <code>FocusOut</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Bám vào một cửa sổ có sẵn</h4>
+          <p>Bạn cũng có thể gắn <code>xev</code> vào một window ID đang tồn tại bằng tuỳ chọn <code>-id id</code>, thay <code>id</code> bằng ID lấy từ <code>xwininfo</code> — một số thập lục phân bắt đầu bằng <code>0x</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span><span class="cite"><a href="#ref-17">17</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">xwininfo / xlsclients</span>
+      <h3>
+        <span class="standard-copy">Soi client từ dòng lệnh: window ID là sợi chỉ dẫn đường</span>
+        <span class="easy-only">Bấm vào cửa sổ để hỏi “mày là ai”</span>
+        <span class="en-only" lang="en">Probing clients from the shell: the window ID is the thread to follow</span>
+      </h3>
+      <p class="standard-copy">Ta thường không nghĩ tới việc làm việc với giao diện đồ hoạ từ dòng lệnh, nhưng Ward chỉ ra vài tiện ích cho phép bạn khám phá các phần của X Window System — đặc biệt là soi các client khi chúng đang chạy.<span class="cite"><a href="#ref-1">1</a></span> Đơn giản nhất là <code>xwininfo</code>: chạy không tham số, nó yêu cầu bạn bấm chuột vào một cửa sổ, rồi in ra danh sách thông tin như vị trí và kích thước.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span></p>
+      <p class="easy-only">Có lệnh cho phép bạn bấm vào một cửa sổ và nó kể cho bạn nghe cửa sổ đó tên gì, to bao nhiêu, nằm ở đâu. <b>Nhớ nhé: bấm một cái là biết lý lịch cửa sổ.</b></p>
+      <p class="en-only" lang="en">One doesn't normally think of working with a graphical interface from the command line, but Ward points to several utilities that let you explore parts of the X Window System — in particular inspecting clients as they run.<span class="cite"><a href="#ref-1">1</a></span> The simplest is <code>xwininfo</code>: run without arguments it asks you to click on a window, then prints a list of information such as its location and size.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Để lấy danh sách mọi window ID và client, dùng <code>xlsclients -l</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span></span>
+        <span class="easy-only">Muốn xem tất cả cửa sổ một lượt thì dùng <code>xlsclients -l</code>.</span>
+        <span class="en-only" lang="en">To get a list of all window IDs and clients, use <code>xlsclients -l</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Window ID để làm gì</h4>
+          <p>Ward lưu ý: X server và các window manager dùng chính định danh này để theo dõi cửa sổ.<span class="cite"><a href="#ref-1">1</a></span> Nó là khoá chung nối <code>xwininfo</code>, <code>xlsclients</code> và <code>xev</code> lại thành một quy trình chẩn đoán.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao Wayland không có bộ công cụ tương đương</h4>
+          <p>Trong Wayland, không có server trung tâm nắm danh sách cửa sổ của mọi client để trả lời câu hỏi kiểu này — đó chính là hệ quả trực tiếp của thiết kế phi tập trung mà Ward mô tả ở mục 14.1.3.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">xinput / xkb</span>
+      <h3>
+        <span class="standard-copy">Thiết lập đầu vào — nơi “có nhiều hơn một cách, và vài cách không chạy”</span>
+        <span class="easy-only">Chỉnh bàn phím chuột: nhiều đường, dễ lạc</span>
+        <span class="en-only" lang="en">Input settings — where "there's often more than one way, and some may not work"</span>
+      </h3>
+      <p class="standard-copy">Ward gọi đây là một trong những đặc tính dễ gây hoang mang nhất của X: thường có nhiều hơn một cách để đặt thiết lập, và vài cách có thể không có tác dụng. Ví dụ kinh điển là đổi phím CAPS LOCK thành CTRL — có thể làm bằng lệnh <code>xmodmap</code> cũ kỹ, hoặc cung cấp hẳn một bản đồ bàn phím mới bằng tiện ích <code>setxkbmap</code>. Làm sao biết dùng cái nào? Đó là chuyện biết phần nào của hệ thống đang giữ trách nhiệm — và xác định điều đó có thể khó, nhất là khi desktop environment còn có thiết lập và ghi đè của riêng nó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+      <p class="easy-only">Muốn đổi một phím trên bàn phím? Có tới mấy cách, mà không phải cách nào cũng ăn. Lý do: nhiều nơi cùng giành quyền quyết định. <b>Nhớ nhé: khi có nhiều cách, hãy hỏi “ai mới là người quyết”.</b></p>
+      <p class="en-only" lang="en">Ward calls this one of X's most potentially baffling characteristics: there's often more than one way to set preferences, and some methods may not work. The classic example is remapping CAPS LOCK to CTRL — doable with the old <code>xmodmap</code> command, or by supplying an entirely new keyboard map with <code>setxkbmap</code>. How do you know which to use? It's a matter of knowing which pieces of the system have responsibility, and determining that can be difficult — especially since a desktop environment may provide its own settings and overrides.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy"><code>xinput --list</code> hiện cấu hình thiết bị; <code>xinput --list-props &lt;id&gt;</code> xem thuộc tính; <code>--set-prop</code> đổi chúng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span></span>
+        <span class="easy-only">Một lệnh liệt kê chuột và bàn phím kèm số hiệu của từng cái.</span>
+        <span class="en-only" lang="en"><code>xinput --list</code> shows the device configuration; <code>xinput --list-props &lt;id&gt;</code> views properties; <code>--set-prop</code> changes them.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Thiết bị lõi ảo</h4>
+          <p>X server dùng X Input Extension để quản lý đầu vào từ nhiều thiết bị. Có hai loại cơ bản — bàn phím và con trỏ (chuột) — và bạn gắn bao nhiêu thiết bị cũng được. Để xử lý nhiều thiết bị cùng loại một lúc, X Input Extension tạo ra một <i>virtual core device</i> làm phễu dẫn đầu vào tới X server.<span class="cite"><a href="#ref-1">1</a></span> Trong đầu ra ví dụ của Ward, ID 2 và 3 là thiết bị lõi, còn ID 8 và 9 là thiết bị thật; đáng chú ý là các nút nguồn của máy cũng được coi là thiết bị nhập của X.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Chuột thuận tay trái</h4>
+          <p>Nhiều thiết lập đổi được trực tiếp qua thuộc tính, nhưng thường dễ hơn khi dùng các tuỳ chọn chuyên biệt <code>--set-ptr-feedback</code> và <code>--set-button-map</code>. Ví dụ để đảo thứ tự nút của một chuột ba nút — tiện cho người thuận tay trái — Ward đưa lệnh <code>xinput --set-button-map dev 3 2 1</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>XKB và hai tính năng đáng nhớ</h4>
+          <p>X luôn có khả năng ánh xạ bàn phím ngay trong giao thức lõi, thao tác được bằng <code>xmodmap</code>; nhưng hệ thống tương đối mới nào cũng dùng XKB (X keyboard extension) để kiểm soát tinh hơn. Ý tưởng của XKB: bạn định nghĩa một bản đồ bàn phím, biên dịch nó bằng <code>xkbcomp</code>, rồi nạp và kích hoạt bản đồ đó trong X server bằng <code>setxkbmap</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span> Hai tính năng đặc biệt thú vị: bạn định nghĩa được <i>bản đồ bộ phận</i> để bổ sung cho bản đồ sẵn có — rất tiện cho việc biến CAPS LOCK thành CTRL — và bạn định nghĩa được bản đồ riêng cho từng bàn phím đang gắn.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hai tiện ích già: xsetroot và xset</h4>
+          <p>Root window của X server chính là nền của display. Lệnh cũ <code>xsetroot</code> cho phép đặt màu nền và vài đặc tính của root window, nhưng trên phần lớn máy nó không có tác dụng vì root window không bao giờ hiện ra — thay vào đó, đa số desktop environment đặt một cửa sổ lớn phía sau mọi cửa sổ khác để có những tính năng như “hình nền động” và duyệt tệp trên desktop.<span class="cite"><a href="#ref-1">1</a></span> Còn <code>xset</code> có lẽ là lệnh thiết lập cổ nhất; nay ít dùng, nhưng <code>xset q</code> vẫn cho bạn trạng thái của vài tính năng — hữu ích nhất có lẽ là thiết lập screensaver và DPMS.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-22">22</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Chú ý sợi dây nối: sự kiện X, sự kiện udev và sự kiện D-Bus được Ward xếp cùng một họ — <b>liên lạc liên tiến trình bất đồng bộ</b>.<span class="cite"><a href="#ref-1">1</a></span> Hiểu một cái là hiểu cả ba. Và trong ba cái đó, D-Bus mới là thứ đã vượt ra khỏi desktop để trở thành hạ tầng của cả hệ thống.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+    <p class="easy-only">Ba loại “tin nhắn” trong máy — của X, của udev, của D-Bus — đều cùng một kiểu: gửi đi rồi ai quan tâm thì nhận. Hiểu một cái là hiểu cả ba. <b>Nhớ nhé: cùng một kiểu tin nhắn, chỉ khác đường dây.</b></p>
+    <p class="en-only" lang="en">Notice the connecting thread: Ward groups X events, udev events and D-Bus events in one family — <b>asynchronous interprocess communication</b>.<span class="cite"><a href="#ref-1">1</a></span> Understand one and you understand all three. And of the three, D-Bus is the one that has grown beyond the desktop into system-wide infrastructure.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="d-bus" aria-labelledby="d-bus-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="d-bus-title">
+      <span class="standard-copy">D-Bus — đường truyền thông điệp đã vượt khỏi desktop</span>
+      <span class="easy-only">D-Bus: đường dây nhắn tin chung</span>
+      <span class="en-only" lang="en">D-Bus — the message bus that outgrew the desktop</span>
+    </h2>
+    <p class="standard-copy">Ward gọi Desktop Bus (D-Bus) là một trong những phát triển quan trọng nhất ra đời từ desktop Linux. Nó quan trọng vì hai lẽ: nó là cơ chế liên lạc liên tiến trình cho phép các ứng dụng desktop nói chuyện với nhau, và vì phần lớn hệ thống Linux dùng nó để thông báo cho các tiến trình về những sự kiện hệ thống — chẳng hạn khi bạn cắm một ổ USB.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+    <p class="easy-only">D-Bus là đường dây nhắn tin chung của máy. Ai muốn báo tin gì thì gửi lên đường dây; ai muốn nghe tin gì thì đăng ký nhận. <b>Nhớ nhé: D-Bus là cái loa chung của cả máy.</b></p>
+    <p class="en-only" lang="en">Ward calls the Desktop Bus (D-Bus) one of the most important developments to come out of the Linux desktop. It matters for two reasons: it is the interprocess communication mechanism that lets desktop applications talk to each other, and most Linux systems use it to notify processes of system events — such as inserting a USB drive.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+    <p class="deep-only">Bản thân D-Bus gồm một thư viện chuẩn hoá liên lạc liên tiến trình bằng một giao thức cùng các hàm hỗ trợ, để hai tiến trình bất kỳ nói chuyện được với nhau. Ward nói thẳng: riêng thư viện đó thì không hơn một phiên bản hoa mỹ của các tiện ích IPC thông thường như Unix domain socket là bao. Cái làm D-Bus hữu ích là một “trung tâm” gọi là <code>dbus-daemon</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>dbus-daemon</code> là hub trung tâm: các tiến trình cần phản ứng với sự kiện thì kết nối tới nó và đăng ký nhận một số loại sự kiện, còn chính những tiến trình đang kết nối cũng tạo ra sự kiện. Ví dụ của Ward: tiến trình <code>udisks-daemon</code> theo dõi udev để bắt sự kiện đĩa rồi gửi chúng tới <code>dbus-daemon</code>, và daemon này phát lại các sự kiện ấy cho những ứng dụng quan tâm tới đĩa.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Có một bác bưu tá ngồi giữa. Ai có tin thì đưa bác ấy, ai muốn nhận loại tin nào thì đăng ký trước. Bác ấy chuyển đúng người. <b>Nhớ nhé: một bác bưu tá, ai đăng ký thì nhận tin.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>dbus-daemon</code> is the central hub: processes that need to react to events connect to it and register to receive certain kinds of events, and connecting processes also create the events. Ward's example: the <code>udisks-daemon</code> process monitors udev for disk events and sends them to <code>dbus-daemon</code>, which then retransmits them to applications interested in disk events.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">hai thực thể dbus-daemon:<br>&nbsp;&nbsp;system → init khởi động,<br>&nbsp;&nbsp;&nbsp;&nbsp;--system, /etc/dbus-1/system.conf<br>&nbsp;&nbsp;session → theo phiên desktop<br>theo dõi:<br># dbus-monitor --system<br>$ dbus-monitor --session</p>
+      <p class="easy-only">hai đường dây:<br>&nbsp;&nbsp;một của cả máy<br>&nbsp;&nbsp;một của phiên bạn<br>nghe thử:<br>$ dbus-monitor --session</p>
+      <p class="en-only" lang="en">two dbus-daemon instances:<br>&nbsp;&nbsp;system → started by init,<br>&nbsp;&nbsp;&nbsp;&nbsp;--system, /etc/dbus-1/system.conf<br>&nbsp;&nbsp;session → per desktop session<br>monitor:<br># dbus-monitor --system<br>$ dbus-monitor --session</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">system instance</span>
+      <h3>
+        <span class="standard-copy">Thực thể hệ thống — và một nguyên tắc thiết kế bị va chạm</span>
+        <span class="easy-only">Đường dây của cả máy</span>
+        <span class="en-only" lang="en">The system instance — and a design rule under strain</span>
+      </h3>
+      <p class="standard-copy">D-Bus đã thành một phần không thể tách rời của hệ thống Linux và nay vươn ra ngoài phạm vi desktop: Ward dẫn ví dụ cả <span lang="en">systemd</span> lẫn <span lang="en">Upstart</span> đều có kênh liên lạc D-Bus. Nhưng thêm phụ thuộc vào công cụ desktop ngay trong lõi hệ thống lại đi ngược một quy tắc thiết kế của Linux.<span class="cite"><a href="#ref-1">1</a></span> Giải pháp là tách làm hai loại thực thể <code>dbus-daemon</code>: một <b>system instance</b> do init khởi động lúc boot với tuỳ chọn <code>--system</code>, và một <b>session instance</b> tuỳ chọn, chỉ chạy khi bạn bắt đầu một phiên desktop.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span></p>
+      <p class="easy-only">Có hai đường dây riêng: một của cả máy, bật từ lúc khởi động; một của riêng phiên làm việc của bạn, chỉ bật khi bạn đăng nhập vào màn hình. <b>Nhớ nhé: một dây cho máy, một dây cho bạn.</b></p>
+      <p class="en-only" lang="en">D-Bus has become an integral part of the Linux system and now reaches beyond the desktop: Ward notes that both <span lang="en">systemd</span> and <span lang="en">Upstart</span> have D-Bus channels of communication. But adding dependencies on desktop tools inside the core system goes against a Linux design rule.<span class="cite"><a href="#ref-1">1</a></span> The answer is two kinds of <code>dbus-daemon</code> instance: a <b>system instance</b> started by init at boot with the <code>--system</code> option, and an optional <b>session instance</b> that runs only when you start a desktop session.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Tiến trình có thể kết nối tới thực thể hệ thống qua Unix domain socket <code>/var/run/dbus/system_bus_socket</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Đường dây của cả máy có một “ổ cắm” cố định trong hệ thống tệp.</span>
+        <span class="en-only" lang="en">Processes can connect to the system instance through the <code>/var/run/dbus/system_bus_socket</code> Unix domain socket.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Chạy dưới danh nghĩa ai</h4>
+          <p>Thực thể hệ thống thường chạy dưới người dùng D-Bus, và tệp cấu hình của nó là <code>/etc/dbus-1/system.conf</code> — nhưng Ward kèm một lời khuyên gọn: có lẽ bạn không nên sửa cấu hình đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Session instance thuộc về bạn</h4>
+          <p>Độc lập với thực thể hệ thống, session instance là tuỳ chọn và chỉ sống trong phiên desktop; các ứng dụng desktop bạn chạy sẽ kết nối tới thực thể này.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">dbus-monitor</span>
+      <h3>
+        <span class="standard-copy">Theo dõi thông điệp — cách tốt nhất để thấy khác biệt</span>
+        <span class="easy-only">Ghé tai nghe đường dây</span>
+        <span class="en-only" lang="en">Monitoring messages — the best way to see the difference</span>
+      </h3>
+      <p class="standard-copy">Ward đề xuất một cách rất thực nghiệm để phân biệt hai thực thể: theo dõi các sự kiện chạy trên bus bằng tiện ích <code>dbus-monitor</code>. Chạy ở chế độ hệ thống, thông điệp khởi đầu cho biết monitor đã kết nối và giành được một tên. Bạn sẽ không thấy nhiều hoạt động, vì thực thể hệ thống thường không bận rộn lắm — muốn thấy có chuyện xảy ra, hãy thử cắm một thiết bị lưu trữ USB.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-24">24</a></span></p>
+      <p class="easy-only">Muốn biết đường dây đang nói gì? Có một lệnh cho bạn nghe lén (một cách hợp pháp, trên chính máy mình). Nghe đường của máy thì im ắng; cắm USB vào là có tin. <b>Nhớ nhé: muốn hiểu thì ghé tai nghe thử.</b></p>
+      <p class="en-only" lang="en">Ward proposes a thoroughly empirical way to tell the two instances apart: monitor the events going over the bus with the <code>dbus-monitor</code> utility. In system mode, the startup message indicates that the monitor connected and acquired a name. You won't see much activity, because the system instance usually isn't very busy — to see something happen, try plugging in a USB storage device.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-24">24</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đổi sang <code>dbus-monitor --session</code> rồi dùng một ứng dụng desktop như trình quản lý tệp: nếu desktop của bạn có nhận thức D-Bus, bạn sẽ nhận được một loạt thông điệp báo các thay đổi.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Nghe đường dây của phiên bạn rồi mở thư mục — tin nhắn chạy rào rào.</span>
+        <span class="en-only" lang="en">Switch to <code>dbus-monitor --session</code> and use a desktop application such as a file manager: if your desktop is D-Bus-aware, you'll get a flurry of messages indicating various changes.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đọc một dòng thông điệp</h4>
+          <p>Dòng khởi đầu trong ví dụ của sách có dạng <code>signal sender=org.freedesktop.DBus -&gt; dest=:1.952 … member=NameAcquired</code>. Ba mảnh đáng nhớ: <i>path</i> (đối tượng), <i>interface</i> (nhóm phương thức/tín hiệu), và <i>member</i> (tên cụ thể) — chính là bộ ba mà đặc tả D-Bus dùng để định địa chỉ mọi thông điệp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đừng kết luận vội khi im lặng</h4>
+          <p>Ward nhắc: không phải ứng dụng nào cũng sinh ra thông điệp.<span class="cite"><a href="#ref-1">1</a></span> Một bus im ắng không chứng minh được rằng hệ thống hỏng — nó chỉ nói rằng thứ bạn đang thử không nói chuyện trên bus đó.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">D-Bus khép lại nửa đầu chương bằng một nhận xét về kiến trúc: chuyện desktop cần một bus riêng, rồi bus đó được lõi hệ thống mượn dùng, cho thấy ranh giới “desktop” và “hệ thống” trên Linux là một ranh giới chính trị hơn là kỹ thuật.<span class="cite"><a href="#ref-1">1</a></span> Phần còn lại của chương chuyển sang một dịch vụ khác cũng bị chia sẻ theo kiểu đó: máy in.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Đường dây sinh ra cho màn hình, rồi cả máy đem dùng chung. Chuyện máy in cũng tương tự: một máy in, nhiều người dùng chung. <b>Nhớ nhé: cái gì dùng chung thì cần luật chung.</b></p>
+    <p class="en-only" lang="en">D-Bus closes the first half of the chapter with an architectural observation: that the desktop needed its own bus, and that the system core then borrowed it, shows the "desktop" / "system" boundary on Linux to be a political one more than a technical one.<span class="cite"><a href="#ref-1">1</a></span> The rest of the chapter turns to another service shared the same way: the printer.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 5 ===================== -->
+<section class="section" id="in-an" aria-labelledby="in-an-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 05</span>
+      <span class="en-only" lang="en">Concept cluster 05</span>
+    </p>
+    <h2 id="in-an-title">
+      <span class="standard-copy">In ấn: tám bước, một hàng đợi, và vì sao mọi thứ xoay quanh PostScript</span>
+      <span class="easy-only">Bấm “In” rồi máy làm gì</span>
+      <span class="en-only" lang="en">Printing: eight steps, one queue, and why it all revolves around PostScript</span>
+    </h2>
+    <p class="standard-copy">Ward mô tả in một tài liệu trên Linux là một tiến trình <b>nhiều giai đoạn</b>: chương trình in thường chuyển tài liệu sang dạng PostScript (bước này là tuỳ chọn); gửi tài liệu tới print server; server nhận và đặt nó vào hàng đợi in; đến lượt thì server gửi tài liệu cho một print filter; nếu tài liệu chưa ở dạng PostScript, filter có thể thực hiện chuyển đổi; nếu máy in đích không hiểu PostScript, một printer driver chuyển tài liệu sang định dạng máy in hiểu được; driver thêm các chỉ dẫn tuỳ chọn như khay giấy và in hai mặt; cuối cùng print server dùng một backend để gửi tài liệu tới máy in.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Bấm nút In, giấy không ra ngay đâu. Tài liệu của bạn đi qua một dây chuyền: đổi sang một ngôn ngữ chung, xếp hàng chờ, đổi tiếp cho hợp với máy in, rồi mới được gửi đi. <b>Nhớ nhé: in là một dây chuyền, không phải một cú bấm.</b></p>
+    <p class="en-only" lang="en">Ward describes printing a document on Linux as a <b>multistage</b> process: the program doing the printing usually converts the document to PostScript (this step is optional); it sends the document to a print server; the server receives it and places it on a print queue; when its turn arrives, the server sends it to a print filter; if the document isn't in PostScript form, the filter may convert it; if the destination printer doesn't understand PostScript, a printer driver converts it to a printer-compatible format; the driver adds optional instructions such as paper tray and duplexing options; and finally the print server uses a backend to send the document to the printer.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Ward giải thích phần khó hiểu nhất của quy trình — vì sao mọi thứ xoay quanh PostScript: <i>PostScript thật ra là một ngôn ngữ lập trình</i>, nên khi bạn in một tệp bằng nó, bạn đang gửi một <b>chương trình</b> tới máy in. PostScript đóng vai trò chuẩn in trên các hệ Unix-like, giống như định dạng <code>.tar</code> đóng vai trò chuẩn lưu trữ.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> PostScript không phải một bức ảnh, nó là một <i>công thức vẽ</i>. Bạn gửi công thức, máy in tự vẽ theo. <b>Nhớ nhé: gửi cho máy in một công thức, không phải một bức ảnh.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Ward explains the most confusing part of the process — why so much revolves around PostScript: <i>PostScript is actually a programming language</i>, so when you print a file using it, you're sending a <b>program</b> to the printer. PostScript serves as a printing standard in Unix-like systems much as the <code>.tar</code> format serves as an archiving standard.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">tài liệu → PostScript (tuỳ chọn)<br>&nbsp;&nbsp;→ print server (cupsd)<br>&nbsp;&nbsp;→ hàng đợi in<br>&nbsp;&nbsp;→ print filter<br>&nbsp;&nbsp;→ printer driver + PPD<br>&nbsp;&nbsp;→ backend → máy in</p>
+      <p class="easy-only">tài liệu → xếp hàng<br>&nbsp;&nbsp;→ đổi định dạng<br>&nbsp;&nbsp;→ gửi máy in</p>
+      <p class="en-only" lang="en">document → PostScript (optional)<br>&nbsp;&nbsp;→ print server (cupsd)<br>&nbsp;&nbsp;→ print queue<br>&nbsp;&nbsp;→ print filter<br>&nbsp;&nbsp;→ printer driver + PPD<br>&nbsp;&nbsp;→ backend → printer</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">cups</span>
+      <h3>
+        <span class="standard-copy">CUPS — hệ thống in chuẩn, và cũng là hệ thống của macOS</span>
+        <span class="easy-only">CUPS — người quản lý hàng đợi in</span>
+        <span class="en-only" lang="en">CUPS — the standard printing system, also used on macOS</span>
+      </h3>
+      <p class="standard-copy">Hệ thống in chuẩn trên Linux là CUPS, cũng chính là hệ thống dùng trên macOS. Daemon server của CUPS tên là <code>cupsd</code>, và bạn có thể dùng lệnh <code>lpr</code> làm một client đơn giản để gửi tệp tới daemon đó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-25">25</a></span><span class="cite"><a href="#ref-26">26</a></span></p>
+      <p class="easy-only">Trên Linux, người trông coi việc in tên là CUPS. Máy Mac cũng dùng đúng anh này. <b>Nhớ nhé: CUPS là người xếp hàng đợi in.</b></p>
+      <p class="en-only" lang="en">The standard printing system on Linux is CUPS, the same system used on macOS. The CUPS server daemon is called <code>cupsd</code>, and you can use the <code>lpr</code> command as a simple client to send files to the daemon.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-25">25</a></span><span class="cite"><a href="#ref-26">26</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Nếu CUPS đang chạy, bạn thường mở được <code>http://localhost:631/</code> để xem cấu hình hiện tại và kiểm tra các tác vụ in.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-27">27</a></span></span>
+        <span class="easy-only">Mở trình duyệt vào địa chỉ <code>localhost:631</code> là thấy danh sách máy in.</span>
+        <span class="en-only" lang="en">If CUPS is running you can usually open <code>http://localhost:631/</code> to see your current configuration and check on printer jobs.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-27">27</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>IPP và cổng 631</h4>
+          <p>Một tính năng quan trọng của CUPS là nó hiện thực Internet Print Protocol (IPP), hệ thống cho phép các giao dịch giống HTTP giữa client và server trên cổng TCP <b>631</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-27">27</a></span> Phần lớn máy in mạng và print server đều hỗ trợ IPP, Windows cũng vậy, nên việc thiết lập máy in từ xa tương đối đơn giản.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đừng quản trị qua giao diện web</h4>
+          <p>Ward khuyên: nhiều khả năng bạn sẽ không quản trị được hệ thống từ giao diện web vì thiết lập mặc định không an toàn lắm; thay vào đó bản phân phối của bạn nhiều khả năng có giao diện thiết lập đồ hoạ để thêm và sửa máy in. Các công cụ đó thao tác lên tệp cấu hình, thường nằm ở <code>/etc/cups</code> — và tốt nhất cứ để chúng làm, vì cấu hình có thể phức tạp.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ngay cả khi phải sửa tay</h4>
+          <p>Nếu gặp trục trặc và buộc phải cấu hình thủ công, Ward vẫn khuyên tạo máy in bằng công cụ đồ hoạ trước để có một điểm xuất phát.<span class="cite"><a href="#ref-1">1</a></span> Đây là một mẫu tư duy lặp lại trong sách: để công cụ sinh ra cấu hình đúng, rồi mới đọc và sửa.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">print filters</span>
+      <h3>
+        <span class="standard-copy">RIP, Ghostscript và PPD — cách một trang thành các chấm mực</span>
+        <span class="easy-only">Đổi công thức thành chấm mực</span>
+        <span class="en-only" lang="en">RIP, Ghostscript and PPD — how a page becomes dots of ink</span>
+      </h3>
+      <p class="standard-copy">Nhiều máy in, gồm gần như mọi mẫu giá rẻ, không hiểu PostScript hay PDF. Để hỗ trợ những máy đó, hệ thống in trên Linux phải chuyển tài liệu sang định dạng riêng của máy in: CUPS gửi tài liệu tới một <i>Raster Image Processor</i> (RIP) để tạo ra bitmap. RIP gần như luôn dùng chương trình Ghostscript (<code>gs</code>) làm phần lớn công việc thật sự.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-28">28</a></span> Nhưng việc này hơi phức tạp, vì bitmap phải khớp định dạng của máy in — nên các printer driver mà CUPS dùng sẽ tra cứu tệp <i>PostScript Printer Definition</i> (PPD) của máy in cụ thể để biết những thiết lập như độ phân giải và khổ giấy.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-29">29</a></span></p>
+      <p class="easy-only">Máy in rẻ tiền không đọc được công thức. Nên có một người đọc công thức rồi vẽ ra thành từng chấm mực cho máy in. Người đó tên là Ghostscript. Còn tờ “thông số máy in” cho biết máy in này in được mịn đến đâu, giấy cỡ nào. <b>Nhớ nhé: có người dịch công thức thành chấm mực.</b></p>
+      <p class="en-only" lang="en">Many printers, including nearly all low-end models, don't understand PostScript or PDF. To support one of those, a Linux printing system must convert documents to a printer-specific format: CUPS sends the document to a <i>Raster Image Processor</i> (RIP) to produce a bitmap. The RIP almost always uses the Ghostscript (<code>gs</code>) program to do most of the real work.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-28">28</a></span> But it's somewhat complicated, because the bitmap must fit the printer's format — so the printer drivers CUPS uses consult the <i>PostScript Printer Definition</i> (PPD) file for the specific printer to figure out settings such as resolution and paper sizes.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-29">29</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi bạn chọn “chất lượng nháp” hay khổ A4 trong hộp thoại in — những lựa chọn đó cuối cùng được đối chiếu với tệp PPD của máy in.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-29">29</a></span></span>
+        <span class="easy-only">Khi bạn chọn khổ giấy A4 hay in nháp trong hộp thoại in.</span>
+        <span class="en-only" lang="en">Every time you pick "draft quality" or A4 in the print dialog — those choices are ultimately matched against the printer's PPD file.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-29">29</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>PDF ở đâu trong bức tranh</h4>
+          <p>Ward ghi nhận rằng một số ứng dụng nay xuất PDF thay vì PostScript, nhưng việc chuyển đổi tương đối dễ.<span class="cite"><a href="#ref-1">1</a></span> Nghĩa là quy trình tám bước vẫn đúng, chỉ đổi định dạng ở đầu vào.</p>
+        </div>
+        <div class="info-block">
+          <h4>Bối cảnh đã đổi từ 2021</h4>
+          <p>Ngoài phạm vi bản văn: OpenPrinting ghi rằng sau thảo luận với Apple, hỗ trợ raw queue bị khai tử từ CUPS 2.2 (2018) và printer driver từ CUPS 2.3 (2019), với các <i>Printer Application</i> thay thế; máy in hỗ trợ chuẩn in “driverless” của IPP tiếp tục hoạt động không cần thay đổi.<span class="cite"><a href="#ref-30">30</a></span> Đây là thông tin cập nhật, không phải lời của Ward — bản văn 2021 vẫn mô tả đường đi driver + PPD như trên.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">other desktop topics</span>
+      <h3>
+        <span class="standard-copy">Phần cuối chương: quyền được chọn, và Chrome OS</span>
+        <span class="easy-only">Bạn được chọn, và một ví dụ đặc biệt</span>
+        <span class="en-only" lang="en">The chapter's coda: the right to choose, and Chrome OS</span>
+      </h3>
+      <p class="standard-copy">Ward khép chương bằng một đặc điểm ông thấy thú vị ở môi trường desktop Linux: nhìn chung bạn có thể chọn dùng những mảnh mình muốn và ngừng dùng những mảnh mình không thích; muốn khảo sát các dự án desktop thì xem danh sách thư và các liên kết dự án tại freedesktop.org.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-31">31</a></span> Ông cũng nêu một phát triển lớn khác: dự án mã nguồn mở Chromium OS cùng bản Google Chrome OS trên các máy Chromebook — một hệ Linux dùng phần lớn công nghệ desktop mô tả trong chương này nhưng lấy trình duyệt Chromium/Chrome làm trung tâm, và lược bỏ phần lớn những gì có trên một desktop truyền thống.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-32">32</a></span></p>
+      <p class="easy-only">Điều hay nhất của desktop Linux: bạn được chọn. Không thích mảnh nào thì bỏ mảnh đó. Có một ví dụ thú vị là máy Chromebook: cũng là Linux, nhưng bỏ gần hết, chỉ giữ trình duyệt. <b>Nhớ nhé: bạn được chọn — kể cả chọn bỏ bớt.</b></p>
+      <p class="en-only" lang="en">Ward closes the chapter with a characteristic he finds interesting about the Linux desktop environment: you can generally choose which pieces you want to use and stop using the ones you dislike; for a survey of the many desktop projects, look at the mailing lists and project links at freedesktop.org.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-31">31</a></span> He also names another major development: the Chromium OS open source project and its Google Chrome OS counterpart on Chromebook PCs — a Linux system that uses much of the desktop technology described in this chapter but is centered on the Chromium/Chrome browsers, with much of a traditional desktop stripped away.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-32">32</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi lần bạn đổi desktop environment mà các ứng dụng cũ vẫn chạy — vì chúng chỉ phụ thuộc vào toolkit và vào bus, không phụ thuộc vào môi trường.</span>
+        <span class="easy-only">Khi bạn đổi kiểu màn hình mà chương trình cũ vẫn mở được.</span>
+        <span class="en-only" lang="en">Every time you switch desktop environments and your old applications still run — because they depend on the toolkit and the bus, not on the environment.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao chương dừng ở đây</h4>
+          <p>Ward viết rằng dù môi trường desktop rất vui để ngắm nghía và thử nghiệm, cuộc thảo luận phải dừng lại — và nếu chương này khiến bạn muốn làm việc trên chúng, bạn sẽ cần biết công cụ phát triển hoạt động ra sao, đó là nơi cuốn sách đi tiếp.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một chương khảo sát, không phải sổ tay</h4>
+          <p>Toàn bộ chương được ông đóng khung là “thảo luận ở mức cao” về các thành phần desktop, với chỉ hai mảnh được nhìn kỹ hơn: hạ tầng lõi phía sau phần lớn desktop, và D-Bus.<span class="cite"><a href="#ref-1">1</a></span> Đọc đúng kỳ vọng đó thì chương này rất gọn; đọc như tài liệu vận hành thì sẽ hụt hẫng.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Nhìn lại, cả chương là một biến tấu của một câu hỏi: <b>khi nhiều chương trình phải dùng chung một tài nguyên vật lý — tấm màn hình, cái máy in — thì ai làm trọng tài, và trọng tài đứng ở đâu?</b> X đặt trọng tài ở giữa; Wayland phân tán trọng tài về phía compositor; CUPS đặt trọng tài ở một hàng đợi; D-Bus thì bỏ hẳn vai trọng tài để chỉ làm người đưa tin.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Cả chương chỉ hỏi một câu: nhiều người dùng chung một thứ thì ai chia? Mỗi phần trả lời một kiểu. <b>Nhớ nhé: dùng chung thì phải có người chia.</b></p>
+    <p class="en-only" lang="en">Looking back, the whole chapter is a variation on one question: <b>when many programs must share one physical resource — a screen, a printer — who arbitrates, and where does the arbiter stand?</b> X puts the arbiter in the middle; Wayland distributes it into the compositor; CUPS puts it in a queue; D-Bus drops the arbiter role entirely and just carries messages.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 6 · MISCONCEPTIONS ===================== -->
+<section class="section" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Đính chính</span>
+      <span class="en-only" lang="en">Corrections</span>
+    </p>
+    <h2 id="ngo-nhan-title">
+      <span class="standard-copy">Ba ngộ nhận mà người đọc lần đầu hay mắc</span>
+      <span class="easy-only">Ba chỗ hay hiểu nhầm</span>
+      <span class="en-only" lang="en">Three misconceptions first readers hit</span>
+    </h2>
+    <p class="standard-copy">Phần này thuộc mức đọc <b>Đầy đủ</b>: nó đối chiếu điều người đọc thường nghĩ với điều bản văn thật sự nói.</p>
+    <p class="easy-only">Phần này hơi khó, bạn có thể bỏ qua và quay lại sau. <b>Nhớ nhé: hiểu chậm mà chắc vẫn hơn.</b></p>
+    <p class="en-only" lang="en">This block belongs to the <b>Đầy đủ</b> (full) reading level: it sets what readers usually assume against what the text actually says.</p>
+  </div>
+
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Wayland là một chương trình thay thế cho X”</span>
+          <span class="en-only" lang="en">"Wayland is a program that replaces X"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> có một gói tên Wayland, cài vào là thay được X server.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> cái tên Wayland chỉ một <i>giao thức truyền thông</i> giữa compositing window manager và client đồ hoạ; đi tìm một gói lõi Wayland to đùng thì sẽ không thấy — cái bạn thấy là thư viện Wayland mà phần lớn client dùng để nói giao thức đó.<span class="cite"><a href="#ref-1">1</a></span> Thứ thật sự thay chỗ X server là <i>compositor</i>, mà trong Wayland gần như chính là window manager.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> there is a package called Wayland that you install to replace the X server.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> the name Wayland refers to a <i>communications protocol</i> between a compositing window manager and a graphical client; go looking for a big Wayland core package and you won't find one — what you'll find is the Wayland library most clients use to speak the protocol.<span class="cite"><a href="#ref-1">1</a></span> What actually takes the X server's place is the <i>compositor</i>, which under Wayland is more or less the window manager itself.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Chạy Wayland nghĩa là X đã biến mất khỏi máy”</span>
+          <span class="en-only" lang="en">"Running Wayland means X is gone from my machine"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> hai hệ thống loại trừ nhau, dùng cái này thì không còn cái kia.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> hai hệ thống này <i>không</i> loại trừ nhau — nếu máy bạn dùng Wayland, nó nhiều khả năng cũng đang chạy một X compatibility server, tức Xwayland, một X server đầy đủ chạy như một Wayland client và được phần lớn chuỗi khởi động compositor chạy mặc định.<span class="cite"><a href="#ref-1">1</a></span> Thậm chí bạn còn khởi động được một compositor Wayland bên trong X.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> the two systems are mutually exclusive — use one and the other is absent.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> these two systems are <i>not</i> mutually exclusive — if your system uses Wayland, it is probably also running an X compatibility server, namely Xwayland, an entire X server running as a Wayland client and started by default by most compositor startup sequences.<span class="cite"><a href="#ref-1">1</a></span> You can even start a Wayland compositor inside X.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Máy in nhận thẳng tệp của tôi”</span>
+          <span class="en-only" lang="en">"The printer receives my file directly"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> bấm In là tệp được gửi nguyên vẹn tới máy in.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> in là một tiến trình nhiều giai đoạn, và với nhiều máy in — gần như mọi mẫu giá rẻ — tài liệu phải qua một RIP để thành bitmap, với Ghostscript làm phần lớn công việc và printer driver tra tệp PPD để biết độ phân giải, khổ giấy.<span class="cite"><a href="#ref-1">1</a></span> Thứ máy in nhận được không phải tệp của bạn, mà là kết quả cuối của dây chuyền đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> pressing Print sends your file to the printer untouched.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> printing is a multistage process, and for many printers — nearly all low-end models — the document must pass through a RIP to become a bitmap, with Ghostscript doing most of the real work and the printer driver consulting the PPD file for resolution and paper sizes.<span class="cite"><a href="#ref-1">1</a></span> What the printer receives is not your file but the end product of that pipeline.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="tu-kiem-tra" aria-labelledby="tu-kiem-tra-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm tra</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="tu-kiem-tra-title">
+      <span class="standard-copy">Bạn đã nắm được bản đồ desktop chưa?</span>
+      <span class="easy-only">Thử trả lời xem nào</span>
+      <span class="en-only" lang="en">Do you have the desktop map yet?</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Trả lời bằng lời của bạn, không tra sách. Nếu một câu khiến bạn ngập ngừng, đó chính là mục bạn nên đọc lại.</p>
+      <p class="easy-only">Thử trả lời miệng thôi, không cần giở lại. Câu nào bí thì quay lại đọc phần đó nhé. <b>Nhớ nhé: chỗ bí chính là chỗ cần học.</b></p>
+      <p class="en-only" lang="en">Answer in your own words, without looking back. Whichever question makes you hesitate points at the section you should reread.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Vì sao Ward nói cấu trúc desktop <i>không</i> giống một hệ phân tầng như lưu trữ hay mạng?</p>
+        <p class="deep-only">Gợi ý sâu hơn: chỗ duy nhất có thể gọi là lớp trừu tượng nằm ở đâu?</p>
+      </li>
+      <li>
+        <p>Framebuffer là gì, và bài toán nào của nó sinh ra mọi hệ thống cửa sổ?</p>
+        <p class="deep-only">Gợi ý sâu hơn: hãy nêu cả hai vế của bài toán — biết vẽ ở đâu, và không ghi đè lên ai.</p>
+      </li>
+      <li>
+        <p>Window manager đóng vai trò khác nhau thế nào giữa X và Wayland?</p>
+        <p class="deep-only">Gợi ý sâu hơn: trong X nó là client hay server? Còn trong Wayland?</p>
+      </li>
+      <li>
+        <p>Bạn làm cách nào để biết máy mình đang chạy Wayland hay X, và cách đó có chắc chắn tuyệt đối không?</p>
+        <p class="deep-only">Gợi ý sâu hơn: Ward thêm chữ “có lẽ” vì lý do gì?</p>
+      </li>
+      <li>
+        <p>Xwayland là gì, và vì sao chiều ngược lại — chạy Wayland client trên X — không hoạt động theo cách tương tự?</p>
+        <p class="deep-only">Gợi ý sâu hơn: điều gì xảy ra nếu bạn để một compositor chạy song song với phiên X?</p>
+      </li>
+      <li>
+        <p>Vì sao network transparency của X bị tắt trên phần lớn bản phân phối, và cổng nào liên quan?</p>
+        <p class="deep-only">Gợi ý sâu hơn: nếu vẫn cần chạy client từ xa thì đi đường nào?</p>
+      </li>
+      <li>
+        <p>Hai loại thực thể <code>dbus-daemon</code> khác nhau ở điểm nào, và vì sao phải tách ra?</p>
+        <p class="deep-only">Gợi ý sâu hơn: quy tắc thiết kế nào của Linux bị va chạm khi lõi hệ thống phụ thuộc vào công cụ desktop?</p>
+      </li>
+      <li>
+        <p>Kể lại đường đi của một tài liệu từ lúc bạn bấm In tới lúc giấy ra — ít nhất bốn chặng.</p>
+        <p class="deep-only">Gợi ý sâu hơn: chặng nào là tuỳ chọn, và chặng nào cần tệp PPD?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Framebuffer là gì? Nói ngắn thôi.</p></li>
+      <li><p>X và Wayland khác nhau ở chỗ nào? Một câu là đủ.</p></li>
+      <li><p>Ai là người sắp chỗ cho các cửa sổ trên màn hình?</p></li>
+      <li><p>Làm sao biết máy bạn đang dùng cách cũ hay cách mới?</p></li>
+      <li><p>D-Bus dùng để làm gì?</p></li>
+      <li><p>Khi bạn bấm In, tài liệu đi qua những ai trước khi ra giấy?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>
+        <p>Why does Ward say a desktop structure is <i>not</i> a layered hierarchy like storage or networking?</p>
+      </li>
+      <li>
+        <p>What is a framebuffer, and which problem about it gives rise to every windowing system?</p>
+      </li>
+      <li>
+        <p>How does the window manager's role differ between X and Wayland?</p>
+      </li>
+      <li>
+        <p>How do you tell whether your machine is running Wayland or X, and is that test absolutely certain?</p>
+      </li>
+      <li>
+        <p>What is Xwayland, and why doesn't the reverse — running Wayland clients on X — work the same way?</p>
+      </li>
+      <li>
+        <p>Why is X's network transparency disabled on most distributions, and which port is involved?</p>
+      </li>
+      <li>
+        <p>How do the two kinds of <code>dbus-daemon</code> instance differ, and why were they separated?</p>
+      </li>
+      <li>
+        <p>Retrace a document's path from clicking Print to paper coming out — at least four stages.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Khác với lưu trữ hay mạng, desktop <span class="closing-accent">không có một tháp tầng đồ sộ</span> — mỗi thành phần làm một việc và trao đổi khi cần.<span class="cite"><a href="#ref-1">1</a></span> Và vì bạn <span class="closing-accent">thường được chọn dùng mảnh nào, bỏ mảnh nào</span>, hiểu ranh giới giữa các mảnh quan trọng hơn thuộc lòng tên của chúng.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Màn hình của bạn không phải một cái tháp — nó là <span class="closing-accent">một nhóm thợ làm chung</span>. Và bạn <span class="closing-accent">được quyền chọn thợ</span>. <b>Nhớ nhé: biết ai làm việc gì, quan trọng hơn thuộc tên.</b></p>
+    <p class="en-only" lang="en">Unlike storage or networking, the desktop has <span class="closing-accent">no extensive hierarchy of layers</span> — each component performs a specific task and communicates as necessary.<span class="cite"><a href="#ref-1">1</a></span> And because you can <span class="closing-accent">generally choose which pieces to use and which to drop</span>, understanding the boundaries between the pieces matters more than memorizing their names.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START -->
+<!-- Region owned by book-cover-curator; body authored by book-chapter-author.
+     Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-13-user-environments.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 13 · Môi trường người dùng</span>
+    <span class="nav-title en-only" lang="en">Chapter 13 · User Environments</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-15-development-tools.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 15 · Công cụ phát triển</span>
+    <span class="nav-title en-only" lang="en">Chapter 15 · Development Tools</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, tái bản lần thứ 3, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chương 14, “A Brief Survey of the Linux Desktop and Printing”, trang 347–362.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd edition, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chapter 14, "A Brief Survey of the Linux Desktop and Printing", pp. 347–362.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả. Những chỗ mô tả tình hình <i>sau</i> năm 2021 — việc GNOME bỏ phiên Xorg, hay lộ trình khai tử driver của CUPS — được ghi nhận từ nguồn hiện hành và nêu rõ là nằm ngoài bản văn.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words. Passages describing the state of things <i>after</i> 2021 — GNOME dropping the Xorg session, or the CUPS driver-deprecation roadmap — are taken from current sources and marked as lying outside the book's text.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd ed., No Starch Press, 2021, ch. 14 “A Brief Survey of the Linux Desktop and Printing”, pp. 347–362. — <a href="https://openlibrary.org/books/OL29462444M" target="_blank" rel="noopener noreferrer">openlibrary.org/books/OL29462444M</a></li>
+      <li id="ref-2"><code>Xorg(1)</code> — X server manual page, X.Org Foundation. <a href="https://www.x.org/releases/current/doc/man/man1/Xorg.1.xhtml" target="_blank" rel="noopener noreferrer">x.org/releases/current/doc/man/man1/Xorg.1.xhtml</a></li>
+      <li id="ref-3">“Wayland Architecture”, freedesktop.org. <a href="https://wayland.freedesktop.org/architecture.html" target="_blank" rel="noopener noreferrer">wayland.freedesktop.org/architecture.html</a></li>
+      <li id="ref-4">GTK 4 API documentation, the GNOME Project. <a href="https://docs.gtk.org/gtk4/" target="_blank" rel="noopener noreferrer">docs.gtk.org/gtk4</a></li>
+      <li id="ref-5">Qt 6 documentation, The Qt Company. <a href="https://doc.qt.io/qt-6/index.html" target="_blank" rel="noopener noreferrer">doc.qt.io/qt-6</a></li>
+      <li id="ref-6">“D-Bus Specification”, freedesktop.org. <a href="https://dbus.freedesktop.org/doc/dbus-specification.html" target="_blank" rel="noopener noreferrer">dbus.freedesktop.org/doc/dbus-specification.html</a></li>
+      <li id="ref-7">Weston documentation (the reference Wayland compositor), freedesktop.org. <a href="https://wayland.pages.freedesktop.org/weston/" target="_blank" rel="noopener noreferrer">wayland.pages.freedesktop.org/weston</a></li>
+      <li id="ref-8"><code>ss(8)</code> — socket statistics, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man8/ss.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/ss.8.html</a></li>
+      <li id="ref-9">Mutter — the GNOME window manager and Wayland compositor, source repository. <a href="https://gitlab.gnome.org/GNOME/mutter" target="_blank" rel="noopener noreferrer">gitlab.gnome.org/GNOME/mutter</a></li>
+      <li id="ref-10"><code>xdg-decoration-unstable-v1</code> — Wayland protocol for window decoration negotiation. <a href="https://wayland.app/protocols/xdg-decoration-unstable-v1" target="_blank" rel="noopener noreferrer">wayland.app/protocols/xdg-decoration-unstable-v1</a></li>
+      <li id="ref-11">libinput documentation, freedesktop.org. <a href="https://wayland.freedesktop.org/libinput/doc/latest/" target="_blank" rel="noopener noreferrer">wayland.freedesktop.org/libinput/doc/latest</a></li>
+      <li id="ref-12">Xwayland — X server in the xserver repository, freedesktop.org GitLab. <a href="https://gitlab.freedesktop.org/xorg/xserver/-/blob/master/README.md" target="_blank" rel="noopener noreferrer">gitlab.freedesktop.org/xorg/xserver</a></li>
+      <li id="ref-13">Jordan Petridis, “X11 Session Removal FAQ”, GNOME blogs, 23 June 2025 — <b>nguồn hiện hành, ngoài bản văn 2021 / current source, beyond the 2021 text</b>. <a href="https://blogs.gnome.org/alatiera/2025/06/23/x11-session-removal-faq/" target="_blank" rel="noopener noreferrer">blogs.gnome.org/alatiera/2025/06/23/x11-session-removal-faq</a></li>
+      <li id="ref-14">“Changes/WaylandOnlyGNOME”, Fedora Project Wiki — <b>nguồn hiện hành, ngoài bản văn 2021 / current source, beyond the 2021 text</b>. <a href="https://fedoraproject.org/wiki/Changes/WaylandOnlyGNOME" target="_blank" rel="noopener noreferrer">fedoraproject.org/wiki/Changes/WaylandOnlyGNOME</a></li>
+      <li id="ref-15"><code>chvt(1)</code> — change foreground virtual terminal, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/chvt.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/chvt.1.html</a></li>
+      <li id="ref-16"><code>xev(1)</code> — print contents of X events, X.Org Foundation. <a href="https://www.x.org/releases/current/doc/man/man1/xev.1.xhtml" target="_blank" rel="noopener noreferrer">x.org/releases/current/doc/man/man1/xev.1.xhtml</a></li>
+      <li id="ref-17"><code>xwininfo(1)</code> — window information utility for X, X.Org Foundation. <a href="https://www.x.org/releases/current/doc/man/man1/xwininfo.1.xhtml" target="_blank" rel="noopener noreferrer">x.org/releases/current/doc/man/man1/xwininfo.1.xhtml</a></li>
+      <li id="ref-18"><code>xlsclients(1)</code> — list client applications running on a display, X.Org Foundation. <a href="https://www.x.org/releases/current/doc/man/man1/xlsclients.1.xhtml" target="_blank" rel="noopener noreferrer">x.org/releases/current/doc/man/man1/xlsclients.1.xhtml</a></li>
+      <li id="ref-19"><code>xmodmap(1)</code> — utility for modifying keymaps and pointer button mappings in X, X.Org Foundation. <a href="https://www.x.org/releases/current/doc/man/man1/xmodmap.1.xhtml" target="_blank" rel="noopener noreferrer">x.org/releases/current/doc/man/man1/xmodmap.1.xhtml</a></li>
+      <li id="ref-20"><code>setxkbmap(1)</code> — set the keyboard using the X Keyboard Extension, X.Org Foundation. <a href="https://www.x.org/releases/current/doc/man/man1/setxkbmap.1.xhtml" target="_blank" rel="noopener noreferrer">x.org/releases/current/doc/man/man1/setxkbmap.1.xhtml</a></li>
+      <li id="ref-21"><code>xinput(1)</code> — utility to configure and test X input devices, X.Org Foundation. <a href="https://www.x.org/releases/current/doc/man/man1/xinput.1.xhtml" target="_blank" rel="noopener noreferrer">x.org/releases/current/doc/man/man1/xinput.1.xhtml</a></li>
+      <li id="ref-22"><code>xset(1)</code> — user preference utility for X, X.Org Foundation. <a href="https://www.x.org/releases/current/doc/man/man1/xset.1.xhtml" target="_blank" rel="noopener noreferrer">x.org/releases/current/doc/man/man1/xset.1.xhtml</a></li>
+      <li id="ref-23"><code>dbus-daemon(1)</code> — message bus daemon, freedesktop.org. <a href="https://dbus.freedesktop.org/doc/dbus-daemon.1.html" target="_blank" rel="noopener noreferrer">dbus.freedesktop.org/doc/dbus-daemon.1.html</a></li>
+      <li id="ref-24"><code>dbus-monitor(1)</code> — debug probe to print message bus messages, freedesktop.org. <a href="https://dbus.freedesktop.org/doc/dbus-monitor.1.html" target="_blank" rel="noopener noreferrer">dbus.freedesktop.org/doc/dbus-monitor.1.html</a></li>
+      <li id="ref-25">CUPS — the standards-based, open source printing system (project home). <a href="https://www.cups.org/" target="_blank" rel="noopener noreferrer">cups.org</a></li>
+      <li id="ref-26"><code>lpr(1)</code> — print files, CUPS documentation, OpenPrinting. <a href="https://openprinting.github.io/cups/doc/man-lpr.html" target="_blank" rel="noopener noreferrer">openprinting.github.io/cups/doc/man-lpr.html</a></li>
+      <li id="ref-27">“Using Network Printers” (IPP over TCP port 631), CUPS documentation, OpenPrinting. <a href="https://openprinting.github.io/cups/doc/network.html" target="_blank" rel="noopener noreferrer">openprinting.github.io/cups/doc/network.html</a></li>
+      <li id="ref-28">Ghostscript — the PostScript and PDF interpreter used as the RIP. <a href="https://www.ghostscript.com/" target="_blank" rel="noopener noreferrer">ghostscript.com</a></li>
+      <li id="ref-29">“PostScript Printer Description File Format Reference” (PPD), CUPS documentation, OpenPrinting. <a href="https://openprinting.github.io/cups/doc/spec-ppd.html" target="_blank" rel="noopener noreferrer">openprinting.github.io/cups/doc/spec-ppd.html</a></li>
+      <li id="ref-30">“Printer Applications and Printer Drivers”, OpenPrinting CUPS documentation — <b>nguồn hiện hành, ngoài bản văn 2021 / current source, beyond the 2021 text</b>. <a href="https://openprinting.github.io/cups/drivers.html" target="_blank" rel="noopener noreferrer">openprinting.github.io/cups/drivers.html</a></li>
+      <li id="ref-31">freedesktop.org — the umbrella site for Linux desktop projects, mailing lists and specifications. <a href="https://www.freedesktop.org/wiki/" target="_blank" rel="noopener noreferrer">freedesktop.org/wiki</a></li>
+      <li id="ref-32">ChromiumOS — the open source project behind Google Chrome OS. <a href="https://www.chromium.org/chromium-os/" target="_blank" rel="noopener noreferrer">chromium.org/chromium-os</a></li>
+    </ol>
+
+    <!-- NAV:START -->
+    <!-- Footer neighbour row — owned by book-cover-curator, body authored by
+         book-chapter-author. Absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-13-user-environments.html">chapter 13</a>
+      <a href="chapter-15-development-tools.html">chapter 15</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('hlw-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('hlw-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('hlw-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

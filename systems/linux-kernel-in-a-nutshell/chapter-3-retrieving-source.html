@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="vi" data-mode="standard" data-lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 3 · Lấy mã nguồn nhân — Linux Kernel in a Nutshell</title>
+<meta name="description" content="Người đồng hành song ngữ Việt/Anh cho Chương 3 &quot;Retrieving the Kernel Source&quot; của Linux Kernel in a Nutshell (Greg Kroah-Hartman, O'Reilly, 2006): chọn cây ổn định hay phát triển, tải mã nguồn từ mạng máy chủ kernel.org, và giải nén vào thư mục nhà của bạn.">
+<script>
+/* pre-hydration: đọc lựa chọn đã lưu trước khi vẽ, tránh nháy màn hình */
+(function () {
+  try {
+    var m = localStorage.getItem("lkn-reading-mode");
+    var l = localStorage.getItem("lkn-lang");
+    if (m === "standard" || m === "easy" || m === "deep") document.documentElement.setAttribute("data-mode", m);
+    if (l === "vi" || l === "en") document.documentElement.setAttribute("data-lang", l);
+    if (localStorage.getItem("lkn-theme") === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  } catch (e) {}
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --teal: #0f766e;
+  --blue: #1d4ed8;
+  --amber: #b45309;
+  --leaf: #4d7c0f;
+  --ink: #16202a;
+  --ink-soft: #4a5a68;
+  --ink-faint: #7c8b98;
+  --surface: #fbfaf7;
+  --surface-2: #ffffff;
+  --surface-3: #f2efe8;
+  --line: #ded8cd;
+  --line-soft: #ebe6dc;
+  --shadow: 0 1px 2px rgba(22, 32, 42, .05), 0 8px 24px rgba(22, 32, 42, .06);
+  --serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --measure: 34rem;
+}
+:root[data-theme="dark"] {
+  --teal: #5eead4;
+  --blue: #93b4ff;
+  --amber: #fbbf24;
+  --leaf: #a3e635;
+  --ink: #e8eef4;
+  --ink-soft: #a6b6c4;
+  --ink-faint: #74869a;
+  --surface: #11171d;
+  --surface-2: #171f27;
+  --surface-3: #1e2831;
+  --line: #2d3945;
+  --line-soft: #232e38;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --teal: #5eead4; --blue: #93b4ff; --amber: #fbbf24; --leaf: #a3e635;
+    --ink: #e8eef4; --ink-soft: #a6b6c4; --ink-faint: #74869a;
+    --surface: #11171d; --surface-2: #171f27; --surface-3: #1e2831;
+    --line: #2d3945; --line-soft: #232e38;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.72;
+  -webkit-font-smoothing: antialiased;
+}
+main { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem 4rem; }
+p { margin: 0 0 1.05rem; max-width: var(--measure); }
+a { color: var(--blue); }
+h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; line-height: 1.22; color: var(--ink); }
+code, kbd, samp { font-family: var(--mono); font-size: .88em; background: var(--surface-3); padding: .12em .38em; border-radius: 4px; }
+
+/* ---------- reading mode + bilingual visibility ---------- */
+.easy-only, .deep-only, .en-only { display: none; }
+:root[data-mode="standard"] .standard-copy,
+:root[data-mode="deep"] .standard-copy { display: revert; }
+:root[data-mode="deep"] .deep-only { display: revert; }
+:root[data-mode="easy"] .standard-copy { display: none; }
+:root[data-mode="easy"] .easy-only { display: revert; }
+:root[data-lang="vi"] .vi-only { display: revert; }
+:root[data-lang="en"] .vi-only,
+:root[data-lang="en"] .standard-copy,
+:root[data-lang="en"] .easy-only,
+:root[data-lang="en"] .deep-only { display: none; }
+:root[data-lang="en"] .en-only { display: revert; }
+:root[data-lang="en"] .mode-switch { opacity: .35; pointer-events: none; }
+
+/* ---------- topbar ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: .7rem 1.5rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.book-label { font-size: .78rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-right: auto; }
+.switch-group { display: flex; gap: .3rem; align-items: center; }
+.switch-group + .switch-group { margin-left: .35rem; }
+.switch-label { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin-right: .25rem; }
+button.chip {
+  font: inherit; font-size: .78rem; font-weight: 600;
+  padding: .3rem .72rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft);
+  transition: background .15s, color .15s, border-color .15s;
+}
+button.chip:hover { border-color: var(--teal); color: var(--teal); }
+button.chip[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: var(--surface); }
+:root[data-theme="dark"] button.chip[aria-pressed="true"] { color: #0b1116; }
+
+/* ---------- hero ---------- */
+.hero {
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  gap: 2.75rem; align-items: center;
+  padding: 3.75rem 0 3rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.hero::after {
+  content: "LKN / 03";
+  position: absolute; top: 1.15rem; right: 0;
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .22em;
+  color: var(--ink-faint);
+}
+.eyebrow { font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--teal); font-weight: 700; margin: 0 0 .85rem; }
+.hero h1 { font-size: clamp(2.05rem, 4.6vw, 3.1rem); margin: 0 0 1.15rem; letter-spacing: -.015em; }
+.hero p { font-size: 1.06rem; color: var(--ink-soft); }
+.thesis {
+  margin-top: 1.5rem; padding: 1.05rem 1.25rem 1.05rem 2.6rem;
+  position: relative; max-width: var(--measure);
+  background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--amber);
+  border-radius: 0 10px 10px 0; box-shadow: var(--shadow);
+}
+.thesis::before { content: "∴"; position: absolute; left: .95rem; top: .95rem; font-size: 1.15rem; color: var(--amber); }
+.thesis p { margin: 0; font-size: .97rem; color: var(--ink); }
+
+/* ---------- CSS diagrams ---------- */
+.system-map {
+  position: relative; display: grid; gap: .75rem;
+  padding: 1.5rem; border-radius: 16px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.system-map .core {
+  justify-self: center; text-align: center;
+  padding: .85rem 1.25rem; border-radius: 999px;
+  background: var(--teal); color: var(--surface); font-weight: 700; font-size: .9rem;
+  max-width: 100%;
+}
+:root[data-theme="dark"] .system-map .core { color: #0b1116; }
+.system-map .spokes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
+.system-map .node {
+  padding: .8rem .85rem; border-radius: 12px; text-align: center;
+  background: var(--surface-3); border: 1px solid var(--line-soft);
+}
+.system-map .node b { display: block; font-size: .82rem; color: var(--ink); margin-bottom: .3rem; }
+.system-map .node small { display: block; font-size: .73rem; line-height: 1.5; color: var(--ink-soft); }
+.loop-diagram { display: grid; gap: .55rem; padding: 1.25rem; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.loop-diagram .step { padding: .6rem .8rem; border-radius: 10px; background: var(--surface-3); border-left: 3px solid var(--blue); font-size: .82rem; }
+
+/* ---------- chapter path ---------- */
+.chapter-path {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem;
+  margin: 2.5rem 0 3rem;
+}
+.chapter-path a {
+  display: block; padding: .9rem 1rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+  transition: border-color .15s, transform .15s;
+}
+.chapter-path a:hover { border-color: var(--teal); transform: translateY(-2px); }
+.chapter-path span { display: block; font-size: .67rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.chapter-path b { display: block; font-family: var(--serif); font-size: .96rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- sections ---------- */
+.section { padding: 2.75rem 0; border-top: 1px solid var(--line-soft); }
+.section-heading h2 { font-size: clamp(1.5rem, 3vw, 2.05rem); margin: 0 0 .9rem; }
+.section-heading p { color: var(--ink-soft); }
+.surprise-lead {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem;
+  margin: 1.75rem 0 2rem;
+}
+.definition, .equation { padding: 1rem 1.15rem; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); font-size: .92rem; }
+.definition { border-left: 3px solid var(--blue); }
+.equation { border-left: 3px solid var(--leaf); font-family: var(--mono); font-size: .82rem; line-height: 1.7; }
+.definition p, .equation p { margin: 0; max-width: none; }
+
+.surprise-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.1rem; }
+.trap-grid { grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
+.surprise-grid > li {
+  padding: 1.25rem 1.35rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.english-term { display: inline-block; font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--amber); margin-bottom: .45rem; }
+.surprise-grid h3 { font-size: 1.05rem; margin: 0 0 .7rem; }
+.surprise-grid p { font-size: .93rem; max-width: none; }
+.opportunity {
+  margin-top: .9rem; padding: .75rem .9rem; border-radius: 10px;
+  background: var(--surface-3); border-left: 3px solid var(--leaf); font-size: .87rem;
+}
+.opportunity p { margin: 0; font-size: .87rem; }
+.mechanics { margin-top: .9rem; display: grid; gap: .7rem; }
+.info-block { padding: .75rem .9rem; border-radius: 10px; border: 1px dashed var(--line); background: var(--surface); }
+.info-block h4 { font-size: .85rem; margin: 0 0 .35rem; color: var(--teal); }
+.info-block p { margin: 0; font-size: .86rem; }
+.result { margin-top: .7rem; font-size: .86rem; color: var(--ink-soft); }
+
+.signal {
+  margin: 2rem 0 0; padding: 1.1rem 1.3rem; border-radius: 12px;
+  background: var(--surface-3); border: 1px solid var(--line-soft); border-top: 3px solid var(--blue);
+}
+.signal p { margin: 0 0 .6rem; font-size: .93rem; }
+.signal p:last-child { margin-bottom: 0; }
+
+/* ---------- misconceptions ---------- */
+.trap-comparison { margin: 2.5rem 0; }
+.comparison-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; margin-top: 1.25rem; }
+.comparison-card {
+  padding: 1.1rem 1.25rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); border-top: 3px solid var(--amber);
+}
+.comparison-card h3 { font-size: .98rem; margin: 0 0 .6rem; }
+.comparison-card p { font-size: .9rem; max-width: none; }
+.comparison-card .myth { color: var(--amber); font-weight: 600; }
+.comparison-card .fact { color: var(--teal); font-weight: 600; }
+
+/* ---------- diagnostic ---------- */
+.diagnostic { padding: 1.75rem; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.diagnostic-intro p { font-size: .97rem; }
+.question-list { counter-reset: q; list-style: none; margin: 1.25rem 0 0; padding: 0; display: grid; gap: .9rem; }
+.question-list > li { counter-increment: q; position: relative; padding-left: 2.4rem; font-size: .93rem; }
+.question-list > li::before {
+  content: counter(q, decimal-leading-zero);
+  position: absolute; left: 0; top: .05rem;
+  font-family: var(--mono); font-size: .78rem; font-weight: 600; color: var(--teal);
+  border: 1px solid var(--line); border-radius: 6px; padding: .05rem .38rem;
+}
+.question-list .deep-only { margin-top: .4rem; font-size: .87rem; color: var(--ink-soft); }
+
+/* ---------- closing ---------- */
+.closing { padding: 3rem 0 1rem; border-top: 1px solid var(--line-soft); }
+.closing blockquote {
+  margin: 0; padding: 1.5rem 0 0; max-width: 46rem;
+  font-family: var(--serif); font-size: clamp(1.15rem, 2.4vw, 1.55rem); line-height: 1.5; color: var(--ink);
+}
+.closing blockquote p { max-width: none; font-size: inherit; line-height: inherit; }
+.closing-accent { color: var(--teal); font-style: italic; }
+
+/* ---------- chapter nav ---------- */
+.chapter-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 3rem 0 0; }
+.nav-cell {
+  display: block; padding: 1rem 1.15rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); transition: border-color .15s, transform .15s;
+}
+a.nav-cell:hover { border-color: var(--teal); transform: translateY(-2px); }
+.nav-cell.disabled { opacity: .5; background: var(--surface-3); cursor: default; }
+.nav-next { text-align: right; }
+.nav-label { display: block; font-size: .68rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.nav-title { display: block; font-family: var(--serif); font-size: .95rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- footer + references ---------- */
+footer {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.5rem; align-items: start;
+  margin-top: 3rem; padding: 2rem 0 3rem; border-top: 1px solid var(--line);
+  font-size: .85rem; color: var(--ink-soft);
+}
+.footer-main p { max-width: 48rem; font-size: .85rem; }
+.footer-label { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; margin: 1.5rem 0 .6rem; }
+.ref-list { margin: 0; padding-left: 1.4rem; display: grid; gap: .5rem; }
+.ref-list li { font-size: .82rem; line-height: 1.6; }
+.edition { font-family: var(--mono); font-size: .7rem; letter-spacing: .12em; color: var(--ink-faint); white-space: nowrap; }
+.cite { font-size: .7em; vertical-align: super; line-height: 0; margin-left: .1em; }
+.cite a { text-decoration: none; padding: 0 .12em; }
+
+/* SECTION-RAIL:START */
+.section-rail {
+  position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+  z-index: 30; padding: .6rem .5rem; display: none;
+}
+.section-rail__list { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+.section-rail__list a {
+  display: flex; align-items: center; gap: .55rem;
+  text-decoration: none; color: var(--ink-faint); font-size: .74rem; line-height: 1.25;
+}
+.section-rail__list a::before {
+  content: ""; flex: 0 0 auto; width: 1.15rem; height: 2px; border-radius: 2px;
+  background: var(--line); transition: width .2s, background .2s;
+}
+.section-rail__label {
+  max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0;
+  transition: max-width .24s ease, opacity .18s ease;
+}
+.section-rail:hover .section-rail__label,
+.section-rail:focus-within .section-rail__label { max-width: 13rem; opacity: 1; }
+.section-rail:hover, .section-rail:focus-within {
+  background: color-mix(in srgb, var(--surface-2) 94%, transparent);
+  border: 1px solid var(--line-soft); border-left: 0; border-radius: 0 12px 12px 0; box-shadow: var(--shadow);
+}
+.section-rail__list a:hover,
+.section-rail__list a[aria-current="true"] { color: var(--teal); }
+.section-rail__list a[aria-current="true"]::before { width: 1.9rem; background: var(--teal); }
+@media (min-width: 1180px) { .section-rail { display: block; } }
+/* SECTION-RAIL:END */
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 2rem; padding-top: 2.5rem; }
+  .hero::after { position: static; display: block; margin-bottom: .75rem; }
+  .system-map .spokes { grid-template-columns: minmax(0, 1fr); }
+  footer { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 620px) {
+  body { font-size: 16px; }
+  main { padding: 0 1.1rem 3rem; }
+  .topbar { padding: .6rem 1.1rem; gap: .5rem; }
+  .book-label { width: 100%; margin-right: 0; }
+  .chapter-nav { grid-template-columns: minmax(0, 1fr); }
+  .nav-next { text-align: left; }
+  .diagnostic { padding: 1.25rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">Linux Kernel in a Nutshell · <span class="vi-only">Chương 3 · Lấy mã nguồn nhân</span><span class="en-only" lang="en">Chapter 3 · Retrieving the Kernel Source</span></div>
+  <div class="switch-group mode-switch">
+    <span class="switch-label vi-only">Mức đọc</span><span class="switch-label en-only" lang="en">Level</span>
+    <button class="chip" type="button" data-set-mode="easy" aria-pressed="false"><span class="vi-only">Dễ hiểu</span><span class="en-only" lang="en">Easy</span></button>
+    <button class="chip" type="button" data-set-mode="standard" aria-pressed="true"><span class="vi-only">Tiêu chuẩn</span><span class="en-only" lang="en">Standard</span></button>
+    <button class="chip" type="button" data-set-mode="deep" aria-pressed="false"><span class="vi-only">Đầy đủ</span><span class="en-only" lang="en">Deep</span></button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-set-lang="vi" aria-pressed="true">VI</button>
+    <button class="chip" type="button" data-set-lang="en" aria-pressed="false">EN</button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-toggle-theme aria-pressed="false"><span class="vi-only">Tối</span><span class="en-only" lang="en">Dark</span></button>
+  </div>
+</header>
+
+<nav class="section-rail" aria-label="Mục lục trong trang"><ul class="section-rail__list"></ul></nav>
+
+<main>
+
+<section class="hero" id="lay-ma-nguon" aria-labelledby="lay-ma-nguon-title">
+  <div>
+    <p class="eyebrow"><span class="vi-only">Phần I · Dựng nhân · Chương 3</span><span class="en-only" lang="en">Part I · Building the Kernel · Chapter 3</span></p>
+    <h1 id="lay-ma-nguon-title">
+      <span class="standard-copy">Lấy mã nguồn nhân: chọn cây, chọn nguồn, chọn chỗ để</span>
+      <span class="easy-only">Tải “bản vẽ” của nhân về máy</span>
+      <span class="en-only" lang="en">Retrieving the kernel source: which tree, which server, which directory</span>
+    </h1>
+    <p class="standard-copy">Chương 3 mở đầu bằng một câu tưởng như hiển nhiên nhưng thực ra là một quyết định: <em>khi tự dựng nhân, bạn muốn bản phát hành ổn định mới nhất</em> <span class="cite"><a href="#ref-1">1</a></span>. Greg Kroah-Hartman thừa nhận nhiều bản phân phối có gói mã nguồn nhân riêng, nhưng “hiếm khi là phiên bản mới nhất, tiên tiến nhất”; ưu điểm của chúng là được làm cho tương thích với trình biên dịch và công cụ của chính bản phân phối — điều Chương 2 đã giải thích vì sao quan trọng — nhưng chúng có thể không mang lại chức năng hay hiệu năng bạn muốn <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    <p class="easy-only">Muốn tự làm nhân thì việc đầu tiên là xin “bản vẽ” về: đó là mã nguồn. Ông Greg Kroah-Hartman nói nên lấy bản ổn định mới nhất <span class="cite"><a href="#ref-1">1</a></span>. Bản Linux bạn đang dùng cũng có sẵn mã nguồn, nhưng thường cũ hơn <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: chương này chỉ làm ba việc — chọn bản, tải về, và cất đúng chỗ.</p>
+    <p class="en-only" lang="en">Chapter 3 opens with a sentence that looks obvious but is really a decision: <em>when you're building your own kernel, you want the latest stable release</em> <span class="cite"><a href="#ref-1">1</a></span>. Greg Kroah-Hartman grants that many distributions provide their own packages of kernel sources, but that these “are rarely the most cutting-edge, recent versions”; their advantage is being built to be compatible with the compiler and other tools the distribution provides — Chapter 2 explained why that matters — yet they may not end up providing the functionality or performance you want <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    <p class="deep-only">Hãy để ý câu kết của đoạn mở đầu: “nếu bạn có thể tạo ra môi trường của riêng mình với nhân, trình biên dịch và các công cụ mới nhất, bạn sẽ dựng được đúng thứ bạn muốn” <span class="cite"><a href="#ref-1">1</a></span>. Đây là một sự đánh đổi có cấu trúc, không phải lời khuyên tuỳ hứng: gói của bản phân phối mua sự <em>tương thích đã được kiểm chứng</em> bằng cái giá là <em>độ mới</em>. Chương 3 dạy bạn cách trả giá ngược lại — và vì thế nó đặt ngay sau Chương 2, nơi bạn vừa dựng xong bộ công cụ đủ mới để gánh được cây mã mới.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận điểm chương 3.</b> Chương này chỉ tập trung vào hai việc: <em>xác định nên tải bộ mã nguồn nhân nào</em>, và <em>lấy nó về bằng cách nào</em> <span class="cite"><a href="#ref-1">1</a></span>. Ba bước là chọn cây (ổn định hay phát triển), tải từ mạng máy chủ kernel.org, rồi giải nén vào một thư mục trong thư mục nhà của bạn — chứ không phải vào <code>/usr/src/linux/</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only"><b>Ý chính.</b> Chương này chỉ hỏi hai câu: lấy bản nào, và lấy ở đâu <span class="cite"><a href="#ref-1">1</a></span>. Rồi cất mã nguồn vào một thư mục của riêng bạn <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: chọn bản, tải về, mở ra — đúng ba bước.</p>
+      <p class="en-only" lang="en"><b>Chapter 3 thesis.</b> The chapter focuses on exactly two things: <em>determining which kernel sources to download</em>, and <em>how to obtain them</em> <span class="cite"><a href="#ref-1">1</a></span>. Three steps: choose a tree (stable or development), download from the kernel.org server network, then unpack into a directory inside your own home directory — not into <code>/usr/src/linux/</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: ba bước của chương 3 — chọn cây mã nguồn, tìm nơi tải, và cất mã vào thư mục nhà. Diagram: the three steps of Chapter 3 — choose a tree, find the source, and put it in your home directory.">
+    <div class="core"><span class="vi-only">Mã nguồn trên máy bạn</span><span class="en-only" lang="en">Source on your machine</span></div>
+    <div class="spokes">
+      <div class="node">
+        <b><span class="vi-only">Chọn cây</span><span class="en-only" lang="en">What tree</span></b>
+        <small class="standard-copy">Ổn định để dùng, phát triển để thử nghiệm và phản hồi.</small>
+        <small class="easy-only">Bản chắc chắn để dùng, bản thử nghiệm để nghịch.</small>
+        <small class="en-only" lang="en">Stable to use; development to test and give feedback.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Tìm ở đâu</span><span class="en-only" lang="en">Where to find it</span></b>
+        <small class="standard-copy">Mạng máy chủ gương kernel.org trải khắp thế giới.</small>
+        <small class="easy-only">Trang kernel.org, có máy chủ ở gần bạn.</small>
+        <small class="en-only" lang="en">The worldwide network of kernel.org mirrors.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Cất vào đâu</span><span class="en-only" lang="en">Where it goes</span></b>
+        <small class="standard-copy">Một thư mục <code>linux</code> trong thư mục nhà, quyền người dùng thường.</small>
+        <small class="easy-only">Một thư mục tên <code>linux</code> của riêng bạn.</small>
+        <small class="en-only" lang="en">A <code>linux</code> directory in your home, as a normal user.</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<nav class="chapter-path" aria-label="Lối đi trong chương">
+  <a href="#cay-nao">
+    <span>01</span>
+    <b><span class="standard-copy">Dùng cây nào: ổn định hay phát triển</span><span class="easy-only">Bản chắc hay bản thử</span><span class="en-only" lang="en">What tree to use</span></b>
+  </a>
+  <a href="#tim-o-dau">
+    <span>02</span>
+    <b><span class="standard-copy">Tìm mã nguồn nhân ở đâu</span><span class="easy-only">Tải ở chỗ nào</span><span class="en-only" lang="en">Where to find the kernel source</span></b>
+  </a>
+  <a href="#lam-gi-voi-ma">
+    <span>03</span>
+    <b><span class="standard-copy">Làm gì với bộ mã vừa tải</span><span class="easy-only">Tải về rồi để đâu</span><span class="en-only" lang="en">What to do with the source</span></b>
+  </a>
+  <a href="#tu-kiem">
+    <span>04</span>
+    <b><span class="standard-copy">Tự kiểm trước khi sang chương 4</span><span class="easy-only">Tự hỏi mình vài câu</span><span class="en-only" lang="en">Self-check before Chapter 4</span></b>
+  </a>
+</nav>
+
+<section class="section" id="cay-nao" aria-labelledby="cay-nao-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 01</span><span class="en-only" lang="en">Concept cluster 01</span></p>
+    <h2 id="cay-nao-title">
+      <span class="standard-copy">Dùng cây nào: ổn định, phát triển, và cái chết của quy ước chẵn lẻ</span>
+      <span class="easy-only">Bản chắc chắn hay bản thử nghiệm?</span>
+      <span class="en-only" lang="en">What tree to use: stable, development, and the death of the odd/even rule</span>
+    </h2>
+    <p class="standard-copy">Kroah-Hartman kể lại lịch sử trước khi đưa ra lời khuyên. Trong quá khứ, nhân Linux chỉ tách thành hai cây: nhánh “phát triển” và nhánh “ổn định”. Nhánh phát triển mang số lẻ ở vị trí thứ hai, nhánh ổn định mang số chẵn — ví dụ bản 2.5.25 là nhân phát triển, còn 2.4.25 là bản phát hành ổn định <span class="cite"><a href="#ref-1">1</a></span>. Quy ước ấy gọn gàng đến mức bạn đọc số hiệu là biết mình đang cầm thứ gì.</p>
+    <p class="easy-only">Ngày xưa nhân Linux có hai “dòng”: dòng đang thử nghiệm và dòng đã chắc chắn. Nhìn con số thứ hai là biết: số lẻ là dòng thử, số chẵn là dòng chắc. Ví dụ 2.5.25 là bản thử, 2.4.25 là bản chắc <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: xưa kia con số tự nói cho bạn biết.</p>
+    <p class="en-only" lang="en">Kroah-Hartman gives the history before the advice. In the past, the Linux kernel was split into only two trees: the “development” branch and the “stable” branch. Development carried an odd number in the second position, stable an even one — 2.5.25 was a development kernel, while 2.4.25 was a stable release <span class="cite"><a href="#ref-1">1</a></span>. The convention was tidy enough that the number alone told you what you were holding.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Cây (<span lang="en">tree</span>).</b> Một dòng phát hành của cùng một dự án, có người bảo trì riêng và nhịp phát hành riêng. Với nhân Linux, “chọn cây” nghĩa là chọn giữa: bản bạn <em>dùng</em> được ngay, và bản bạn <em>thử</em> giúp nhà phát triển. Sách khuyên rõ: muốn dùng thì lấy bản phát hành ổn định; muốn giúp thử nghiệm tính năng của bản tới và gửi phản hồi thì lấy bản phát triển <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="easy-only"><b>Cây là gì.</b> Là một “dòng” bản phát hành. Muốn dùng cho việc thật thì lấy dòng ổn định. Muốn nghịch và báo lỗi giúp người làm nhân thì lấy dòng phát triển <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: dùng thật thì chọn dòng ổn định.</p>
+      <p class="en-only" lang="en"><b>Tree.</b> A release line of the same project with its own maintainer and cadence. For the kernel, “choosing a tree” means choosing between the release you can <em>use</em> and the release you <em>test</em> on the developers' behalf. The book is explicit: to just use the latest kernel for your work, use the stable kernel releases; to help test the next release's features and give feedback, use the development release <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">TRƯỚC 2.6: 2.5.x = phát triển (lẻ)<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.4.x = ổn định&nbsp;&nbsp; (chẵn)<br>TỪ 2.6:&nbsp;&nbsp;&nbsp; 2.6.18-rc1 = phát triển<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.6.17.1&nbsp;&nbsp;&nbsp; = sửa lỗi <span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Xưa: số lẻ = bản thử<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;số chẵn = bản chắc<br>Nay: có “-rc” = bản thử<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thêm số đuôi = bản vá lỗi <span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="en-only" lang="en">BEFORE 2.6: 2.5.x = development (odd)<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.4.x = stable&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (even)<br>FROM 2.6:&nbsp;&nbsp;&nbsp; 2.6.18-rc1 = development<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2.6.17.1&nbsp;&nbsp;&nbsp;&nbsp; = bug fixes <span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">odd / even</span>
+      <h3>
+        <span class="standard-copy">Quy ước chẵn lẻ — và lý do nó bị bỏ</span>
+        <span class="easy-only">Số lẻ, số chẵn — và vì sao bỏ</span>
+        <span class="en-only" lang="en">The odd/even convention — and why it was dropped</span>
+      </h3>
+      <p class="standard-copy">Sau khi dòng 2.6 ra đời, các nhà phát triển nhân quyết định từ bỏ cách duy trì hai cây tách biệt, và tuyên bố <em>mọi</em> bản phát hành 2.6 đều được coi là “ổn định”, bất kể việc phát triển đang diễn ra nhanh đến đâu <span class="cite"><a href="#ref-1">1</a></span>. Vài tháng giữa các bản 2.6 lớn là khoảng thời gian để nhà phát triển thêm tính năng mới rồi kịp làm chúng ổn định trước bản kế tiếp <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="easy-only">Từ khi có dòng 2.6, người ta bỏ luôn cách chia hai dòng. Mọi bản 2.6 đều được gọi là “ổn định” <span class="cite"><a href="#ref-1">1</a></span>. Khoảng vài tháng giữa hai bản lớn là lúc thêm tính năng mới rồi sửa cho chắc <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: không còn nhìn số lẻ số chẵn nữa.</p>
+      <p class="en-only" lang="en">After the 2.6 series was created, the kernel developers decided to abandon the method of having two separate trees, and declared that <em>all</em> 2.6 kernel releases would be considered “stable”, no matter how quickly development was happening <span class="cite"><a href="#ref-1">1</a></span>. The few months between major 2.6 releases give developers time to add new features and then stabilise them in time for the next release <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> kernel.org ngày nay xác nhận quy ước cũ đã chết hẳn: các số hiệu lẻ như 2.1, 2.3, 2.5 từng báo hiệu nhân phát triển, nhưng sau 2.6 thì nhân tiền phát hành chỉ được đánh dấu bằng hậu tố <code>-rc</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Bây giờ bản thử nghiệm được gắn chữ <code>-rc</code> ở cuối tên, thế thôi <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: thấy <code>-rc</code> là bản chưa chính thức.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> kernel.org today confirms the old convention is gone for good: odd minor numbers such as 2.1, 2.3 and 2.5 once signalled development kernels, but after 2.6 pre-release kernels are flagged with an <code>-rc</code> suffix instead <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đánh số hôm nay</h4>
+          <p>kernel.org nói thẳng rằng con số đầu tiên không mang ý nghĩa gì: nó được tăng lên “khi con số sau dấu chấm bắt đầu trông quá lớn”, và “thực sự không có lý do nào khác” <span class="cite"><a href="#ref-5">5</a></span>. Vậy nên đừng đọc 2.6 → 3.x → 6.x → 7.x như các thế hệ kiến trúc; chúng chỉ là chỗ ngắt cho dễ nhìn.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao chuyện chẵn lẻ tan rã</h4>
+          <p>Đoạn lịch sử của sách trùng với một biến cố công cụ: dự án nhân dùng BitKeeper từ 2002, quan hệ với công ty làm BitKeeper đổ vỡ năm 2005 và Git ra đời từ đó <span class="cite"><a href="#ref-10">10</a></span>. Khi việc hợp nhất nhánh trở nên rẻ, việc giữ một cây “phát triển” tách biệt hàng năm trời mất phần lớn lý do tồn tại.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">-stable branch</span>
+      <h3>
+        <span class="standard-copy">Nhánh <code>-stable</code> — bản vá cho bản vừa phát hành</span>
+        <span class="easy-only">Bản vá lỗi cho bản mới nhất</span>
+        <span class="en-only" lang="en">The <code>-stable</code> branch — fixes for the release you already have</span>
+      </h3>
+      <p class="standard-copy">Đi kèm với thay đổi trên, một nhánh nhân “<code>-stable</code>” được lập ra, phát hành các bản sửa lỗi và cập nhật bảo mật cho bản nhân vừa ra, trong khoảng thời gian chờ bản 2.6 lớn kế tiếp <span class="cite"><a href="#ref-1">1</a></span>. Ví dụ của chính sách: đội nhân phát hành 2.6.17 như một bản ổn định; sau đó nhà phát triển bắt đầu làm tính năng mới và phát hành các bản <code>-rc</code> để mọi người giúp thử và gỡ lỗi; khi tất cả đồng ý bản phát triển đã đủ ổn định, nó ra đời thành 2.6.18 — cả chu kỳ thường mất khoảng hai đến ba tháng <span class="cite"><a href="#ref-1">1</a></span>. Trong lúc đó, các bản 2.6.17.1, 2.6.17.2… lần lượt xuất hiện với bản vá lỗi và cập nhật bảo mật <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="easy-only">Cùng lúc đó có thêm một nhánh tên <code>-stable</code>, chuyên vá lỗi và vá bảo mật cho bản vừa ra <span class="cite"><a href="#ref-1">1</a></span>. Sách kể ví dụ: ra bản 2.6.17, rồi trong lúc chờ bản 2.6.18 thì lần lượt có 2.6.17.1, 2.6.17.2 để sửa lỗi <span class="cite"><a href="#ref-1">1</a></span>. Cả vòng ấy mất chừng hai tới ba tháng <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: số đuôi thêm vào là bản vá, không phải tính năng mới.</p>
+      <p class="en-only" lang="en">Alongside that change, a “<code>-stable</code>” kernel branch was created, releasing bug fixes and security updates for the past kernel release before the next major 2.6 release happens <span class="cite"><a href="#ref-1">1</a></span>. The book's own example: the kernel team released 2.6.17 as a stable release; developers then began new features and issued <code>-rc</code> versions as development kernels so people could help test and debug the changes; once everyone agreed the development release was stable enough, it shipped as 2.6.18 — the whole cycle usually taking about two to three months <span class="cite"><a href="#ref-1">1</a></span>. Meanwhile 2.6.17.1, 2.6.17.2 and further stable versions appeared, carrying bug fixes and security updates <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Mô hình ấy còn nguyên và đã lớn thêm: kernel.org hiện phân loại bản phát hành thành <span lang="en">prepatch (rc)</span>, <span lang="en">mainline</span>, <span lang="en">stable</span> và <span lang="en">longterm</span>; nhân mainline mới ra mỗi 9–10 tuần, còn bản vá stable ra “khi cần, thường là mỗi tuần một lần” <span class="cite"><a href="#ref-5">5</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Bây giờ có bốn loại: rc, mainline, stable và longterm. Bản lớn ra mỗi 9–10 tuần, bản vá thường mỗi tuần <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: nhịp thì đổi, cách làm thì vẫn vậy.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The model survived and grew: kernel.org now sorts releases into <span lang="en">prepatch (rc)</span>, <span lang="en">mainline</span>, <span lang="en">stable</span> and <span lang="en">longterm</span>; new mainline kernels appear every 9–10 weeks, and stable updates come “on as-needed basis, usually once a week” <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bậc “longterm” mà sách chưa có</h4>
+          <p>Năm 2006 chỉ có stable ngắn hạn. Ngày nay kernel.org duy trì thêm một tầng <span lang="en">longterm</span>: nhiều cây cũ được giữ sống để lùi bản vá về, hiện là các dòng 6.18, 6.12, 6.6, 6.1, 5.15 và 5.10, do chính Greg Kroah-Hartman cùng Sasha Levin bảo trì <span class="cite"><a href="#ref-5">5</a></span>. Tác giả cuốn sách này, nói cách khác, vẫn đang vận hành đúng cái cơ chế ông mô tả ở trang 12.</p>
+        </div>
+        <div class="info-block">
+          <h4>Một ghi chú về con số</h4>
+          <p>Mọi số hiệu trong chương — 2.4.25, 2.5.25, 2.6.17, 2.6.18-rc1 — đều là ví dụ của năm 2006, không phải chỉ dẫn để gõ hôm nay. Tại thời điểm truy cập 22-09-2026, kernel.org công bố bản ổn định mới nhất là 7.2.7 và mainline là 7.3-rc4 <span class="cite"><a href="#ref-6">6</a></span>. Hãy đọc chương này như một <em>mô hình</em>, rồi thay số bằng dữ liệu hiện hành.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Đã chọn được loại cây, câu hỏi kế tiếp thuần túy hậu cần: bộ mã ấy nằm trên máy chủ nào, và làm sao kéo nó về mà không phụ thuộc vào trình duyệt? Sách trả lời bằng một mạng lưới máy chủ gương và hai lệnh dòng lệnh.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Biết lấy bản nào rồi, giờ hỏi: lấy ở đâu? Nhớ nhé: câu trả lời là kernel.org, và hai câu lệnh ngắn.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> With the kind of tree settled, the next question is pure logistics: which server holds the code, and how do you pull it down without depending on a browser? The book answers with a mirror network and two command-line tools.</p>
+  </aside>
+</section>
+
+<section class="section" id="tim-o-dau" aria-labelledby="tim-o-dau-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 02</span><span class="en-only" lang="en">Concept cluster 02</span></p>
+    <h2 id="tim-o-dau-title">
+      <span class="standard-copy">Tìm mã nguồn ở đâu: một mạng lưới, không phải một máy chủ</span>
+      <span class="easy-only">Tải ở đâu: kernel.org</span>
+      <span class="en-only" lang="en">Where to find the source: a network, not a server</span>
+    </h2>
+    <p class="standard-copy">Toàn bộ mã nguồn của nhân Linux có thể tìm thấy trên một trong các site kernel.org — một mạng lưới máy chủ toàn cầu nhân bản mã nguồn Linux, để bất cứ ai cũng tìm được một máy chủ ở gần mình <span class="cite"><a href="#ref-2">2</a></span>. Kroah-Hartman giải thích lợi ích kép: các máy chủ nhân chính nhờ đó chỉ phải phục vụ các site gương và giữ được độ phản hồi, còn người dùng thì tải được tệp cần thiết nhanh nhất có thể <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    <p class="easy-only">Mã nguồn nhân nằm ở kernel.org. Đó không phải một máy chủ duy nhất, mà là nhiều máy chủ giống hệt nhau đặt khắp thế giới, để ai cũng có một máy ở gần <span class="cite"><a href="#ref-2">2</a></span>. Nhờ vậy máy chủ chính đỡ quá tải và bạn tải nhanh hơn <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: gần hơn thì nhanh hơn.</p>
+    <p class="en-only" lang="en">All of the source code for the Linux kernel can be found on one of the kernel.org sites — a worldwide network of servers that mirror the Linux source code, enabling anyone to find a local server close to them <span class="cite"><a href="#ref-2">2</a></span>. Kroah-Hartman spells out the double benefit: the main kernel servers stay responsive by serving the mirror sites, and users download the needed files as quickly as possible <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    <p class="deep-only">Về mặt kiến trúc, đây là một quyết định chống tập trung được đưa ra từ rất sớm, và nó vẫn định hình cách bạn lấy nhân hôm nay. Khác biệt là lớp phân phối đã đổi: thay cho danh sách máy gương thủ công, kernel.org hiện phục vụ tệp nén qua <code>cdn.kernel.org</code>, đồng thời mở HTTP, GIT và RSYNC làm ba giao thức truy cập song song <span class="cite"><a href="#ref-6">6</a></span>. Ý tưởng “tìm bản sao gần bạn” không mất đi — nó chỉ chuyển xuống dưới lớp tên miền.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Site gương (<span lang="en">mirror</span>).</b> Một máy chủ giữ bản sao đầy đủ của kho mã nguồn chính, đồng bộ định kỳ. Bạn tải từ gương gần nhất thay vì dồn tải lên máy chủ gốc. Sách mô tả kernel.org đúng như thế: “một mạng lưới máy chủ toàn cầu nhân bản mã nguồn Linux” <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only"><b>Máy chủ gương là gì.</b> Là bản sao của kho mã nguồn, đặt ở nhiều nơi cho gần người dùng <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: bạn tải từ bản sao gần nhất, không phải từ một chỗ duy nhất.</p>
+      <p class="en-only" lang="en"><b>Mirror.</b> A server holding a complete, periodically synchronised copy of the main archive. You download from the nearest one instead of piling load onto the origin. The book describes kernel.org in exactly those terms: “a worldwide network of servers that mirror the Linux source code” <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy"># ví dụ của sách (2006, lịch sử)<br>$ wget http://www.kernel.org/pub/\<br>&nbsp;&nbsp;&nbsp;linux/kernel/v2.6/\<br>&nbsp;&nbsp;&nbsp;linux-2.6.17.8.tar.gz<br># → 51.707.742 byte (49M) <span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"># cách sách tải file về<br>$ wget &lt;địa chỉ file nhân&gt;<br># file nặng khoảng 49 MB <span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="en-only" lang="en"># the book's example (2006, historical)<br>$ wget http://www.kernel.org/pub/\<br>&nbsp;&nbsp;&nbsp;linux/kernel/v2.6/\<br>&nbsp;&nbsp;&nbsp;linux-2.6.17.8.tar.gz<br># → 51,707,742 bytes (49M) <span class="cite"><a href="#ref-2">2</a></span></p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">wget / curl</span>
+      <h3>
+        <span class="standard-copy">Tải từ dòng lệnh — <code>wget</code> và <code>curl</code></span>
+        <span class="easy-only">Tải bằng câu lệnh, không cần trình duyệt</span>
+        <span class="en-only" lang="en">Downloading from the command line — <code>wget</code> and <code>curl</code></span>
+      </h3>
+      <p class="standard-copy">Sách chỉ đường qua giao diện web trước — trên trang kernel.org chính, bấm ký tự <code>F</code> trên dòng của phiên bản nhân để tải toàn bộ cây mã nguồn, hoặc điều hướng vào thư mục con của các bản 2.6 <span class="cite"><a href="#ref-2">2</a></span> — rồi lập tức đưa ra cách dùng được lâu hơn: tải từ dòng lệnh bằng <code>wget</code> hoặc <code>curl</code>, hai tiện ích mà bản phân phối nào cũng có sẵn <span class="cite"><a href="#ref-2">2</a></span>. Bản ghi phiên làm việc trong sách cho thấy tệp <code>linux-2.6.17.8.tar.gz</code> nặng 51.707.742 byte, tức khoảng 49 MB <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Có thể bấm tải trên trang web <span class="cite"><a href="#ref-2">2</a></span>, nhưng sách khuyên dùng câu lệnh <code>wget</code> hoặc <code>curl</code> — hai lệnh có sẵn trong mọi bản Linux <span class="cite"><a href="#ref-2">2</a></span>. Tệp nhân trong ví dụ nặng khoảng 49 MB <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: gõ lệnh thì lặp lại được, bấm chuột thì không.</p>
+      <p class="en-only" lang="en">The book routes you through the web interface first — on the main kernel.org site, click the <code>F</code> character on the line for the kernel version to download the full source tree, or navigate to the subdirectory for the 2.6 kernel versions <span class="cite"><a href="#ref-2">2</a></span> — then immediately offers the longer-lived method: download from the command line using the <code>wget</code> or <code>curl</code> utilities, both of which should come with your Linux distribution <span class="cite"><a href="#ref-2">2</a></span>. The session transcript shows <code>linux-2.6.17.8.tar.gz</code> weighing in at 51,707,742 bytes, roughly 49 MB <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Đường dẫn cụ thể trong sách thuộc về năm 2006 và không còn là cách làm hiện hành. Hôm nay kernel.org phát tệp <code>.tar.xz</code> qua <code>cdn.kernel.org</code>, kèm tệp chữ ký <code>.tar.sign</code>, bản vá đầy đủ và bản vá tăng dần cho mỗi bản phát hành <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Địa chỉ trong sách là của năm 2006. Bây giờ tệp có đuôi <code>.tar.xz</code> và đi kèm một tệp chữ ký <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: cách làm giữ nguyên, địa chỉ thì phải tra lại.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The exact URL in the book belongs to 2006 and is no longer current practice. Today kernel.org serves <code>.tar.xz</code> archives from <code>cdn.kernel.org</code>, each with a <code>.tar.sign</code> signature file, a full patch and an incremental patch <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bước sách chưa có: xác minh chữ ký</h4>
+          <p>kernel.org hướng dẫn tải kèm tệp <code>.tar.sign</code>, giải nén rồi kiểm chữ ký: <code>unxz linux-x.y.z.tar.xz</code> sau đó <code>gpg2 --verify linux-x.y.z.tar.sign</code>. Chữ ký được ký trên tệp <code>.tar</code> chưa nén để “chỉ cần một chữ ký cho cả bản <code>.gz</code> lẫn <code>.xz</code>” <span class="cite"><a href="#ref-7">7</a></span>. Thiếu khoá thì lấy bằng <code>gpg2 --locate-keys torvalds@kernel.org gregkh@kernel.org</code> <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Lối đi thứ hai: lấy bằng <span lang="en">git</span></h4>
+          <p>Tài liệu nhân hiện hành khuyến nghị nhân bản nông cây stable thay vì tải tệp nén: <code>git clone --depth 1 -b master https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git ~/linux/</code>, vì kho này cho truy cập cả mainline lẫn các dòng stable <span class="cite"><a href="#ref-8">8</a></span>. Cần lùi xa hơn thì dùng <code>git fetch --shallow-exclude=</code>… — tài liệu cảnh báo luôn phải giới hạn, nếu không sẽ kéo gần như toàn bộ lịch sử và “gây áp lực lên máy chủ” <span class="cite"><a href="#ref-8">8</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">finger_banner</span>
+      <h3>
+        <span class="standard-copy">Biết bản mới nhất là bản nào — một tệp văn bản</span>
+        <span class="easy-only">Làm sao biết bản mới nhất?</span>
+        <span class="en-only" lang="en">Knowing which version is newest — one text file</span>
+      </h3>
+      <p class="standard-copy">Để biết nhanh và gọn các phiên bản nhân mới nhất, sách chỉ tới thông tin sẵn có tại <code>kernel.org/kdist/finger_banner</code> <span class="cite"><a href="#ref-2">2</a></span>. Đây là chi tiết nhỏ nhưng nói lên văn hoá của dự án: câu trả lời cho “bản mới nhất là gì” được phát ra dưới dạng văn bản thuần, đọc được bằng mắt lẫn bằng script, chứ không phải một trang cần trình duyệt.</p>
+        <p class="easy-only">Muốn biết bản nào mới nhất, sách chỉ tới một trang văn bản đơn giản trên kernel.org <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: câu trả lời nằm trong một tệp chữ, không cần mở trình duyệt.</p>
+      <p class="en-only" lang="en">For a quick and easy way to determine the latest kernel versions, the book points to the information available at <code>kernel.org/kdist/finger_banner</code> <span class="cite"><a href="#ref-2">2</a></span>. It is a small detail that says a lot about the project's culture: the answer to “what is newest?” is published as plain text, readable by eye and by script alike, not as a page that needs a browser.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Tệp ấy vẫn sống, chỉ chuyển chỗ: đường dẫn cũ nay chuyển hướng sang <code>kernel.org/finger_banner</code>, và cùng dữ liệu đó còn được phát dưới dạng máy đọc tại <code>kernel.org/releases.json</code> <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Tệp đó vẫn còn, chỉ đổi địa chỉ, và nay có thêm bản dạng JSON cho máy đọc <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: ý tưởng sống lâu hơn đường dẫn.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The file is still alive, merely moved: the old path now redirects to <code>kernel.org/finger_banner</code>, and the same data is published in machine-readable form at <code>kernel.org/releases.json</code> <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Tệp nén đã nằm trên đĩa. Phần cuối chương trả lời câu hỏi mà người mới hay bỏ qua — và là câu hỏi quyết định việc biên dịch về sau có trơn tru hay không: <em>để nó ở đâu?</em></p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Tải xong rồi. Giờ tới câu hỏi dễ bị coi nhẹ: cất ở đâu? Nhớ nhé: cất sai chỗ là rắc rối về sau.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> The archive is on disk. The last part of the chapter answers the question beginners skip — and the one that decides whether the build later goes smoothly: <em>where does it go?</em></p>
+  </aside>
+</section>
+
+<section class="section" id="lam-gi-voi-ma" aria-labelledby="lam-gi-voi-ma-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 03</span><span class="en-only" lang="en">Concept cluster 03</span></p>
+    <h2 id="lam-gi-voi-ma-title">
+      <span class="standard-copy">Làm gì với bộ mã: bốn lệnh và một nguyên tắc</span>
+      <span class="easy-only">Tải về rồi làm gì tiếp</span>
+      <span class="en-only" lang="en">What to do with the source: four commands and one principle</span>
+    </h2>
+    <p class="standard-copy">“Giờ bạn đã tải đúng bộ mã nguồn nhân, nó được đặt ở đâu?” — Kroah-Hartman đặt câu hỏi rồi trả lời ngay: nên tạo một thư mục cục bộ trong thư mục nhà của bạn, đặt tên là <code>linux</code>, để chứa toàn bộ các tệp mã nguồn nhân khác nhau <span class="cite"><a href="#ref-3">3</a></span>. Bốn lệnh của ông ngắn đến mức dễ bị coi thường: <code>mkdir ~/linux</code>, chuyển tệp nén vào đó, <code>cd ~/linux</code>, rồi <code>tar -xzvf linux-2.6.17.8.tar.gz</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+    <p class="easy-only">Tải xong rồi để đâu? Ông bảo: tạo một thư mục tên <code>linux</code> ngay trong thư mục nhà của bạn, rồi chuyển tệp vào đó và mở ra <span class="cite"><a href="#ref-3">3</a></span>. Bốn lệnh thôi: tạo thư mục, chuyển tệp, đi vào, giải nén <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: một thư mục riêng cho tất cả các bản nhân bạn tải.</p>
+    <p class="en-only" lang="en">“Now that you have downloaded the proper kernel source, where is it supposed to go?” — Kroah-Hartman asks, then answers at once: create a local directory in your home directory called <code>linux</code> to hold all of the different kernel source files <span class="cite"><a href="#ref-3">3</a></span>. His four commands are short enough to be underrated: <code>mkdir ~/linux</code>, move the archive into it, <code>cd ~/linux</code>, then <code>tar -xzvf linux-2.6.17.8.tar.gz</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+    <p class="deep-only">Đáng chú ý là hình ảnh cuối chương: sau khi giải nén, trong <code>~/linux/</code> có <em>cả hai</em> — tệp nén gốc và thư mục vừa bung ra <span class="cite"><a href="#ref-3">3</a></span>. Ông không bảo bạn xoá tệp nén, và điều đó nhất quán với lý do đặt tên thư mục là “chứa tất cả các tệp mã nguồn nhân khác nhau” <span class="cite"><a href="#ref-3">3</a></span>: <code>~/linux</code> là một kho lưu trữ nhiều phiên bản song song, không phải một chỗ làm việc dùng một lần. Thói quen ấy trả công ở Chương 4, khi bạn cần so cấu hình giữa hai bản nhân.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Thư mục nhà (<span lang="en">home directory</span>).</b> Nơi tài khoản người dùng thường của bạn có toàn quyền ghi mà không cần <code>root</code>. Đặt cây mã ở đây không phải chuyện thẩm mỹ: nó là điều kiện để cả quy trình tải, cấu hình và biên dịch chạy được bằng quyền người dùng thường, đúng quy tắc an toàn của Chương 1 <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only"><b>Thư mục nhà là gì.</b> Là thư mục riêng của bạn, nơi bạn được phép ghi mà không cần quyền quản trị. Để mã nguồn ở đó thì mọi bước đều làm bằng tài khoản thường <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: làm trong nhà mình thì không cần xin phép ai.</p>
+      <p class="en-only" lang="en"><b>Home directory.</b> The place your ordinary user account can write to without <code>root</code>. Putting the tree here is not cosmetic: it is what lets the whole download-configure-build sequence run as a normal user, exactly as Chapter 1's safety rule requires <span class="cite"><a href="#ref-4">4</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">$ mkdir ~/linux<br>$ mv ~/linux-2.6.17.8.tar.gz ~/linux/<br>$ cd ~/linux<br>$ tar -xzvf linux-2.6.17.8.tar.gz<br># → linux-2.6.17.8.tar.gz + linux-2.6.17.8/ <span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only">$ mkdir ~/linux&nbsp;&nbsp;&nbsp; # tạo thư mục<br>$ mv ... ~/linux/&nbsp; # chuyển tệp vào<br>$ cd ~/linux&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; # đi vào<br>$ tar -xzvf ...&nbsp;&nbsp;&nbsp; # mở tệp ra <span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="en-only" lang="en">$ mkdir ~/linux<br>$ mv ~/linux-2.6.17.8.tar.gz ~/linux/<br>$ cd ~/linux<br>$ tar -xzvf linux-2.6.17.8.tar.gz<br># → linux-2.6.17.8.tar.gz + linux-2.6.17.8/ <span class="cite"><a href="#ref-3">3</a></span></p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">~/linux</span>
+      <h3>
+        <span class="standard-copy">Một thư mục cho mọi phiên bản</span>
+        <span class="easy-only">Một chỗ cất cho tất cả</span>
+        <span class="en-only" lang="en">One directory for every version</span>
+      </h3>
+      <p class="standard-copy">Lời khuyên là tạo <code>~/linux</code> để “chứa tất cả các tệp mã nguồn nhân khác nhau” <span class="cite"><a href="#ref-3">3</a></span> — số nhiều là cố ý. Mỗi bản nhân bạn tải về sẽ bung ra thành một thư mục riêng mang tên phiên bản, nên nhiều phiên bản cùng tồn tại cạnh nhau mà không giẫm lên nhau. Sau lệnh <code>tar</code>, màn hình đầy tên tệp đang được giải nén, và trong <code>linux/</code> bạn còn lại tệp nén cùng thư mục <code>linux-2.6.17.8/</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Tạo một thư mục <code>~/linux</code> để cất mọi bản nhân bạn tải <span class="cite"><a href="#ref-3">3</a></span>. Mỗi bản mở ra thành một thư mục riêng mang tên phiên bản, nên không lẫn vào nhau <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: mỗi bản một ngăn, không chồng lên nhau.</p>
+      <p class="en-only" lang="en">The advice is to create <code>~/linux</code> to “hold all of the different kernel source files” <span class="cite"><a href="#ref-3">3</a></span> — the plural is deliberate. Each kernel you download unpacks into its own version-named directory, so several versions coexist without overwriting one another. After the <code>tar</code> command, the screen fills with the files being uncompressed, and <code>linux/</code> is left holding both the archive and a <code>linux-2.6.17.8/</code> directory <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Tài liệu nhân hiện hành giữ nguyên lời khuyên này: hãy đặt tệp nén “vào một thư mục bạn có quyền (ví dụ thư mục nhà của bạn) rồi giải nén”, với lệnh cập nhật cho định dạng <code>xz</code>: <code>xz -cd linux-6.x.tar.xz | tar xvf -</code> <span class="cite"><a href="#ref-9">9</a></span>. Tài liệu <span lang="en">git</span> cũng nhân bản thẳng vào <code>~/linux/</code> <span class="cite"><a href="#ref-8">8</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Tài liệu nhân ngày nay vẫn bảo để mã nguồn trong thư mục nhà rồi giải nén <span class="cite"><a href="#ref-9">9</a></span>, và lệnh <span lang="en">git</span> cũng tải thẳng vào <code>~/linux/</code> <span class="cite"><a href="#ref-8">8</a></span>. Nhớ nhé: hai mươi năm sau, lời khuyên vẫn thế.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Current kernel documentation keeps the same advice: put the tarball “in a directory where you have permissions (e.g. your home directory) and unpack it”, with the command updated for <code>xz</code>: <code>xz -cd linux-6.x.tar.xz | tar xvf -</code> <span class="cite"><a href="#ref-9">9</a></span>. The git instructions clone straight into <code>~/linux/</code> too <span class="cite"><a href="#ref-8">8</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao không phải <code>/usr/src/linux</code></h4>
+          <p>Chương 1 đã cấm dùng <code>/usr/src/linux/</code>, và tài liệu nhân hiện hành nói còn gắt hơn: “Do NOT use the <code>/usr/src/linux</code> area!” — vì nơi đó giữ một tập tệp tiêu đề nhân (thường không đầy đủ) mà các tệp tiêu đề thư viện dựa vào, và chúng phải khớp với thư viện chứ không phải với nhân hiện tại <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4><code>-xzvf</code> tách ra là gì</h4>
+          <p>Bốn chữ cái trong lệnh của sách: <code>x</code> bung ra, <code>z</code> giải nén gzip, <code>v</code> in tên từng tệp — chính là “màn hình đầy tệp” mà ông mô tả — và <code>f</code> chỉ tên tệp nén <span class="cite"><a href="#ref-3">3</a></span>. Tệp ngày nay nén bằng <code>xz</code> chứ không phải <code>gzip</code>, nên <code>z</code> được thay bằng đường ống <code>xz -cd … | tar xvf -</code> <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">latest stable release</span>
+      <h3>
+        <span class="standard-copy">Giả định của cả phần còn lại cuốn sách</span>
+        <span class="easy-only">Giả định cho các chương sau</span>
+        <span class="en-only" lang="en">The assumption the rest of the book runs on</span>
+      </h3>
+      <p class="standard-copy">Cuối phần chọn cây, tác giả chốt một giả định làm việc: “cho mục đích của chương này, chúng ta sẽ giả định rằng bạn đang dùng một bản phát hành nhân ổn định” <span class="cite"><a href="#ref-1">1</a></span>. Câu ấy nhỏ nhưng ràng buộc mọi chương sau: các bước cấu hình, biên dịch và cài đặt ở Chương 4 trở đi đều được viết cho một cây ổn định đã giải nén trong thư mục nhà của bạn.</p>
+      <p class="easy-only">Tác giả chốt: từ đây trở đi, coi như bạn đang dùng bản ổn định <span class="cite"><a href="#ref-1">1</a></span>. Các chương sau đều dựa trên giả định đó. Nhớ nhé: nếu bạn chọn bản thử nghiệm, hãy tự biết mình đang đi lệch một chút.</p>
+      <p class="en-only" lang="en">At the end of the tree discussion the author fixes a working assumption: “for the purpose of this chapter, we will assume that you are using a stable kernel release” <span class="cite"><a href="#ref-1">1</a></span>. It is a small sentence that binds every later chapter: the configure, build and install steps from Chapter 4 onward are written for a stable tree already unpacked in your home directory.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Nếu hôm nay bạn muốn bám sát giả định ấy, hãy đọc dòng “stable” hoặc một dòng “longterm” trên kernel.org thay vì mainline — tại thời điểm truy cập 22-09-2026 đó là 7.2.7, hoặc các dòng longterm 6.18, 6.12, 6.6, 6.1, 5.15, 5.10 <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Trên kernel.org, chọn dòng ghi “stable” hoặc “longterm”, đừng chọn dòng có chữ <code>-rc</code> <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: nhìn nhãn, đừng nhìn con số to nhất.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> To hold to that assumption today, read the “stable” line or a “longterm” line on kernel.org rather than mainline — as accessed on 22 Sep 2026 that means 7.2.7, or the longterm series 6.18, 6.12, 6.6, 6.1, 5.15 and 5.10 <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      </div>
+    </li>
+  </ol>
+
+  <div class="trap-comparison deep-only">
+    <p class="eyebrow"><span class="vi-only">Ba hiểu lầm thường gặp</span><span class="en-only" lang="en">Three common misconceptions</span></p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Số chẵn là ổn định, số lẻ là thử nghiệm”</span><span class="en-only" lang="en">“Even means stable, odd means development”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> quy tắc chẵn lẻ vẫn dùng được để đọc số hiệu nhân. <span class="fact">Thực tế:</span> chính chương này ghi lại thời điểm quy tắc ấy bị bỏ — từ dòng 2.6, mọi bản phát hành đều được coi là ổn định <span class="cite"><a href="#ref-1">1</a></span>; kernel.org xác nhận nhân tiền phát hành nay chỉ mang hậu tố <code>-rc</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> the odd/even rule still helps you read a kernel version. <span class="fact">Fact:</span> this very chapter records the moment it was abandoned — from the 2.6 series on, all releases are considered stable <span class="cite"><a href="#ref-1">1</a></span>; kernel.org confirms pre-release kernels now carry only an <code>-rc</code> suffix <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Gói mã nguồn của bản phân phối là được rồi”</span><span class="en-only" lang="en">“The distribution's source package is good enough”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> tải mã nguồn từ bản phân phối là tương đương. <span class="fact">Thực tế:</span> ông nói rõ các gói ấy “hiếm khi là phiên bản mới nhất, tiên tiến nhất”; chúng đổi độ mới lấy sự tương thích với công cụ của bản phân phối, và có thể không cho bạn chức năng hay hiệu năng bạn muốn <span class="cite"><a href="#ref-1">1</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> pulling the source from your distribution is equivalent. <span class="fact">Fact:</span> he states plainly that those packages “are rarely the most cutting-edge, recent versions”; they trade recency for compatibility with the distribution's tools, and may not end up providing the functionality or performance you want <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Mã nguồn nhân thì phải nằm trong <code>/usr/src</code>”</span><span class="en-only" lang="en">“Kernel source belongs in <code>/usr/src</code>”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> đó là chỗ “đúng chuẩn” cho mã nguồn nhân. <span class="fact">Thực tế:</span> sách đưa mã nguồn vào <code>~/linux</code> <span class="cite"><a href="#ref-3">3</a></span>, và tài liệu nhân hiện hành cấm thẳng: “Do NOT use the <code>/usr/src/linux</code> area!”, vì các tệp tiêu đề ở đó phải khớp với thư viện hệ thống <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> that is the “proper” home for kernel source. <span class="fact">Fact:</span> the book puts it in <code>~/linux</code> <span class="cite"><a href="#ref-3">3</a></span>, and current kernel documentation forbids the alternative outright: “Do NOT use the <code>/usr/src/linux</code> area!”, because the headers there must stay matched to the system library <span class="cite"><a href="#ref-9">9</a></span>.</p>
+      </div>
+    </div>
+  </div>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Bạn đã có một cây mã nguồn đã giải nén, nằm trong thư mục bạn sở hữu, thuộc dòng ổn định. Đó chính xác là điểm xuất phát mà Chương 4 giả định khi bắt đầu nói về cấu hình và biên dịch.</p>
+    <p class="easy-only"><b>Nối sang chương sau.</b> Giờ bạn đã có mã nguồn mở sẵn trong thư mục của mình. Chương 4 sẽ dạy cách chỉnh và biên dịch nó. Nhớ nhé: có bản vẽ rồi, tiếp theo là chọn xem lắp những gì.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> You now have an unpacked source tree, in a directory you own, from the stable line. That is precisely the starting point Chapter 4 assumes when it opens on configuring and building.</p>
+  </aside>
+</section>
+
+<section class="section" id="tu-kiem" aria-labelledby="tu-kiem-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Tự kiểm</span><span class="en-only" lang="en">Self-check</span></p>
+    <h2 id="tu-kiem-title">
+      <span class="standard-copy">Tự kiểm trước khi sang chương 4</span>
+      <span class="easy-only">Tự hỏi mình vài câu</span>
+      <span class="en-only" lang="en">Self-check before Chapter 4</span>
+    </h2>
+  </div>
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Chương 3 là chương đầu tiên có lệnh để gõ. Trước khi sang phần cấu hình, hãy chắc rằng bạn trả lời được những câu sau bằng chính trạng thái máy mình — chứ không chỉ bằng trí nhớ về trang sách.</p>
+      <p class="easy-only">Chương này là chương đầu tiên có câu lệnh thật. Trước khi đi tiếp, hãy kiểm tra lại trên máy mình. Nhớ nhé: làm được mới tính, đọc xong chưa tính.</p>
+      <p class="en-only" lang="en">Chapter 3 is the first chapter with commands to type. Before moving on to configuration, make sure you can answer the following from the actual state of your machine — not just from your memory of the page.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>Bạn nói được mình đang dùng cây nào, và vì sao lại chọn cây đó?
+        <p class="deep-only">Mặc định của sách là bản phát hành ổn định; bản phát triển chỉ dành cho người muốn giúp thử nghiệm và gửi phản hồi <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </li>
+      <li>Bạn giải thích được vì sao “2.4.25 ổn định, 2.5.25 phát triển” là một quy ước <em>lịch sử</em>, không phải quy tắc hiện hành?
+        <p class="deep-only">Quy ước bị bỏ từ dòng 2.6 <span class="cite"><a href="#ref-1">1</a></span>; hôm nay dấu hiệu duy nhất của bản tiền phát hành là hậu tố <code>-rc</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      </li>
+      <li>Bạn phân biệt được bản vá dạng 2.6.17.1 với bản phát hành lớn 2.6.18?
+        <p class="deep-only">Số đuôi là nhánh <code>-stable</code>: chỉ sửa lỗi và cập nhật bảo mật, không thêm tính năng <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </li>
+      <li>Bạn tải được bộ mã nguồn bằng dòng lệnh, không cần trình duyệt?
+        <p class="deep-only">Sách dùng <code>wget</code> hoặc <code>curl</code> <span class="cite"><a href="#ref-2">2</a></span>; hôm nay nên tải kèm tệp <code>.tar.sign</code> và kiểm bằng <code>gpg2 --verify</code> <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </li>
+      <li>Cây mã nguồn của bạn có đang nằm trong thư mục nhà, thuộc sở hữu tài khoản thường, và <em>không</em> nằm ở <code>/usr/src/linux</code>?
+        <p class="deep-only">Đây là điểm giao của chương 1 và chương 3: vị trí thư mục chính là thứ giữ cho toàn bộ quy trình chạy không cần <code>root</code> <span class="cite"><a href="#ref-4">4</a></span><span class="cite"><a href="#ref-9">9</a></span>.</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li>Bạn đang dùng bản ổn định hay bản thử nghiệm?</li>
+      <li>Vì sao bây giờ không còn nhìn số chẵn lẻ để đoán nữa?</li>
+      <li>Số thêm ở đuôi, ví dụ 2.6.17.1, nghĩa là gì?</li>
+      <li>Bạn tải được tệp nhân bằng câu lệnh chưa?</li>
+      <li>Nhớ nhé: mã nguồn phải nằm trong thư mục nhà của bạn, không phải trong <code>/usr/src</code>.</li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>Can you say which tree you are on, and why you chose it?
+        <p class="deep-only" lang="en">The book's default is a stable release; the development release is for people who want to help test and give feedback <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </li>
+      <li>Can you explain why “2.4.25 stable, 2.5.25 development” is a <em>historical</em> convention rather than a current rule?
+        <p class="deep-only" lang="en">It was abandoned with the 2.6 series <span class="cite"><a href="#ref-1">1</a></span>; today the only marker of a pre-release is the <code>-rc</code> suffix <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      </li>
+      <li>Can you tell a 2.6.17.1 fix release apart from a major 2.6.18 release?
+        <p class="deep-only" lang="en">The extra digit is the <code>-stable</code> branch: bug fixes and security updates only, no new features <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </li>
+      <li>Can you fetch the source from the command line, with no browser?
+        <p class="deep-only" lang="en">The book uses <code>wget</code> or <code>curl</code> <span class="cite"><a href="#ref-2">2</a></span>; today also fetch the <code>.tar.sign</code> file and check it with <code>gpg2 --verify</code> <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </li>
+      <li>Is your source tree inside your home directory, owned by your normal account, and <em>not</em> in <code>/usr/src/linux</code>?</li>
+    </ol>
+  </div>
+</section>
+
+<section class="closing" id="dong-lai" aria-labelledby="dong-lai-title">
+  <p class="eyebrow" id="dong-lai-title"><span class="vi-only">Đọng lại</span><span class="en-only" lang="en">What remains</span></p>
+  <blockquote>
+    <p class="standard-copy">Chương ngắn nhất của Phần I lại là chương quyết định nhiều nhất: <span class="closing-accent">khi tự dựng nhân, bạn muốn bản phát hành ổn định mới nhất</span> — không phải bản mới nhất nói chung, cũng không phải bản tiện tay nhất. Và nơi bạn đặt nó, <span class="closing-accent">một thư mục trong nhà mình</span>, đã quyết định trước rằng toàn bộ việc còn lại sẽ làm bằng quyền người dùng thường.</p>
+    <p class="easy-only">Chương này ngắn nhưng quan trọng: <span class="closing-accent">lấy bản ổn định mới nhất</span>, và <span class="closing-accent">cất vào thư mục nhà của bạn</span>. Nhớ nhé: chọn đúng bản, để đúng chỗ, rồi mới tới chuyện lắp ráp.</p>
+    <p class="en-only" lang="en">The shortest chapter in Part I decides the most: <span class="closing-accent">when you're building your own kernel, you want the latest stable release</span> — not the newest thing in general, nor the most convenient thing to hand. And where you put it, <span class="closing-accent">a directory inside your own home</span>, has already decided that everything remaining will be done as a normal user.</p>
+  </blockquote>
+</section>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-2-requirements.html">
+    <span class="nav-label">◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span></span>
+    <span class="nav-title"><span class="vi-only">Chương 2 · Yêu cầu để dựng và dùng nhân</span><span class="en-only" lang="en">Chapter 2 · Requirements for Building and Using the Kernel</span></span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-4-configuring-building.html">
+    <span class="nav-label"><span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶</span>
+    <span class="nav-title"><span class="vi-only">Chương 4 · Cấu hình và biên dịch</span><span class="en-only" lang="en">Chapter 4 · Configuring and Building</span></span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chương 3, “Retrieving the Kernel Source”, trang 12–16 (các mục “What Tree to Use”, “Where to Find the Kernel Source”, “What to Do with the Source”). Trang này là <b>người đồng hành diễn giải</b>, không phải bản dịch: nó tóm lược, sắp xếp lại và chú giải nội dung chương, không thay thế việc đọc sách gốc. Các ví dụ và phép so sánh ở mức đọc <i>Dễ hiểu</i> là minh họa do trang này thêm vào, không có trong sách. Sách xuất bản năm 2006 và viết cho dòng nhân 2.6; mọi số hiệu phiên bản, địa chỉ tải và quy ước đánh số trong chương đều thuộc về thời điểm đó — các ghi chú về tình hình hiện nay đều được dẫn nguồn riêng.</p>
+    <p class="en-only" lang="en"><b>Primary source.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chapter 3, “Retrieving the Kernel Source”, pages 12–16 (“What Tree to Use”, “Where to Find the Kernel Source”, “What to Do with the Source”). This page is an <b>interpretive study companion</b>, not a translation: it summarises, rearranges and annotates the chapter, and does not replace reading the book itself. Examples and analogies at the <i>Easy</i> reading level are illustrations added here, not the author's. The book was published in 2006 and targets the 2.6 kernel series; every version number, download URL and numbering convention in the chapter belongs to that moment — notes about the present day each carry their own citation.</p>
+
+    <p class="footer-label vi-only">Tham chiếu</p>
+    <p class="footer-label en-only" lang="en">References</p>
+    <ol class="ref-list">
+      <li id="ref-1">Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006, Chapter 3 “Retrieving the Kernel Source”, mở đầu chương và mục “What Tree to Use”, pp. 12–13. Bản trực tuyến miễn phí: <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-2">Sđd., Chapter 3, “Where to Find the Kernel Source”, pp. 13–15 (mạng máy chủ gương kernel.org; <code>wget</code> và <code>curl</code>; bản ghi tải <code>linux-2.6.17.8.tar.gz</code> — 51.707.742 byte; <code>kdist/finger_banner</code>). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-3">Sđd., Chapter 3, “What to Do with the Source”, pp. 15–16 (<code>mkdir ~/linux</code>, <code>mv</code>, <code>cd ~/linux</code>, <code>tar -xzvf</code>, và nội dung thư mục sau khi giải nén). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-4">Sđd., Chapter 1, “Using This Book”, p. 4 — quy tắc làm mọi việc bằng quyền người dùng thường và không dùng <code>/usr/src/linux/</code>. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-5">kernel.org, <a href="https://www.kernel.org/category/releases.html" target="_blank" rel="noopener noreferrer">“Active kernel releases”</a> — prepatch/mainline/stable/longterm, nhịp 9–10 tuần, việc bỏ quy ước số lẻ sau 2.6, và ghi chú rằng con số chính không mang ý nghĩa (truy cập 22-09-2026).</li>
+      <li id="ref-6">kernel.org, <a href="https://www.kernel.org/" target="_blank" rel="noopener noreferrer">trang phát hành chính</a>, <a href="https://www.kernel.org/finger_banner" target="_blank" rel="noopener noreferrer">finger_banner</a> và <a href="https://www.kernel.org/releases.json" target="_blank" rel="noopener noreferrer">releases.json</a> — phiên bản hiện hành (stable 7.2.7, mainline 7.3-rc4, longterm 6.18 / 6.12 / 6.6 / 6.1 / 5.15 / 5.10), định dạng <code>.tar.xz</code> qua <code>cdn.kernel.org</code>, và các giao thức HTTP/GIT/RSYNC (truy cập 22-09-2026).</li>
+      <li id="ref-7">kernel.org, <a href="https://www.kernel.org/signature.html" target="_blank" rel="noopener noreferrer">“Linux Kernel Releases PGP Signatures”</a> — tệp <code>.tar.sign</code>, <code>unxz</code> + <code>gpg2 --verify</code>, lý do ký trên tệp <code>.tar</code> chưa nén, và <code>gpg2 --locate-keys</code> (truy cập 22-09-2026).</li>
+      <li id="ref-8">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/quickly-build-trimmed-linux.html" target="_blank" rel="noopener noreferrer">“Quickly build a trimmed Linux kernel”</a> — <code>git clone --depth 1 -b master … stable/linux.git ~/linux/</code> và cảnh báo về việc kéo lịch sử không giới hạn (truy cập 22-09-2026).</li>
+      <li id="ref-9">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/README.html" target="_blank" rel="noopener noreferrer">“Linux kernel release 6.x”</a> (<code>Documentation/admin-guide/README.rst</code>) — “Do NOT use the <code>/usr/src/linux</code> area!”, giải nén bằng <code>xz -cd linux-6.x.tar.xz | tar xvf -</code> trong thư mục bạn có quyền (truy cập 22-09-2026).</li>
+      <li id="ref-10">Scott Chacon &amp; Ben Straub, <a href="https://git-scm.com/book/en/v2/Getting-Started-A-Short-History-of-Git" target="_blank" rel="noopener noreferrer"><i>Pro Git</i> — “A Short History of Git”</a> — dự án nhân dùng BitKeeper từ 2002, quan hệ đổ vỡ năm 2005 và Git ra đời từ đó (truy cập 22-09-2026).</li>
+    </ol>
+
+    <p class="footer-label vi-only">Trong loạt bài</p>
+    <p class="footer-label en-only" lang="en">In this series</p>
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <p class="vi-only"><a href="index.html">Trang bìa</a> · <a href="chapter-2-requirements.html">Chương 2 · Yêu cầu để dựng và dùng nhân</a> · <span>Chương 3 · Lấy mã nguồn nhân (trang này)</span> · <a href="chapter-4-configuring-building.html">Chương 4 · Cấu hình và biên dịch</a></p>
+    <p class="en-only" lang="en"><a href="index.html">Cover</a> · <a href="chapter-2-requirements.html">Chapter 2 · Requirements for Building and Using the Kernel</a> · <span>Chapter 3 · Retrieving the Kernel Source (this page)</span> · <a href="chapter-4-configuring-building.html">Chapter 4 · Configuring and Building</a></p>
+    <!-- NAV:END -->
+  </div>
+  <div class="edition">LKN · CH 03 · VI/EN</div>
+</footer>
+
+</main>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  function sync() {
+    var mode = root.getAttribute("data-mode") || "standard";
+    var lang = root.getAttribute("data-lang") || "vi";
+    var dark = root.getAttribute("data-theme") === "dark";
+    document.querySelectorAll("[data-set-mode]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-mode") === mode));
+    });
+    document.querySelectorAll("[data-set-lang]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-lang") === lang));
+    });
+    document.querySelectorAll("[data-toggle-theme]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(dark));
+    });
+    root.setAttribute("lang", lang === "en" ? "en" : "vi");
+  }
+
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button.chip");
+    if (!b) return;
+    if (b.hasAttribute("data-set-mode")) {
+      root.setAttribute("data-mode", b.getAttribute("data-set-mode"));
+      store("lkn-reading-mode", b.getAttribute("data-set-mode"));
+    } else if (b.hasAttribute("data-set-lang")) {
+      root.setAttribute("data-lang", b.getAttribute("data-set-lang"));
+      store("lkn-lang", b.getAttribute("data-set-lang"));
+    } else if (b.hasAttribute("data-toggle-theme")) {
+      var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      store("lkn-theme", next);
+    }
+    sync();
+  });
+
+  sync();
+})();
+
+/* section-index rail: built at runtime from this page's own id'd sections */
+(function () {
+  var list = document.querySelector(".section-rail__list");
+  if (!list) return;
+  var sections = Array.prototype.slice.call(document.querySelectorAll("main section[id][aria-labelledby]"));
+  if (!sections.length) { var rail = document.querySelector(".section-rail"); if (rail) rail.remove(); return; }
+
+  /* headings carry all three reading levels + both languages as sibling spans,
+     so read only the ones actually visible under the current toggles */
+  function labelFor(sec) {
+    var head = document.getElementById(sec.getAttribute("aria-labelledby"));
+    if (!head) return sec.id;
+    var parts = [];
+    Array.prototype.forEach.call(head.children, function (el) {
+      if (el.offsetParent !== null || el.getClientRects().length) parts.push(el.textContent);
+    });
+    var label = (parts.length ? parts.join(" ") : head.textContent || "").replace(/\s+/g, " ").trim();
+    return label.length > 46 ? label.slice(0, 44) + "…" : label;
+  }
+
+  var links = sections.map(function (sec) {
+    var label = labelFor(sec);
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.href = "#" + sec.id;
+    var span = document.createElement("span");
+    span.className = "section-rail__label";
+    span.textContent = label;
+    a.appendChild(span);
+    li.appendChild(a);
+    list.appendChild(li);
+    return a;
+  });
+
+  function mark(id) {
+    links.forEach(function (a) {
+      if (a.getAttribute("href") === "#" + id) a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    });
+  }
+
+  if ("IntersectionObserver" in window) {
+    var seen = new Map();
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { seen.set(e.target.id, e.intersectionRatio); });
+      var best = null, bestR = 0;
+      seen.forEach(function (r, id) { if (r > bestR) { bestR = r; best = id; } });
+      if (best) mark(best);
+    }, { rootMargin: "-20% 0px -60% 0px", threshold: [0, .25, .5, 1] });
+    sections.forEach(function (s) { obs.observe(s); });
+  }
+
+  /* the rail labels change with the language toggle, so relabel on click */
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest("button.chip")) return;
+    sections.forEach(function (sec, i) {
+      links[i].firstChild.textContent = labelFor(sec);
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

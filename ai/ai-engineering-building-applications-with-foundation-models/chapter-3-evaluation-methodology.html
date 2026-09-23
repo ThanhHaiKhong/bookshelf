@@ -1,0 +1,1946 @@
+<!doctype html>
+<html lang="vi" data-reading-mode="deep">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Chương 3 cuốn AI Engineering của Chip Huyen — Phương pháp luận đánh giá: vì sao mô hình nền tảng khó đo, entropy · cross entropy · BPC/BPB · perplexity, đánh giá chính xác (tính đúng chức năng và đo tương đồng với dữ liệu tham chiếu), AI làm giám khảo, và xếp hạng bằng đánh giá so sánh. Song ngữ Việt–Anh, ba chế độ đọc.">
+<title>Chương 3 · Phương pháp luận đánh giá — AI Engineering · Chip Huyen</title>
+<link rel="icon" href="data:,">
+<script>
+  (function () {
+    const validModes = ["easy", "quick", "deep"];
+    let storedMode = "deep";
+    let storedLang = "vi";
+    try {
+      const preference = localStorage.getItem("aie-reading-mode");
+      if (validModes.includes(preference)) storedMode = preference;
+      if (localStorage.getItem("aie-lang") === "en") storedLang = "en";
+    } catch (_) {}
+    document.documentElement.dataset.readingMode = storedMode;
+    document.documentElement.dataset.lang = storedLang;
+    document.documentElement.setAttribute("lang", storedLang);
+  })();
+</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&family=Noto+Serif:wght@600;700&display=swap">
+
+<style>
+  :root {
+    --bg: #eef4ec;
+    --surface: #f5faf3;
+    --surface-strong: #ffffff;
+    --ink: #17281c;
+    --muted: #566b56;
+    --line: #cfe3c9;
+    --teal: #3f7d52;
+    --teal-soft: #d9ecdb;
+    --blue: #2f7d78;
+    --blue-soft: #d3e9e6;
+    --amber: #b0812b;
+    --amber-soft: #f0e5cb;
+    --leaf: #5aa15f;
+    --leaf-soft: #dcecd6;
+    --shadow: 0 22px 60px rgba(20, 50, 28, 0.14);
+    --display: "Noto Serif", Georgia, serif;
+    --body: "Be Vietnam Pro", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10231a;
+      --surface: #163020;
+      --surface-strong: #1d3b28;
+      --ink: #e9f5ea;
+      --muted: #9fc3a3;
+      --line: #294a35;
+      --teal: #6fce86;
+      --teal-soft: #163a24;
+      --blue: #63c3bc;
+      --blue-soft: #123833;
+      --amber: #e0b45f;
+      --amber-soft: #3a2f18;
+      --leaf: #7fd08a;
+      --leaf-soft: #163a22;
+      --shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #10231a;
+    --surface: #163020;
+    --surface-strong: #1d3b28;
+    --ink: #e9f5ea;
+    --muted: #9fc3a3;
+    --line: #294a35;
+    --teal: #6fce86;
+    --teal-soft: #163a24;
+    --blue: #63c3bc;
+    --blue-soft: #123833;
+    --amber: #e0b45f;
+    --amber-soft: #3a2f18;
+    --leaf: #7fd08a;
+    --leaf-soft: #163a22;
+    --shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(circle at 8% 4%, color-mix(in srgb, var(--teal-soft) 74%, transparent), transparent 31rem),
+      var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    line-height: 1.72;
+    overflow-x: hidden;
+  }
+
+  a { color: var(--teal); }
+
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible {
+    outline: 3px solid var(--amber);
+    outline-offset: 4px;
+  }
+
+  .page {
+    width: min(1180px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 28px 0 72px;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 10px 0 28px;
+  }
+
+  .book-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .book-label::before {
+    content: "";
+    width: 28px;
+    height: 2px;
+    background: var(--teal);
+  }
+
+  .reading-controls {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+  }
+
+  .reading-controls button {
+    min-height: 44px;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 13px;
+    background: transparent;
+    color: var(--muted);
+    font: 600 0.8rem var(--body);
+    cursor: pointer;
+  }
+
+  html[data-reading-mode="easy"] .reading-controls button[data-mode="easy"],
+  html[data-reading-mode="quick"] .reading-controls button[data-mode="quick"],
+  html[data-reading-mode="deep"] .reading-controls button[data-mode="deep"] {
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+    align-items: center;
+    gap: clamp(36px, 7vw, 92px);
+    min-height: 620px;
+    padding: 46px clamp(24px, 5vw, 64px);
+    border: 1px solid var(--line);
+    border-radius: 34px 34px 8px 34px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .hero::after {
+    content: "AI ENGINEERING / 03";
+    position: absolute;
+    right: 22px;
+    bottom: 16px;
+    color: var(--line);
+    font: 500 0.72rem var(--mono);
+    letter-spacing: 0.14em;
+  }
+
+  .eyebrow {
+    color: var(--teal);
+    font: 500 0.78rem var(--mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--display);
+    line-height: 1.13;
+    text-wrap: balance;
+  }
+
+  h1 {
+    max-width: 720px;
+    margin: 18px 0 24px;
+    font-size: clamp(3rem, 6.4vw, 6.2rem);
+    letter-spacing: -0.045em;
+  }
+
+  html[data-reading-mode="easy"] h1 {
+    font-size: clamp(2.6rem, 5.2vw, 5rem);
+  }
+
+  .hero-title-accent {
+    color: var(--teal);
+    font-style: italic;
+  }
+
+  .hero-copy > p {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: clamp(1.02rem, 1.5vw, 1.22rem);
+  }
+
+  .thesis {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    align-items: start;
+    margin-top: 34px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+  }
+
+  .thesis-mark {
+    color: var(--amber);
+    font: 700 1.5rem var(--display);
+  }
+
+  .thesis strong { display: block; margin-bottom: 4px; }
+  .thesis p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+
+  .system-map {
+    position: relative;
+    width: min(100%, 470px);
+    aspect-ratio: 1;
+    margin: auto;
+  }
+
+  .system-map::before,
+  .system-map::after {
+    content: "";
+    position: absolute;
+    inset: 14%;
+    border: 1px dashed var(--line);
+    border-radius: 50%;
+  }
+
+  .system-map::after {
+    inset: 29%;
+    border-style: solid;
+    opacity: 0.75;
+  }
+
+  .core {
+    position: absolute;
+    inset: 36%;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--surface);
+    text-align: center;
+    font: 600 0.77rem/1.35 var(--mono);
+    letter-spacing: 0.05em;
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--teal-soft) 72%, transparent);
+  }
+
+  .node {
+    position: absolute;
+    width: 132px;
+    min-height: 92px;
+    display: grid;
+    align-content: center;
+    gap: 4px;
+    padding: 15px;
+    border: 1px solid var(--line);
+    border-radius: 22px 22px 5px 22px;
+    background: var(--surface-strong);
+    box-shadow: 0 12px 30px color-mix(in srgb, var(--ink) 10%, transparent);
+  }
+
+  .node b { font-family: var(--display); font-size: 1rem; }
+  .node small { color: var(--muted); font-size: 0.7rem; line-height: 1.4; }
+  .node-resilience { top: 2%; left: 50%; transform: translateX(-50%); }
+  .node-organization { left: 2%; bottom: 8%; }
+  .node-hierarchy { right: 2%; bottom: 8%; }
+
+  .node-resilience b { color: var(--teal); }
+  .node-organization b { color: var(--blue); }
+  .node-hierarchy b { color: var(--amber); }
+
+  .pulse {
+    position: absolute;
+    inset: 29%;
+    border-radius: 50%;
+    border: 2px solid var(--teal);
+    opacity: 0;
+    animation: pulse 4.8s ease-out infinite;
+  }
+
+  @keyframes pulse {
+    0% { transform: scale(0.6); opacity: 0; }
+    18% { opacity: 0.34; }
+    78%, 100% { transform: scale(1.9); opacity: 0; }
+  }
+
+  .section {
+    padding: clamp(74px, 10vw, 128px) clamp(4px, 3vw, 28px) 0;
+  }
+
+  .section-heading {
+    display: grid;
+    grid-template-columns: minmax(210px, 0.42fr) minmax(0, 1fr);
+    gap: clamp(28px, 7vw, 86px);
+    align-items: end;
+    margin-bottom: 44px;
+  }
+
+  .section-heading h2 {
+    margin: 8px 0 0;
+    font-size: clamp(2rem, 4vw, 3.8rem);
+    letter-spacing: -0.035em;
+  }
+
+  .section-heading p {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: 1.04rem;
+  }
+
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .overview-card {
+    display: grid;
+    gap: 18px;
+    min-height: 280px;
+    padding: 26px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .overview-card:first-child { border-radius: 28px 8px 8px 8px; }
+  .overview-card:last-child { border-radius: 8px 28px 8px 8px; }
+
+  .overview-card .term {
+    font: 500 0.7rem var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .overview-card h3 { margin: 0; font-size: 1.72rem; }
+  .overview-card p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+  .overview-card .result { align-self: end; padding-top: 14px; border-top: 1px solid var(--line); font-weight: 600; }
+  .overview-card.teal .term, .overview-card.teal .result { color: var(--teal); }
+  .overview-card.blue .term, .overview-card.blue .result { color: var(--blue); }
+  .overview-card.amber .term, .overview-card.amber .result { color: var(--amber); }
+
+  .info-block {
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface-strong);
+  }
+
+  .info-block h4 {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font: 500 0.72rem var(--mono);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .info-block p { margin: 0; font-size: 0.92rem; }
+
+  .signal {
+    padding: 18px 20px;
+    border-left: 4px solid var(--teal);
+    background: var(--teal-soft);
+    color: var(--ink);
+    font-size: 0.92rem;
+  }
+
+  .signal strong { display: block; margin-bottom: 4px; }
+
+  html:not([data-reading-mode="easy"]) .easy-only,
+  html[data-reading-mode="easy"] .standard-copy,
+  html:not([data-reading-mode="deep"]) .deep-only {
+    display: none !important;
+  }
+
+  /* Bilingual: EN shows the single standard translation; VN keeps 3 modes.
+     .vi-only marks Vietnamese text outside the reading-mode system. */
+  html:not([data-lang="en"]) .en-only { display: none !important; }
+  html[data-lang="en"] .standard-copy,
+  html[data-lang="en"] .easy-only,
+  html[data-lang="en"] .deep-only,
+  html[data-lang="en"] .vi-only,
+  html[data-lang="en"] .reading-controls { display: none !important; }
+
+  .lang-controls {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+  }
+
+  .lang-controls button {
+    min-height: 44px;
+    min-width: 48px;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 13px;
+    background: transparent;
+    color: var(--muted);
+    font: 600 0.8rem var(--body);
+    cursor: pointer;
+  }
+
+  html:not([data-lang="en"]) .lang-controls button[data-lang-option="vi"],
+  html[data-lang="en"] .lang-controls button[data-lang-option="en"] {
+    background: var(--teal);
+    color: var(--surface);
+  }
+
+  .topbar-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .synthesis {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  .loop-diagram,
+  .synthesis-copy {
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .loop-diagram {
+    min-height: 500px;
+    position: relative;
+    display: grid;
+    place-items: center;
+    padding: 38px;
+    border-radius: 34px 8px 8px 8px;
+    overflow: hidden;
+  }
+
+  .loop-diagram::before {
+    content: "";
+    width: 65%;
+    aspect-ratio: 1;
+    border: 2px solid var(--line);
+    border-radius: 50%;
+  }
+
+  .loop-center {
+    position: absolute;
+    width: 150px;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--surface);
+    text-align: center;
+    font: 600 0.9rem/1.45 var(--body);
+  }
+
+  .loop-label {
+    position: absolute;
+    width: 150px;
+    padding: 13px 15px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-strong);
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .loop-label.top { top: 11%; color: var(--teal); }
+  .loop-label.left { left: 7%; bottom: 14%; color: var(--blue); }
+  .loop-label.right { right: 7%; bottom: 14%; color: var(--amber); }
+
+  .synthesis-copy {
+    display: grid;
+    align-content: center;
+    gap: 24px;
+    padding: clamp(28px, 5vw, 54px);
+    border-radius: 8px 34px 34px 8px;
+  }
+
+  .synthesis-copy h3 { margin: 0; font-size: clamp(2rem, 3.4vw, 3rem); }
+  .synthesis-copy > p { margin: 0; color: var(--muted); }
+
+  .equation {
+    display: grid;
+    gap: 10px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    background: var(--surface-strong);
+  }
+
+  .equation-row {
+    display: grid;
+    grid-template-columns: minmax(110px, 0.65fr) 1fr;
+    gap: 16px;
+    align-items: baseline;
+    font-size: 0.9rem;
+  }
+
+  .equation-row b { font-family: var(--display); font-size: 1.05rem; }
+  .equation-row span { color: var(--muted); }
+
+  .surprise-lead {
+    display: grid;
+    grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
+    gap: clamp(28px, 6vw, 72px);
+    align-items: center;
+    margin-bottom: 22px;
+    padding: clamp(28px, 5vw, 52px);
+    border: 1px solid var(--line);
+    border-radius: 34px 8px 34px 8px;
+    background: var(--surface);
+  }
+
+  .surprise-lead-copy {
+    display: grid;
+    gap: 18px;
+  }
+
+  .surprise-lead-copy p { margin: 0; }
+  .surprise-lead-copy .deep-only { color: var(--muted); font-size: 0.94rem; }
+
+  .definition {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--display);
+    font-size: clamp(1.25rem, 2vw, 1.62rem);
+    line-height: 1.5;
+  }
+
+  .english-term { color: var(--muted); font: 500 0.75rem var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+
+  .surprise-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .surprise-mechanism {
+    --mechanism-accent: var(--teal);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 18px;
+    align-content: start;
+    padding: 26px;
+    border: 1px solid var(--line);
+    border-top: 4px solid var(--mechanism-accent);
+    border-radius: 8px 24px 8px 24px;
+    background: var(--surface);
+  }
+
+  .surprise-number {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--mechanism-accent);
+    color: var(--surface);
+    font: 500 0.76rem var(--mono);
+  }
+
+  .surprise-content {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .surprise-content h3 {
+    margin: 0;
+    font-size: clamp(1.35rem, 2.3vw, 1.85rem);
+  }
+
+  .surprise-content > p { margin: 0; color: var(--muted); }
+  .surprise-content .info-block { margin-top: 2px; }
+  .surprise-connection { margin-top: 22px; }
+
+  .mechanics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .chapter-path {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 18px 0 0;
+  }
+
+  .chapter-path a {
+    display: grid;
+    gap: 5px;
+    min-height: 82px;
+    align-content: center;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .chapter-path a:first-child { border-radius: 20px 5px 5px 5px; }
+  .chapter-path a:last-child { border-radius: 5px 20px 5px 5px; }
+  .chapter-path a:hover { border-color: var(--teal); background: var(--surface-strong); }
+  .chapter-path b { font-family: var(--display); }
+  .chapter-path span { color: var(--muted); font: 500 0.7rem var(--mono); letter-spacing: 0.05em; text-transform: uppercase; }
+
+  .trap-lead { border-top: 4px solid var(--leaf); }
+  .trap-grid { margin-top: 22px; }
+  .trap-card { --mechanism-accent: var(--leaf); }
+  .trap-card:nth-child(4n + 2) { --mechanism-accent: var(--teal); }
+  .trap-card:nth-child(4n + 3) { --mechanism-accent: var(--blue); }
+  .trap-card:nth-child(4n) { --mechanism-accent: var(--amber); }
+  .trap-card .english-term { overflow-wrap: anywhere; }
+
+  .opportunity {
+    margin-top: 2px;
+    padding: 18px 20px;
+    border-left: 4px solid var(--leaf);
+    background: var(--leaf-soft);
+    color: var(--ink);
+    font-size: 0.92rem;
+  }
+
+  .opportunity strong { display: block; margin-bottom: 4px; color: var(--leaf); }
+
+  .trap-comparison {
+    display: grid;
+    gap: 18px;
+    margin-top: 24px;
+    padding: clamp(26px, 5vw, 46px);
+    border: 1px solid var(--line);
+    border-radius: 28px 8px 28px 8px;
+    background: var(--surface);
+  }
+
+  .trap-comparison h3 { margin: 0; font-size: clamp(1.65rem, 3vw, 2.35rem); }
+
+  .comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .comparison-card {
+    display: grid;
+    gap: 10px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--leaf);
+    background: var(--surface-strong);
+  }
+
+  .comparison-card h4 { margin: 0; font: 700 1rem var(--body); }
+  .comparison-card p { margin: 0; color: var(--muted); font-size: 0.88rem; }
+
+  .myths {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .myth {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 16px;
+    padding: 23px;
+    border-top: 1px solid var(--line);
+  }
+
+  .myth-mark {
+    color: var(--amber);
+    font: 700 1.4rem var(--display);
+  }
+
+  .myth h3 { margin: 0 0 6px; font: 700 1.08rem var(--body); }
+  .myth p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+  .diagnostic {
+    display: grid;
+    grid-template-columns: 0.72fr 1.28fr;
+    gap: clamp(28px, 7vw, 84px);
+    padding: clamp(34px, 6vw, 64px);
+    border-radius: 34px 8px 34px 8px;
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .diagnostic h2 { margin: 10px 0 18px; font-size: clamp(2.3rem, 4.5vw, 4rem); }
+  .diagnostic .eyebrow { color: var(--surface); }
+  .diagnostic-intro p { margin: 0; color: color-mix(in srgb, var(--surface) 70%, transparent); }
+
+  .question-list {
+    display: grid;
+    gap: 0;
+    counter-reset: question;
+  }
+
+  .question {
+    counter-increment: question;
+    display: grid;
+    grid-template-columns: 38px 1fr;
+    gap: 14px;
+    padding: 18px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--surface) 22%, transparent);
+  }
+
+  .question::before {
+    content: counter(question, decimal-leading-zero);
+    color: var(--teal);
+    font: 500 0.74rem var(--mono);
+  }
+
+  .question strong { display: block; margin-bottom: 5px; }
+  .question span { color: color-mix(in srgb, var(--surface) 70%, transparent); font-size: 0.88rem; }
+
+  .closing {
+    display: grid;
+    grid-template-columns: 0.45fr 1.55fr;
+    gap: clamp(28px, 8vw, 100px);
+    align-items: start;
+    padding: clamp(74px, 10vw, 128px) clamp(4px, 3vw, 28px) 40px;
+  }
+
+  .closing .eyebrow { padding-top: 12px; }
+  .closing blockquote {
+    margin: 0;
+    font: 600 clamp(1.7rem, 3.6vw, 3.25rem)/1.35 var(--display);
+    letter-spacing: -0.025em;
+  }
+
+  .closing-accent { color: var(--teal); }
+
+  .chapter-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: clamp(24px, 3.5vw, 40px);
+    padding-top: clamp(24px, 3.5vw, 40px);
+    border-top: 1px solid var(--line);
+  }
+
+  .chapter-nav .nav-cell {
+    display: grid;
+    gap: 5px;
+    align-content: start;
+    padding: 18px 22px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .chapter-nav a.nav-cell:hover {
+    border-color: var(--teal);
+    background: var(--surface-strong);
+  }
+
+  .chapter-nav .nav-next { text-align: right; }
+
+  .chapter-nav .nav-cell.disabled { opacity: 0.55; }
+
+  .chapter-nav .nav-label {
+    color: var(--muted);
+    font: 500 0.7rem var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .chapter-nav .nav-title {
+    font-family: var(--display);
+    font-size: clamp(1.05rem, 1.8vw, 1.28rem);
+    line-height: 1.25;
+  }
+
+  @media (max-width: 620px) {
+    .chapter-nav { grid-template-columns: 1fr; }
+    .chapter-nav .nav-next { text-align: left; }
+  }
+
+  .cite { font: 500 0.82em var(--mono); white-space: nowrap; }
+  .cite a { color: var(--amber); text-decoration: none; }
+  .cite a:hover { text-decoration: underline; }
+  .cite a::before { content: "["; }
+  .cite a::after { content: "]"; }
+
+  .footer-main { display: grid; gap: 10px; }
+
+  .ref-list { margin: 2px 0 0; padding-left: 1.4em; display: grid; gap: 4px; }
+  .ref-list li { font-size: 0.78rem; }
+  .ref-list li:target { color: var(--ink); font-weight: 600; }
+
+  footer {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    margin-top: clamp(24px, 3.5vw, 40px);
+    padding: clamp(24px, 3.5vw, 40px) clamp(4px, 3vw, 28px) 0;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+
+  footer p { max-width: 80ch; margin: 0; }
+  footer .edition { font-family: var(--mono); white-space: nowrap; }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; min-height: auto; }
+    .system-map { width: min(100%, 420px); }
+    .section-heading,
+    .synthesis,
+    .surprise-lead,
+    .surprise-grid,
+    .comparison-grid,
+    .diagnostic,
+    .closing { grid-template-columns: 1fr; }
+    .chapter-path { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .overview-grid { grid-template-columns: 1fr; }
+    .overview-card { min-height: auto; border-radius: 18px !important; }
+    .loop-diagram { min-height: 440px; }
+  }
+
+  @media (max-width: 620px) {
+    .page { width: min(100% - 20px, 1180px); padding-top: 12px; }
+    .topbar { flex-direction: column; align-items: stretch; gap: 14px; }
+    .book-label { max-width: none; }
+    .reading-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+    .reading-controls button { width: 100%; padding: 8px 6px; font-size: 0.78rem; white-space: nowrap; }
+    .hero { padding: 34px 20px 54px; border-radius: 24px 24px 6px 24px; }
+    h1 { font-size: clamp(2.7rem, 14vw, 4rem); }
+    .system-map { aspect-ratio: auto; display: grid; gap: 10px; }
+    .system-map::before,
+    .system-map::after,
+    .core,
+    .pulse { display: none; }
+    .node { position: static; transform: none; width: 100%; min-height: auto; }
+    .mechanics, .myths { grid-template-columns: 1fr; }
+    .chapter-path { grid-template-columns: 1fr; }
+    .chapter-path a { min-height: auto; border-radius: 12px !important; }
+    .surprise-lead { padding: 28px 20px; }
+    .surprise-mechanism { grid-template-columns: 1fr; padding: 22px 20px; }
+    .trap-comparison { padding: 24px 20px; }
+    .equation-row { grid-template-columns: 1fr; gap: 3px; }
+    .loop-diagram { min-height: 390px; padding: 20px; }
+    .loop-label { width: 122px; padding: 10px; font-size: 0.7rem; }
+    .loop-label.left { left: 2%; }
+    .loop-label.right { right: 2%; }
+    .diagnostic { padding: 32px 22px; }
+    footer { grid-template-columns: 1fr; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .pulse { animation: none; }
+  }
+
+  /* SECTION-RAIL:START — on-page section index (scroll-spy); markup injected by the bottom script */
+  .section-rail {
+    position: fixed;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 50;
+    padding: 10px;
+    pointer-events: none;
+  }
+  .section-rail::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--surface-strong);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    transform: translateX(-6px);
+    transform-origin: left center;
+    transition: opacity 0.18s ease, transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+  }
+  .section-rail::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 42px;
+    pointer-events: auto;
+  }
+  .section-rail:hover::before,
+  .section-rail:focus-within::before {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .section-rail__list {
+    position: relative;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .section-rail__list::before {
+    content: "";
+    position: absolute;
+    left: 13px;
+    top: 16px;
+    bottom: 16px;
+    width: 2px;
+    transform: translateX(-50%);
+    background: var(--line);
+    border-radius: 2px;
+  }
+  .section-rail__link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--muted);
+    pointer-events: none;
+    transition: background-color 0.16s ease, color 0.16s ease;
+  }
+  .section-rail:hover .section-rail__link,
+  .section-rail:focus-within .section-rail__link { pointer-events: auto; }
+  .section-rail__tick {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: 0 0 0 2px var(--line);
+    transition: transform 0.2s cubic-bezier(0.34, 1.28, 0.64, 1), background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .section-rail__label {
+    white-space: nowrap;
+    font: 500 0.78rem/1.35 var(--body);
+    letter-spacing: -0.005em;
+    opacity: 0;
+    transition: opacity 0.16s ease;
+  }
+  .section-rail:hover .section-rail__label,
+  .section-rail:focus-within .section-rail__label { opacity: 1; }
+  .section-rail__link:hover { background: var(--teal-soft); color: var(--ink); }
+  .section-rail__link:hover .section-rail__tick { box-shadow: 0 0 0 2px var(--teal); }
+  .section-rail__item.is-active .section-rail__link { color: var(--ink); }
+  .section-rail__item.is-active .section-rail__tick {
+    background: var(--teal);
+    box-shadow: 0 0 0 3px var(--teal-soft);
+    transform: scale(1.5);
+  }
+  @media (max-width: 1279px) { .section-rail { display: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .section-rail::before,
+    .section-rail__tick,
+    .section-rail__label,
+    .section-rail__link { transition: none; }
+  }
+  /* SECTION-RAIL:END */
+</style>
+</head><body>
+<main class="page">
+  <header class="topbar">
+    <div class="book-label"><span class="standard-copy">AI Engineering · Chip Huyen · Chương 3</span><span class="easy-only">AI Engineering · Chip Huyen · Chương 3</span><span class="en-only" lang="en">AI Engineering · Chip Huyen · Chapter 3</span></div>
+    <div class="topbar-controls">
+      <div class="lang-controls" role="group" aria-label="Ngôn ngữ / Language">
+        <button type="button" data-lang-option="vi" aria-pressed="true">VI</button>
+        <button type="button" data-lang-option="en" aria-pressed="false">EN</button>
+      </div>
+      <div class="reading-controls" role="group" aria-label="Chế độ đọc">
+        <button type="button" data-mode="easy" aria-label="Dễ hiểu: giải thích bằng ví dụ cho người mới và trẻ nhỏ" aria-pressed="false">Dễ hiểu</button>
+        <button type="button" data-mode="quick" aria-pressed="false">Tóm tắt</button>
+        <button type="button" data-mode="deep" aria-pressed="true">Đầy đủ</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="hero" aria-labelledby="page-title">
+    <div class="hero-copy">
+      <div class="eyebrow"><span class="standard-copy">Chương 3 · Phương pháp luận đánh giá</span><span class="easy-only">Chương 3 · Làm sao biết máy trả lời đúng</span><span class="en-only" lang="en">Chapter 3 · Evaluation Methodology</span></div>
+      <h1 id="page-title"><span class="standard-copy">Đo một câu trả lời <span class="hero-title-accent">không có đáp án đúng duy nhất</span></span><span class="easy-only">Chấm bài khi <span class="hero-title-accent">không có đáp án mẫu</span></span><span class="en-only" lang="en">Measuring answers with <span class="hero-title-accent">no single right answer</span></span></h1>
+      <p class="standard-copy">Chip Huyen mở chương bằng một danh sách tai nạn: một người đàn ông tự tử sau khi được một chatbot khuyến khích, luật sư nộp bằng chứng giả do AI bịa ra, Air Canada bị buộc bồi thường vì chatbot của hãng cung cấp thông tin sai cho hành khách. Với bà, các sự cố ấy có chung một gốc — không có cách kiểm soát chất lượng đầu ra, rủi ro của AI có thể lớn hơn lợi ích.<span class="cite"><a href="#ref-1">1</a></span> Chương này là kho phương pháp: bốn chỉ số ngôn ngữ, hai lối đánh giá chính xác, AI làm giám khảo, và xếp hạng bằng so sánh.</p>
+      <p class="easy-only">Máy trả lời rất trôi chảy, nhưng trôi chảy không có nghĩa là đúng. Đã có người tin lời máy rồi gặp chuyện tệ: luật sư nộp giấy tờ do máy bịa, một hãng hàng không phải đền tiền vì máy nói sai. Vậy làm sao biết máy đúng hay sai? Nhớ nhé: chương này dạy các cách chấm điểm cho máy.</p>
+      <p class="en-only" lang="en">Chip Huyen opens the chapter with a list of failures: a man took his own life after being encouraged by a chatbot, lawyers filed false evidence hallucinated by AI, Air Canada was ordered to pay damages when its chatbot gave a passenger false information. For her they share one root cause — without a way to quality-control AI outputs, the risk of AI may outweigh its benefits.<span class="cite"><a href="#ref-1">1</a></span> This chapter is the toolbox: four language-modelling metrics, two families of exact evaluation, AI as a judge, and ranking by comparison.</p>
+      <div class="thesis">
+        <div class="thesis-mark">∴</div>
+        <div>
+          <strong class="standard-copy">Luận đề của chương</strong>
+          <strong class="easy-only">Ý chính của chương</strong>
+          <strong class="en-only" lang="en">The chapter's thesis</strong>
+          <p class="standard-copy">Khi các đội bắt đầu đưa AI vào sản phẩm, nhiều người nhanh chóng nhận ra rào cản lớn nhất không phải là mô hình mà là đánh giá — với một số ứng dụng, riêng việc nghĩ ra cách đánh giá đã chiếm phần lớn công sức phát triển.<span class="cite"><a href="#ref-1">1</a></span> Vì đánh giá khó, nhiều người đành tin vào lời truyền miệng hoặc “nhìn qua thấy ổn”, và chính điều đó lại làm rủi ro tăng lên. Chương 3 vì thế không dạy một thước đo duy nhất; nó dạy cách hiểu từng thước đo đo được gì và bỏ sót gì.</p>
+          <p class="easy-only">Phần khó nhất khi làm ứng dụng AI không phải là chọn máy, mà là biết máy làm tốt tới đâu. Nhiều người lười nên chỉ “nhìn qua thấy ổn” là xong — và thế là hỏng. Nhớ nhé: đo được thì mới sửa được.</p>
+          <p class="en-only" lang="en">As teams rush to adopt AI, many quickly realise the biggest hurdle is not the model but evaluation — for some applications, figuring out evaluation can take up the majority of the development effort.<span class="cite"><a href="#ref-1">1</a></span> Because it is hard, many settle for word of mouth or for eyeballing results, which only adds risk. Chapter 3 therefore does not sell one metric; it teaches what each metric measures and what it quietly misses.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="system-map" role="img" aria-label="Ba lớp phương pháp đánh giá trong chương: chỉ số mô hình ngôn ngữ, đánh giá chính xác, và đánh giá chủ quan bằng AI làm giám khảo cùng xếp hạng so sánh / The chapter's three layers of evaluation methods: language modelling metrics, exact evaluation, and subjective evaluation via AI judges and comparative ranking">
+      <div class="pulse"></div>
+      <div class="core"><span class="vi-only">ĐÁNH GIÁ<br>MÔ HÌNH MỞ</span><span class="en-only" lang="en">EVALUATING<br>OPEN-ENDED</span></div>
+      <div class="node node-resilience">
+        <b><span class="vi-only">Chỉ số ngôn ngữ</span><span class="en-only" lang="en">LM metrics</span></b>
+        <small class="standard-copy">Entropy, cross entropy, BPC/BPB, perplexity</small>
+        <small class="easy-only">Máy đoán chữ kế tiếp giỏi cỡ nào.</small>
+        <small class="en-only" lang="en">Entropy, cross entropy, BPC/BPB, perplexity</small>
+      </div>
+      <div class="node node-organization">
+        <b><span class="vi-only">Đánh giá chính xác</span><span class="en-only" lang="en">Exact evaluation</span></b>
+        <small class="standard-copy">Tính đúng chức năng và đo tương đồng với tham chiếu</small>
+        <small class="easy-only">Chạy thử, hoặc so với đáp án mẫu.</small>
+        <small class="en-only" lang="en">Functional correctness and similarity to reference data</small>
+      </div>
+      <div class="node node-hierarchy">
+        <b><span class="vi-only">Đánh giá chủ quan</span><span class="en-only" lang="en">Subjective evaluation</span></b>
+        <small class="standard-copy">AI làm giám khảo và xếp hạng bằng so sánh</small>
+        <small class="easy-only">Nhờ một AI khác chấm, hoặc bắt hai bên thi nhau.</small>
+        <small class="en-only" lang="en">AI as a judge and comparative ranking</small>
+      </div>
+    </div>
+  </section>
+
+  <nav class="chapter-path" aria-label="Các mục trong chương">
+    <a href="#why-hard">
+      <span>01</span>
+      <b><span class="standard-copy">Vì sao khó đánh giá</span><span class="easy-only">Vì sao khó chấm</span><span class="en-only" lang="en">Why it is hard</span></b>
+    </a>
+    <a href="#lm-metrics">
+      <span>02</span>
+      <b><span class="standard-copy">Entropy &amp; perplexity</span><span class="easy-only">Máy đoán giỏi cỡ nào</span><span class="en-only" lang="en">Entropy &amp; perplexity</span></b>
+    </a>
+    <a href="#exact-eval">
+      <span>03</span>
+      <b><span class="standard-copy">Đánh giá chính xác</span><span class="easy-only">Chạy thử &amp; so đáp án</span><span class="en-only" lang="en">Exact evaluation</span></b>
+    </a>
+    <a href="#judge-and-rank">
+      <span>04</span>
+      <b><span class="standard-copy">Giám khảo &amp; xếp hạng</span><span class="easy-only">Nhờ AI chấm</span><span class="en-only" lang="en">Judges &amp; ranking</span></b>
+    </a>
+  </nav>
+
+  <section class="section" id="why-hard" aria-labelledby="why-hard-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Mục 01 · Thách thức</span><span class="easy-only">Mục 01 · Vì sao khó</span><span class="en-only" lang="en">Part 01 · Challenges</span></div>
+        <h2 id="why-hard-title"><span class="standard-copy">Vì sao mô hình nền tảng khó đánh giá</span><span class="easy-only">Vì sao chấm điểm máy lại khó</span><span class="en-only" lang="en">Why foundation models are hard to evaluate</span></h2>
+      </div>
+      <p class="standard-copy">Đánh giá mô hình học máy vốn đã khó; với mô hình nền tảng nó còn khó hơn. Huyen liệt kê một chuỗi lý do xếp chồng lên nhau: mô hình càng thông minh càng khó chấm, đầu ra mở nên không có danh sách đáp án đúng, mô hình là hộp đen, các bộ đo công khai bão hòa quá nhanh, và phạm vi đánh giá đã rộng ra tới mức phải đi khám phá những việc mô hình có thể làm mà ta chưa biết.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Chấm bài cho máy khó vì bốn lẽ: máy giỏi quá thì người chấm phải giỏi hơn; câu hỏi mở thì không có một đáp án đúng; ta không được nhìn vào bên trong máy; và các bài kiểm tra cũ thì máy làm hết điểm tuyệt đối rất nhanh. Nhớ nhé: đề thi nào máy cũng đạt điểm tối đa thì đề ấy hết dùng được.</p>
+      <p class="en-only" lang="en">Evaluating ML models has always been hard; foundation models make it harder still. Huyen stacks up the reasons: the smarter a model gets the harder it is to judge, open-ended outputs have no enumerable ground truth, models are black boxes, public benchmarks saturate fast, and the scope of evaluation has widened to include discovering capabilities nobody has catalogued yet.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Một bộ đo trở nên <em>bão hòa</em> với một mô hình ngay khi mô hình ấy đạt điểm tuyệt đối — và với mô hình nền tảng, điều đó đang xảy ra rất nhanh.</p>
+        <p class="definition easy-only">Khi máy làm đúng hết cả đề thi, đề thi ấy không còn cho ta biết gì nữa. Người ta phải ra đề mới, khó hơn.</p>
+        <p class="definition en-only" lang="en">A benchmark becomes <em>saturated</em> for a model once the model achieves the perfect score — and with foundation models, benchmarks are saturating fast.</p>
+        <p class="deep-only">Điều đáng chú ý trong danh sách dưới đây không phải từng bộ đo, mà là nhịp thay thế: khoảng cách giữa một bộ đo và bản kế nhiệm của nó ngắn dần theo thời gian. Bộ đo là thước; khi thước ngắn hơn vật cần đo, ta không đo được nữa.</p>
+      </div>
+      <div class="equation">
+        <div class="equation-row">
+          <b lang="en">GLUE (2018)</b>
+          <span class="standard-copy">Bão hòa chỉ trong một năm → <span lang="en">SuperGLUE</span> (2019)<span class="cite"><a href="#ref-1">1</a></span></span>
+          <span class="easy-only">Ra năm 2018, một năm sau máy đã làm hết điểm.</span>
+          <span class="en-only" lang="en">Saturated in just a year → <span>SuperGLUE</span> (2019)<span class="cite"><a href="#ref-1">1</a></span></span>
+        </div>
+        <div class="equation-row">
+          <b lang="en">NaturalInstructions (2021)</b>
+          <span class="standard-copy">Được thay bằng <span lang="en">Super-NaturalInstructions</span> (2022)<span class="cite"><a href="#ref-1">1</a></span></span>
+          <span class="easy-only">Ra 2021, năm sau đã phải làm đề mới.</span>
+          <span class="en-only" lang="en">Replaced by <span>Super-NaturalInstructions</span> (2022)<span class="cite"><a href="#ref-1">1</a></span></span>
+        </div>
+        <div class="equation-row">
+          <b lang="en">MMLU (2020)</b>
+          <span class="standard-copy">Bộ đo mạnh mà nhiều mô hình nền tảng đời đầu dựa vào, phần lớn đã được thay bằng <span lang="en">MMLU-Pro</span> (2024)<span class="cite"><a href="#ref-1">1</a></span></span>
+          <span class="easy-only">Đề thi nổi tiếng nhất cũng phải nâng cấp sau bốn năm.</span>
+          <span class="en-only" lang="en">A strong benchmark many early foundation models relied on, largely replaced by <span>MMLU-Pro</span> (2024)<span class="cite"><a href="#ref-1">1</a></span></span>
+        </div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">01</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">The intelligence gap</div>
+          <h3><span class="standard-copy">Càng thông minh càng khó chấm</span><span class="easy-only">Máy giỏi quá thì ai chấm?</span><span class="en-only" lang="en">The smarter the model, the harder to judge</span></h3>
+          <p class="standard-copy">Hầu hết mọi người đều nhận ra lời giải toán sai của một học sinh lớp một; rất ít người làm được điều đó với một lời giải toán trình độ tiến sĩ. Một bản tóm tắt sách nhảm thì dễ thấy, nhưng một bản tóm tắt mạch lạc mà sai thì phải đọc cả cuốn sách mới biết. Hệ quả: với tác vụ phức tạp, đánh giá tốn thời gian hơn rất nhiều — không còn chấm theo “nghe có xuôi tai không”, mà phải kiểm chứng sự thật, lập luận, và cần cả chuyên môn ngành.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Bạn dễ biết em bé lớp một làm sai phép cộng. Nhưng nếu ai đó giải một bài toán rất cao siêu, bạn không biết đúng hay sai, vì chính bạn chưa học tới. Máy bây giờ giống người giải bài cao siêu ấy. Nhớ nhé: nghe xuôi tai không có nghĩa là đúng.</p>
+          <p class="en-only" lang="en">Most people can tell if a first grader's maths is wrong; few can do the same for a PhD-level solution. Gibberish summaries are easy to spot; a coherent but wrong one may require reading the book first. The corollary: for sophisticated tasks evaluation becomes far more time-consuming — you can no longer judge a response by how it sounds, you must fact-check, reason, and bring domain expertise.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ở mọi đội sản phẩm phải thuê chuyên gia y tế, luật hay tài chính chỉ để đọc lại đầu ra của mô hình — chi phí đánh giá khi ấy là chi phí chuyên môn, không phải chi phí tính toán.</span>
+            <span class="easy-only">Ở bệnh viện hay tòa án: phải nhờ đúng người trong nghề đọc lại câu trả lời của máy.</span>
+            <span class="en-only" lang="en">In every product team that has to hire clinicians, lawyers or analysts just to read model outputs — evaluation cost becomes an expertise cost, not a compute cost.</span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Chú thích của tác giả</h4>
+              <p>Huyen dẫn phản ứng của nhà toán học đoạt huy chương Fields Terence Tao khi GPT-o1 ra mắt tháng 9 năm 2024: làm việc với mô hình này giống làm việc với “một nghiên cứu sinh tầm thường, nhưng không hoàn toàn bất tài”. Nhiều người đùa rằng nếu đã phải cần tới những bộ óc sáng nhất để đánh giá AI, thì sẽ chẳng còn ai đủ tư cách đánh giá các mô hình sau này.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Hệ quả thiết kế</h4>
+              <p>Vì thế Huyen nhấn mạnh đánh giá phải đặt trong bối cảnh cả hệ thống chứ không tách rời: trước hết xác định nơi hệ thống dễ hỏng, rồi thiết kế đánh giá quanh đó — đôi khi phải thiết kế lại chính hệ thống để nhìn thấy được lỗi của nó.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">02</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Open-endedness</div>
+          <h3><span class="standard-copy">Đầu ra mở phá vỡ lối đo theo đáp án</span><span class="easy-only">Không có một đáp án đúng</span><span class="en-only" lang="en">Open-endedness breaks ground-truth evaluation</span></h3>
+          <p class="standard-copy">Với học máy truyền thống, phần lớn tác vụ là đóng: một mô hình phân loại chỉ có thể trả về một trong các nhãn định trước, nên chỉ cần so nhãn dự đoán với nhãn đúng. Với tác vụ mở, một đầu vào có vô số câu trả lời đúng khả dĩ, và không thể liệt kê đầy đủ tập ấy để so sánh.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Nếu đề bài là “chọn A, B hay C” thì chấm dễ. Nhưng nếu đề bài là “hãy kể một câu chuyện”, có hàng nghìn câu chuyện đều hay cả — không ai chép ra hết được. Nhớ nhé: câu hỏi mở thì không có danh sách đáp án.</p>
+          <p class="en-only" lang="en">In classical ML most tasks are close-ended: a classifier can only output one of the expected categories, so you compare its output to the expected one. For an open-ended task a single input has so many possible correct responses that curating a comprehensive list to compare against is impossible.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ở bản dịch máy: “Comment ça va?” có thể là “How are you?”, “How is everything?”, “How are you doing?” — và một bản dịch đúng thứ tư vẫn sẽ bị chấm sai nếu không nằm trong tập tham chiếu.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Một câu tiếng Pháp có thể dịch ra nhiều câu tiếng Anh đều đúng cả.</span>
+            <span class="en-only" lang="en">In machine translation: “Comment ça va?” maps to “How are you?”, “How is everything?”, “How are you doing?” — and a fourth correct translation still scores as wrong if it is absent from the reference set.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">03</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Black boxes</div>
+          <h3><span class="standard-copy">Hộp đen: chỉ còn cách nhìn đầu ra</span><span class="easy-only">Không nhìn được vào bên trong</span><span class="en-only" lang="en">Black boxes: outputs are all you get</span></h3>
+          <p class="standard-copy">Phần lớn mô hình nền tảng bị đối xử như hộp đen, hoặc vì nhà cung cấp chọn không công bố chi tiết, hoặc vì người làm ứng dụng không đủ chuyên môn để hiểu chúng. Kiến trúc, dữ liệu huấn luyện và quy trình huấn luyện vốn nói lên rất nhiều về điểm mạnh điểm yếu của một mô hình; thiếu chúng, ta chỉ còn cách đánh giá qua quan sát đầu ra.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Ta không được mở nắp máy ra xem nó học từ sách nào. Ta chỉ được nghe nó trả lời rồi đoán. Nhớ nhé: không biết máy học gì thì phải kiểm tra kỹ hơn, chứ không phải tin nhiều hơn.</p>
+          <p class="en-only" lang="en">Most foundation models are treated as black boxes, either because providers choose not to expose details or because application developers lack the expertise to read them. Architecture, training data and training process would reveal a lot about a model's strengths and weaknesses; without them you can only evaluate by observing outputs.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ở chính chỉ số perplexity: Huyen ghi nhận nhiều công ty đã ngừng công bố perplexity của mô hình, theo xu hướng ngày càng kín tiếng về mô hình của họ.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Nhiều hãng giờ không còn công bố điểm số của máy mình nữa.</span>
+            <span class="en-only" lang="en">In the metrics themselves: Huyen notes that many companies have stopped reporting their models' perplexity, following the trend of being increasingly secretive about their models.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">04</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Underinvestment in evaluation</div>
+          <h3><span class="standard-copy">Quan tâm thì tăng, đầu tư thì tụt lại</span><span class="easy-only">Ai cũng nói, ít ai làm</span><span class="en-only" lang="en">Interest rises, investment lags</span></h3>
+          <p class="standard-copy">Tin tốt: số bài báo về đánh giá mô hình ngôn ngữ tăng theo cấp số nhân trong nửa đầu năm 2023, từ 2 bài mỗi tháng lên gần 35 bài mỗi tháng.<span class="cite"><a href="#ref-2">2</a></span> Trong phân tích riêng của Huyen trên 1.000 kho mã AI nhiều sao nhất GitHub, có hơn 50 kho dành riêng cho đánh giá tính tới tháng 5 năm 2024. Tin xấu: con số ấy vẫn nhỏ so với công cụ cho huấn luyện và điều phối, và nhóm Balduzzi cùng cộng sự ở DeepMind từng nhận xét rằng “việc phát triển các phép đánh giá nhận được rất ít sự chú ý có hệ thống so với việc phát triển thuật toán”.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Số người viết bài về cách chấm điểm AI tăng rất nhanh, nhưng số công cụ chấm điểm thật sự dùng được thì vẫn ít. Nhớ nhé: nói về việc kiểm tra dễ hơn là làm ra dụng cụ kiểm tra.</p>
+          <p class="en-only" lang="en">The good news: published papers on LLM evaluation grew exponentially through the first half of 2023, from 2 a month to almost 35 a month.<span class="cite"><a href="#ref-2">2</a></span> In Huyen's own analysis of the 1,000 most-starred AI repositories on GitHub, over 50 were dedicated to evaluation as of May 2024. The bad news: that is still small next to tooling for modelling, training and orchestration, and Balduzzi et al. at DeepMind observed that “developing evaluations has received little systematic attention compared to developing algorithms”.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ở câu trả lời quen thuộc khi hỏi một đội đang đánh giá ứng dụng thế nào: “bọn tôi nhìn qua kết quả thôi” — kèm một tập prompt tủ được gom tùy hứng theo kinh nghiệm cá nhân chứ không theo nhu cầu của ứng dụng.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Nhiều đội chỉ thử vài câu quen thuộc rồi kết luận máy tốt.</span>
+            <span class="en-only" lang="en">In the familiar answer when you ask a team how they evaluate: “we just eyeball the results” — plus a small set of go-to prompts curated ad hoc from personal experience rather than from the application's needs.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Lời kêu gọi chính sách</h4>
+              <p>Nhận ra sự thiếu đầu tư này, Anthropic đã kêu gọi giới hoạch định chính sách tăng tài trợ và cấp vốn nhà nước cho cả việc phát triển phương pháp đánh giá mới lẫn việc phân tích độ bền vững của các phép đánh giá hiện có.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Vì sao “nhìn qua” không đủ</h4>
+              <p>Huyen thừa nhận lối làm tùy hứng có thể tạm ổn lúc khởi động dự án, nhưng không đủ cho giai đoạn lặp lại và cải tiến ứng dụng — vì khi ấy ta cần biết một thay đổi làm hệ thống tốt lên hay xấu đi, và “nhìn qua” không trả lời được câu đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Cầu nối sang mục sau</strong>
+      <strong class="easy-only">Nối sang phần sau</strong>
+      <strong class="en-only" lang="en">Bridge to the next part</strong>
+      <p class="standard-copy">Nếu không nhìn được vào trong hộp đen và không có danh sách đáp án đúng, ta vẫn còn một thứ đo được một cách chặt chẽ: mô hình đoán chữ kế tiếp giỏi tới đâu. Đó là địa hạt của entropy và perplexity — mục tiếp theo.</p>
+      <p class="easy-only">May là vẫn còn một thứ đo được chắc chắn: máy đoán chữ tiếp theo giỏi cỡ nào. Nhớ nhé: đó là phần sắp tới.</p>
+      <p class="en-only" lang="en">If you cannot see inside the box and cannot enumerate the right answers, one thing is still measurable rigorously: how well the model predicts the next token. That is the territory of entropy and perplexity — the next part.</p>
+    </aside>
+  </section>
+
+  <section class="section" id="lm-metrics" aria-labelledby="lm-metrics-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Mục 02 · Bốn chỉ số họ hàng</span><span class="easy-only">Mục 02 · Đoán chữ kế tiếp</span><span class="en-only" lang="en">Part 02 · Four related metrics</span></div>
+        <h2 id="lm-metrics-title"><span class="standard-copy">Entropy, cross entropy và perplexity</span><span class="easy-only">Máy đoán chữ giỏi tới đâu</span><span class="en-only" lang="en">Entropy, cross entropy and perplexity</span></h2>
+      </div>
+      <p class="standard-copy">Mô hình nền tảng tiến hóa lên từ mô hình ngôn ngữ, và nhiều mô hình vẫn giữ một thành phần ngôn ngữ làm lõi; với chúng, chất lượng của thành phần ấy tương quan khá tốt với hiệu năng ở tác vụ hạ nguồn.<span class="cite"><a href="#ref-1">1</a></span> Bốn chỉ số — cross entropy, perplexity, <span lang="en">bits-per-character</span> (BPC) và <span lang="en">bits-per-byte</span> (BPB) — gắn chặt với nhau: biết một cái, với đủ thông tin, là suy ra ba cái còn lại.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mọi mô hình này đều học một trò chơi: đoán chữ tiếp theo. Đoán càng giỏi thì điểm càng tốt, và điểm đó thường cũng nói lên máy làm các việc khác giỏi tới đâu. Nhớ nhé: có bốn tên gọi khác nhau nhưng tất cả đều đang đo cùng một trò chơi ấy.</p>
+      <p class="en-only" lang="en">Foundation models evolved out of language models, and many still keep a language model as their main component; for those, the language model's performance correlates well with downstream performance.<span class="cite"><a href="#ref-1">1</a></span> Four metrics — cross entropy, perplexity, bits-per-character (BPC) and bits-per-byte (BPB) — are closely related: know one and, given the necessary information, you can compute the other three.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="deep-only">Huyen nhắc rằng mạch phát triển này bắt đầu từ Claude Shannon với bài báo năm 1951 “Prediction and Entropy of Printed English”, và các chỉ số dẫn dắt việc phát triển mô hình ngôn ngữ về cơ bản không đổi kể từ đó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Bà cũng lưu ý đây là mục nặng toán nhất sách, và nếu thấy rối thì cứ bỏ qua phần toán mà đọc phần diễn giải ý nghĩa.</p>
+    </div>
+
+    <div class="surprise-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Entropy đo lượng thông tin trung bình mà một token mang theo. Entropy càng cao, mỗi token càng chứa nhiều thông tin — và càng cần nhiều bit để biểu diễn.</p>
+        <p class="definition easy-only">Entropy là “mỗi chữ nói được bao nhiêu điều”. Chữ nói được càng nhiều thì càng khó đoán trước.</p>
+        <p class="definition en-only" lang="en">Entropy measures how much information, on average, a token carries. The higher the entropy, the more information each token carries — and the more bits are needed to represent it.</p>
+        <p class="deep-only">Trực giác đi kèm quan trọng không kém định nghĩa: entropy đo mức khó đoán của một ngôn ngữ. Ngôn ngữ có entropy càng thấp thì càng dễ đoán — giống như nếu bạn đoán trước được hoàn hảo điều tôi sắp nói, thì điều tôi nói chẳng mang thông tin gì mới.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="equation">
+        <div class="equation-row">
+          <b><span class="vi-only">Ví dụ ô vuông</span><span class="en-only" lang="en">Square example</span></b>
+          <span class="standard-copy">Ngôn ngữ 2 token (trên / dưới) cần 1 bit → entropy = 1. Ngôn ngữ 4 token (trên-trái, trên-phải, dưới-trái, dưới-phải) cần 2 bit → entropy = 2.<span class="cite"><a href="#ref-1">1</a></span></span>
+          <span class="easy-only">Hai ô thì một câu hỏi có/không là đủ. Bốn ô thì phải hỏi hai lần.</span>
+          <span class="en-only" lang="en">A 2-token language (upper / lower) needs 1 bit → entropy = 1. A 4-token language (upper-left, upper-right, lower-left, lower-right) needs 2 bits → entropy = 2.<span class="cite"><a href="#ref-1">1</a></span></span>
+        </div>
+        <div class="equation-row">
+          <b lang="en">H(P, Q) = H(P) + D<sub>KL</sub>(P‖Q)</b>
+          <span class="standard-copy">Cross entropy của mô hình = entropy của dữ liệu + độ lệch <span lang="en">Kullback–Leibler</span> giữa phân phối mô hình học được (Q) và phân phối thật (P).<span class="cite"><a href="#ref-1">1</a></span></span>
+          <span class="easy-only">Điểm của máy = độ khó vốn có của bài + phần máy học chưa tới.</span>
+          <span class="en-only" lang="en">A model's cross entropy = the data's own entropy + the Kullback–Leibler divergence between the learned distribution (Q) and the true one (P).<span class="cite"><a href="#ref-1">1</a></span></span>
+        </div>
+        <div class="equation-row">
+          <b lang="en">PPL(P, Q) = 2<sup>H(P, Q)</sup></b>
+          <span class="standard-copy">Perplexity là lũy thừa của cross entropy. Cross entropy 2 bit → perplexity 4: mô hình phải chọn giữa 4 khả năng.<span class="cite"><a href="#ref-1">1</a></span></span>
+          <span class="easy-only">Perplexity là “máy đang phân vân giữa bao nhiêu lựa chọn”.</span>
+          <span class="en-only" lang="en">Perplexity is the exponential of cross entropy. A cross entropy of 2 bits → perplexity 4: the model must choose among 4 options.<span class="cite"><a href="#ref-1">1</a></span></span>
+        </div>
+        <div class="equation-row">
+          <b><span class="vi-only">BPC → BPB</span><span class="en-only" lang="en">BPC → BPB</span></b>
+          <span class="standard-copy">6 bit/token, mỗi token 2 ký tự → BPC = 6/2 = 3. Nếu mỗi ký tự là 7 bit (⅞ byte) → BPB = 3 / (⅞) = 3,43 — tức nén văn bản gốc xuống dưới một nửa.<span class="cite"><a href="#ref-1">1</a></span></span>
+          <span class="easy-only">Đây là cách quy điểm về cùng một đơn vị để so máy này với máy kia cho công bằng.</span>
+          <span class="en-only" lang="en">6 bits/token at 2 characters per token → BPC = 6/2 = 3. If a character is 7 bits (⅞ of a byte) → BPB = 3 / (⅞) = 3.43 — compressing the original text to less than half its size.<span class="cite"><a href="#ref-1">1</a></span></span>
+        </div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">05</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Perplexity — uncertainty per token</div>
+          <h3><span class="standard-copy">Perplexity — số lựa chọn máy còn phân vân</span><span class="easy-only">Perplexity — máy phân vân cỡ nào</span><span class="en-only" lang="en">Perplexity — how uncertain the model is</span></h3>
+          <p class="standard-copy">Nếu cross entropy đo mức khó khi dự đoán token kế tiếp, thì perplexity đo mức bất định khi dự đoán ấy: bất định càng lớn nghĩa là càng nhiều khả năng cho token tiếp theo. Huyen viết rằng giá trị perplexity thấp tới 3 hoặc thấp hơn không phải hiếm — và nếu mọi token đều có cơ hội ngang nhau, perplexity 3 nghĩa là mô hình có 1 trên 3 cơ hội đoán đúng token kế tiếp; với từ vựng cỡ hàng chục nghìn tới hàng trăm nghìn token, đó là tỉ lệ đáng kinh ngạc.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Hãy tưởng tượng máy đang chơi trò đoán chữ. Perplexity bằng 3 nghĩa là nó đang lưỡng lự giữa khoảng ba chữ. Mà trong tiếng Việt có hàng chục nghìn chữ! Nhớ nhé: số này càng nhỏ thì máy càng chắc tay.</p>
+          <p class="en-only" lang="en">If cross entropy measures how hard it is to predict the next token, perplexity measures the uncertainty in doing so: higher uncertainty means more possible options. Huyen notes that perplexity values as low as 3 or lower are not uncommon — and if all tokens were equally likely, a perplexity of 3 means a 1-in-3 chance of predicting the next token correctly; against a vocabulary in the tens or hundreds of thousands, those odds are incredible.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ở báo cáo GPT-2 của OpenAI: mô hình lớn hơn cho perplexity thấp hơn một cách nhất quán trên nhiều tập dữ liệu — trên WikiText2, perplexity giảm từ 29,41 ở bản 117M xuống 18,34 ở bản 1542M.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+            <span class="easy-only">Máy càng to thì càng ít phân vân — người ta đã đo được điều đó.</span>
+            <span class="en-only" lang="en">In OpenAI's GPT-2 report: larger models consistently give lower perplexity across datasets — on WikiText2 it falls from 29.41 for the 117M model to 18.34 for the 1542M model.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Ba quy tắc ngón tay cái</h4>
+              <p>Dữ liệu càng có cấu trúc, perplexity kỳ vọng càng thấp (mã HTML dễ đoán hơn văn nói: thấy <span lang="en">&lt;head&gt;</span> là biết sắp có <span lang="en">&lt;/head&gt;</span>). Từ vựng càng lớn, perplexity càng cao (truyện thiếu nhi thấp hơn <em lang="en">War and Peace</em>; perplexity theo ký tự thấp hơn theo từ). Ngữ cảnh càng dài, perplexity càng thấp.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Bit hay nat</h4>
+              <p>Các khung phổ biến như TensorFlow và PyTorch dùng đơn vị <span lang="en">nat</span> (log tự nhiên) thay vì bit, khi ấy perplexity là lũy thừa cơ số e. Chính sự lẫn lộn giữa bit và nat khiến nhiều người báo cáo perplexity thay vì cross entropy.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">06</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Perplexity as a detector</div>
+          <h3><span class="standard-copy">Dùng perplexity như một máy dò</span><span class="easy-only">Dùng perplexity để bắt lỗi</span><span class="en-only" lang="en">Perplexity as a detector</span></h3>
+          <p class="standard-copy">Perplexity của một mô hình thấp nhất trên chính những văn bản nó đã thấy và ghi nhớ khi huấn luyện. Từ đó sinh ra ba công dụng ngoài việc dẫn dắt huấn luyện: phát hiện nhiễm dữ liệu (perplexity của mô hình trên dữ liệu một bộ đo mà thấp thì bộ đo ấy nhiều khả năng đã nằm trong dữ liệu huấn luyện, khiến điểm số kém đáng tin), khử trùng lặp dữ liệu (chỉ thêm dữ liệu mới khi perplexity của nó cao), và phát hiện văn bản bất thường.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Nếu máy thấy một đoạn văn quá “quen tay”, nhiều khả năng nó đã đọc đoạn ấy khi học — nghĩa là đề thi bị lộ. Ngược lại, câu nào máy thấy quá lạ thì có thể là câu vô nghĩa. Nhớ nhé: cùng một thước đo, dùng ngược lại thành máy dò.</p>
+          <p class="en-only" lang="en">A model's perplexity is lowest on the texts it saw and memorised during training. That yields three uses beyond guiding training: detecting data contamination (low perplexity on a benchmark's data suggests the benchmark was in the training set, making its scores less trustworthy), deduplicating training data (add new data only when its perplexity is high), and detecting abnormal text.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Perplexity cao nhất ở những văn bản khó đoán, ví dụ ý tưởng khác thường (“chó của tôi dạy vật lý lượng tử lúc rảnh”) hoặc câu vô nghĩa (“nhà mèo đi mắt”).<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Câu càng kỳ quặc thì máy càng bất ngờ — và ta đo được sự bất ngờ đó.</span>
+            <span class="en-only" lang="en">Perplexity is highest on unpredictable text — unusual ideas (“my dog teaches quantum physics in his free time”) or gibberish (“home cat go eye”).<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Cảnh báo của tác giả</strong>
+      <strong class="easy-only">Một lời dặn</strong>
+      <strong class="en-only" lang="en">The author's warning</strong>
+      <p class="standard-copy">Perplexity có thể không phải đại diện tốt cho các mô hình đã qua hậu huấn luyện bằng SFT hay RLHF. Hậu huấn luyện dạy mô hình cách hoàn thành nhiệm vụ; mô hình càng giỏi làm việc thì có thể càng kém đoán token kế tiếp — perplexity thường tăng sau hậu huấn luyện, hiện tượng đôi khi được gọi là “hậu huấn luyện làm sụp entropy”. Lượng tử hóa cũng có thể làm perplexity đổi theo cách khó lường.<span class="cite"><a href="#ref-1">1</a></span> Thêm nữa, muốn tính perplexity thì cần truy cập xác suất (logprob) mà mô hình gán cho từng token — và không phải mô hình thương mại nào cũng công bố.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Điểm đoán chữ không phải là tất cả. Một cái máy được dạy thêm để lễ phép và làm đúng việc có thể đoán chữ kém đi, mà vẫn hữu ích hơn. Nhớ nhé: đừng chỉ nhìn một con số.</p>
+      <p class="en-only" lang="en">Perplexity may be a poor proxy for models post-trained with SFT or RLHF. Post-training teaches a model to complete tasks; as it gets better at tasks it may get worse at predicting next tokens — perplexity typically rises after post-training, an effect sometimes described as post-training collapsing entropy. Quantization can also shift perplexity in unexpected ways.<span class="cite"><a href="#ref-1">1</a></span> And computing perplexity at all requires access to the probabilities (logprobs) the model assigns to each token — which not every commercial model exposes.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </aside>
+  </section>
+
+  <section class="section" id="exact-eval" aria-labelledby="exact-eval-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Mục 03 · Đánh giá chính xác</span><span class="easy-only">Mục 03 · Chạy thử &amp; so đáp án</span><span class="en-only" lang="en">Part 03 · Exact evaluation</span></div>
+        <h2 id="exact-eval-title"><span class="standard-copy">Chạy thử được thì đừng đoán</span><span class="easy-only">Thử luôn cho chắc</span><span class="en-only" lang="en">If you can run it, do not guess it</span></h2>
+      </div>
+      <p class="standard-copy">Huyen phân biệt hai loại: đánh giá <em>chính xác</em> cho ra phán quyết không mơ hồ (đáp án là A mà bạn chọn B thì bạn sai), còn chấm luận văn thì chủ quan — cùng một bài, người khác chấm ra điểm khác, thậm chí cùng một người chấm hai lần cách nhau cũng khác.<span class="cite"><a href="#ref-1">1</a></span> Mục này đi qua hai lối cho ra điểm chính xác: tính đúng chức năng, và đo tương đồng với dữ liệu tham chiếu.</p>
+      <p class="easy-only">Có hai kiểu chấm. Kiểu thứ nhất: chấm chắc chắn, như bài trắc nghiệm — đúng là đúng, sai là sai. Kiểu thứ hai: chấm theo cảm nhận, như chấm văn. Nhớ nhé: phần này nói về kiểu thứ nhất.</p>
+      <p class="en-only" lang="en">Huyen separates two families: <em>exact</em> evaluation produces judgment without ambiguity (if the answer is A and you pick B, you are wrong), whereas essay grading is subjective — the score depends on who grades, and the same grader asked twice some time apart can score the same essay differently.<span class="cite"><a href="#ref-1">1</a></span> This part covers the two approaches that produce exact scores: functional correctness, and similarity measurements against reference data.</p>
+      <p class="deep-only">Bà cũng nói rõ phạm vi: mục này tập trung vào đầu ra mở (sinh văn bản tự do) chứ không phải đầu ra đóng như phân loại — không phải vì mô hình nền tảng không làm tác vụ đóng (thực tế nhiều hệ thống có ít nhất một thành phần phân loại, thường để phân loại ý định hoặc chấm điểm), mà vì đánh giá tác vụ đóng vốn đã được hiểu rõ.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Tính đúng chức năng là thước đo tối hậu của mọi ứng dụng: nó hỏi thẳng hệ thống có làm được đúng việc nó sinh ra để làm hay không.</p>
+        <p class="definition easy-only">Cách chắc chắn nhất để biết một cái máy có làm được việc không: bắt nó làm, rồi xem kết quả.</p>
+        <p class="definition en-only" lang="en">Functional correctness is the ultimate metric for any application: it asks straight out whether the system does what it was built to do.</p>
+        <p class="deep-only">Nhược điểm nằm ngay trong sức mạnh của nó: tính đúng chức năng không phải lúc nào cũng đo được, và việc đo cũng không dễ tự động hóa. Sinh mã là ngoại lệ đẹp vì có sẵn trình thông dịch làm trọng tài.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="equation">
+        <div class="equation-row">
+          <b lang="en">pass@k</b>
+          <span class="standard-copy">Với mỗi bài, sinh k mẫu mã; bài được tính là giải được nếu bất kỳ mẫu nào vượt qua toàn bộ test case. Điểm là tỉ lệ bài giải được — 10 bài, giải 5 với k = 3 thì <span lang="en">pass@3</span> = 50%.<span class="cite"><a href="#ref-1">1</a></span></span>
+          <span class="easy-only">Cho máy thử k lần; chỉ cần một lần đúng là tính đậu bài đó.</span>
+          <span class="en-only" lang="en">For each problem, generate k code samples; the problem counts as solved if any sample passes all its test cases. The score is the fraction solved — 10 problems, 5 solved at k = 3 gives pass@3 = 50%.<span class="cite"><a href="#ref-1">1</a></span></span>
+        </div>
+        <div class="equation-row">
+          <b><span class="vi-only">Thứ tự kỳ vọng</span><span class="en-only" lang="en">Expected order</span></b>
+          <span class="standard-copy">Sinh càng nhiều mẫu thì càng nhiều cơ hội, nên kỳ vọng <span lang="en">pass@1</span> &lt; <span lang="en">pass@3</span> &lt; <span lang="en">pass@10</span>. So điểm giữa các k khác nhau là so sai.<span class="cite"><a href="#ref-1">1</a></span></span>
+          <span class="easy-only">Cho thử nhiều lần thì dễ đậu hơn — nên phải so cùng số lần thử.</span>
+          <span class="en-only" lang="en">More samples means more chances, so in expectation pass@1 &lt; pass@3 &lt; pass@10. Comparing scores across different k is comparing the wrong things.<span class="cite"><a href="#ref-1">1</a></span></span>
+        </div>
+        <div class="equation-row">
+          <b><span class="vi-only">Tương đồng từ vựng</span><span class="en-only" lang="en">Lexical similarity</span></b>
+          <span class="standard-copy">Tham chiếu “My cats scare the mice”: câu A “My cats eat the mice” trùng 4/5 từ (80%), câu B “Cats and mice fight all the time” trùng 3/5 (60%) — nên A được coi là gần hơn.<span class="cite"><a href="#ref-1">1</a></span></span>
+          <span class="easy-only">Đếm xem hai câu dùng chung bao nhiêu chữ.</span>
+          <span class="en-only" lang="en">Reference “My cats scare the mice”: response A “My cats eat the mice” shares 4 of 5 words (80%), response B “Cats and mice fight all the time” shares 3 of 5 (60%) — so A counts as closer.<span class="cite"><a href="#ref-1">1</a></span></span>
+        </div>
+        <div class="equation-row">
+          <b><span class="vi-only">Tương đồng ngữ nghĩa</span><span class="en-only" lang="en">Semantic similarity</span></b>
+          <span class="standard-copy">Nhúng hai văn bản thành vector rồi tính <span lang="en">cosine similarity</span>: hai vector giống hệt được 1, hai vector ngược nhau được −1.<span class="cite"><a href="#ref-1">1</a></span></span>
+          <span class="easy-only">Đổi câu thành dãy số, rồi đo hai dãy số có “chỉ về cùng hướng” không.</span>
+          <span class="en-only" lang="en">Embed both texts as vectors, then take the cosine similarity: identical embeddings score 1, opposite embeddings score −1.<span class="cite"><a href="#ref-1">1</a></span></span>
+        </div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">07</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Functional correctness</div>
+          <h3><span class="standard-copy">Tính đúng chức năng — để trình thông dịch làm trọng tài</span><span class="easy-only">Tính đúng chức năng — chạy thử là biết</span><span class="en-only" lang="en">Functional correctness — let the interpreter judge</span></h3>
+          <p class="standard-copy">Sinh mã là ví dụ mà tính đúng chức năng tự động hóa được, đôi khi gọi là <span lang="en">execution accuracy</span>. Yêu cầu mô hình viết hàm <span lang="en">gcd(num1, num2)</span> tìm ước chung lớn nhất, rồi đưa mã vào trình thông dịch Python: với cặp (15, 20), nếu hàm không trả về 5 thì hàm sai. Cách kiểm tra này có trước AI rất lâu — nó chính là unit test, và là cách các nền tảng như LeetCode, HackerRank chấm bài nộp.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Nếu bạn nhờ máy viết một công thức tính toán, bạn không cần tranh cãi xem nó viết hay không — cứ bấm chạy thử với một con số mình biết đáp án. Sai là lộ ngay. Nhớ nhé: chạy thử được thì đừng ngồi đoán.</p>
+          <p class="en-only" lang="en">Code generation is the clean case where functional correctness can be automated, sometimes called execution accuracy. Ask a model to write <span>gcd(num1, num2)</span>, feed the code to a Python interpreter, and for the pair (15, 20) check whether it returns 5. This predates AI entirely — it is unit testing, and it is how platforms like LeetCode and HackerRank validate submissions.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ở các bộ đo sinh mã: <span lang="en">HumanEval</span> của OpenAI<span class="cite"><a href="#ref-5">5</a></span> và <span lang="en">MBPP</span> của Google, cùng các bộ text-to-SQL như <span lang="en">Spider</span><span class="cite"><a href="#ref-6">6</a></span>, <span lang="en">BIRD-SQL</span> và <span lang="en">WikiSQL</span> — tất cả đều dựa trên tính đúng chức năng.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Ở các bộ đề chấm máy viết mã: chạy thử từng bài rồi đếm số bài đậu.</span>
+            <span class="en-only" lang="en">In code-generation benchmarks: OpenAI's HumanEval<span class="cite"><a href="#ref-5">5</a></span> and Google's MBPP, plus text-to-SQL suites like Spider<span class="cite"><a href="#ref-6">6</a></span>, BIRD-SQL and WikiSQL — all built on functional correctness.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Ngoài mã nguồn</h4>
+              <p>Một nhóm tác vụ khác cũng đo tự động được là bot chơi game: làm bot chơi Tetris thì điểm số chính là thước đo. Nói chung, tác vụ có mục tiêu đo được đều đánh giá được theo tính đúng chức năng — ví dụ nhờ AI xếp lịch chạy tải để tối ưu tiêu thụ điện thì đo bằng lượng điện tiết kiệm được.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Vướng mắc còn lại</h4>
+              <p>Huyen ghi chú rằng AI thường chưa đủ giỏi để làm trọn một tác vụ phức tạp, nên nó chỉ làm một phần — và đánh giá một phần của lời giải đôi khi còn khó hơn đánh giá kết quả cuối. Bà ví với cờ vua: chấm kết cục ván cờ (thắng/thua/hòa) dễ hơn chấm một nước đi đơn lẻ.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">08</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Exact match &amp; its edge cases</div>
+          <h3><span class="standard-copy">Khớp chính xác — và chỗ nó gãy</span><span class="easy-only">So đúng từng chữ — và cái bẫy</span><span class="en-only" lang="en">Exact match — and where it breaks</span></h3>
+          <p class="standard-copy">Khớp chính xác chạy tốt với tác vụ có câu trả lời ngắn và dứt khoát: “2 + 3 bằng mấy?”, “Ai là người phụ nữ đầu tiên đoạt giải Nobel?”. Một biến thể dễ dãi hơn chấp nhận mọi đầu ra <em>có chứa</em> đáp án — nhưng chính biến thể ấy tạo ra lỗi tinh vi: hỏi Anne Frank sinh năm nào, đáp án đúng là 1929, mà mô hình trả lời “12 tháng 9 năm 1929” thì vẫn chứa đúng năm nhưng sai sự thật.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Với câu hỏi có đáp án ngắn thì so từng chữ là xong. Nhưng nếu ta dễ dãi kiểu “miễn có số đúng trong câu là được”, máy có thể trả lời sai ngày mà vẫn được điểm. Nhớ nhé: chứa đáp án đúng không có nghĩa là câu trả lời đúng.</p>
+          <p class="en-only" lang="en">Exact match works for tasks with short, exact answers: “What's 2 + 3?”, “Who was the first woman to win a Nobel Prize?”. A looser variant accepts any output that <em>contains</em> the reference — and that variant introduces a subtle failure: asked what year Anne Frank was born, the correct answer is 1929, and an output of “September 12, 1929” contains the right year while being factually wrong.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ngay khi rời khỏi tác vụ đơn giản: văn bản gốc càng dài và phức tạp thì càng nhiều bản dịch đúng, và không thể dựng nổi tập đáp án đầy đủ. Khi ấy phải chuyển sang đo tương đồng từ vựng hoặc ngữ nghĩa.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Câu càng dài thì càng nhiều cách nói đúng — không liệt kê hết được.</span>
+            <span class="en-only" lang="en">The moment you leave simple tasks: the longer and more complex the original, the more correct responses exist, and an exhaustive answer set is impossible. That is when you move to lexical or semantic similarity.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">09</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Lexical similarity</div>
+          <h3><span class="standard-copy">Tương đồng từ vựng — đo cái nhìn giống, không phải nghĩa giống</span><span class="easy-only">Đếm chữ trùng nhau</span><span class="en-only" lang="en">Lexical similarity — looking alike, not meaning alike</span></h3>
+          <p class="standard-copy">Tương đồng từ vựng đo mức chồng lấp giữa hai văn bản: đếm token chung, hoặc đếm số phép sửa để biến văn bản này thành văn bản kia (khoảng cách sửa — xóa, chèn, thay thế), hoặc so các n-gram. “bad” cách “bard” một phép sửa và cách “cash” ba phép, nên “bad” gần “bard” hơn. Các chỉ số quen thuộc là BLEU, ROUGE, METEOR++, TER, CIDEr — khác nhau ở cách tính chồng lấp.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Cách đơn giản nhất để so hai câu: đếm xem chúng dùng chung bao nhiêu chữ, hoặc phải sửa mấy chữ thì câu này thành câu kia. Nhớ nhé: cách này chỉ biết hai câu <em>trông</em> giống nhau, chứ không biết chúng có cùng ý hay không.</p>
+          <p class="en-only" lang="en">Lexical similarity measures overlap: count shared tokens, count the edits needed to turn one text into the other (edit distance — deletion, insertion, substitution), or compare n-grams. “bad” is one edit from “bard” and three from “cash”, so it counts as closer to “bard”. The familiar metrics are BLEU, ROUGE, METEOR++, TER and CIDEr, differing in how overlap is computed.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ở chỗ nó gãy: trên HumanEval, OpenAI thấy điểm BLEU của lời giải sai và lời giải đúng là tương đương nhau — tối ưu BLEU không phải là tối ưu tính đúng chức năng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span>
+            <span class="easy-only">Có khi bài sai mà vẫn “trông giống” bài đúng — nên điểm giống nhau không nói lên bài đúng.</span>
+            <span class="en-only" lang="en">Where it breaks: on HumanEval, OpenAI found BLEU scores for incorrect and correct solutions were similar — optimising for BLEU is not optimising for functional correctness.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Tham chiếu thiếu</h4>
+              <p>Một câu trả lời hay vẫn có thể bị điểm thấp nếu tập tham chiếu không chứa câu nào giống nó. Adept phát hiện mô hình Fuyu của họ bị chấm kém trên một số ví dụ không phải vì đầu ra sai, mà vì tập tham chiếu thiếu đáp án đúng — một chú thích ảnh đúng nhưng không có trong tham chiếu vẫn nhận điểm thấp.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Tham chiếu sai</h4>
+              <p>Tệ hơn, tham chiếu có thể sai: ban tổ chức nhiệm vụ <span lang="en">WMT 2023 Metrics</span> báo cáo họ tìm thấy nhiều bản dịch tham chiếu kém chất lượng trong dữ liệu. Dữ liệu tham chiếu chất lượng thấp là một lý do khiến các chỉ số không cần tham chiếu cạnh tranh được với chỉ số cần tham chiếu về mức tương quan với đánh giá của con người.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">10</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Semantic similarity &amp; embeddings</div>
+          <h3><span class="standard-copy">Tương đồng ngữ nghĩa — đổi câu thành vector</span><span class="easy-only">Đổi câu thành dãy số</span><span class="en-only" lang="en">Semantic similarity — turning text into vectors</span></h3>
+          <p class="standard-copy">“What's up?” và “How are you?” gần như không trùng chữ nào nhưng rất gần về nghĩa; ngược lại “Let's eat, grandma” và “Let's eat grandma” trông giống hệt mà nghĩa khác hẳn. Đo ngữ nghĩa vì thế cần đổi văn bản thành biểu diễn số — gọi là <span lang="en">embedding</span> — rồi so hai vector. Kích thước vector nhúng thực tế thường nằm giữa 100 và 10.000 phần tử.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">“Khỏe không?” và “Dạo này thế nào?” chẳng có chữ nào giống nhau, mà ý thì như nhau. Nên máy đổi mỗi câu thành một dãy số ghi lại ý nghĩa, rồi so hai dãy số ấy. Nhớ nhé: dãy số đó gọi là embedding.</p>
+          <p class="en-only" lang="en">“What's up?” and “How are you?” share almost no words yet mean nearly the same thing; “Let's eat, grandma” and “Let's eat grandma” look almost identical and mean opposite things. Measuring meaning therefore requires turning text into a numerical representation — an embedding — and comparing vectors. Real embedding vectors typically run between 100 and 10,000 elements.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ở mọi nơi trong phần còn lại của sách: tìm kiếm vector ở Chương 6 và khử trùng lặp dữ liệu ở Chương 8 đều đứng trên khái niệm này. Chỉ số ngữ nghĩa quen thuộc gồm <span lang="en">BERTScore</span> và <span lang="en">MoverScore</span>.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Ý tưởng này còn quay lại ở nhiều chương sau của sách.</span>
+            <span class="en-only" lang="en">Everywhere in the rest of the book: vector search in Chapter 6 and data deduplication in Chapter 8 both rest on it. Familiar semantic metrics include BERTScore and MoverScore.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Không gian nhúng chung</h4>
+              <p><span lang="en">CLIP</span> (Radford và cộng sự, 2021) là một trong những mô hình lớn đầu tiên ánh xạ dữ liệu khác phương thức — văn bản và ảnh — vào một không gian nhúng chung: một bộ mã hóa văn bản và một bộ mã hóa ảnh, rồi chiếu cả hai vào cùng không gian sao cho ảnh nằm gần đúng đoạn mô tả của nó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Nhờ đó mới có tìm ảnh bằng chữ.</p>
+            </div>
+            <div class="info-block">
+              <h4>Một cảnh báo về “chính xác”</h4>
+              <p>Huyen xếp tương đồng ngữ nghĩa vào nhóm đánh giá chính xác nhưng tự cảnh báo: nó có thể coi là chủ quan, vì thuật toán nhúng khác nhau cho ra embedding khác nhau. Tuy vậy, khi đã có hai embedding thì điểm tương đồng giữa chúng được tính một cách chính xác.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Cầu nối sang mục sau</strong>
+      <strong class="easy-only">Nối sang phần sau</strong>
+      <strong class="en-only" lang="en">Bridge to the next part</strong>
+      <p class="standard-copy">Cả hai lối trên đều nghẽn ở cùng một chỗ: chúng cần dữ liệu tham chiếu, mà dữ liệu tham chiếu do người tạo thì đắt và chậm. Câu hỏi tự nhiên tiếp theo — nếu AI đã tự động hóa được nhiều việc khó, liệu nó có tự động hóa được cả việc chấm điểm?</p>
+      <p class="easy-only">Hai cách trên đều cần có đáp án mẫu do người soạn, mà soạn đáp án thì tốn tiền tốn công. Nhớ nhé: câu hỏi kế tiếp là nhờ chính AI chấm bài được không.</p>
+      <p class="en-only" lang="en">Both approaches bottleneck on the same thing: they need reference data, and human-generated reference data is expensive and slow. Which raises the obvious next question — if AI has automated so many hard tasks, can it automate evaluation too?</p>
+    </aside>
+  </section>
+
+  <section class="section" id="judge-and-rank" aria-labelledby="judge-and-rank-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Mục 04 · Đánh giá chủ quan</span><span class="easy-only">Mục 04 · Nhờ AI chấm</span><span class="en-only" lang="en">Part 04 · Subjective evaluation</span></div>
+        <h2 id="judge-and-rank-title"><span class="standard-copy">AI làm giám khảo, và xếp hạng bằng so sánh</span><span class="easy-only">Nhờ AI chấm, hoặc bắt hai bên thi nhau</span><span class="en-only" lang="en">AI as a judge, and ranking by comparison</span></h2>
+      </div>
+      <p class="standard-copy">Ý tưởng dùng AI để đánh giá AI đã có từ lâu, nhưng chỉ trở nên khả thi khi mô hình đủ mạnh — khoảng năm 2020 với GPT-3. Tính tới thời điểm sách viết, đây đã là một trong những phương pháp phổ biến nhất để đánh giá mô hình trong sản xuất.<span class="cite"><a href="#ref-1">1</a></span> Một điểm Huyen nhấn rất mạnh: giám khảo AI không phải là một mô hình, mà là một <em>hệ thống</em> gồm mô hình cộng prompt — đổi mô hình, đổi prompt, hay đổi tham số lấy mẫu là ra một giám khảo khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nếu người chấm bài quá đắt và quá chậm, ta nhờ một cái máy khác chấm. Cách này nhanh và rẻ, nhưng có cái bẫy: “giám khảo” ấy không chỉ là cái máy, mà là cái máy cộng với câu lệnh ta đưa cho nó. Nhớ nhé: đổi câu lệnh là đổi luôn giám khảo.</p>
+      <p class="en-only" lang="en">Using AI to evaluate AI has been around as an idea for a long time, but only became practical once models were capable enough — around 2020 with GPT-3. As of the book's writing it is one of the most common methods for evaluating models in production.<span class="cite"><a href="#ref-1">1</a></span> A point Huyen presses hard: an AI judge is not a model but a <em>system</em> of model plus prompt — change the model, the prompt, or the sampling parameters and you have a different judge.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="deep-only">Huyen dẫn báo cáo <span lang="en">State of AI</span> năm 2023 của LangChain, theo đó 58% các phép đánh giá trên nền tảng của họ do giám khảo AI thực hiện.<span class="cite"><a href="#ref-1">1</a></span> Lưu ý về nguồn: bản báo cáo công khai hiện hành chỉ nói rằng trong số phản hồi được ghi nhận, “phần lớn dùng một LLM để đánh giá đầu ra”, và không nêu con số phần trăm ấy.<span class="cite"><a href="#ref-8">8</a></span> Ở đây trang giữ nguyên cách dẫn của sách, đồng thời ghi rõ chênh lệch này thay vì im lặng chọn một phía.</p>
+    </div>
+
+    <div class="surprise-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Giám khảo AI nhanh, dễ dùng, rẻ hơn người — và quan trọng nhất, chạy được cả khi không có dữ liệu tham chiếu, tức là chạy được trong môi trường sản xuất.</p>
+        <p class="definition easy-only">Cái hay nhất của giám khảo AI: nó chấm được ngay cả khi không có đáp án mẫu để đối chiếu.</p>
+        <p class="definition en-only" lang="en">AI judges are fast, easy to use and cheap relative to humans — and crucially they work without reference data, which means they work in production.</p>
+        <p class="deep-only">Huyen thêm một lập luận đáng suy nghĩ: bạn không phải lúc nào cũng tin được ý kiến của người, và cũng không phải lúc nào cũng tin được phán quyết của AI. Nhưng vì mỗi mô hình là một sự tổng hợp từ số đông, nó có thể đưa ra phán quyết mang tính đại diện cho số đông ấy.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="equation">
+        <div class="equation-row">
+          <b><span class="vi-only">Tương quan với người</span><span class="en-only" lang="en">Agreement with humans</span></b>
+          <span class="standard-copy">Trên bộ đo <span lang="en">MT-Bench</span>, Zheng và cộng sự (2023) thấy mức đồng thuận giữa GPT-4 và người đạt 85% — cao hơn cả mức đồng thuận giữa người với người (81%).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span>
+          <span class="easy-only">Có nghiên cứu thấy máy chấm trùng ý người tới 85% — còn hai người chấm thì chỉ trùng nhau 81%.</span>
+          <span class="en-only" lang="en">On MT-Bench, Zheng et al. (2023) found GPT-4's agreement with humans reached 85% — higher than the agreement among humans themselves (81%).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span>
+        </div>
+        <div class="equation-row">
+          <b><span class="vi-only">Tính nhất quán</span><span class="en-only" lang="en">Consistency</span></b>
+          <span class="standard-copy">Thêm ví dụ đánh giá vào prompt nâng tính nhất quán của GPT-4 từ 65% lên 77,5% — nhưng chính nhóm tác giả thừa nhận nhất quán cao chưa chắc là chính xác cao: giám khảo có thể sai một cách nhất quán.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span>
+          <span class="easy-only">Cho giám khảo xem bài mẫu thì nó chấm ổn định hơn — nhưng ổn định không có nghĩa là đúng.</span>
+          <span class="en-only" lang="en">Adding evaluation examples to the prompt raised GPT-4's consistency from 65% to 77.5% — though the authors acknowledged high consistency may not imply high accuracy: a judge can be consistently wrong.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span>
+        </div>
+        <div class="equation-row">
+          <b><span class="vi-only">Thiên lệch tự thân</span><span class="en-only" lang="en">Self-bias</span></b>
+          <span class="standard-copy">Trong thí nghiệm của Zheng và cộng sự (2023), GPT-4 ưu ái chính mình với tỉ lệ thắng cao hơn 10%, còn Claude-v1 ưu ái chính mình tới 25%.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span>
+          <span class="easy-only">Máy thường chấm bài của chính mình cao hơn bài của máy khác.</span>
+          <span class="en-only" lang="en">In Zheng et al.'s 2023 experiment, GPT-4 favoured its own responses with a 10% higher win rate, and Claude-v1 favoured itself by 25%.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span>
+        </div>
+        <div class="equation-row">
+          <b><span class="vi-only">Thiên lệch độ dài</span><span class="en-only" lang="en">Verbosity bias</span></b>
+          <span class="standard-copy">Wu và Aji (2023) thấy cả GPT-4 lẫn Claude-1 thích câu trả lời dài (~100 từ) có lỗi sự thật hơn câu ngắn (~50 từ) mà đúng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span>
+          <span class="easy-only">Bài dài thường được chấm cao hơn, dù bài ngắn mới là bài đúng.</span>
+          <span class="en-only" lang="en">Wu and Aji (2023) found both GPT-4 and Claude-1 preferred longer responses (~100 words) containing factual errors over shorter, correct ones (~50 words).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span>
+        </div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">11</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Criteria ambiguity</div>
+          <h3><span class="standard-copy">Tiêu chí mơ hồ — cùng một chữ, ba thang điểm</span><span class="easy-only">Cùng một tiêu chí, mỗi nơi chấm một kiểu</span><span class="en-only" lang="en">Criteria ambiguity — one word, three scales</span></h3>
+          <p class="standard-copy">Khác với các chỉ số do người thiết kế, tiêu chí của giám khảo AI không được chuẩn hóa. Tính tới thời điểm sách viết, ba công cụ mã nguồn mở MLflow, Ragas và LlamaIndex đều có sẵn tiêu chí <span lang="en">faithfulness</span>, nhưng chỉ dẫn và thang điểm khác hẳn nhau: MLflow dùng thang 1–5, Ragas dùng 0 và 1, còn LlamaIndex yêu cầu giám khảo trả lời YES hoặc NO. Cho cùng một cặp (ngữ cảnh, câu trả lời), MLflow cho 3, Ragas cho 1, LlamaIndex cho NO — bạn sẽ dùng điểm nào?<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Ba ông thầy cùng chấm một bài theo cùng một tiêu chí, nhưng ông thì cho điểm từ 1 tới 5, ông thì chỉ cho 0 hoặc 1, ông thì chỉ nói “có” hoặc “không”. Vậy bài ấy được mấy điểm? Nhớ nhé: điểm số chỉ có nghĩa khi ta biết ai chấm và chấm theo thang nào.</p>
+          <p class="en-only" lang="en">Unlike human-designed metrics, AI-judge criteria are not standardised. As of the book's writing, MLflow, Ragas and LlamaIndex all ship a built-in <span>faithfulness</span> criterion with entirely different instructions and scoring: MLflow scores 1–5, Ragas scores 0 or 1, LlamaIndex asks for YES or NO. For the same (context, answer) pair MLflow says 3, Ragas says 1 and LlamaIndex says NO — which score would you use?<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ở chính báo cáo hằng tháng của đội bạn: tháng trước điểm mạch lạc 90%, tháng này 92% — có phải ứng dụng đã tốt lên không? Không trả lời được, trừ khi chắc chắn giám khảo hai tháng là y hệt nhau.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Điểm tháng này cao hơn tháng trước chưa chắc vì bài tốt hơn — có khi vì thầy khác.</span>
+            <span class="en-only" lang="en">In your own monthly report: last month the coherence score was 90%, this month 92% — did the application improve? You cannot say, unless you know the judges in both months were exactly the same.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Lời khuyên dứt khoát</h4>
+              <p>Huyen đặt thành nguyên tắc: đừng tin bất kỳ giám khảo AI nào nếu bạn không nhìn thấy mô hình và prompt được dùng cho giám khảo ấy.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Rủi ro tổ chức</h4>
+              <p>Rắc rối nhân lên khi ứng dụng và giám khảo do hai đội khác nhau quản: đội giám khảo có thể đổi giám khảo mà không báo, còn đội ứng dụng lại quy sự thay đổi trong kết quả cho ứng dụng của mình thay vì cho giám khảo.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">12</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Specialized judges</div>
+          <h3><span class="standard-copy">Giám khảo chuyên biệt — nhỏ mà đáng tin hơn</span><span class="easy-only">Giám khảo nhỏ chuyên một việc</span><span class="en-only" lang="en">Specialized judges — small can be more reliable</span></h3>
+          <p class="standard-copy">Giám khảo có thể mạnh hơn, yếu hơn, hay ngang bằng mô hình bị chấm, và mỗi lựa chọn có cái giá riêng. Dùng mô hình mạnh nhất làm giám khảo để lại hai vấn đề: mô hình mạnh nhất sẽ không còn ai đủ tư cách chấm nó, và ta vẫn cần một phương pháp khác để biết mô hình nào là mạnh nhất. Huyen đặc biệt hào hứng với hướng ngược lại: giám khảo nhỏ, chuyên biệt — được huấn luyện cho một loại phán quyết, theo tiêu chí và thang điểm cụ thể — có thể đáng tin hơn giám khảo lớn đa dụng cho đúng phán quyết ấy.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Không phải cứ giám khảo giỏi toàn diện mới chấm tốt. Một người chỉ chuyên chấm đúng một môn có khi còn chấm chuẩn hơn. Nhớ nhé: nhỏ mà chuyên thì vẫn hơn to mà chung chung.</p>
+          <p class="en-only" lang="en">A judge can be stronger, weaker or equal to the model being judged, and each has a price. Using the strongest model as judge leaves two problems: the strongest model itself has no eligible judge, and you still need another method to decide which model is strongest. Huyen is most excited by the opposite direction: small, specialized judges trained for specific judgments with specific criteria and scoring systems can be more reliable than larger general-purpose judges for those judgments.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ở ba họ giám khảo chuyên biệt: mô hình thưởng như <span lang="en">Cappy</span> của Google — chỉ 360 triệu tham số, nhỏ hơn nhiều so với mô hình nền tảng đa dụng, cho điểm 0–1 cho cặp (prompt, câu trả lời)<span class="cite"><a href="#ref-11">11</a></span>; giám khảo dựa tham chiếu như <span lang="en">BLEURT</span> và <span lang="en">Prometheus</span>; và mô hình sở thích như <span lang="en">PandaLM</span><span class="cite"><a href="#ref-12">12</a></span> hay <span lang="en">JudgeLM</span>.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Đã có những giám khảo tí hon chuyên chấm một loại bài — nhẹ và rẻ hơn nhiều.</span>
+            <span class="en-only" lang="en">In three families: reward models like Google's Cappy — just 360 million parameters, far smaller than a general-purpose foundation model, scoring a (prompt, response) pair from 0 to 1<span class="cite"><a href="#ref-11">11</a></span>; reference-based judges like BLEURT and Prometheus; and preference models like PandaLM<span class="cite"><a href="#ref-12">12</a></span> and JudgeLM.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Tự chấm chính mình</h4>
+              <p>Cho mô hình tự đánh giá (<span lang="en">self-evaluation</span> hay <span lang="en">self-critique</span>) nghe như gian lận vì thiên lệch tự thân, nhưng rất hợp để kiểm tra tỉnh táo: nếu chính mô hình cho rằng câu trả lời của nó sai, mô hình ấy có lẽ không đáng tin. Ngoài ra, việc bắt mô hình tự đánh giá còn thúc nó sửa lại và cải thiện câu trả lời.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Chi phí thật</h4>
+              <p>Dùng GPT-4 vừa sinh vừa chấm là gấp đôi số lệnh gọi API. Nếu có ba prompt đánh giá cho ba tiêu chí — chất lượng chung, tính nhất quán sự thật, độc hại — số lệnh gọi tăng gấp bốn. Cách giảm: dùng mô hình yếu hơn làm giám khảo, hoặc kiểm tra xác suất trên một tập con.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">13</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Comparative evaluation</div>
+          <h3><span class="standard-copy">Xếp hạng bằng so sánh — mượn luật từ thể thao</span><span class="easy-only">Bắt hai bên thi nhau</span><span class="en-only" lang="en">Comparative evaluation — borrowing the rules of sport</span></h3>
+          <p class="standard-copy">Thường ta đánh giá mô hình không phải vì cần điểm số, mà vì cần biết mô hình nào tốt nhất cho mình — tức là cần một bảng xếp hạng. Với chất lượng mang tính chủ quan, so sánh thường dễ hơn chấm điểm từng cái: nói bài hát nào trong hai bài hay hơn dễ hơn cho mỗi bài một điểm cụ thể. Trong AI, đánh giá so sánh được Anthropic dùng lần đầu năm 2021 để xếp hạng các mô hình, và nay là nền của bảng xếp hạng <span lang="en">Chatbot Arena</span> của LMSYS.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span></p>
+          <p class="easy-only">Thay vì chấm điểm từng thí sinh, ta cho hai thí sinh thi cùng lúc rồi hỏi khán giả thích ai hơn. Làm nhiều trận thì ra bảng xếp hạng, y như bóng đá hay cờ vua. Nhớ nhé: chọn ai hơn dễ hơn chấm điểm từng người.</p>
+          <p class="en-only" lang="en">Often you evaluate models not because you care about scores but because you want to know which is best for you — that is, you want a ranking. For subjective quality, comparison is usually easier than pointwise scoring: it is easier to say which of two songs is better than to give each a concrete score. In AI, comparative evaluation was first used by Anthropic in 2021 to rank models, and now powers LMSYS's Chatbot Arena leaderboard.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ở chính khung chat bạn đang dùng: ChatGPT thỉnh thoảng hiện hai câu trả lời cạnh nhau và hỏi bạn thích bản nào — đó là một trận đấu, và nó khác A/B testing ở chỗ người dùng nhìn thấy cả hai cùng lúc.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Đôi khi ứng dụng chat hiện hai câu trả lời và hỏi bạn thích câu nào hơn.</span>
+            <span class="en-only" lang="en">In the chat box you already use: ChatGPT occasionally shows two responses side by side and asks which you prefer — that is a match, and it differs from A/B testing in that the user sees both at once.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Thuật toán xếp hạng</h4>
+              <p>Từ các tín hiệu so sánh, một thuật toán xếp hạng tính điểm cho từng mô hình rồi sắp thứ tự. Các thuật toán mượn từ thể thao và game gồm Elo, Bradley–Terry, TrueSkill. Chatbot Arena ban đầu dùng Elo nhưng sau chuyển sang Bradley–Terry vì thấy Elo nhạy với thứ tự người đánh giá và thứ tự prompt.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Xếp hạng là bài toán dự báo</h4>
+              <p>Một bảng xếp hạng đúng nếu với mọi cặp mô hình, mô hình xếp trên có xác suất thắng cao hơn khi đấu với mô hình xếp dưới. Không có “bảng xếp hạng chân lý”: chất lượng của một bảng xếp hạng được đo bằng khả năng dự báo kết quả các trận đấu tương lai.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">14</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">From relative to absolute</div>
+          <h3><span class="standard-copy">Biết ai hơn, vẫn chưa biết đủ tốt chưa</span><span class="easy-only">Hơn người khác không có nghĩa là đủ tốt</span><span class="en-only" lang="en">Knowing which is better is not knowing if it is good enough</span></h3>
+          <p class="standard-copy">Với nhiều ứng dụng, ta không cần mô hình tốt nhất có thể — ta cần một mô hình <em>đủ tốt</em>. Đánh giá so sánh cho biết mô hình nào hơn, nhưng không cho biết mô hình ấy tốt tới đâu: nếu B hơn A, có thể B tốt còn A tệ, có thể cả hai đều tệ, cũng có thể cả hai đều tốt. Giả sử A giải quyết được 70% số phiếu hỗ trợ khách hàng, và B thắng A 51% số trận — không rõ 51% ấy quy ra bao nhiêu phiếu B xử lý được.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Biết bạn chạy nhanh hơn tôi chưa cho biết bạn có kịp chuyến xe buýt hay không. Nhớ nhé: so hai máy với nhau khác với biết máy có dùng được thật không.</p>
+          <p class="en-only" lang="en">For many applications you do not need the best possible model — you need one that is <em>good enough</em>. Comparative evaluation tells you which model is better, not how good it is: if B beats A, maybe B is good and A is bad, maybe both are bad, maybe both are good. Suppose A resolves 70% of support tickets and B wins against A 51% of the time — it is unclear how that 51% converts into tickets resolved.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ở bàn cân chi phí–lợi ích: nếu B đắt gấp đôi A, chỉ riêng đánh giá so sánh không đủ để biết mức cải thiện có đáng số tiền ấy không.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Máy tốt hơn nhưng đắt gấp đôi thì có đáng không? So sánh suông không trả lời được.</span>
+            <span class="en-only" lang="en">At the cost–benefit table: if B costs twice as much as A, comparative evaluation alone cannot tell you whether the gain is worth the money.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Nghẽn quy mô</h4>
+              <p>Số cặp mô hình cần so tăng theo bình phương số mô hình. Tháng 1 năm 2024, LMSYS đánh giá 57 mô hình bằng 244.000 phép so sánh — nghe thì nhiều, nhưng 57 mô hình tương ứng 1.596 cặp, tức trung bình chỉ 153 phép so sánh mỗi cặp.<span class="cite"><a href="#ref-1">1</a></span> Các thuật toán xếp hạng thường giả định tính bắc cầu, mà nhiều bài báo lại nêu chính giả định ấy là một hạn chế.</p>
+            </div>
+            <div class="info-block">
+              <h4>Chất lượng tín hiệu</h4>
+              <p>Trong 33.000 prompt mà Chatbot Arena công bố năm 2023, 180 prompt là “hello” và “hi” — chiếm 0,55% dữ liệu, chưa kể các biến thể; riêng câu đố “X có 3 chị gái, mỗi chị có một anh em trai. X có bao nhiêu anh em trai?” được hỏi 44 lần. Prompt quá đơn giản thì khó phân biệt mô hình, và có thể làm nhiễu bảng xếp hạng.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Vì sao đánh giá so sánh vẫn có tương lai</strong>
+      <strong class="easy-only">Nhưng cách này vẫn rất đáng dùng</strong>
+      <strong class="en-only" lang="en">Why comparative evaluation still has a future</strong>
+      <p class="standard-copy">Ba lý do Huyen đưa ra. Một: khi mô hình mạnh hơn người, người đánh giá có thể không còn chấm điểm tuyệt đối được nữa nhưng vẫn phân biệt được hai bản — bài báo Llama 2 ghi nhận rằng khi mô hình viết vượt khả năng của những người chú giải giỏi nhất, con người vẫn cung cấp được phản hồi giá trị khi so sánh hai câu trả lời. Hai: khác với bộ đo sẽ vô dụng khi bị làm hết điểm, đánh giá so sánh không bao giờ bão hòa chừng nào còn mô hình mới. Ba: nó tương đối khó gian lận, vì không có cách dễ dàng nào như huấn luyện mô hình trên chính dữ liệu tham chiếu.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Cách so sánh có ba cái lợi: vẫn dùng được khi máy giỏi hơn người chấm, không bao giờ “hết đề”, và khó gian lận. Nhớ nhé: nên dùng nó cùng với các cách khác, chứ đừng dùng một mình.</p>
+      <p class="en-only" lang="en">Huyen gives three reasons. One: when models surpass human performance, evaluators may no longer be able to assign absolute scores yet can still tell two responses apart — the Llama 2 paper reported that when the model ventures beyond the ability of the best human annotators, humans can still give valuable feedback by comparing two answers. Two: unlike benchmarks that become useless once scores max out, comparative evaluation never saturates as long as newer models keep arriving. Three: it is relatively hard to game, since there is no easy cheat like training on the reference data.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </aside>
+
+    <div class="trap-comparison deep-only">
+      <h3 class="standard-copy">Ba hiểu lầm mà người đọc lần đầu hay mắc</h3>
+      <h3 class="en-only" lang="en">Three misconceptions a first reader falls into</h3>
+      <p class="standard-copy">Chương này dày đặc chỉ số, và chính sự dày đặc ấy sinh ra ba ngộ nhận. Mỗi ngộ nhận đều xuất phát từ một câu đúng, rồi bị kéo đi xa hơn chỗ câu ấy chịu được.</p>
+      <p class="en-only" lang="en">The chapter is dense with metrics, and that density breeds three misreadings. Each starts from something true and then stretches it past what it can carry.</p>
+      <div class="comparison-grid">
+        <div class="comparison-card">
+          <h4 class="standard-copy">“Perplexity thấp nghĩa là mô hình tốt hơn”</h4>
+          <h4 class="en-only" lang="en">“Lower perplexity means a better model”</h4>
+          <p class="standard-copy">Perplexity là đại diện tốt cho năng lực nền, nhưng Huyen cảnh báo nó có thể không phải đại diện tốt cho mô hình đã qua hậu huấn luyện: mô hình càng giỏi làm việc thì có thể càng kém đoán token kế tiếp, và perplexity thường tăng sau hậu huấn luyện. So perplexity giữa một mô hình nền và một mô hình đã chỉnh theo chỉ dẫn là so nhầm thứ.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="en-only" lang="en">Perplexity is a good proxy for base capability, but Huyen warns it may be a poor one for post-trained models: as a model gets better at tasks it can get worse at predicting next tokens, and perplexity typically rises after post-training. Comparing the perplexity of a base model with that of an instruction-tuned one compares the wrong things.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="comparison-card">
+          <h4 class="standard-copy">“Điểm tương đồng cao nghĩa là câu trả lời đúng”</h4>
+          <h4 class="en-only" lang="en">“A high similarity score means a correct answer”</h4>
+          <p class="standard-copy">Không. Trên HumanEval, OpenAI thấy điểm BLEU của lời giải sai và lời giải đúng tương đương nhau; và Adept thấy mô hình Fuyu bị chấm thấp chỉ vì tập tham chiếu thiếu đáp án đúng. Điểm tương đồng đo khoảng cách tới tập tham chiếu, và tập tham chiếu vừa có thể thiếu, vừa có thể sai.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+          <p class="en-only" lang="en">No. On HumanEval, OpenAI found BLEU scores for incorrect and correct solutions were similar; and Adept found Fuyu scored low only because the reference set lacked the correct answer. A similarity score measures distance to the reference set — and that set can be both incomplete and wrong.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+        </div>
+        <div class="comparison-card">
+          <h4 class="standard-copy">“Giám khảo AI là một thước đo khách quan”</h4>
+          <h4 class="en-only" lang="en">“An AI judge is an objective metric”</h4>
+          <p class="standard-copy">Huyen xếp AI làm giám khảo vào nhóm <em>chủ quan</em> chính vì điểm số phụ thuộc vào mô hình và prompt được dùng. Giám khảo AI cũng là một ứng dụng AI, nên nó cũng thay đổi theo thời gian — điều đó khiến nó không đáng tin như một mốc chuẩn để theo dõi thay đổi của ứng dụng qua các tháng. Kết luận của bà: giám khảo AI nên được bổ sung bằng đánh giá chính xác, đánh giá của con người, hoặc cả hai.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="en-only" lang="en">Huyen files AI as a judge under <em>subjective</em> precisely because the score depends on the judge model and prompt. An AI judge is itself an AI application, so it changes over time — which makes it unreliable as a fixed benchmark for tracking an application month over month. Her conclusion: AI judges should be supplemented with exact evaluation, human evaluation, or both.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="diagnostic" aria-labelledby="diagnostic-title">
+    <div class="diagnostic">
+      <div class="diagnostic-intro">
+        <div class="eyebrow"><span class="standard-copy">Tự kiểm</span><span class="easy-only">Tự hỏi mình</span><span class="en-only" lang="en">Self-check</span></div>
+        <h2 id="diagnostic-title"><span class="standard-copy">Sáu câu hỏi cho hệ thống của bạn</span><span class="easy-only">Sáu câu hỏi cho bạn</span><span class="en-only" lang="en">Six questions for your system</span></h2>
+        <p class="standard-copy">Huyen viết rằng đánh giá phải đặt trong bối cảnh cả hệ thống, và bắt đầu từ việc xác định nơi hệ thống dễ hỏng.<span class="cite"><a href="#ref-1">1</a></span> Sáu câu dưới đây chuyển chương này thành một cuộc rà soát cho hệ thống của chính bạn.</p>
+        <p class="easy-only">Đọc xong rồi thì đừng vội tin ngay. Hãy tự hỏi mình mấy câu dưới đây về cái máy mà bạn đang dùng. Nhớ nhé: biết chỗ dễ hỏng trước thì mới kiểm tra đúng chỗ.</p>
+        <p class="en-only" lang="en">Huyen writes that evaluation must be considered in the context of a whole system, starting from identifying where that system is likely to fail.<span class="cite"><a href="#ref-1">1</a></span> These six questions turn the chapter into an audit of your own system.</p>
+      </div>
+      <div>
+        <div class="question-list standard-copy">
+          <div class="question">
+            <strong>Bạn có đang “nhìn qua thấy ổn” không?</strong>
+            <span>Hãy viết ra cách bạn đang đánh giá ứng dụng của mình. Nếu câu trả lời là một tập prompt tủ gom tùy hứng theo kinh nghiệm cá nhân chứ không theo nhu cầu ứng dụng, thì đó chính là lối làm mà Huyen nói có thể tạm đủ lúc khởi động nhưng không đủ để lặp lại và cải tiến.<span class="deep-only"> Bước sửa đầu tiên không phải là chọn chỉ số, mà là liệt kê những chỗ hệ thống dễ hỏng nhất.</span></span>
+          </div>
+          <div class="question">
+            <strong>Phần nào trong hệ thống có thể chạy thử được?</strong>
+            <span>Nếu đầu ra là mã, truy vấn SQL, một lời gọi API hay một hành động có kết quả đo được, thì tính đúng chức năng áp dụng được — và nó là thước đo tối hậu.<span class="deep-only"> Đừng dùng điểm tương đồng cho phần mà trình thông dịch có thể phán quyết dứt khoát.</span></span>
+          </div>
+          <div class="question">
+            <strong>Tập tham chiếu của bạn có đủ và có đúng không?</strong>
+            <span>Một câu trả lời hay vẫn bị điểm thấp nếu tập tham chiếu thiếu câu giống nó — trường hợp Fuyu của Adept. Và tham chiếu có thể sai: nhóm WMT 2023 Metrics báo cáo nhiều bản dịch tham chiếu kém chất lượng trong dữ liệu của chính họ.<span class="deep-only"> Vì thế các chỉ số không cần tham chiếu là đối thủ cạnh tranh được, chứ không phải lựa chọn hạng hai.</span></span>
+          </div>
+          <div class="question">
+            <strong>Bạn có nhìn thấy mô hình và prompt của giám khảo AI không?</strong>
+            <span>Huyen đặt thành nguyên tắc: đừng tin bất kỳ giám khảo AI nào nếu không thấy được mô hình và prompt của nó. Nếu giám khảo do một đội khác quản lý, hãy hỏi ai được phép sửa prompt và sửa thì báo cho ai.<span class="deep-only"> Ghi phiên bản giám khảo vào cùng chỗ với phiên bản ứng dụng, nếu không mọi so sánh theo thời gian đều vô nghĩa.</span></span>
+          </div>
+          <div class="question">
+            <strong>Các điểm số bạn đang so có cùng thang không?</strong>
+            <span>Cùng chữ <span lang="en">faithfulness</span> mà MLflow cho 1–5, Ragas cho 0/1, LlamaIndex cho YES/NO. Cùng cách <span lang="en">pass@k</span> mà k khác nhau thì điểm không so được.<span class="deep-only"> Quy tắc chung: một con số chỉ có nghĩa kèm theo ai đo, đo bằng gì, và trên tập nào.</span></span>
+          </div>
+          <div class="question">
+            <strong>Bạn cần “tốt nhất” hay chỉ cần “đủ tốt”?</strong>
+            <span>Đánh giá so sánh cho biết mô hình nào hơn, không cho biết mô hình nào đủ dùng. Nếu quyết định của bạn là đổi A sang B mà B đắt gấp đôi, bạn cần thêm một phép đo tuyệt đối trước khi ký.<span class="deep-only"> Một thay đổi 1% ở tỉ lệ thắng có thể là cú nhảy lớn ở ứng dụng này và gần như không đổi gì ở ứng dụng khác.</span></span>
+          </div>
+        </div>
+
+        <div class="question-list easy-only">
+          <div class="question">
+            <strong>Bạn đang chấm máy bằng cách nào?</strong>
+            <span>Nếu chỉ là “thử vài câu thấy ổn” thì chưa đủ đâu.</span>
+          </div>
+          <div class="question">
+            <strong>Có việc nào chạy thử được ngay không?</strong>
+            <span>Việc nào bấm chạy là biết đúng sai thì đừng ngồi đoán.</span>
+          </div>
+          <div class="question">
+            <strong>Đáp án mẫu của bạn có đủ chưa?</strong>
+            <span>Thiếu đáp án đúng thì bài đúng vẫn bị chấm sai.</span>
+          </div>
+          <div class="question">
+            <strong>Ai là giám khảo, và chấm theo lệnh nào?</strong>
+            <span>Không biết thầy nào chấm thì đừng tin điểm.</span>
+          </div>
+          <div class="question">
+            <strong>Hai điểm bạn đang so có cùng thang không?</strong>
+            <span>Thang 1–5 không so được với thang “có / không”.</span>
+          </div>
+          <div class="question">
+            <strong>Bạn cần giỏi nhất hay chỉ cần đủ dùng?</strong>
+            <span>Hơn máy kia chưa chắc đã đủ dùng cho việc của bạn.</span>
+          </div>
+        </div>
+
+        <div class="question-list en-only" lang="en">
+          <div class="question">
+            <strong>Are you still eyeballing results?</strong>
+            <span>Write down how you evaluate today. If the answer is a handful of go-to prompts curated ad hoc from personal experience, that is the approach Huyen says may get a project off the ground but will not sustain iteration.</span>
+          </div>
+          <div class="question">
+            <strong>Which part of your system can actually be executed?</strong>
+            <span>If the output is code, SQL, an API call or any action with a measurable objective, functional correctness applies — and it is the ultimate metric.</span>
+          </div>
+          <div class="question">
+            <strong>Is your reference set complete, and is it right?</strong>
+            <span>A good response scores low when the reference set contains nothing like it — Adept's Fuyu case. And references can be wrong: the WMT 2023 Metrics organisers reported many bad reference translations in their own data.</span>
+          </div>
+          <div class="question">
+            <strong>Can you see your AI judge's model and prompt?</strong>
+            <span>Huyen's rule: do not trust any AI judge whose model and prompt you cannot see. If another team owns the judge, ask who may change the prompt and who gets told when they do.</span>
+          </div>
+          <div class="question">
+            <strong>Are the scores you compare on the same scale?</strong>
+            <span>The same word <span>faithfulness</span> scores 1–5 in MLflow, 0/1 in Ragas and YES/NO in LlamaIndex. And pass@k values at different k are not comparable.</span>
+          </div>
+          <div class="question">
+            <strong>Do you need the best model or a good-enough one?</strong>
+            <span>Comparative evaluation tells you which model is better, not which is sufficient. If B costs twice as much as A, you need an absolute measure before you sign.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="closing" id="closing" aria-labelledby="closing-title">
+    <div class="eyebrow" id="closing-title"><span class="standard-copy">Đọng lại</span><span class="easy-only">Đọng lại</span><span class="en-only" lang="en">What remains</span></div>
+    <blockquote>
+      <p class="standard-copy">Mô hình càng mạnh thì <span class="closing-accent">khả năng hỏng càng lớn</span>, mà cũng chính vì mạnh nên <span class="closing-accent">càng khó chấm</span>. Không có một thước đo duy nhất — chỉ có việc biết rõ từng thước đo được gì và <span class="closing-accent">bỏ sót gì</span>.</p>
+      <p class="easy-only">Máy càng giỏi thì hỏng càng to, mà cũng <span class="closing-accent">càng khó chấm</span>. Không có một cái thước nào đo được hết — phải <span class="closing-accent">dùng nhiều thước</span>, và biết mỗi thước bỏ sót gì. Nhớ nhé: tin vào cách kiểm tra, đừng tin vào cảm giác.</p>
+      <p class="en-only" lang="en">The stronger models get, the <span class="closing-accent">higher the potential for catastrophic failure</span> — and the same strength is what makes them <span class="closing-accent">harder to judge</span>. There is no single metric, only the discipline of knowing what each one measures and <span class="closing-accent">what it quietly misses</span>.</p>
+    </blockquote>
+  </section>
+
+  <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+  <nav class="chapter-nav" aria-label="Điều hướng chương">
+    <a class="nav-cell nav-prev" href="chapter-2-understanding-foundation-models.html">
+      <span class="nav-label">◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span></span>
+      <span class="nav-title"><span class="vi-only">Chương 2 · Hiểu về mô hình nền tảng</span><span class="en-only" lang="en">Chapter 2 · Understanding Foundation Models</span></span>
+    </a>
+    <a class="nav-cell nav-next" href="chapter-4-evaluate-ai-systems.html">
+      <span class="nav-label"><span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶</span>
+      <span class="nav-title"><span class="vi-only">Chương 4 · Đánh giá hệ thống AI</span><span class="en-only" lang="en">Chapter 4 · Evaluate AI Systems</span></span>
+    </a>
+  </nav>
+  <!-- NAV:END -->
+
+  <footer>
+    <div class="footer-main">
+      <p class="standard-copy"><strong>Nguồn chính:</strong> Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, ấn bản thứ nhất, tháng 12 năm 2024 (ISBN 9781098166304) — Chương 3, “Evaluation Methodology”. Trang này là bản diễn giải và tổng hợp phục vụ học tập, không phải bản dịch nguyên văn hoặc bản sao nội dung sách. Các ví dụ trong chế độ “Dễ hiểu” là minh họa do người biên soạn thêm vào.</p>
+      <p class="easy-only"><strong>Nguồn chính:</strong> Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, 2024 — Chương 3. Đây là bản diễn giải để học, không phải bản dịch. Các ví dụ dễ hiểu là do người biên soạn thêm vào cho dễ hình dung.</p>
+      <p class="en-only" lang="en"><strong>Primary source:</strong> Chip Huyen, <em>AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, first edition, December 2024 (ISBN 9781098166304) — Chapter 3, “Evaluation Methodology”. This page is an interpretive study companion, not a verbatim translation or reproduction of the book. Examples in the “Dễ hiểu” mode are added illustrations by the compiler.</p>
+      <p class="vi-only"><strong>Tham chiếu</strong></p>
+      <p class="en-only" lang="en"><strong>References</strong></p>
+      <ol class="ref-list">
+        <li id="ref-1">Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em> — Chapter 3, “Evaluation Methodology” (O’Reilly Media, 2024). <a href="https://www.oreilly.com/library/view/ai-engineering/9781098166298/" target="_blank" rel="noopener noreferrer">oreilly.com — trang sách</a> · <a href="https://huyenchip.com/books/" target="_blank" rel="noopener noreferrer">huyenchip.com/books</a> · <a href="https://github.com/chiphuyen/aie-book" target="_blank" rel="noopener noreferrer">github.com/chiphuyen/aie-book</a></li>
+        <li id="ref-2">Yupeng Chang et al., “A Survey on Evaluation of Large Language Models”, arXiv, 2023 — nguồn của Hình 3-1 trong sách. <a href="https://arxiv.org/abs/2307.03109" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2307.03109</a></li>
+        <li id="ref-3">Claude E. Shannon, “Prediction and Entropy of Printed English”, <em lang="en">Bell System Technical Journal</em>, 1951. <a href="https://people.math.harvard.edu/~ctm/home/text/others/shannon/entropy/entropy.pdf" target="_blank" rel="noopener noreferrer">bản PDF lưu trữ tại harvard.edu</a></li>
+        <li id="ref-4">Alec Radford et al., “Language Models are Unsupervised Multitask Learners” (GPT-2), OpenAI — nguồn của Bảng 3-1. <a href="https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf" target="_blank" rel="noopener noreferrer">cdn.openai.com — bản PDF</a></li>
+        <li id="ref-5">Mark Chen et al., “Evaluating Large Language Models Trained on Code” (HumanEval, <span lang="en">pass@k</span>), arXiv, 2021. <a href="https://arxiv.org/abs/2107.03374" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2107.03374</a> · <a href="https://github.com/openai/human-eval" target="_blank" rel="noopener noreferrer">github.com/openai/human-eval</a></li>
+        <li id="ref-6">Tao Yu et al., “Spider: A Large-Scale Human-Labeled Dataset for Complex and Cross-Domain Semantic Parsing and Text-to-SQL Task”, arXiv, 2018. <a href="https://arxiv.org/abs/1809.08887" target="_blank" rel="noopener noreferrer">arxiv.org/abs/1809.08887</a></li>
+        <li id="ref-7">Alec Radford et al., “Learning Transferable Visual Models From Natural Language Supervision” (CLIP), arXiv, 2021. <a href="https://arxiv.org/abs/2103.00020" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2103.00020</a></li>
+        <li id="ref-8">LangChain, “LangChain State of AI 2023”. <a href="https://www.langchain.com/blog/langchain-state-of-ai-2023" target="_blank" rel="noopener noreferrer">langchain.com — bài viết</a></li>
+        <li id="ref-9">Lianmin Zheng et al., “Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena”, arXiv, 2023. <a href="https://arxiv.org/abs/2306.05685" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2306.05685</a></li>
+        <li id="ref-10">Minghao Wu and Alham Fikri Aji, “Style Over Substance: Evaluation Biases for Large Language Models”, arXiv, 2023. <a href="https://arxiv.org/abs/2307.03025" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2307.03025</a></li>
+        <li id="ref-11">Bowen Tan et al., “Cappy: Outperforming and Boosting Large Multi-Task LMs with a Small Scorer”, arXiv, 2023. <a href="https://arxiv.org/abs/2311.06720" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2311.06720</a></li>
+        <li id="ref-12">Yidong Wang et al., “PandaLM: An Automatic Evaluation Benchmark for LLM Instruction Tuning Optimization”, arXiv, 2023. <a href="https://arxiv.org/abs/2306.05087" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2306.05087</a></li>
+        <li id="ref-13">Wei-Lin Chiang et al., “Chatbot Arena: An Open Platform for Evaluating LLMs by Human Preference”, arXiv, 2024. <a href="https://arxiv.org/abs/2403.04132" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2403.04132</a> · <a href="https://lmarena.ai/" target="_blank" rel="noopener noreferrer">lmarena.ai</a></li>
+      </ol>
+      <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+      <p class="vi-only"><strong>Trong bộ bài:</strong> <a href="index.html">Trang bìa</a> · <a href="chapter-2-understanding-foundation-models.html">Chương 2 · Hiểu về mô hình nền tảng</a> · <a href="chapter-4-evaluate-ai-systems.html">Chương 4 · Đánh giá hệ thống AI</a></p>
+      <p class="en-only" lang="en"><strong>In this series:</strong> <a href="index.html">Cover</a> · <a href="chapter-2-understanding-foundation-models.html">Chapter 2 · Understanding Foundation Models</a> · <a href="chapter-4-evaluate-ai-systems.html">Chapter 4 · Evaluate AI Systems</a></p>
+      <!-- NAV:END -->
+    </div>
+    <div class="edition"><span class="standard-copy">VI · 2026</span><span class="easy-only">VI · 2026</span><span class="en-only" lang="en">EN · 2026</span></div>
+  </footer>
+</main>
+
+<script>
+  (function () {
+    const STORAGE_KEY = "aie-reading-mode";
+    const VALID_MODES = ["easy", "quick", "deep"];
+    const modeButtons = document.querySelectorAll(".reading-controls [data-mode]");
+
+    function setMode(requestedMode, persist) {
+      const mode = VALID_MODES.includes(requestedMode) ? requestedMode : "deep";
+      document.documentElement.dataset.readingMode = mode;
+      modeButtons.forEach(function (button) {
+        button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
+      });
+      if (persist) {
+        try { localStorage.setItem(STORAGE_KEY, mode); } catch (_) {}
+      }
+    }
+
+    setMode(document.documentElement.dataset.readingMode, false);
+    modeButtons.forEach(function (button) {
+      button.addEventListener("click", function () { setMode(button.dataset.mode, true); });
+    });
+
+    const LANG_KEY = "aie-lang";
+    const langButtons = document.querySelectorAll(".lang-controls [data-lang-option]");
+
+    function setLang(requestedLang, persist) {
+      const lang = requestedLang === "en" ? "en" : "vi";
+      document.documentElement.dataset.lang = lang;
+      document.documentElement.setAttribute("lang", lang);
+      langButtons.forEach(function (button) {
+        button.setAttribute("aria-pressed", String(button.dataset.langOption === lang));
+      });
+      if (persist) {
+        try { localStorage.setItem(LANG_KEY, lang); } catch (_) {}
+      }
+    }
+
+    setLang(document.documentElement.dataset.lang, false);
+    langButtons.forEach(function (button) {
+      button.addEventListener("click", function () { setLang(button.dataset.langOption, true); });
+    });
+  })();
+
+  /* SECTION-RAIL: on-page section index (scroll-spy). Built from the page's own id'd
+     sections; reuses each heading's vi-only/en-only + reading-mode spans so language
+     and reading mode are handled by the existing CSS. No per-page markup. */
+  (function () {
+    if (document.querySelector(".section-rail")) return;
+    var main = document.querySelector("main") || document.body;
+    var targets = Array.prototype.slice.call(
+      document.querySelectorAll("main .section[id], main .closing[id]")
+    );
+    if (targets.length < 2) return;
+
+    function labelFor(sec) {
+      var id = sec.getAttribute("aria-labelledby");
+      var el = (id && document.getElementById(id)) ||
+               sec.querySelector(".section-heading h2, h2, h3, .eyebrow");
+      return el ? el.innerHTML : sec.id;
+    }
+
+    var nav = document.createElement("nav");
+    nav.className = "section-rail";
+    nav.setAttribute("aria-label", "Mục lục trang");
+    var list = document.createElement("ol");
+    list.className = "section-rail__list";
+    var byId = {};
+
+    targets.forEach(function (sec) {
+      var li = document.createElement("li");
+      li.className = "section-rail__item";
+      var a = document.createElement("a");
+      a.className = "section-rail__link";
+      a.href = "#" + sec.id;
+      a.innerHTML =
+        '<span class="section-rail__tick" aria-hidden="true"></span>' +
+        '<span class="section-rail__label">' + labelFor(sec) + "</span>";
+      li.appendChild(a);
+      list.appendChild(li);
+      byId[sec.id] = li;
+    });
+    nav.appendChild(list);
+    main.appendChild(nav);
+
+    var activeId = null;
+    function setActive(id) {
+      if (id === activeId) return;
+      if (activeId && byId[activeId]) byId[activeId].classList.remove("is-active");
+      if (id && byId[id]) byId[id].classList.add("is-active");
+      activeId = id;
+    }
+    function update() {
+      var line = window.innerHeight * 0.3;
+      var current = targets[0].id;
+      for (var i = 0; i < targets.length; i++) {
+        if (targets[i].getBoundingClientRect().top - line <= 0) current = targets[i].id;
+      }
+      setActive(current);
+    }
+    var ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(function () { update(); ticking = false; });
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    update();
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="vi" data-mode="standard" data-lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 11 · Tham chiếu tùy chọn cấu hình nhân — Linux Kernel in a Nutshell</title>
+<meta name="description" content="Người đồng hành song ngữ Việt/Anh cho Chương 11 &quot;Kernel Configuration Option Reference&quot; của Linux Kernel in a Nutshell (Greg Kroah-Hartman, O'Reilly, 2006): cách đọc một mục Kconfig, các nhóm tùy chọn CONFIG_* quan trọng theo mô tả của sách, và những ký hiệu đã đổi tên hoặc biến mất kể từ nhân 2.6.">
+<script>
+/* pre-hydration: đọc lựa chọn đã lưu trước khi vẽ, tránh nháy màn hình */
+(function () {
+  try {
+    var m = localStorage.getItem("lkn-reading-mode");
+    var l = localStorage.getItem("lkn-lang");
+    if (m === "standard" || m === "easy" || m === "deep") document.documentElement.setAttribute("data-mode", m);
+    if (l === "vi" || l === "en") document.documentElement.setAttribute("data-lang", l);
+    if (localStorage.getItem("lkn-theme") === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  } catch (e) {}
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --teal: #0f766e;
+  --blue: #1d4ed8;
+  --amber: #b45309;
+  --leaf: #4d7c0f;
+  --ink: #16202a;
+  --ink-soft: #4a5a68;
+  --ink-faint: #7c8b98;
+  --surface: #fbfaf7;
+  --surface-2: #ffffff;
+  --surface-3: #f2efe8;
+  --line: #ded8cd;
+  --line-soft: #ebe6dc;
+  --shadow: 0 1px 2px rgba(22, 32, 42, .05), 0 8px 24px rgba(22, 32, 42, .06);
+  --serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --measure: 34rem;
+}
+:root[data-theme="dark"] {
+  --teal: #5eead4;
+  --blue: #93b4ff;
+  --amber: #fbbf24;
+  --leaf: #a3e635;
+  --ink: #e8eef4;
+  --ink-soft: #a6b6c4;
+  --ink-faint: #74869a;
+  --surface: #11171d;
+  --surface-2: #171f27;
+  --surface-3: #1e2831;
+  --line: #2d3945;
+  --line-soft: #232e38;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --teal: #5eead4; --blue: #93b4ff; --amber: #fbbf24; --leaf: #a3e635;
+    --ink: #e8eef4; --ink-soft: #a6b6c4; --ink-faint: #74869a;
+    --surface: #11171d; --surface-2: #171f27; --surface-3: #1e2831;
+    --line: #2d3945; --line-soft: #232e38;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.72;
+  -webkit-font-smoothing: antialiased;
+}
+main { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem 4rem; }
+p { margin: 0 0 1.05rem; max-width: var(--measure); }
+a { color: var(--blue); }
+h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; line-height: 1.22; color: var(--ink); }
+code, kbd, samp { font-family: var(--mono); font-size: .88em; background: var(--surface-3); padding: .12em .38em; border-radius: 4px; }
+
+/* ---------- reading mode + bilingual visibility ---------- */
+.easy-only, .deep-only, .en-only { display: none; }
+:root[data-mode="standard"] .standard-copy,
+:root[data-mode="deep"] .standard-copy { display: revert; }
+:root[data-mode="deep"] .deep-only { display: revert; }
+:root[data-mode="easy"] .standard-copy { display: none; }
+:root[data-mode="easy"] .easy-only { display: revert; }
+:root[data-lang="vi"] .vi-only { display: revert; }
+:root[data-lang="en"] .vi-only,
+:root[data-lang="en"] .standard-copy,
+:root[data-lang="en"] .easy-only,
+:root[data-lang="en"] .deep-only { display: none; }
+:root[data-lang="en"] .en-only { display: revert; }
+:root[data-lang="en"] .mode-switch { opacity: .35; pointer-events: none; }
+
+/* ---------- topbar ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: .7rem 1.5rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.book-label { font-size: .78rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-right: auto; }
+.switch-group { display: flex; gap: .3rem; align-items: center; }
+.switch-group + .switch-group { margin-left: .35rem; }
+.switch-label { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin-right: .25rem; }
+button.chip {
+  font: inherit; font-size: .78rem; font-weight: 600;
+  padding: .3rem .72rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft);
+  transition: background .15s, color .15s, border-color .15s;
+}
+button.chip:hover { border-color: var(--teal); color: var(--teal); }
+button.chip[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: var(--surface); }
+:root[data-theme="dark"] button.chip[aria-pressed="true"] { color: #0b1116; }
+
+/* ---------- hero ---------- */
+.hero {
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  gap: 2.75rem; align-items: center;
+  padding: 3.75rem 0 3rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.hero::after {
+  content: "LKN / 11";
+  position: absolute; top: 1.15rem; right: 0;
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .22em;
+  color: var(--ink-faint);
+}
+.eyebrow { font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--teal); font-weight: 700; margin: 0 0 .85rem; }
+.hero h1 { font-size: clamp(2.05rem, 4.6vw, 3.1rem); margin: 0 0 1.15rem; letter-spacing: -.015em; }
+.hero p { font-size: 1.06rem; color: var(--ink-soft); }
+.thesis {
+  margin-top: 1.5rem; padding: 1.05rem 1.25rem 1.05rem 2.6rem;
+  position: relative; max-width: var(--measure);
+  background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--amber);
+  border-radius: 0 10px 10px 0; box-shadow: var(--shadow);
+}
+.thesis::before { content: "∴"; position: absolute; left: .95rem; top: .95rem; font-size: 1.15rem; color: var(--amber); }
+.thesis p { margin: 0; font-size: .97rem; color: var(--ink); }
+
+/* ---------- CSS diagrams ---------- */
+.system-map {
+  position: relative; display: grid; gap: .75rem;
+  padding: 1.5rem; border-radius: 16px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.system-map .core {
+  justify-self: center; text-align: center;
+  padding: .85rem 1.25rem; border-radius: 999px;
+  background: var(--teal); color: var(--surface); font-weight: 700; font-size: .9rem;
+  max-width: 100%;
+}
+:root[data-theme="dark"] .system-map .core { color: #0b1116; }
+.system-map .spokes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
+.system-map .node {
+  padding: .8rem .85rem; border-radius: 12px; text-align: center;
+  background: var(--surface-3); border: 1px solid var(--line-soft);
+}
+.system-map .node b { display: block; font-size: .82rem; color: var(--ink); margin-bottom: .3rem; }
+.system-map .node small { display: block; font-size: .73rem; line-height: 1.5; color: var(--ink-soft); }
+.loop-diagram { display: grid; gap: .55rem; padding: 1.25rem; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.loop-diagram .step { padding: .6rem .8rem; border-radius: 10px; background: var(--surface-3); border-left: 3px solid var(--blue); font-size: .82rem; }
+
+/* ---------- chapter path ---------- */
+.chapter-path {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem;
+  margin: 2.5rem 0 3rem;
+}
+.chapter-path a {
+  display: block; padding: .9rem 1rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+  transition: border-color .15s, transform .15s;
+}
+.chapter-path a:hover { border-color: var(--teal); transform: translateY(-2px); }
+.chapter-path span { display: block; font-size: .67rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.chapter-path b { display: block; font-family: var(--serif); font-size: .96rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- sections ---------- */
+.section { padding: 2.75rem 0; border-top: 1px solid var(--line-soft); }
+.section-heading h2 { font-size: clamp(1.5rem, 3vw, 2.05rem); margin: 0 0 .9rem; }
+.section-heading p { color: var(--ink-soft); }
+.surprise-lead {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem;
+  margin: 1.75rem 0 2rem;
+}
+.definition, .equation { padding: 1rem 1.15rem; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); font-size: .92rem; }
+.definition { border-left: 3px solid var(--blue); }
+.equation { border-left: 3px solid var(--leaf); font-family: var(--mono); font-size: .82rem; line-height: 1.7; }
+.definition p, .equation p { margin: 0; max-width: none; }
+
+.surprise-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.1rem; }
+.trap-grid { grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
+.surprise-grid > li {
+  padding: 1.25rem 1.35rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.english-term { display: inline-block; font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--amber); margin-bottom: .45rem; }
+.surprise-grid h3 { font-size: 1.05rem; margin: 0 0 .7rem; }
+.surprise-grid p { font-size: .93rem; max-width: none; }
+.opportunity {
+  margin-top: .9rem; padding: .75rem .9rem; border-radius: 10px;
+  background: var(--surface-3); border-left: 3px solid var(--leaf); font-size: .87rem;
+}
+.opportunity p { margin: 0; font-size: .87rem; }
+.mechanics { margin-top: .9rem; display: grid; gap: .7rem; }
+.info-block { padding: .75rem .9rem; border-radius: 10px; border: 1px dashed var(--line); background: var(--surface); }
+.info-block h4 { font-size: .85rem; margin: 0 0 .35rem; color: var(--teal); }
+.info-block p { margin: 0; font-size: .86rem; }
+.result { margin-top: .7rem; font-size: .86rem; color: var(--ink-soft); }
+
+.signal {
+  margin: 2rem 0 0; padding: 1.1rem 1.3rem; border-radius: 12px;
+  background: var(--surface-3); border: 1px solid var(--line-soft); border-top: 3px solid var(--blue);
+}
+.signal p { margin: 0 0 .6rem; font-size: .93rem; }
+.signal p:last-child { margin-bottom: 0; }
+
+/* ---------- misconceptions ---------- */
+.trap-comparison { margin: 2.5rem 0; }
+.comparison-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; margin-top: 1.25rem; }
+.comparison-card {
+  padding: 1.1rem 1.25rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); border-top: 3px solid var(--amber);
+}
+.comparison-card h3 { font-size: .98rem; margin: 0 0 .6rem; }
+.comparison-card p { font-size: .9rem; max-width: none; }
+.comparison-card .myth { color: var(--amber); font-weight: 600; }
+.comparison-card .fact { color: var(--teal); font-weight: 600; }
+
+/* ---------- diagnostic ---------- */
+.diagnostic { padding: 1.75rem; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.diagnostic-intro p { font-size: .97rem; }
+.question-list { counter-reset: q; list-style: none; margin: 1.25rem 0 0; padding: 0; display: grid; gap: .9rem; }
+.question-list > li { counter-increment: q; position: relative; padding-left: 2.4rem; font-size: .93rem; }
+.question-list > li::before {
+  content: counter(q, decimal-leading-zero);
+  position: absolute; left: 0; top: .05rem;
+  font-family: var(--mono); font-size: .78rem; font-weight: 600; color: var(--teal);
+  border: 1px solid var(--line); border-radius: 6px; padding: .05rem .38rem;
+}
+.question-list .deep-only { margin-top: .4rem; font-size: .87rem; color: var(--ink-soft); }
+
+/* ---------- closing ---------- */
+.closing { padding: 3rem 0 1rem; border-top: 1px solid var(--line-soft); }
+.closing blockquote {
+  margin: 0; padding: 1.5rem 0 0; max-width: 46rem;
+  font-family: var(--serif); font-size: clamp(1.15rem, 2.4vw, 1.55rem); line-height: 1.5; color: var(--ink);
+}
+.closing blockquote p { max-width: none; font-size: inherit; line-height: inherit; }
+.closing-accent { color: var(--teal); font-style: italic; }
+
+/* ---------- chapter nav ---------- */
+.chapter-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 3rem 0 0; }
+.nav-cell {
+  display: block; padding: 1rem 1.15rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); transition: border-color .15s, transform .15s;
+}
+a.nav-cell:hover { border-color: var(--teal); transform: translateY(-2px); }
+.nav-cell.disabled { opacity: .5; background: var(--surface-3); cursor: default; }
+.nav-next { text-align: right; }
+.nav-label { display: block; font-size: .68rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.nav-title { display: block; font-family: var(--serif); font-size: .95rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- footer + references ---------- */
+footer {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.5rem; align-items: start;
+  margin-top: 3rem; padding: 2rem 0 3rem; border-top: 1px solid var(--line);
+  font-size: .85rem; color: var(--ink-soft);
+}
+.footer-main p { max-width: 48rem; font-size: .85rem; }
+.footer-label { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; margin: 1.5rem 0 .6rem; }
+.ref-list { margin: 0; padding-left: 1.4rem; display: grid; gap: .5rem; }
+.ref-list li { font-size: .82rem; line-height: 1.6; }
+.edition { font-family: var(--mono); font-size: .7rem; letter-spacing: .12em; color: var(--ink-faint); white-space: nowrap; }
+.cite { font-size: .7em; vertical-align: super; line-height: 0; margin-left: .1em; }
+.cite a { text-decoration: none; padding: 0 .12em; }
+
+/* SECTION-RAIL:START */
+.section-rail {
+  position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+  z-index: 30; padding: .6rem .5rem; display: none;
+}
+.section-rail__list { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+.section-rail__list a {
+  display: flex; align-items: center; gap: .55rem;
+  text-decoration: none; color: var(--ink-faint); font-size: .74rem; line-height: 1.25;
+}
+.section-rail__list a::before {
+  content: ""; flex: 0 0 auto; width: 1.15rem; height: 2px; border-radius: 2px;
+  background: var(--line); transition: width .2s, background .2s;
+}
+.section-rail__label {
+  max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0;
+  transition: max-width .24s ease, opacity .18s ease;
+}
+.section-rail:hover .section-rail__label,
+.section-rail:focus-within .section-rail__label { max-width: 13rem; opacity: 1; }
+.section-rail:hover, .section-rail:focus-within {
+  background: color-mix(in srgb, var(--surface-2) 94%, transparent);
+  border: 1px solid var(--line-soft); border-left: 0; border-radius: 0 12px 12px 0; box-shadow: var(--shadow);
+}
+.section-rail__list a:hover,
+.section-rail__list a[aria-current="true"] { color: var(--teal); }
+.section-rail__list a[aria-current="true"]::before { width: 1.9rem; background: var(--teal); }
+@media (min-width: 1180px) { .section-rail { display: block; } }
+/* SECTION-RAIL:END */
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 2rem; padding-top: 2.5rem; }
+  .hero::after { position: static; display: block; margin-bottom: .75rem; }
+  .system-map .spokes { grid-template-columns: minmax(0, 1fr); }
+  footer { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 620px) {
+  body { font-size: 16px; }
+  main { padding: 0 1.1rem 3rem; }
+  .topbar { padding: .6rem 1.1rem; gap: .5rem; }
+  .book-label { width: 100%; margin-right: 0; }
+  .chapter-nav { grid-template-columns: minmax(0, 1fr); }
+  .nav-next { text-align: left; }
+  .diagnostic { padding: 1.25rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">Linux Kernel in a Nutshell · <span class="vi-only">Chương 11 · Tham chiếu tùy chọn cấu hình</span><span class="en-only" lang="en">Chapter 11 · Kernel Configuration Option Reference</span></div>
+  <div class="switch-group mode-switch">
+    <span class="switch-label vi-only">Mức đọc</span><span class="switch-label en-only" lang="en">Level</span>
+    <button class="chip" type="button" data-set-mode="easy" aria-pressed="false"><span class="vi-only">Dễ hiểu</span><span class="en-only" lang="en">Easy</span></button>
+    <button class="chip" type="button" data-set-mode="standard" aria-pressed="true"><span class="vi-only">Tiêu chuẩn</span><span class="en-only" lang="en">Standard</span></button>
+    <button class="chip" type="button" data-set-mode="deep" aria-pressed="false"><span class="vi-only">Đầy đủ</span><span class="en-only" lang="en">Deep</span></button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-set-lang="vi" aria-pressed="true">VI</button>
+    <button class="chip" type="button" data-set-lang="en" aria-pressed="false">EN</button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-toggle-theme aria-pressed="false"><span class="vi-only">Tối</span><span class="en-only" lang="en">Dark</span></button>
+  </div>
+</header>
+
+<nav class="section-rail" aria-label="Mục lục trong trang"><ul class="section-rail__list"></ul></nav>
+
+<main>
+
+<section class="hero" id="ban-do-tuy-chon" aria-labelledby="ban-do-tuy-chon-title">
+  <div>
+    <p class="eyebrow"><span class="vi-only">Phần III · Tham chiếu nhân · Chương 11</span><span class="en-only" lang="en">Part III · Kernel Reference · Chapter 11</span></p>
+    <h1 id="ban-do-tuy-chon-title">
+      <span class="standard-copy">Một bản đồ các tùy chọn, không phải một danh mục đầy đủ</span>
+      <span class="easy-only">Bản đồ các nút bấm trong nhân</span>
+      <span class="en-only" lang="en">A map of the options, not a complete catalogue</span>
+    </h1>
+    <p class="standard-copy">Chương dài nhất của cuốn sách cũng là chương khiêm tốn nhất về tham vọng. Kroah-Hartman mở đầu bằng đúng một câu định phạm vi: chương này liệt kê <em>những tùy chọn cấu hình quan trọng nhất</em> được đưa ra khi bạn chạy <code>make config</code> hoặc một trong các giao diện đồ họa của nó <span class="cite"><a href="#ref-1">1</a></span>. Không phải tất cả. Ở chương 4 ông đã nói thẳng con số: nhân chứa “gần hai nghìn tùy chọn cấu hình khác nhau” <span class="cite"><a href="#ref-5">5</a></span> — và chương 11 chỉ chọn ra vài trăm.</p>
+    <p class="easy-only">Đây là chương dài nhất sách, nhưng nó không cố kể hết. Ông Greg nói rõ: chương này chỉ liệt kê những tùy chọn <em>quan trọng nhất</em> mà bạn gặp khi chạy <code>make config</code> <span class="cite"><a href="#ref-1">1</a></span>. Nhân có gần hai nghìn tùy chọn <span class="cite"><a href="#ref-5">5</a></span>, kể hết thì không nổi. Nhớ nhé: đây là tấm bản đồ rút gọn, không phải cuốn từ điển.</p>
+    <p class="en-only" lang="en">The book's longest chapter is also its most modest in ambition. Kroah-Hartman opens with a single scope-setting sentence: this chapter lists <em>the most important</em> configuration options offered when you run <code>make config</code> or one of its graphical interfaces <span class="cite"><a href="#ref-1">1</a></span>. Not all of them. In Chapter 4 he gave the number plainly: the kernel contains “almost two thousand different configuration options” <span class="cite"><a href="#ref-5">5</a></span> — and Chapter 11 picks out a few hundred.</p>
+    <p class="deep-only">Con số ấy là ảnh chụp năm 2006 của dòng nhân 2.6. Tháng 9-2025, LWN dẫn phân tích cho biết nhân 6.16 có <b>32.468</b> tùy chọn cấu hình trên kiến trúc <span lang="en">x86_64</span>, và số cách tổ hợp chúng là một con số có 6.550 chữ số <span class="cite"><a href="#ref-21">21</a></span>. Nghĩa là khoảng cách giữa “những tùy chọn quan trọng nhất” và “tất cả tùy chọn” đã rộng ra gấp bội kể từ khi sách in — lý do để đọc chương này như một cách <em>đọc</em>, chứ không phải một danh sách để tra.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận điểm chương 11.</b> Phần lớn chương này dựa trên tài liệu nằm sẵn trong nhân cho từng tùy chọn cấu hình — do chính các nhà phát triển nhân viết và phát hành theo giấy phép GPL <span class="cite"><a href="#ref-1">1</a></span>. Vì vậy giá trị lâu bền của chương không nằm ở danh sách, mà ở việc dạy bạn đọc chính nguồn ấy: khi sách cũ đi, cây mã nguồn vẫn tự mô tả nó.</p>
+      <p class="easy-only"><b>Ý chính.</b> Những lời giải thích trong chương này được lấy từ tài liệu có sẵn ngay trong mã nguồn nhân, do người viết nhân soạn <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: học cách đọc tài liệu đó thì bạn không bao giờ lỗi thời.</p>
+      <p class="en-only" lang="en"><b>Chapter 11 thesis.</b> The majority of the chapter is based on the in-kernel documentation for the different configuration options, written by the kernel developers and released under the GPL <span class="cite"><a href="#ref-1">1</a></span>. So the chapter's lasting value is not the list but the reading skill: when the book ages, the source tree still describes itself.</p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: ba lớp của một tùy chọn cấu hình — ký hiệu CONFIG, kiểu và phụ thuộc, và đoạn trợ giúp. Diagram: the three layers of a configuration option — the CONFIG symbol, its type and dependencies, and its help text.">
+    <div class="core"><span class="vi-only">Một mục Kconfig</span><span class="en-only" lang="en">One Kconfig entry</span></div>
+    <div class="spokes">
+      <div class="node">
+        <b><span class="vi-only">Ký hiệu</span><span class="en-only" lang="en">Symbol</span></b>
+        <small class="standard-copy">Tên sau <code>config</code>, hiện ra trong <code>.config</code> với tiền tố <code>CONFIG_</code>.</small>
+        <small class="easy-only">Cái tên. Trong tệp cấu hình nó có thêm chữ <code>CONFIG_</code> đằng trước.</small>
+        <small class="en-only" lang="en">The name after <code>config</code>; it appears in <code>.config</code> with a <code>CONFIG_</code> prefix.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Kiểu &amp; phụ thuộc</span><span class="en-only" lang="en">Type &amp; deps</span></b>
+        <small class="standard-copy"><code>bool</code> hay <code>tristate</code>; <code>depends on</code> và <code>select</code> quyết định nó có hiện ra không.</small>
+        <small class="easy-only">Bật/tắt hay bật/module/tắt — và nó cần gì mới xuất hiện.</small>
+        <small class="en-only" lang="en"><code>bool</code> or <code>tristate</code>; <code>depends on</code> and <code>select</code> decide whether it is offered at all.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Đoạn trợ giúp</span><span class="en-only" lang="en">Help text</span></b>
+        <small class="standard-copy">Chính là nguồn mà chương 11 chép lại phần lớn nội dung.</small>
+        <small class="easy-only">Phần giải thích — đúng thứ mà chương này chép lại.</small>
+        <small class="en-only" lang="en">Precisely the source Chapter 11 reproduces most of its content from.</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<nav class="chapter-path" aria-label="Lối đi trong chương">
+  <a href="#doc-mot-muc">
+    <span>01</span>
+    <b><span class="standard-copy">Đọc một mục Kconfig</span><span class="easy-only">Hiểu một dòng cấu hình</span><span class="en-only" lang="en">Reading a Kconfig entry</span></b>
+  </a>
+  <a href="#nhom-loi">
+    <span>02</span>
+    <b><span class="standard-copy">Nhóm lõi: nhân dạng, CPU, bộ nhớ, I/O</span><span class="easy-only">Nhóm lõi của nhân</span><span class="en-only" lang="en">The core groups</span></b>
+  </a>
+  <a href="#nhom-thiet-bi">
+    <span>03</span>
+    <b><span class="standard-copy">Nhóm thiết bị, lưu trữ, tệp và gỡ lỗi</span><span class="easy-only">Nhóm thiết bị và ổ đĩa</span><span class="en-only" lang="en">Devices, storage, filesystems</span></b>
+  </a>
+  <a href="#da-doi-thay">
+    <span>04</span>
+    <b><span class="standard-copy">Những gì đã đổi kể từ 2006</span><span class="easy-only">Cái gì đã cũ đi</span><span class="en-only" lang="en">What changed since 2006</span></b>
+  </a>
+  <a href="#tu-kiem">
+    <span>05</span>
+    <b><span class="standard-copy">Tự kiểm khi khép lại phần tham chiếu</span><span class="easy-only">Tự hỏi mình vài câu</span><span class="en-only" lang="en">Self-check</span></b>
+  </a>
+</nav>
+
+<section class="section" id="doc-mot-muc" aria-labelledby="doc-mot-muc-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 01</span><span class="en-only" lang="en">Concept cluster 01</span></p>
+    <h2 id="doc-mot-muc-title">
+      <span class="standard-copy">Đọc một mục Kconfig: bốn thứ luôn có mặt</span>
+      <span class="easy-only">Một dòng cấu hình gồm những gì</span>
+      <span class="en-only" lang="en">Reading a Kconfig entry: four things always present</span>
+    </h2>
+    <p class="standard-copy">Chương 11 trình bày mỗi tùy chọn theo đúng một khuôn: cột trái là ký hiệu — <code>EXPERIMENTAL</code>, <code>MODULES</code>, <code>SMP</code> — cột phải là dòng nhắc mà giao diện cấu hình hiển thị, rồi đến đoạn giải thích <span class="cite"><a href="#ref-1">1</a></span>. Khuôn ấy không phải do ông nghĩ ra: nó là hình chiếu của cú pháp Kconfig có thật trong cây mã. Nắm được cú pháp gốc thì bạn đọc được <em>mọi</em> tùy chọn, kể cả những cái ra đời sau khi sách in.</p>
+    <p class="easy-only">Mỗi mục trong chương có ba phần: cái tên viết hoa, một câu nhắc ngắn, và phần giải thích <span class="cite"><a href="#ref-1">1</a></span>. Ba phần ấy đến thẳng từ mã nguồn nhân. Nhớ nhé: học khuôn này một lần, đọc được tất cả.</p>
+    <p class="en-only" lang="en">Chapter 11 lays out every option in one fixed shape: the symbol on the left — <code>EXPERIMENTAL</code>, <code>MODULES</code>, <code>SMP</code> — the prompt the configuration front end displays on the right, then the explanatory text <span class="cite"><a href="#ref-1">1</a></span>. That shape is not his invention: it is a projection of the real Kconfig syntax in the tree. Learn the underlying syntax and you can read <em>any</em> option, including the ones born after the book went to press.</p>
+    <p class="deep-only">Tài liệu Kconfig hiện hành mô tả một mục bắt đầu bằng từ khóa <code>config</code> theo sau là ký hiệu, rồi các thuộc tính; các từ khóa khác kết thúc một mục là <code>menuconfig</code>, <code>choice</code>/<code>endchoice</code>, <code>comment</code>, <code>menu</code>/<code>endmenu</code>, <code>if</code>/<code>endif</code> và <code>source</code> <span class="cite"><a href="#ref-6">6</a></span>. Những mục “chọn một trong nhiều” mà bạn thấy ở chương 11 — mô hình chiếm dụng, mô hình bộ nhớ, bộ điều phối vào/ra mặc định — chính là các khối <code>choice</code>, nơi chỉ một mục con được chọn <span class="cite"><a href="#ref-6">6</a></span>.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Kconfig.</b> Ngôn ngữ khai báo mà nhân dùng để mô tả từng tùy chọn: tên, kiểu, điều kiện hiển thị và đoạn trợ giúp. Các tệp <code>Kconfig</code> rải khắp cây mã và được nối lại bằng từ khóa <code>source</code> <span class="cite"><a href="#ref-6">6</a></span>; <code>make menuconfig</code> chỉ là một trình đọc chúng.</p>
+      <p class="easy-only"><b>Kconfig là gì.</b> Là “ngôn ngữ khai báo nút bấm” của nhân. Mỗi thư mục mã có tệp <code>Kconfig</code> riêng, nối vào nhau bằng <code>source</code> <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: menu bạn thấy là do các tệp ấy sinh ra.</p>
+      <p class="en-only" lang="en"><b>Kconfig.</b> The declarative language the kernel uses to describe each option: name, type, visibility condition and help text. <code>Kconfig</code> files are scattered across the tree and stitched together with the <code>source</code> keyword <span class="cite"><a href="#ref-6">6</a></span>; <code>make menuconfig</code> is merely a reader for them.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">config &lt;SYMBOL&gt;<br>&nbsp;&nbsp;bool | tristate "dòng nhắc"<br>&nbsp;&nbsp;depends on &lt;điều kiện&gt;<br>&nbsp;&nbsp;select &lt;ký hiệu khác&gt;<br>&nbsp;&nbsp;help ...<br>→ CONFIG_SYMBOL=y|m|n</p>
+      <p class="easy-only">tên tùy chọn<br>+ kiểu (bật/tắt hay có module)<br>+ cần gì mới hiện ra<br>+ lời giải thích<br>→ y (vào nhân) · m (module) · n (bỏ)</p>
+      <p class="en-only" lang="en">config &lt;SYMBOL&gt;<br>&nbsp;&nbsp;bool | tristate "prompt"<br>&nbsp;&nbsp;depends on &lt;condition&gt;<br>&nbsp;&nbsp;select &lt;other symbol&gt;<br>&nbsp;&nbsp;help ...<br>→ CONFIG_SYMBOL=y|m|n</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">symbol &amp; prompt</span>
+      <h3>
+        <span class="standard-copy">Ký hiệu và dòng nhắc — hai cái tên của cùng một thứ</span>
+        <span class="easy-only">Tên máy và tên người</span>
+        <span class="en-only" lang="en">Symbol and prompt — two names for one thing</span>
+      </h3>
+      <p class="standard-copy">Cột trái trong chương 11 là ký hiệu; cột phải là dòng nhắc. Ví dụ <code>IKCONFIG</code> có dòng nhắc “Kernel .config support”, và đoạn trợ giúp cho biết nó nhúng toàn bộ nội dung tệp <code>.config</code> vào chính nhân, có thể trích ra bằng <code>scripts/extract-ikconfig</code> hoặc đọc từ <code>/proc/config.gz</code> của nhân đang chạy <span class="cite"><a href="#ref-2">2</a></span>. Khi tìm kiếm trong <code>menuconfig</code>, bạn gõ ký hiệu; khi đọc menu bằng mắt, bạn thấy dòng nhắc.</p>
+      <p class="easy-only">Mỗi tùy chọn có hai tên: tên viết hoa cho máy, và câu tiếng Anh cho người. Ví dụ <code>IKCONFIG</code> hiện ra là “Kernel .config support”, và nó cất bản cấu hình ngay trong nhân để sau này đọc lại qua <code>/proc/config.gz</code> <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: tìm thì tìm theo tên viết hoa.</p>
+      <p class="en-only" lang="en">The left column in Chapter 11 is the symbol; the right column is the prompt. <code>IKCONFIG</code>, for instance, is prompted as “Kernel .config support”, and its help text explains that it saves the complete <code>.config</code> contents inside the kernel, extractable with <code>scripts/extract-ikconfig</code> or readable from <code>/proc/config.gz</code> on a running kernel <span class="cite"><a href="#ref-2">2</a></span>. You search by symbol; you read menus by prompt.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Mọi dòng trong tệp <code>.config</code> của bạn đều là <code>CONFIG_&lt;ký hiệu&gt;=y|m</code> hoặc một dòng chú thích “is not set”. Tiền tố <code>CONFIG_</code> là mặc định và có thể đổi bằng biến môi trường cùng tên <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Mở tệp <code>.config</code> ra, mỗi dòng là một tùy chọn kèm <code>=y</code> hoặc <code>=m</code>. Nhớ nhé: đó chính là danh sách nút bạn đã bấm.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Every line in your <code>.config</code> is <code>CONFIG_&lt;symbol&gt;=y|m</code> or an “is not set” comment. The <code>CONFIG_</code> prefix is the default and can be overridden with an environment variable of the same name <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ký hiệu đổi tên</h4>
+          <p>Tài liệu hiện hành cảnh báo rằng các bản nhân mới không chỉ thêm ký hiệu mà còn <em>đổi tên</em> ký hiệu; khi đó dùng lại một <code>.config</code> cũ với <code>make oldconfig</code> không chắc cho ra nhân chạy được <span class="cite"><a href="#ref-7">7</a></span>. Đây chính là lý do một phần chương 11 không còn tra được nguyên văn.</p>
+        </div>
+        <div class="info-block">
+          <h4>Công cụ soi khác biệt</h4>
+          <p>Để thấy ký hiệu mới xuất hiện: <code>make listnewconfig</code> liệt kê từng cái một dòng; hoặc chạy <code>make oldconfig</code> rồi <code>scripts/diffconfig .config.old .config</code> <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">tristate: y / m / n</span>
+      <h3>
+        <span class="standard-copy">Kiểu — vì sao một số tùy chọn có ba trạng thái</span>
+        <span class="easy-only">Bật, rời, hay bỏ</span>
+        <span class="en-only" lang="en">Type — why some options have three states</span>
+      </h3>
+      <p class="standard-copy">Mục <code>MODULES</code> là chìa khóa của cả hệ thống: nó bật khả năng nạp module, và đoạn trợ giúp nói rõ rằng khi chọn nó, <em>nhiều phần của nhân có thể được dựng thành module</em> bằng cách trả lời <code>M</code> thay vì <code>yes</code> — hữu ích nhất cho những tính năng ít dùng và không cần lúc khởi động <span class="cite"><a href="#ref-2">2</a></span>. Nói cách khác: <code>MODULES</code> chính là thứ biến các tùy chọn khác từ hai trạng thái thành ba.</p>
+      <p class="easy-only">Có tùy chọn chỉ bật/tắt, có tùy chọn thêm lựa chọn thứ ba là “làm thành mảnh rời”. Mảnh rời đó gọi là module, và nó có được nhờ tùy chọn <code>MODULES</code> <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: thứ ít dùng thì để thành module.</p>
+      <p class="en-only" lang="en">The <code>MODULES</code> entry is the key to the whole system: it enables loadable module support, and its help text says plainly that with it selected, <em>many parts of the kernel can be built as modules</em> by answering <code>M</code> instead of yes — most useful for infrequently used options not required for booting <span class="cite"><a href="#ref-2">2</a></span>. In other words, <code>MODULES</code> is what turns other options from two-state into three-state.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Sách nhắc: nếu trả lời có cho <code>MODULES</code>, bạn sẽ phải chạy <code>make modules_install</code> để đặt module vào <code>/lib/modules</code>, nơi các công cụ như <code>modprobe</code> tìm thấy chúng <span class="cite"><a href="#ref-2">2</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Dùng module thì phải chạy thêm <code>make modules_install</code> để đặt chúng đúng chỗ <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: quên bước này là module không nạp được.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The book reminds you: if you say yes to <code>MODULES</code>, you will need to run <code>make modules_install</code> to put the modules under <code>/lib/modules</code> where the module tools can find them <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Chỉ-module</h4>
+          <p>Một thủ thuật Kconfig hiện hành: viết <code>depends on BAR &amp;&amp; m</code> để giới hạn một thành phần chỉ được dựng thành module hoặc tắt hẳn, không cho dựng thẳng vào nhân <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Cảnh báo về hệ thống tệp gốc</h4>
+          <p>Mục <code>EXT2_FS</code> kèm một cảnh báo đóng khung: hệ thống tệp của phân vùng gốc (phân vùng chứa thư mục <code>/</code>) không thể dựng thành module nếu không dùng một quy trình khởi động đặc biệt, nên để nó ở dạng module có thể nguy hiểm <span class="cite"><a href="#ref-4">4</a></span>. Cùng logic ấy áp cho <code>SCSI</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">depends on / select</span>
+      <h3>
+        <span class="standard-copy">Phụ thuộc — vì sao tùy chọn bạn tìm không hiện ra</span>
+        <span class="easy-only">Vì sao không thấy nút bạn cần</span>
+        <span class="en-only" lang="en">Dependencies — why the option you want is not shown</span>
+      </h3>
+      <p class="standard-copy">Có những mục mà đoạn trợ giúp kết bằng đúng một câu: “tự thân nó không làm gì cả, ngoài việc cho phép bạn chọn các tùy chọn khác.” Sách ghi câu ấy cho cả <code>EXPERIMENTAL</code> và <code>EMBEDDED</code> <span class="cite"><a href="#ref-2">2</a></span>, và <code>DEBUG_KERNEL</code> cũng cùng loại <span class="cite"><a href="#ref-4">4</a></span>. Đó là các cổng: tắt cổng thì cả một nhánh menu biến mất, và người mới thường tưởng tùy chọn mình cần “không tồn tại”.</p>
+      <p class="easy-only">Một số nút không làm gì cả — chúng chỉ mở khóa cho các nút khác hiện ra. Sách nói vậy về <code>EXPERIMENTAL</code> và <code>EMBEDDED</code> <span class="cite"><a href="#ref-2">2</a></span>, và <code>DEBUG_KERNEL</code> cũng thế <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: không thấy nút cần tìm thì có thể bạn chưa mở cổng.</p>
+      <p class="en-only" lang="en">Some entries end their help text with exactly one sentence: “on its own, this option does not do anything except allow you to select other options.” The book records that line for both <code>EXPERIMENTAL</code> and <code>EMBEDDED</code> <span class="cite"><a href="#ref-2">2</a></span>, and <code>DEBUG_KERNEL</code> is of the same kind <span class="cite"><a href="#ref-4">4</a></span>. These are gates: close one and a whole menu branch vanishes, and newcomers conclude the option they need “does not exist”.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Trong <code>menuconfig</code>, nhấn <kbd>/</kbd> rồi gõ ký hiệu: màn hình tìm kiếm liệt kê chính xác chuỗi <code>depends on</code> đang chặn nó. Các giao diện <span lang="en">xconfig</span>, <span lang="en">menuconfig</span> và <span lang="en">nconfig</span> đều có sẵn phần trợ giúp nhúng cho việc này <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Trong màn hình cấu hình, bấm <kbd>/</kbd> rồi gõ tên tùy chọn — nó sẽ nói bạn còn thiếu điều kiện gì <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: dùng ô tìm kiếm trước khi kết luận là không có.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> In <code>menuconfig</code>, press <kbd>/</kbd> and type the symbol: the search screen lists the exact <code>depends on</code> chain blocking it. The xconfig, menuconfig and nconfig front ends all carry embedded help for this <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4><code>select</code> khác <code>depends on</code></h4>
+          <p>Tài liệu Kconfig cảnh báo rằng <code>select</code> ép một ký hiệu thành <code>y</code> bất kể phụ thuộc của nó; vì thế khuôn mẫu khuyến nghị là dùng một ký hiệu nội bộ dạng <code>HAVE_*</code> để kiến trúc <code>select</code>, còn phụ thuộc thật thì đặt ở ký hiệu hiển thị <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Phụ thuộc vào trình biên dịch</h4>
+          <p>Kconfig ngày nay có thể phụ thuộc vào năng lực của trình biên dịch, ví dụ <code>depends on $(cc-option,-fstack-protector)</code>; tiền tố khuyến nghị cho các ký hiệu kiểu này là <code>CC_HAS_</code> <span class="cite"><a href="#ref-6">6</a></span>. Đây là lớp cú pháp hoàn toàn không có trong ảnh chụp 2006 của sách.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">help text</span>
+      <h3>
+        <span class="standard-copy">Đoạn trợ giúp — nguồn thật của chương này</span>
+        <span class="easy-only">Phần giải thích đến từ đâu</span>
+        <span class="en-only" lang="en">Help text — this chapter's actual source</span>
+      </h3>
+      <p class="standard-copy">Điều làm chương 11 khác mọi chương khác: tác giả nói trước rằng phần lớn nội dung <em>không phải</em> lời ông, mà là tài liệu trong nhân do các nhà phát triển viết, phát hành theo GPL <span class="cite"><a href="#ref-1">1</a></span>. Đọc kỹ sẽ thấy giọng văn đổi liên tục — chỗ thì khô khan như đặc tả, chỗ lại đùa (“tôi nghe nói kể cả không có card âm thanh, bạn vẫn có thể bắt máy kêu nhiều hơn một tiếng bíp bằng cách lập trình loa PC”) <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Chương này phần lớn không phải lời tác giả, mà là lời giải thích có sẵn trong mã nguồn nhân <span class="cite"><a href="#ref-1">1</a></span>. Vì nhiều người viết nên giọng văn rất khác nhau. Nhớ nhé: đó là lý do có chỗ trang nghiêm, có chỗ đùa.</p>
+      <p class="en-only" lang="en">What sets Chapter 11 apart: the author says up front that most of its content is <em>not</em> his words but the in-kernel documentation written by kernel developers and released under the GPL <span class="cite"><a href="#ref-1">1</a></span>. Read closely and the voice keeps shifting — dry as a spec in places, joking in others (“I'm told that even without a sound card, you can make your computer create more than an occasional beep by programming the PC speaker”) <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Cùng một đoạn trợ giúp ấy vẫn nằm trong cây mã bạn đang có, dưới các tệp <code>Kconfig</code>, và được kết xuất thành tài liệu chính thức tại <a href="https://www.kernel.org/doc/html/latest/" target="_blank" rel="noopener noreferrer">kernel.org/doc</a> <span class="cite"><a href="#ref-8">8</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Mở mã nguồn nhân, tìm tệp tên <code>Kconfig</code> — lời giải thích nằm ngay đó, và bản web chính thức ở <a href="https://www.kernel.org/doc/html/latest/" target="_blank" rel="noopener noreferrer">kernel.org/doc</a> <span class="cite"><a href="#ref-8">8</a></span>. Nhớ nhé: sách cũ thì tra mã nguồn mới.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> That same help text still sits in the tree you have, under the <code>Kconfig</code> files, and is rendered as the official documentation at <a href="https://www.kernel.org/doc/html/latest/" target="_blank" rel="noopener noreferrer">kernel.org/doc</a> <span class="cite"><a href="#ref-8">8</a></span>.</p>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Có khuôn đọc rồi, phần còn lại là địa lý: tùy chọn nào thuộc vùng nào. Chương 11 đi gần như theo thứ tự menu của <code>make menuconfig</code>, và ta sẽ theo đúng thứ tự ấy — bắt đầu từ vùng lõi.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Biết cách đọc rồi thì đi xem bản đồ: nhóm nào ở đâu. Nhớ nhé: chương này xếp theo đúng thứ tự menu bạn thấy khi cấu hình.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> With the reading shape in hand, the rest is geography: which option lives in which region. Chapter 11 follows roughly the menu order of <code>make menuconfig</code>, and so will we — starting with the core.</p>
+  </aside>
+</section>
+
+<section class="section" id="nhom-loi" aria-labelledby="nhom-loi-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 02</span><span class="en-only" lang="en">Concept cluster 02</span></p>
+    <h2 id="nhom-loi-title">
+      <span class="standard-copy">Nhóm lõi: nhân dạng, CPU, bộ nhớ, vào/ra</span>
+      <span class="easy-only">Nhóm lõi: tên nhân, CPU, bộ nhớ, ổ đĩa</span>
+      <span class="en-only" lang="en">The core groups: identity, CPU, memory, I/O</span>
+    </h2>
+    <p class="standard-copy">Đây là vùng mà một lựa chọn sai không làm hỏng một thiết bị — nó làm hỏng cả lần khởi động. Bốn nhóm dưới đây là bốn quyết định kiến trúc bạn phải đưa ra trước khi chạm đến bất kỳ driver nào: nhân này tên gì, nó thấy mấy CPU, nó quản bộ nhớ ra sao, và nó xếp hàng vào/ra thế nào.</p>
+    <p class="easy-only">Đây là những lựa chọn lớn nhất. Chọn sai ở đây thì máy không khởi động được, chứ không phải chỉ hỏng một thiết bị. Bốn câu hỏi: nhân tên gì, thấy mấy CPU, quản bộ nhớ kiểu nào, xếp hàng đọc ghi ổ đĩa ra sao. Nhớ nhé: cẩn thận nhất ở vùng này.</p>
+    <p class="en-only" lang="en">This is the region where a wrong choice does not break a device — it breaks the boot. The four groups below are the four architectural decisions you make before touching any driver: what this kernel is called, how many CPUs it sees, how it manages memory, and how it queues I/O.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Nhân dạng nhân (<span lang="en">kernel identity</span>).</b> Tập các tùy chọn quyết định nhân tự xưng là gì và mang theo gì về chính mình: <code>LOCALVERSION</code> nối thêm một chuỗi vào cuối số hiệu phiên bản — chuỗi này hiện ra khi bạn gõ <code>uname</code>, và tối đa 64 ký tự <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only"><b>Nhân dạng là gì.</b> Là cách nhân tự giới thiệu. <code>LOCALVERSION</code> cho bạn gắn thêm một mẩu chữ vào tên phiên bản, thấy được khi gõ <code>uname</code>, dài tối đa 64 ký tự <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: đặt tên riêng để khỏi nhầm với nhân của bản phân phối.</p>
+      <p class="en-only" lang="en"><b>Kernel identity.</b> The set of options deciding what the kernel calls itself and what it carries about itself: <code>LOCALVERSION</code> appends an extra string to the end of the kernel version — it shows up when you run <code>uname</code>, and is capped at 64 characters <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">LOCALVERSION → uname -r<br>IKCONFIG&nbsp;&nbsp;&nbsp;&nbsp; → /proc/config.gz<br>MODULES&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → make modules_install<br>SMP + NR_CPUS → ~8 KB / CPU <span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">đặt tên → thấy ở uname<br>nhúng cấu hình → đọc lại được<br>bật module → cài thêm một bước<br>mỗi CPU thêm → tốn ~8 KB <span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="en-only" lang="en">LOCALVERSION → uname -r<br>IKCONFIG&nbsp;&nbsp;&nbsp;&nbsp; → /proc/config.gz<br>MODULES&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → make modules_install<br>SMP + NR_CPUS → ~8 KB / CPU <span class="cite"><a href="#ref-2">2</a></span></p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">SMP · NR_CPUS · SCHED_SMT</span>
+      <h3>
+        <span class="standard-copy">Bao nhiêu CPU — và cái giá của việc đoán thừa</span>
+        <span class="easy-only">Máy bạn có mấy CPU</span>
+        <span class="en-only" lang="en">How many CPUs — and the price of over-guessing</span>
+      </h3>
+      <p class="standard-copy">Đoạn trợ giúp của <code>SMP</code> rất thẳng: nếu bạn nói không, nhân vẫn chạy trên cả máy một và nhiều CPU nhưng chỉ dùng <em>một</em> CPU; nếu bạn nói có, nhân chạy trên nhiều — <em>nhưng không phải tất cả</em> — máy một CPU, và trên máy một CPU thì nhân chạy nhanh hơn nếu bạn nói không <span class="cite"><a href="#ref-2">2</a></span>. <code>NR_CPUS</code> đặt trần số CPU, sách ghi dải 2–255 và nói rõ đây thuần túy là chuyện tiết kiệm bộ nhớ: mỗi CPU được hỗ trợ làm ảnh nhân to thêm <em>khoảng 8 KB</em> <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Nếu máy bạn chỉ có một CPU, chọn “không” cho <code>SMP</code> thì nhân chạy nhanh hơn <span class="cite"><a href="#ref-2">2</a></span>. Còn <code>NR_CPUS</code> là số CPU tối đa nhân biết đến — đặt càng cao thì nhân càng to, mỗi CPU thêm khoảng 8 KB <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: đừng khai nhiều hơn máy bạn có.</p>
+      <p class="en-only" lang="en"><code>SMP</code>'s help text is blunt: say no and the kernel runs on both single- and multiprocessor machines but uses only <em>one</em> CPU of a multiprocessor; say yes and it runs on many — <em>but not all</em> — single-processor machines, and on a single-processor machine the kernel runs faster if you say no <span class="cite"><a href="#ref-2">2</a></span>. <code>NR_CPUS</code> sets the ceiling, which the book gives as 2–255, noting the option is purely about saving memory: each supported CPU adds <em>approximately 8 KB</em> to the kernel image <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> <code>SCHED_SMT</code> là tùy chọn kề bên: sách mô tả nó cải thiện quyết định của bộ điều phối trên chip Pentium 4 có HyperThreading, đổi lại một chút phí tổn ở vài chỗ <span class="cite"><a href="#ref-2">2</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Ngay cạnh là <code>SCHED_SMT</code>, dành cho CPU có HyperThreading; nó giúp chia việc khéo hơn, đổi lại tốn thêm chút ít <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: chỉ bật khi CPU thật sự có tính năng đó.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> <code>SCHED_SMT</code> sits right beside it: the book describes it as improving the CPU scheduler's decision-making on Intel Pentium 4 chips with HyperThreading, at the cost of slightly increased overhead in some places <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ảnh chụp 2006, không phải hiện tại</h4>
+          <p>Ví dụ “Pentium 4” trong đoạn trợ giúp cho thấy tuổi của văn bản. <code>SMP</code>, <code>NR_CPUS</code> và <code>SCHED_SMT</code> đều vẫn là ký hiệu có thật trong các dòng nhân gần đây theo cơ sở dữ liệu LKDDb <span class="cite"><a href="#ref-22">22</a></span>, nhưng dải giá trị và mô tả đã đổi; hãy đọc lại đoạn trợ giúp trong cây mã của bạn thay vì tin con số 255.</p>
+        </div>
+        <div class="info-block">
+          <h4>Còn danh sách họ CPU thì sao</h4>
+          <p>Sách dành hơn một trang liệt kê các lựa chọn họ vi xử lý dưới <code>M386</code>: 386, 486, 586, Pentium-Classic, Pentium-MMX, Pentium-Pro, Pentium-II/III/4, K6, Athlon… <span class="cite"><a href="#ref-2">2</a></span>. Đây là phần lão hóa nhanh nhất của chương và là ví dụ rõ nhất vì sao bạn nên tra menu thật.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">PREEMPT_NONE / _VOLUNTARY / PREEMPT</span>
+      <h3>
+        <span class="standard-copy">Mô hình chiếm dụng — chọn giữa thông lượng và độ trễ</span>
+        <span class="easy-only">Máy chủ mượt việc, hay máy bàn mượt tay</span>
+        <span class="en-only" lang="en">Preemption model — throughput versus latency</span>
+      </h3>
+      <p class="standard-copy">Ba mục liền nhau, và sách gán cho mỗi mục một loại máy. <code>PREEMPT_NONE</code> là mô hình truyền thống, hướng tới tối đa hóa thông lượng, thỉnh thoảng có độ trễ dài hơn — chọn nó cho máy chủ hoặc hệ tính toán khoa học <span class="cite"><a href="#ref-2">2</a></span>. <code>PREEMPT_VOLUNTARY</code> thêm các “điểm chiếm dụng tường minh” để giảm độ trễ tái điều phối, đổi lại thông lượng thấp hơn chút ít — chọn cho máy bàn <span class="cite"><a href="#ref-2">2</a></span>. <code>PREEMPT</code> làm mọi mã nhân ngoài vùng tới hạn đều có thể bị chiếm dụng — chọn cho máy bàn hoặc hệ nhúng cần độ trễ cỡ mili-giây <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Ba kiểu, ba loại máy. Kiểu “không chiếm dụng” cho máy chủ: làm được nhiều việc nhưng thỉnh thoảng khựng <span class="cite"><a href="#ref-2">2</a></span>. Kiểu “tự nguyện” cho máy bàn: mượt hơn, chậm hơn tí <span class="cite"><a href="#ref-2">2</a></span>. Kiểu “chiếm dụng đầy đủ” cho máy cần phản ứng cực nhanh <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: mượt tay và làm nhiều việc là hai thứ đánh đổi nhau.</p>
+      <p class="en-only" lang="en">Three adjacent entries, each assigned a machine class. <code>PREEMPT_NONE</code> is the traditional model geared toward maximising throughput, with occasional longer delays — pick it for a server or scientific/computation system <span class="cite"><a href="#ref-2">2</a></span>. <code>PREEMPT_VOLUNTARY</code> adds more “explicit preemption points” to reduce rescheduling latency at the cost of slightly lower throughput — pick it for a desktop <span class="cite"><a href="#ref-2">2</a></span>. <code>PREEMPT</code> makes all kernel code outside critical sections preemptible — pick it for a desktop or an embedded system with latency requirements in the milliseconds range <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Từ nhân 5.12, lựa chọn này không còn bị đóng cứng lúc biên dịch: bản phát hành ấy thêm tham số khởi động <code>preempt=none|voluntary|full</code> cùng một công tắc trong <span lang="en">debugfs</span> để đổi lúc đang chạy, hiện thực bằng vá mã thời gian chạy <span class="cite"><a href="#ref-17">17</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Ngày nay bạn không cần biên dịch lại để đổi kiểu này: từ nhân 5.12 có thể chọn ngay lúc khởi động bằng <code>preempt=</code> <span class="cite"><a href="#ref-17">17</a></span>. Nhớ nhé: cái sách bảo phải chọn trước, giờ chọn sau cũng được.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Since kernel 5.12 the choice is no longer frozen at build time: that release added the <code>preempt=none|voluntary|full</code> boot options plus a debugfs switch to change it at runtime, implemented via runtime patching <span class="cite"><a href="#ref-17">17</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Một mục đã biến mất</h4>
+          <p>Sách còn liệt kê <code>PREEMPT_BKL</code> — “chiếm dụng Khóa Nhân Lớn” — và khuyên nói có nếu dựng cho máy bàn <span class="cite"><a href="#ref-2">2</a></span>. Theo LKDDb, ký hiệu này chỉ tồn tại tới khoảng nhân 2.6.25 <span class="cite"><a href="#ref-22">22</a></span>, và bản thân Khóa Nhân Lớn đã bị gỡ hoàn toàn khỏi mã nguồn ở 2.6.39 <span class="cite"><a href="#ref-19">19</a></span>. Đây là một tùy chọn chỉ-2006.</p>
+        </div>
+        <div class="info-block">
+          <h4>Ký hiệu mới thay chỗ</h4>
+          <p>Cơ chế chọn-lúc-khởi-động nói trên mang ký hiệu <code>PREEMPT_DYNAMIC</code>, mà LKDDb ghi nhận xuất hiện từ khoảng nhân 5.16 trở đi <span class="cite"><a href="#ref-22">22</a></span>. Một mục mới thay thế một mục cũ — đúng kiểu thay đổi mà <code>make listnewconfig</code> sinh ra để bạn phát hiện <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">NOHIGHMEM · HIGHMEM4G · HIGHMEM64G</span>
+      <h3>
+        <span class="standard-copy">Bộ nhớ cao — di sản của không gian địa chỉ 32 bit</span>
+        <span class="easy-only">Khi RAM nhiều hơn chỗ chứa địa chỉ</span>
+        <span class="en-only" lang="en">High memory — the 32-bit address-space legacy</span>
+      </h3>
+      <p class="standard-copy">Đoạn trợ giúp giải thích mạch lạc một nghịch lý phần cứng: Linux dùng được tới 64 GB RAM vật lý trên hệ x86, nhưng không gian địa chỉ của vi xử lý x86 32 bit chỉ 4 GB — phần RAM vật lý không được ánh xạ thường trực gọi là <em>bộ nhớ cao</em> <span class="cite"><a href="#ref-2">2</a></span>. Quy tắc chọn rất gọn: dưới 1 GB thì tắt (mặc định, hợp với đa số), cho ra kiểu chia 3 GB/1 GB; 1–4 GB thì chọn <code>4GB</code>; trên 4 GB thì chọn <code>64GB</code>, bật chế độ PAE của Intel <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Máy 32 bit chỉ “đánh số” được tới 4 GB, nhưng RAM có thể nhiều hơn thế. Phần dôi ra gọi là bộ nhớ cao <span class="cite"><a href="#ref-2">2</a></span>. Dưới 1 GB thì tắt, 1–4 GB chọn <code>4GB</code>, trên 4 GB chọn <code>64GB</code> <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: chọn sai ở đây máy có thể không khởi động.</p>
+      <p class="en-only" lang="en">The help text explains a hardware paradox cleanly: Linux can use up to 64 GB of physical memory on x86, but the address space of a 32-bit x86 processor is only 4 GB — the physical memory not permanently mapped is called <em>high memory</em> <span class="cite"><a href="#ref-2">2</a></span>. The selection rule is terse: under 1 GB, answer off (the default, suitable for most users), giving a 3 GB/1 GB split; between 1 and 4 GB, answer <code>4GB</code>; above 4 GB, answer <code>64GB</code>, which turns on Intel PAE mode <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Sách in hẳn một cảnh báo đóng khung: nếu chọn <code>64GB</code>, nhân <em>sẽ không khởi động</em> trên CPU không hỗ trợ PAE <span class="cite"><a href="#ref-2">2</a></span>. Đây là một trong số ít chỗ trong chương mà hậu quả là máy không lên.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Sách cảnh báo in đậm: chọn <code>64GB</code> mà CPU không hỗ trợ PAE thì máy không khởi động được <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: kiểm tra CPU trước khi chọn.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The book prints a boxed warning: if you say <code>64GB</code>, the kernel <em>will not boot</em> on CPUs that don't support PAE <span class="cite"><a href="#ref-2">2</a></span>. It is one of the few places in the chapter where the penalty is a dead machine.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Mô hình bộ nhớ: ba thành hai</h4>
+          <p>Sách trình bày ba lựa chọn mô hình bộ nhớ — <code>FLATMEM_MANUAL</code>, <code>DISCONTIGMEM_MANUAL</code>, <code>SPARSEMEM_MANUAL</code> — và khuyên: nếu phân vân giữa sparse và discontiguous thì chọn discontiguous <span class="cite"><a href="#ref-2">2</a></span>. Lời khuyên ấy nay đã hết hiệu lực: mô hình DISCONTIGMEM bị gỡ khỏi nhân ở bản 5.14 <span class="cite"><a href="#ref-10">10</a></span>, và tài liệu hiện hành chỉ còn nói tới hai mô hình, FLATMEM và SPARSEMEM <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao SPARSEMEM thắng</h4>
+          <p>Tài liệu hiện hành mô tả SPARSEMEM là mô hình linh hoạt nhất và là mô hình duy nhất hỗ trợ các tính năng như cắm nóng/rút nóng bộ nhớ vật lý <span class="cite"><a href="#ref-9">9</a></span>. Đúng chỗ mà sách 2006 ghi là điểm yếu của DISCONTIGMEM <span class="cite"><a href="#ref-2">2</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">IOSCHED_NOOP / _AS / _DEADLINE / _CFQ</span>
+      <h3>
+        <span class="standard-copy">Bộ điều phối vào/ra — bốn cách xếp hàng cho ổ đĩa</span>
+        <span class="easy-only">Bốn kiểu xếp hàng đọc ghi ổ đĩa</span>
+        <span class="en-only" lang="en">I/O schedulers — four ways to queue a disk</span>
+      </h3>
+      <p class="standard-copy">Sách liệt kê bốn: <code>IOSCHED_NOOP</code> tối giản, chỉ gộp và sắp xếp cơ bản, dùng cho thiết bị khối không phải đĩa như thiết bị nhớ <span class="cite"><a href="#ref-2">2</a></span>; <code>IOSCHED_AS</code> — bộ điều phối <em>mặc định</em> ở thời điểm đó — nói chung là lựa chọn tốt nhưng khá lớn và phức tạp, có thể chậm hơn dưới một số tải cơ sở dữ liệu <span class="cite"><a href="#ref-2">2</a></span>; <code>IOSCHED_DEADLINE</code> đơn giản và gọn, thường tốt ngang bộ anticipatory và dưới vài tải cơ sở dữ liệu còn tốt hơn <span class="cite"><a href="#ref-2">2</a></span>; <code>IOSCHED_CFQ</code> cố chia đều băng thông cho mọi tiến trình, hợp với hệ máy bàn <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Ổ đĩa chỉ làm được một việc một lúc, nên nhân phải xếp hàng các yêu cầu. Sách kể bốn kiểu xếp hàng: kiểu tối giản, kiểu “chờ một nhịp”, kiểu “theo hạn chót”, và kiểu “chia đều cho mọi chương trình” <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: kiểu chia đều hợp với máy bàn.</p>
+      <p class="en-only" lang="en">The book lists four: <code>IOSCHED_NOOP</code>, minimal, doing basic merging and sorting, for non-disk block devices such as memory devices <span class="cite"><a href="#ref-2">2</a></span>; <code>IOSCHED_AS</code> — the <em>default</em> disk scheduler at the time — generally a good choice but quite large and complex, and slower under some database loads <span class="cite"><a href="#ref-2">2</a></span>; <code>IOSCHED_DEADLINE</code>, simple and compact, often as good as anticipatory and better under some database workloads <span class="cite"><a href="#ref-2">2</a></span>; and <code>IOSCHED_CFQ</code>, which tries to distribute bandwidth equally among all processes, suitable for desktop systems <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Không còn ở đâu cả, dưới những cái tên này. Bộ anticipatory bị gỡ ở nhân 2.6.33, với ghi chú “được thay bằng bộ điều phối mặc định, CFQ” <span class="cite"><a href="#ref-15">15</a></span>; rồi toàn bộ tầng khối cũ cùng ba bộ noop, deadline và cfq bị xóa trong một lần dọn dẹp tiến vào nhân 5.0 <span class="cite"><a href="#ref-14">14</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Không gặp nữa. Cả bốn cái tên này đều đã bị gỡ khỏi nhân — cái đầu ở bản 2.6.33 <span class="cite"><a href="#ref-15">15</a></span>, ba cái còn lại ở bản 5.0 <span class="cite"><a href="#ref-14">14</a></span>. Nhớ nhé: đây là phần cũ nhất của chương.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Nowhere, under these names. The anticipatory scheduler was removed in 2.6.33, noted as “replaced by the default io scheduler, CFQ” <span class="cite"><a href="#ref-15">15</a></span>; then the whole legacy block layer along with noop, deadline and cfq was deleted in the cleanup that landed in 5.0 <span class="cite"><a href="#ref-14">14</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cái gì thay chỗ</h4>
+          <p>Bộ kế thừa tinh thần của CFQ là BFQ. Tài liệu nhân hiện hành mô tả BFQ là bộ điều phối chia theo tỷ lệ, phân phối <em>băng thông</em> chứ không chỉ thời gian, giữa các tiến trình hoặc nhóm, và ở cấu hình mặc định nó ưu tiên độ trễ hơn thông lượng <span class="cite"><a href="#ref-16">16</a></span>. Ý niệm “công bằng cho máy bàn” của sách vẫn sống, chỉ mang tên khác.</p>
+        </div>
+        <div class="info-block">
+          <h4>Đọc ảnh chụp cho đúng</h4>
+          <p>Câu “anticipatory là bộ điều phối đĩa mặc định” <span class="cite"><a href="#ref-2">2</a></span> đúng vào lúc sách in và sai kể từ 2.6.33 <span class="cite"><a href="#ref-15">15</a></span>. Khi một câu trong chương 11 nói về <em>mặc định</em>, hãy luôn đọc nó như “mặc định năm 2006”.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">SECCOMP · KEXEC</span>
+      <h3>
+        <span class="standard-copy">Hai tùy chọn 2006 đã trở thành hạ tầng</span>
+        <span class="easy-only">Hai cái tên nhỏ, sau này thành lớn</span>
+        <span class="en-only" lang="en">Two 2006 options that became infrastructure</span>
+      </h3>
+      <p class="standard-copy">Sách giới thiệu <code>SECCOMP</code> như một tiện ích hẹp: hữu ích cho ứng dụng tính toán cần chạy mã byte không tin cậy; một khi bật qua <code>/proc/pid/seccomp</code> thì không tắt được nữa, và tác vụ chỉ còn được gọi vài lời gọi hệ thống an toàn <span class="cite"><a href="#ref-2">2</a></span>. <code>KEXEC</code> thì được mô tả là “lời gọi hệ thống kexec (thử nghiệm)”: tắt nhân hiện tại và khởi động một nhân khác, giống khởi động lại nhưng độc lập với phần sụn hệ thống — và sách thành thật cảnh báo “đừng ngạc nhiên nếu đoạn mã này ban đầu không chạy được” <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Hai tùy chọn nhỏ trong sách, sau này thành rất quan trọng. <code>SECCOMP</code> nhốt một chương trình lại, chỉ cho nó gọi vài lệnh an toàn, và đã bật thì không tắt được <span class="cite"><a href="#ref-2">2</a></span>. <code>KEXEC</code> cho phép nhảy thẳng sang một nhân khác mà không khởi động lại máy <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: thứ ghi “thử nghiệm” năm 2006 có thể là nền tảng của hôm nay.</p>
+      <p class="en-only" lang="en">The book introduces <code>SECCOMP</code> as a narrow utility: useful for number-crunching applications that may need to compute untrusted bytecode; once enabled via <code>/proc/pid/seccomp</code> it cannot be disabled, and the task may execute only a few safe syscalls <span class="cite"><a href="#ref-2">2</a></span>. <code>KEXEC</code> is described as “kexec system call (experimental)”: shut down your current kernel and start up another, like a reboot but independent of the system firmware — and the book honestly warns, “do not be surprised if this code does not initially work for you” <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Cả hai ký hiệu vẫn có mặt trong các dòng nhân gần đây theo LKDDb <span class="cite"><a href="#ref-22">22</a></span> — nhưng vai trò đã khác hẳn những gì đoạn trợ giúp 2006 gợi ý. Đừng suy ra hành vi hiện tại từ mô tả cũ; hãy đọc đoạn trợ giúp trong cây mã của bạn.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Hai cái tên này vẫn còn trong nhân ngày nay <span class="cite"><a href="#ref-22">22</a></span>, nhưng chúng đã lớn hơn nhiều so với mô tả trong sách. Nhớ nhé: tên còn, nghĩa đã đổi.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Both symbols are still present in recent kernel series per LKDDb <span class="cite"><a href="#ref-22">22</a></span> — but their role is nothing like what the 2006 help text suggests. Do not infer current behaviour from the old description; read the help text in your own tree.</p>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Vùng lõi quyết định nhân <em>là gì</em>. Vùng kế tiếp quyết định nhân <em>nói chuyện được với cái gì</em> — và đó là nơi chiếm phần lớn số trang, vì đó là nơi chiếm phần lớn cây mã.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Phần trên nói nhân là cái gì. Phần sau nói nhân nhận ra được những thiết bị nào. Nhớ nhé: phần driver bao giờ cũng dài nhất.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> The core region decides what the kernel <em>is</em>. The next decides what it can <em>talk to</em> — and that is where most of the pages go, because that is where most of the tree lives.</p>
+  </aside>
+</section>
+
+<section class="section" id="nhom-thiet-bi" aria-labelledby="nhom-thiet-bi-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 03</span><span class="en-only" lang="en">Concept cluster 03</span></p>
+    <h2 id="nhom-thiet-bi-title">
+      <span class="standard-copy">Nguồn điện, bus, lưu trữ, hệ thống tệp, gỡ lỗi</span>
+      <span class="easy-only">Điện, cổng cắm, ổ đĩa, tệp, và công cụ soi lỗi</span>
+      <span class="en-only" lang="en">Power, buses, storage, filesystems, debugging</span>
+    </h2>
+    <p class="standard-copy">Từ trang 130 tới hết chương, sách đi qua các vùng menu lần lượt: quản lý nguồn, PCI và PCMCIA, mạng, lưu trữ, thiết bị nhập, âm thanh, USB, hệ thống tệp, rồi khép lại bằng gỡ lỗi và an ninh <span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-4">4</a></span>. Ta không chép lại danh sách — ta lấy từ mỗi vùng một mục mà việc đọc nó dạy được điều gì đó về cách suy nghĩ khi cấu hình.</p>
+    <p class="easy-only">Phần còn lại của chương đi qua từng khu: điện, cổng cắm, mạng, ổ đĩa, bàn phím chuột, âm thanh, USB, hệ thống tệp, rồi công cụ soi lỗi <span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-4">4</a></span>. Ở đây ta chỉ lấy vài ví dụ tiêu biểu. Nhớ nhé: học cách nghĩ, đừng học thuộc danh sách.</p>
+    <p class="en-only" lang="en">From page 130 to the end, the book walks the menu regions in order: power management, PCI and PCMCIA, networking, storage, input devices, sound, USB, filesystems, then closes with debugging and security <span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-4">4</a></span>. We do not reproduce the list — we take from each region one entry whose reading teaches something about how to think while configuring.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Cổng menu (<span lang="en">menu gate</span>).</b> Một tùy chọn mà cả một nhánh phụ thuộc vào. <code>PM</code> là ví dụ điển hình: bật quản lý nguồn rồi mới chọn được một trong hai chuẩn cạnh tranh — APM hoặc ACPI <span class="cite"><a href="#ref-3">3</a></span>. Tương tự, <code>NET</code> mở đường cho toàn bộ cây mạng, và sách khuyên nói có “trừ khi bạn là chuyên gia và có lý do thật tốt để không” <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only"><b>Cổng menu là gì.</b> Là cái nút mở ra cả một khu. Bật <code>PM</code> mới chọn được kiểu tiết kiệm điện <span class="cite"><a href="#ref-3">3</a></span>; bật <code>NET</code> mới có phần mạng, và sách bảo hầu như ai cũng nên bật <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: tìm cổng trước, tìm nút con sau.</p>
+      <p class="en-only" lang="en"><b>Menu gate.</b> An option a whole branch hangs off. <code>PM</code> is the classic case: enable power management first, then choose between the two competing standards, APM or ACPI <span class="cite"><a href="#ref-3">3</a></span>. Likewise <code>NET</code> opens the entire networking tree, and the book advises saying yes “unless you are an expert with a really good reason not to” <span class="cite"><a href="#ref-3">3</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">PM&nbsp;&nbsp;&nbsp;→ ACPI → CPU_FREQ → governor<br>NET&nbsp;&nbsp;→ INET → NETFILTER<br>SCSI → BLK_DEV_SD → BLK_DEV_MD → BLK_DEV_DM<br>DEBUG_KERNEL → DEBUG_FS · KPROBES</p>
+      <p class="easy-only">bật điện → chọn chuẩn → chỉnh tốc độ CPU<br>bật mạng → chọn giao thức → tường lửa<br>bật ổ đĩa → gộp RAID → quản lý ổ ảo<br>bật gỡ lỗi → mở các công cụ soi</p>
+      <p class="en-only" lang="en">PM&nbsp;&nbsp;&nbsp;→ ACPI → CPU_FREQ → governor<br>NET&nbsp;&nbsp;→ INET → NETFILTER<br>SCSI → BLK_DEV_SD → BLK_DEV_MD → BLK_DEV_DM<br>DEBUG_KERNEL → DEBUG_FS · KPROBES</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">CPU_FREQ · governors</span>
+      <h3>
+        <span class="standard-copy">Điều tốc CPU — tùy chọn không tự làm gì</span>
+        <span class="easy-only">Chỉnh tốc độ CPU cho đỡ tốn điện</span>
+        <span class="en-only" lang="en">CPU frequency scaling — the option that does nothing by itself</span>
+      </h3>
+      <p class="standard-copy">Đoạn trợ giúp của <code>CPU_FREQ</code> nói một điều mà người mới hay bỏ sót: driver này <em>không</em> tự động đổi tốc độ xung nhịp; bạn phải bật thêm một <span lang="en">governor</span> động sau khi khởi động, hoặc dùng công cụ ở không gian người dùng <span class="cite"><a href="#ref-3">3</a></span>. Rồi sách liệt kê các governor: <code>PERFORMANCE</code> ghim tần số ở mức cao nhất <span class="cite"><a href="#ref-3">3</a></span>; <code>USERSPACE</code> để bạn hoặc một chương trình tự đặt <span class="cite"><a href="#ref-3">3</a></span>; <code>ONDEMAND</code> thăm dò CPU rồi đổi tần số theo mức sử dụng <span class="cite"><a href="#ref-3">3</a></span>; và <code>CONSERVATIVE</code>, giống ondemand nhưng tối ưu cho máy chạy pin, tăng giảm tần số từ tốn thay vì nhảy thẳng lên 100% <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Bật <code>CPU_FREQ</code> thôi thì chưa đủ — nó không tự đổi tốc độ, bạn phải chọn thêm một “người điều khiển” <span class="cite"><a href="#ref-3">3</a></span>. Có loại luôn chạy nhanh nhất, có loại tự nhìn tải mà tăng giảm, có loại tăng giảm từ từ cho máy dùng pin <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: bật cổng rồi phải chọn người lái.</p>
+      <p class="en-only" lang="en"><code>CPU_FREQ</code>'s help text says something beginners miss: this driver does <em>not</em> automatically change the CPU clock speed; you must either enable a dynamic governor after booting or use a userspace tool <span class="cite"><a href="#ref-3">3</a></span>. The book then lists the governors: <code>PERFORMANCE</code> pins the frequency statically to the highest supported <span class="cite"><a href="#ref-3">3</a></span>; <code>USERSPACE</code> lets you or a program set it <span class="cite"><a href="#ref-3">3</a></span>; <code>ONDEMAND</code> polls the CPU and changes frequency based on utilisation <span class="cite"><a href="#ref-3">3</a></span>; and <code>CONSERVATIVE</code>, similar to ondemand but optimised for a battery-powered system, raising and lowering the frequency gracefully rather than jumping to 100 percent <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> <code>CPU_FREQ</code> và <code>CPU_FREQ_GOV_ONDEMAND</code> vẫn là ký hiệu hiện hành theo LKDDb <span class="cite"><a href="#ref-22">22</a></span>, nhưng danh sách governor đã dài thêm — ví dụ <code>CPU_FREQ_GOV_SCHEDUTIL</code> chỉ xuất hiện từ khoảng nhân 4.9 <span class="cite"><a href="#ref-22">22</a></span>, tức hoàn toàn vắng mặt trong sách.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Hai cái tên đầu vẫn còn dùng được hôm nay <span class="cite"><a href="#ref-22">22</a></span>, nhưng có thêm những “người lái” mới mà sách chưa kịp biết <span class="cite"><a href="#ref-22">22</a></span>. Nhớ nhé: danh sách chỉ dài thêm, không ngắn lại.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> <code>CPU_FREQ</code> and <code>CPU_FREQ_GOV_ONDEMAND</code> are still current symbols per LKDDb <span class="cite"><a href="#ref-22">22</a></span>, but the governor list has grown — <code>CPU_FREQ_GOV_SCHEDUTIL</code>, for one, appears only from around kernel 4.9 <span class="cite"><a href="#ref-22">22</a></span>, so it is entirely absent from the book.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Treo máy: hai tên, một khái niệm</h4>
+          <p>Sách gọi việc ghi ảnh bộ nhớ ra phân vùng trao đổi là <code>SOFTWARE_SUSPEND</code>, và hướng dẫn truyền <code>resume=/dev/swappartition</code> lúc khởi động lần sau <span class="cite"><a href="#ref-3">3</a></span>. Theo LKDDb, ký hiệu ấy chỉ còn thấy tới khoảng 2.6.22, còn <code>HIBERNATION</code> xuất hiện từ 2.6.23 — một lần đổi tên chứ không phải một tính năng mới <span class="cite"><a href="#ref-20">20</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Bốn trạng thái ngủ hôm nay</h4>
+          <p>Tài liệu hiện hành phân biệt tới bốn trạng thái: suspend-to-idle, standby, suspend-to-RAM và hibernation; ba cái đầu đều nằm dưới <code>CONFIG_SUSPEND</code>, còn hibernation là con đường riêng <span class="cite"><a href="#ref-23">23</a></span>. Cách chia hai nhánh APM/ACPI của sách không còn phản ánh cấu trúc ấy.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">IDE · SCSI · SCSI_SATA</span>
+      <h3>
+        <span class="standard-copy">Lưu trữ — vùng lão hóa nhanh nhất của chương</span>
+        <span class="easy-only">Ổ cứng: phần cũ nhất trong sách</span>
+        <span class="en-only" lang="en">Storage — the fastest-ageing region of the chapter</span>
+      </h3>
+      <p class="standard-copy">Sách dành nhiều trang cho <code>IDE</code>, kèm cả một bài học lịch sử nhỏ: IDE còn gọi là ATA-1, do Western Digital và Compaq thiết kế năm 1984; ATA là tập cha của IDE; Fast-IDE là ATA-2; EIDE là ATA-3, hỗ trợ đĩa lớn hơn tới 8,4 GB qua chuẩn LBA và bốn đĩa thay vì hai; UDMA/33 là ATA-4 <span class="cite"><a href="#ref-3">3</a></span>. Bên cạnh đó là nhánh <code>SCSI</code>, với cảnh báo: đừng biên dịch nó thành module nếu hệ thống tệp gốc nằm trên thiết bị SCSI <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Phần ổ cứng trong sách rất dài và rất cũ. Nó kể cả lịch sử: IDE ra đời năm 1984, rồi lớn dần thành ATA-2, ATA-3, ATA-4 <span class="cite"><a href="#ref-3">3</a></span>. Có một lời dặn vẫn đúng: nếu hệ điều hành nằm trên ổ SCSI thì đừng để driver SCSI thành module <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: driver cho ổ chứa hệ điều hành phải nằm sẵn trong nhân.</p>
+      <p class="en-only" lang="en">The book gives <code>IDE</code> several pages, with a small history lesson attached: IDE is also known as ATA-1, designed by Western Digital and Compaq in 1984; ATA is the superset of the IDE specifications; Fast-IDE is ATA-2; EIDE is ATA-3, supporting larger disks up to 8.4 GB via LBA and four disks instead of two; UDMA/33 is ATA-4 <span class="cite"><a href="#ref-3">3</a></span>. Beside it sits the <code>SCSI</code> branch, with a warning: do not compile it as a module if your root filesystem is located on a SCSI device <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Toàn bộ hệ con <code>drivers/ide</code> cũ đã bị xóa khỏi nhân ở bản 5.14, sau khi mọi cấu hình mặc định còn lại được chuyển sang libata <span class="cite"><a href="#ref-18">18</a></span>. Phần cứng PATA vẫn chạy — nhưng qua libata, và tên thiết bị đổi từ kiểu <code>/dev/hda</code> sang kiểu <code>/dev/sda</code> <span class="cite"><a href="#ref-18">18</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Phần mã IDE cũ đã bị gỡ hẳn ở nhân 5.14 <span class="cite"><a href="#ref-18">18</a></span>. Ổ cứng cũ vẫn dùng được, nhưng tên đổi từ <code>/dev/hda</code> thành <code>/dev/sda</code> <span class="cite"><a href="#ref-18">18</a></span>. Nhớ nhé: tên ổ đĩa trong sách đã lỗi thời.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The entire legacy <code>drivers/ide</code> subsystem was deleted in kernel 5.14, after the remaining defconfigs were switched to libata <span class="cite"><a href="#ref-18">18</a></span>. PATA hardware still works — but through libata, and device names shift from the <code>/dev/hda</code> style to the <code>/dev/sda</code> style <span class="cite"><a href="#ref-18">18</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Một ký hiệu chỉ sống được năm bản</h4>
+          <p>Sách liệt kê <code>SCSI_SATA</code> trong phần lưu trữ <span class="cite"><a href="#ref-3">3</a></span>. Theo LKDDb, ký hiệu này chỉ tồn tại từ nhân 2.6.13 đến 2.6.18 <span class="cite"><a href="#ref-22">22</a></span> — nghĩa là nó đã biến mất <em>trước cả khi sách lên kệ</em> vào cuối 2006. Một lời nhắc rằng ngay cả ảnh chụp cũng có thể trễ nhịp.</p>
+        </div>
+        <div class="info-block">
+          <h4>Hai mục vẫn còn nguyên giá trị</h4>
+          <p><code>BLK_DEV_MD</code> gộp nhiều phân vùng thành một thiết bị khối logic, làm RAID 1/4/5 bằng phần mềm <span class="cite"><a href="#ref-3">3</a></span>; <code>BLK_DEV_DM</code> là trình quản lý ổ đĩa mức thấp mà các trình quản lý mức cao như LVM2 dựa lên <span class="cite"><a href="#ref-3">3</a></span>. Cả hai ký hiệu đều còn trong các dòng nhân gần đây theo LKDDb <span class="cite"><a href="#ref-22">22</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">EXT3_FS · FUSE_FS · CIFS</span>
+      <h3>
+        <span class="standard-copy">Hệ thống tệp — chỗ mô tả già đi chậm nhất</span>
+        <span class="easy-only">Hệ thống tệp: phần bền nhất</span>
+        <span class="en-only" lang="en">Filesystems — where the descriptions age slowest</span>
+      </h3>
+      <p class="standard-copy">Mô tả <code>EXT3_FS</code> vẫn đọc được nguyên: nó là phiên bản có nhật ký của ext2; nhật ký nghĩa là bạn không phải chạy <code>fsck</code> sau một lần sập máy, vì nó theo dõi các thay đổi đang diễn ra lúc sập <span class="cite"><a href="#ref-4">4</a></span>. Và một chi tiết đẹp: ngoài phần nhật ký, định dạng trên đĩa của ext3 <em>giống hệt</em> ext2, nên có thể chuyển qua lại giữa hai driver miễn là hệ thống tệp đã được tháo sạch <span class="cite"><a href="#ref-4">4</a></span>. <code>FUSE_FS</code> thì mở ra cả một thể loại: với FUSE, có thể hiện thực một hệ thống tệp đầy đủ chức năng bằng chương trình ở không gian người dùng <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only">ext3 chính là ext2 có thêm cuốn sổ ghi chép, nên sau khi mất điện không phải dò lại cả ổ <span class="cite"><a href="#ref-4">4</a></span>. Hay ở chỗ: bỏ cuốn sổ đi thì nó lại đúng là ext2 <span class="cite"><a href="#ref-4">4</a></span>. Còn FUSE cho phép viết hệ thống tệp bằng chương trình thường, không cần đụng vào nhân <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: phần này trong sách vẫn còn đúng nhiều nhất.</p>
+      <p class="en-only" lang="en">The <code>EXT3_FS</code> description still reads intact: it is the journaling version of ext2; the journal means you do not have to run <code>fsck</code> after a crash, because it tracks the changes in flight when the system went down <span class="cite"><a href="#ref-4">4</a></span>. And a lovely detail: other than the journal, ext3's on-disk format is <em>identical</em> to ext2, so you can freely switch between the two drivers as long as the filesystem was cleanly unmounted <span class="cite"><a href="#ref-4">4</a></span>. <code>FUSE_FS</code> opens a whole genre: with FUSE it is possible to implement a fully functional filesystem in a userspace program <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Sách liệt kê cả <code>SMB_FS</code> lẫn <code>CIFS</code>, và nói rõ CIFS là kế thừa của giao thức SMB, còn smbfs dùng để truy cập các máy chủ SMB cũ <span class="cite"><a href="#ref-4">4</a></span>. Theo LKDDb, <code>SMB_FS</code> bị dời vào <code>drivers/staging</code> ở 2.6.37–2.6.38 rồi biến mất <span class="cite"><a href="#ref-19">19</a></span>; nhánh còn lại là CIFS.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Sách có hai cách nối tới máy Windows: <code>SMB_FS</code> cũ và <code>CIFS</code> mới <span class="cite"><a href="#ref-4">4</a></span>. Cái cũ đã bị bỏ khỏi nhân <span class="cite"><a href="#ref-19">19</a></span>. Nhớ nhé: ngày nay chỉ còn CIFS.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The book lists both <code>SMB_FS</code> and <code>CIFS</code>, stating plainly that CIFS is the successor to the SMB protocol while smbfs is for older SMB servers <span class="cite"><a href="#ref-4">4</a></span>. Per LKDDb, <code>SMB_FS</code> was moved into <code>drivers/staging</code> for 2.6.37–2.6.38 and then disappeared <span class="cite"><a href="#ref-19">19</a></span>; the surviving branch is CIFS.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Một tên biến mất rất lặng lẽ</h4>
+          <p>Sách mô tả <code>INOTIFY</code> là hệ thống thông báo thay đổi tệp thay thế dnotify, theo dõi được cả tệp lẫn thư mục qua một đối tượng <span lang="en">fd</span> duy nhất <span class="cite"><a href="#ref-4">4</a></span>. LKDDb cho thấy ký hiệu <code>INOTIFY</code> chỉ còn tới khoảng 2.6.35, trong khi <code>INOTIFY_USER</code> vẫn tiếp tục <span class="cite"><a href="#ref-22">22</a></span>. Tính năng ở lại, cái tên thì không — đúng kiểu bẫy mà <code>make oldconfig</code> im lặng bỏ qua <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Danh sách hệ thống tệp trong sách</h4>
+          <p>Ngoài ext2/ext3, chương còn có ReiserFS (lưu cả tên tệp lẫn nội dung trong cây cân bằng), JFS (bản chuyển từ IBM), XFS (khởi nguồn trên SGI IRIX, đa luồng hoàn toàn), OCFS2 (hệ thống tệp cụm chia sẻ đĩa), QUOTA và AUTOFS <span class="cite"><a href="#ref-4">4</a></span>. Đáng chú ý: <code>EXT4_FS</code> <em>không</em> có mặt — LKDDb ghi nhận nó xuất hiện từ khoảng nhân 2.6.28 <span class="cite"><a href="#ref-22">22</a></span>, tức sau khi sách in.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">MAGIC_SYSRQ · DEBUG_KERNEL · SECURITY_SELINUX</span>
+      <h3>
+        <span class="standard-copy">Gỡ lỗi và an ninh — hai mục cuối chương</span>
+        <span class="easy-only">Công cụ cứu máy và khóa máy</span>
+        <span class="en-only" lang="en">Debugging and security — the chapter's last entries</span>
+      </h3>
+      <p class="standard-copy">Sách khép chương bằng những công cụ dành cho lúc mọi thứ hỏng. <code>MAGIC_SYSRQ</code> cho bạn chút quyền điều khiển ngay cả khi hệ thống đã sập — xả bộ đệm ra đĩa, khởi động lại ngay, hoặc đổ ra vài thông tin trạng thái — bằng cách giữ phím SysRq (Alt+PrintScreen) rồi nhấn các phím lệnh; và một câu dặn rất thật: “đừng nói có trừ khi bạn thực sự biết cái mẹo này làm gì” <span class="cite"><a href="#ref-4">4</a></span>. <code>PRINTK_TIME</code> chèn thông tin thời gian vào đầu ra thông điệp nhân, hữu ích để tìm các đoạn trễ dài lúc khởi động <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only">Cuối chương là các công cụ dành cho lúc máy treo. <code>MAGIC_SYSRQ</code> cho bạn ra vài lệnh cấp cứu bằng tổ hợp phím kể cả khi máy đã đứng <span class="cite"><a href="#ref-4">4</a></span>. <code>PRINTK_TIME</code> gắn giờ vào từng dòng thông báo để biết chỗ nào khởi động chậm <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: sách dặn đừng bật SysRq nếu chưa hiểu nó.</p>
+      <p class="en-only" lang="en">The book closes with tools for when everything breaks. <code>MAGIC_SYSRQ</code> gives you some control over the system even if it has crashed — flush the buffer cache to disk, reboot immediately, or dump status information — by holding SysRq (Alt+PrintScreen) and pressing command keys; with a very honest caveat: “don't say yes unless you really know what this hack does” <span class="cite"><a href="#ref-4">4</a></span>. <code>PRINTK_TIME</code> includes timing information in kernel message output, useful for identifying long delays in startup <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Mục cuối cùng của chương là <code>SECURITY_SELINUX</code>: sách nói nó chọn SELinux của NSA và bạn còn cần thêm một cấu hình chính sách cùng một hệ thống tệp có nhãn <span class="cite"><a href="#ref-4">4</a></span>. Cổng của nó là <code>SECURITY</code>, mục cho phép cấu hình các mô-đun an ninh khác nhau vào nhân <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Mục cuối sách là SELinux — nhưng bật nó thôi chưa đủ, còn phải có bộ chính sách và hệ thống tệp gắn nhãn <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: an ninh là cả một bộ, không phải một nút.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The chapter's final entry is <code>SECURITY_SELINUX</code>: the book says it selects NSA Security-Enhanced Linux and that you will also need a policy configuration and a labeled filesystem <span class="cite"><a href="#ref-4">4</a></span>. Its gate is <code>SECURITY</code>, the entry that lets you configure different security modules into your kernel <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Một công cụ đã về hưu</h4>
+          <p>Sách giới thiệu <code>PROFILING</code> và <code>OPROFILE</code> — hệ thống lấy mẫu toàn hệ thống, gồm cả nhân, module, thư viện và ứng dụng <span class="cite"><a href="#ref-4">4</a></span>. Theo LKDDb, <code>OPROFILE</code> còn tới khoảng nhân 5.11 rồi dừng <span class="cite"><a href="#ref-22">22</a></span>; kernelnewbies ghi nhận việc gỡ oprofile và dcookies trong bản 5.12 <span class="cite"><a href="#ref-17">17</a></span>. <code>PROFILING</code> và <code>KPROBES</code> thì vẫn còn <span class="cite"><a href="#ref-22">22</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Mục dễ bị bỏ quên nhất</h4>
+          <p><code>DEBUG_FS</code> — hệ thống tệp ảo nơi các nhà phát triển nhân đặt tệp gỡ lỗi <span class="cite"><a href="#ref-4">4</a></span> — chính là nơi công tắc <code>preempt</code> thời-gian-chạy của nhân 5.12 xuất hiện <span class="cite"><a href="#ref-17">17</a></span>. Một mục vô danh năm 2006 trở thành giao diện điều khiển của một tính năng ra đời mười lăm năm sau.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Đọc tới đây, một câu hỏi thành ra không tránh được: bao nhiêu phần của chương này còn dùng được? Câu trả lời trung thực là “tùy mục”, và phần sau đưa ra cách phân loại thay vì một lời khẳng định chung.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Câu hỏi tự nhiên: sách in năm 2006, giờ còn đúng bao nhiêu? Nhớ nhé: phần sau chỉ bạn cách tự kiểm tra từng mục.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> By now one question is unavoidable: how much of this chapter still holds? The honest answer is “it depends on the entry”, and the next section offers a way to sort them rather than one blanket verdict.</p>
+  </aside>
+</section>
+
+<section class="section" id="da-doi-thay" aria-labelledby="da-doi-thay-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 04</span><span class="en-only" lang="en">Concept cluster 04</span></p>
+    <h2 id="da-doi-thay-title">
+      <span class="standard-copy">Đọc một ảnh chụp 2006 vào năm nay</span>
+      <span class="easy-only">Sách cũ, nhân mới: đọc sao cho đúng</span>
+      <span class="en-only" lang="en">Reading a 2006 snapshot today</span>
+    </h2>
+    <p class="standard-copy">Không có câu trả lời chung cho “chương 11 còn đúng không”. Có bốn số phận khác nhau, và việc của bạn là xếp mỗi mục vào đúng ngăn trước khi tin nó: <b>còn nguyên</b> (tên và nghĩa giữ nguyên), <b>đổi tên</b> (khái niệm sống, ký hiệu chết), <b>bị thay</b> (cả cơ chế được viết lại), và <b>biến mất</b> (không còn gì tương ứng). Mỗi ngăn có một cách kiểm tra riêng, và cả bốn đều kết thúc ở cùng một nơi: cây mã bạn đang cầm.</p>
+    <p class="easy-only">Không thể nói gọn “sách còn đúng” hay “sách sai rồi”. Mỗi mục rơi vào một trong bốn trường hợp: còn nguyên, chỉ đổi tên, bị thay bằng thứ khác, hoặc mất hẳn. Nhớ nhé: cứ tra trong mã nguồn bạn đang có, đừng đoán.</p>
+    <p class="en-only" lang="en">There is no blanket answer to “is Chapter 11 still right”. There are four fates, and your job is to sort each entry before trusting it: <b>intact</b> (name and meaning preserved), <b>renamed</b> (concept alive, symbol dead), <b>replaced</b> (the mechanism itself rewritten), and <b>gone</b> (nothing corresponds). Each has its own check, and all four end in the same place: the tree in your hands.</p>
+    <p class="deep-only">Có một lý do cấu trúc khiến việc phân loại này không bao giờ xong: số tùy chọn chỉ tăng. Từ “gần hai nghìn” trong sách <span class="cite"><a href="#ref-5">5</a></span> tới 32.468 tùy chọn trên <span lang="en">x86_64</span> ở nhân 6.16 theo phân tích LWN <span class="cite"><a href="#ref-21">21</a></span> là hệ số mười sáu trong chưa tới hai thập niên. Không bản in nào theo kịp nhịp đó — nên cuốn sách khôn ngoan khi dạy cách đọc trước khi liệt kê.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Ký hiệu chỉ-2006.</b> Một ký hiệu <code>CONFIG_*</code> có trong sách nhưng không còn trong cây mã hiện hành. Ví dụ đã dẫn ở trên: <code>PREEMPT_BKL</code>, <code>IOSCHED_AS</code>, <code>SCSI_SATA</code>, <code>SMB_FS</code>, <code>EXPERIMENTAL</code>. Dấu hiệu nhận biết nhanh nhất: <code>make menuconfig</code> tìm không ra, và <code>make oldconfig</code> lặng lẽ bỏ dòng đó khỏi <code>.config</code> của bạn.</p>
+      <p class="easy-only"><b>Ký hiệu chỉ-2006 là gì.</b> Là cái tên có trong sách nhưng không còn trong nhân ngày nay. Cách nhận ra: tìm trong màn hình cấu hình mà không thấy. Nhớ nhé: không thấy thì đừng cố ép nó vào tệp cấu hình.</p>
+      <p class="en-only" lang="en"><b>A 2006-only symbol.</b> A <code>CONFIG_*</code> symbol present in the book but absent from a current tree. The examples above: <code>PREEMPT_BKL</code>, <code>IOSCHED_AS</code>, <code>SCSI_SATA</code>, <code>SMB_FS</code>, <code>EXPERIMENTAL</code>. The quickest tell: <code>make menuconfig</code> cannot find it, and <code>make oldconfig</code> quietly drops the line from your <code>.config</code>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">còn nguyên&nbsp; → tra menuconfig, thấy<br>đổi tên&nbsp;&nbsp;&nbsp;&nbsp; → tra LKDDb, tìm tên kế thừa<br>bị thay&nbsp;&nbsp;&nbsp;&nbsp; → đọc docs.kernel.org<br>biến mất&nbsp;&nbsp;&nbsp; → tra changelog bản gỡ bỏ</p>
+      <p class="easy-only">tìm thấy → dùng được<br>không thấy → xem nó đổi tên thành gì<br>đổi cơ chế → đọc tài liệu mới<br>mất hẳn → xem bản nào đã gỡ</p>
+      <p class="en-only" lang="en">intact&nbsp;&nbsp; → search menuconfig, found<br>renamed&nbsp; → check LKDDb for the successor<br>replaced → read docs.kernel.org<br>gone&nbsp;&nbsp;&nbsp;&nbsp; → find the release that removed it</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">renamed</span>
+      <h3>
+        <span class="standard-copy">Đổi tên — khái niệm sống, ký hiệu chết</span>
+        <span class="easy-only">Cùng một thứ, tên khác</span>
+        <span class="en-only" lang="en">Renamed — concept alive, symbol dead</span>
+      </h3>
+      <p class="standard-copy">Ba ví dụ rõ nhất từ chính chương này. <code>SOFTWARE_SUSPEND</code> thành <code>HIBERNATION</code> từ nhân 2.6.23 <span class="cite"><a href="#ref-20">20</a></span>. <code>EMBEDDED</code> — mà sách mô tả là “cấu hình các tính năng nhân chuẩn (cho hệ thống nhỏ)”, chỉ nên dùng cho chuyên gia vì rất dễ tạo ra nhân không khởi động nổi <span class="cite"><a href="#ref-2">2</a></span> — được đổi tên thành <code>EXPERT</code> ở nhân 2.6.38, với dòng nhắc đổi thành “cho người dùng thành thạo” <span class="cite"><a href="#ref-12">12</a></span>. Còn <code>INOTIFY</code> nhường chỗ cho <code>INOTIFY_USER</code> <span class="cite"><a href="#ref-22">22</a></span>.</p>
+      <p class="easy-only">Nhiều tùy chọn chỉ đổi tên chứ không mất. “Treo máy ghi ra đĩa” đổi từ <code>SOFTWARE_SUSPEND</code> sang <code>HIBERNATION</code> <span class="cite"><a href="#ref-20">20</a></span>. <code>EMBEDDED</code> đổi thành <code>EXPERT</code> <span class="cite"><a href="#ref-12">12</a></span>. Nhớ nhé: không thấy tên cũ thì đi tìm tên mới, đừng vội kết luận là mất.</p>
+      <p class="en-only" lang="en">Three clear examples from this very chapter. <code>SOFTWARE_SUSPEND</code> became <code>HIBERNATION</code> as of kernel 2.6.23 <span class="cite"><a href="#ref-20">20</a></span>. <code>EMBEDDED</code> — which the book describes as “configure standard kernel features (for small systems)”, recommended only for experts since it is very easy to create a kernel that will not even boot <span class="cite"><a href="#ref-2">2</a></span> — was renamed to <code>EXPERT</code> in 2.6.38, its prompt changed to “expert users” <span class="cite"><a href="#ref-12">12</a></span>. And <code>INOTIFY</code> gave way to <code>INOTIFY_USER</code> <span class="cite"><a href="#ref-22">22</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Đây đúng là tình huống mà tài liệu Kconfig cảnh báo: bản mới không chỉ thêm ký hiệu mà còn đổi tên chúng, nên dùng lại một <code>.config</code> cũ với <code>make oldconfig</code> không chắc cho ra nhân chạy được <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Khi bạn mang tệp cấu hình cũ sang nhân mới — tài liệu nhân cảnh báo đúng chuyện này <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: chạy <code>make listnewconfig</code> để xem có gì mới.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> This is exactly the situation the Kconfig documentation warns about: new releases not only introduce symbols but rename them, so reusing an old <code>.config</code> with <code>make oldconfig</code> will not necessarily produce a working kernel <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đổi tên rồi vẫn còn hậu vận</h4>
+          <p>Lần đổi tên 2.6.38 không xóa ký hiệu cũ: một <code>EMBEDDED</code> mới được thêm vào, tự động <code>select EXPERT</code>, dành cho các lựa chọn chỉ liên quan tới hệ nhúng <span class="cite"><a href="#ref-12">12</a></span>. Mãi tới 2022 nó mới được đề nghị gỡ hẳn, với lý do gần như không ai còn dùng nó để đặt mặc định khác đi <span class="cite"><a href="#ref-13">13</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Tra cứu vòng đời ký hiệu</h4>
+          <p>Cơ sở dữ liệu LKDDb công bố dải phiên bản nhân mà mỗi ký hiệu xuất hiện <span class="cite"><a href="#ref-22">22</a></span> — cách nhanh nhất để biết một mục trong chương 11 thuộc ngăn nào. Đó là nguồn cho mọi khẳng định “còn/không còn” trên trang này.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">removed outright</span>
+      <h3>
+        <span class="standard-copy">Biến mất — khi cả một khái niệm bị rút đi</span>
+        <span class="easy-only">Mất hẳn, không có gì thay</span>
+        <span class="en-only" lang="en">Gone — when a whole concept is withdrawn</span>
+      </h3>
+      <p class="standard-copy">Mục <code>EXPERIMENTAL</code> mở đầu chương 11 và là mục cuối cùng người đọc hôm nay nên tìm: nó bị gỡ khỏi nhân ở bản 3.9 <span class="cite"><a href="#ref-11">11</a></span>. Lý do rất đáng nhớ: thay đổi trong mô hình phát triển nhân cùng sự ra đời của thư mục <span lang="en">staging</span> đã khiến nó vô nghĩa — gần như mọi bản phân phối đều bật nó theo mặc định <span class="cite"><a href="#ref-11">11</a></span>. Nói cách khác, một tùy chọn “cảnh báo” mà ai cũng bật thì không còn cảnh báo ai nữa.</p>
+        <p class="easy-only">Mục đầu tiên của chương, <code>EXPERIMENTAL</code>, đã bị gỡ khỏi nhân ở bản 3.9 <span class="cite"><a href="#ref-11">11</a></span>. Vì sao? Vì ai cũng bật nó, nên nó chẳng còn cảnh báo được ai <span class="cite"><a href="#ref-11">11</a></span>. Nhớ nhé: một lời cảnh báo mà ai cũng bỏ qua thì nên bỏ đi.</p>
+      <p class="en-only" lang="en">The <code>EXPERIMENTAL</code> entry opens Chapter 11 and is the last one a reader today should go looking for: it was removed from the kernel in 3.9 <span class="cite"><a href="#ref-11">11</a></span>. The reason is worth remembering: changes in the kernel development model and the arrival of the staging directory made it obsolete — nearly every distribution enabled it by default <span class="cite"><a href="#ref-11">11</a></span>. A warning switch that everyone flips warns nobody.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Thói quen thay thế: thay vì một cổng chung, các nhà phát triển nay gắn thẳng nhãn “(EXPERIMENTAL)” vào dòng nhắc của từng tùy chọn <span class="cite"><a href="#ref-11">11</a></span>. Cảnh báo từ toàn cục chuyển thành cục bộ.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Ngày nay lời cảnh báo được viết thẳng vào tên từng tùy chọn, thay vì một cái công tắc chung <span class="cite"><a href="#ref-11">11</a></span>. Nhớ nhé: đọc kỹ dòng nhắc.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The replacement habit: instead of one shared gate, developers now put an “(EXPERIMENTAL)” tag directly in an option's own prompt <span class="cite"><a href="#ref-11">11</a></span>. The warning moved from global to local.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ba lần gỡ bỏ đáng nhớ</h4>
+          <p>Mô hình bộ nhớ DISCONTIGMEM gỡ ở 5.14 <span class="cite"><a href="#ref-10">10</a></span>; tầng khối cũ cùng ba bộ điều phối vào/ra gỡ ở 5.0 <span class="cite"><a href="#ref-14">14</a></span>; hệ con <code>drivers/ide</code> gỡ ở 5.14 <span class="cite"><a href="#ref-18">18</a></span>. Ba lần ấy xóa sổ một tỷ lệ đáng kể các mục trong chương 11 — nhưng không xóa bất kỳ khả năng nào của người dùng: mỗi lần đều có một đường thay thế.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao đó là tin tốt</h4>
+          <p>Xu hướng chung không phải “thêm mãi”: nó là hợp nhất. SPARSEMEM thay hai mô hình <span class="cite"><a href="#ref-9">9</a></span>; libata thay cả một hệ con IDE <span class="cite"><a href="#ref-18">18</a></span>; blk-mq thay bốn bộ điều phối bằng một tập nhỏ hơn <span class="cite"><a href="#ref-14">14</a></span>. Với người cấu hình, ít lựa chọn nhưng đúng đắn hơn là một cải thiện.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">still true</span>
+      <h3>
+        <span class="standard-copy">Còn nguyên — phần không hề cũ đi</span>
+        <span class="easy-only">Phần vẫn còn đúng</span>
+        <span class="en-only" lang="en">Intact — the part that did not age</span>
+      </h3>
+      <p class="standard-copy">Đáng chú ý là danh sách này dài hơn người ta tưởng. Theo LKDDb, các ký hiệu <code>LOCALVERSION</code>, <code>IKCONFIG</code>, <code>MAGIC_SYSRQ</code>, <code>DEBUG_KERNEL</code>, <code>DEBUG_FS</code>, <code>KPROBES</code>, <code>PRINTK_TIME</code>, <code>AUDIT</code>, <code>NET</code>, <code>USB</code>, <code>SND</code>, <code>INPUT</code>, <code>BLK_DEV_MD</code>, <code>BLK_DEV_DM</code>, <code>FUSE_FS</code>, <code>QUOTA</code>, <code>CPU_FREQ</code> và <code>X86_GENERIC</code> đều vẫn có mặt trong các dòng nhân gần đây <span class="cite"><a href="#ref-22">22</a></span>. Điều già đi là <em>ví dụ</em> (Pentium 4, ZIP drive, Windows 2003), không phải <em>cấu trúc</em>.</p>
+      <p class="easy-only">Phần còn đúng nhiều hơn bạn tưởng: rất nhiều tên trong sách vẫn dùng được hôm nay <span class="cite"><a href="#ref-22">22</a></span>. Thứ cũ đi là các ví dụ về phần cứng, chứ không phải cách tổ chức. Nhớ nhé: đọc lấy ý, bỏ qua tên thiết bị đời cũ.</p>
+      <p class="en-only" lang="en">The list is longer than people expect. Per LKDDb, the symbols <code>LOCALVERSION</code>, <code>IKCONFIG</code>, <code>MAGIC_SYSRQ</code>, <code>DEBUG_KERNEL</code>, <code>DEBUG_FS</code>, <code>KPROBES</code>, <code>PRINTK_TIME</code>, <code>AUDIT</code>, <code>NET</code>, <code>USB</code>, <code>SND</code>, <code>INPUT</code>, <code>BLK_DEV_MD</code>, <code>BLK_DEV_DM</code>, <code>FUSE_FS</code>, <code>QUOTA</code>, <code>CPU_FREQ</code> and <code>X86_GENERIC</code> are all still present in recent kernel series <span class="cite"><a href="#ref-22">22</a></span>. What aged is the <em>examples</em> (Pentium 4, ZIP drives, Windows 2003), not the <em>structure</em>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Và một lối tắt mà sách 2006 chưa có: tài liệu nhân hiện hành khuyến nghị <code>make localmodconfig</code>, lấy cấu hình sẵn có làm nền rồi tắt các module có vẻ thừa với máy bạn, “giảm thời gian biên dịch một cách khổng lồ” <span class="cite"><a href="#ref-24">24</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Ngày nay có lệnh <code>make localmodconfig</code> tự cắt bớt phần máy bạn không dùng, biên dịch nhanh hơn rất nhiều <span class="cite"><a href="#ref-24">24</a></span>. Nhớ nhé: không phải cái gì cũng phải chọn tay.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> And a shortcut the 2006 book did not have: current kernel documentation recommends <code>make localmodconfig</code>, taking an existing config as a base and disabling modules apparently superfluous for your setup, which “will reduce the compile time enormously” <span class="cite"><a href="#ref-24">24</a></span>.</p>
+      </div>
+    </li>
+  </ol>
+
+  <div class="trap-comparison deep-only">
+    <p class="eyebrow"><span class="vi-only">Ba hiểu lầm thường gặp</span><span class="en-only" lang="en">Three common misconceptions</span></p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Chương 11 là danh mục đầy đủ”</span><span class="en-only" lang="en">“Chapter 11 is a complete catalogue”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> tra chương 11 là biết hết tùy chọn. <span class="fact">Thực tế:</span> chính câu đầu chương nói nó liệt kê <em>những tùy chọn quan trọng nhất</em> <span class="cite"><a href="#ref-1">1</a></span>, trong khi nhân 2.6 đã có gần hai nghìn tùy chọn <span class="cite"><a href="#ref-5">5</a></span> và nhân 6.16 có 32.468 tùy chọn trên <span lang="en">x86_64</span> <span class="cite"><a href="#ref-21">21</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> consulting Chapter 11 tells you every option. <span class="fact">Fact:</span> its own first sentence says it lists <em>the most important</em> options <span class="cite"><a href="#ref-1">1</a></span>, while the 2.6 kernel already had almost two thousand <span class="cite"><a href="#ref-5">5</a></span> and kernel 6.16 has 32,468 on x86_64 <span class="cite"><a href="#ref-21">21</a></span>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Tên còn trong nhân thì mô tả vẫn đúng”</span><span class="en-only" lang="en">“If the symbol survives, the description holds”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> tìm thấy ký hiệu trong <code>menuconfig</code> nghĩa là đoạn mô tả 2006 còn dùng được. <span class="fact">Thực tế:</span> <code>SECCOMP</code> và <code>KEXEC</code> vẫn tồn tại <span class="cite"><a href="#ref-22">22</a></span> nhưng vai trò đã khác xa mô tả cũ <span class="cite"><a href="#ref-2">2</a></span>; luôn đọc lại đoạn trợ giúp trong cây mã của bạn <span class="cite"><a href="#ref-8">8</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> finding the symbol in <code>menuconfig</code> means the 2006 description still applies. <span class="fact">Fact:</span> <code>SECCOMP</code> and <code>KEXEC</code> both survive <span class="cite"><a href="#ref-22">22</a></span> but their roles are far from the old text <span class="cite"><a href="#ref-2">2</a></span>; always reread the help text in your own tree <span class="cite"><a href="#ref-8">8</a></span>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“<code>make oldconfig</code> sẽ lo hết”</span><span class="en-only" lang="en">“<code>make oldconfig</code> will handle it”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> mang <code>.config</code> cũ sang nhân mới là xong. <span class="fact">Thực tế:</span> tài liệu nói rõ rằng bản mới có thể <em>đổi tên</em> ký hiệu, nên <code>make oldconfig</code> không chắc cho ra nhân chạy được; hãy dùng <code>make listnewconfig</code> hoặc <code>scripts/diffconfig</code> để xem thứ đã đổi <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> carrying an old <code>.config</code> forward is enough. <span class="fact">Fact:</span> the documentation states that new releases may <em>rename</em> symbols, so <code>make oldconfig</code> will not necessarily produce a working kernel; use <code>make listnewconfig</code> or <code>scripts/diffconfig</code> to see what moved <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </div>
+    </div>
+  </div>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Chương 11 khép lại phần thân sách. Thứ bạn mang theo không nên là một danh sách thuộc lòng, mà là một phản xạ: gặp một <code>CONFIG_*</code> lạ thì tìm đoạn trợ giúp của nó trước khi tìm ý kiến trên diễn đàn.</p>
+    <p class="easy-only"><b>Nối sang phần cuối.</b> Đây là chương cuối của phần chính. Nhớ nhé: gặp tùy chọn lạ, đọc lời giải thích của chính nó trước đã.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> Chapter 11 closes the body of the book. What you should carry away is not a memorised list but a reflex: meet an unfamiliar <code>CONFIG_*</code> and read its own help text before reading anyone's opinion.</p>
+  </aside>
+</section>
+
+<section class="section" id="tu-kiem" aria-labelledby="tu-kiem-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Tự kiểm</span><span class="en-only" lang="en">Self-check</span></p>
+    <h2 id="tu-kiem-title">
+      <span class="standard-copy">Tự kiểm khi khép lại phần tham chiếu</span>
+      <span class="easy-only">Tự hỏi mình vài câu</span>
+      <span class="en-only" lang="en">Self-check as the reference closes</span>
+    </h2>
+  </div>
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Chương này không có quy trình để làm theo, nên bài tự kiểm cũng khác: nó đo xem bạn đã có phản xạ tra cứu hay chưa. Hãy mở một cây mã nguồn thật và trả lời bằng thao tác, không bằng trí nhớ.</p>
+      <p class="easy-only">Chương này không dạy quy trình, nên câu hỏi ở đây là về thói quen tra cứu. Mở mã nguồn thật ra và làm thử. Nhớ nhé: trả lời bằng cách làm, đừng trả lời bằng cách nhớ.</p>
+      <p class="en-only" lang="en">This chapter has no procedure to follow, so the self-check differs: it measures whether you have acquired the lookup reflex. Open a real source tree and answer by doing, not by remembering.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>Bạn chỉ ra được bốn phần của một mục Kconfig — ký hiệu, kiểu, phụ thuộc, đoạn trợ giúp — trong một tệp <code>Kconfig</code> thật chưa?
+        <p class="deep-only">Mở bất kỳ tệp <code>Kconfig</code> nào trong cây mã; cú pháp đầy đủ và danh sách từ khóa nằm trong tài liệu Kconfig Language <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      </li>
+      <li>Trong <code>menuconfig</code>, bạn tìm được một tùy chọn đang bị ẩn và đọc ra chuỗi <code>depends on</code> đang chặn nó chứ?
+        <p class="deep-only">Các giao diện <span lang="en">menuconfig</span>, <span lang="en">xconfig</span> và <span lang="en">nconfig</span> đều có trợ giúp nhúng cho phần tìm kiếm và điều hướng <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </li>
+      <li>Bạn phân biệt được một mục “cổng” (<code>MODULES</code>, <code>PM</code>, <code>NET</code>, <code>DEBUG_KERNEL</code>) với một mục thực sự sinh ra mã?
+        <p class="deep-only">Dấu hiệu trong sách: câu “tự thân nó không làm gì cả, ngoài việc cho phép bạn chọn các tùy chọn khác” <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </li>
+      <li>Cho một ký hiệu bất kỳ trong chương 11, bạn nói được nó thuộc ngăn nào trong bốn ngăn: còn nguyên, đổi tên, bị thay, biến mất?</li>
+      <li>Bạn biết chạy lệnh nào để thấy các ký hiệu mới xuất hiện khi nâng cấp cây mã?
+        <p class="deep-only">Đáp án: <code>make listnewconfig</code>, hoặc <code>make oldconfig</code> rồi <code>scripts/diffconfig .config.old .config</code> <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li>Bạn mở được một tệp <code>Kconfig</code> thật và chỉ ra đâu là tên, đâu là lời giải thích chưa?</li>
+      <li>Trong màn hình cấu hình, bạn biết bấm <kbd>/</kbd> để tìm một tùy chọn chứ?</li>
+      <li>Bạn nhận ra được nút nào là “cổng” mở ra cả một khu?</li>
+      <li>Gặp một cái tên trong sách mà nhân không có, bạn sẽ làm gì tiếp?</li>
+      <li>Nhớ nhé: trả lời được cả năm câu thì bạn đã có phản xạ tra cứu rồi.</li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>Can you point out the four parts of a Kconfig entry — symbol, type, dependencies, help text — in a real <code>Kconfig</code> file?</li>
+      <li>In <code>menuconfig</code>, can you find a hidden option and read off the <code>depends on</code> chain blocking it?</li>
+      <li>Can you tell a “gate” entry (<code>MODULES</code>, <code>PM</code>, <code>NET</code>, <code>DEBUG_KERNEL</code>) from one that actually produces code?
+        <p class="deep-only" lang="en">The book's tell: the sentence “on its own, this option does not do anything except allow you to select other options” <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </li>
+      <li>Given any symbol in Chapter 11, can you place it in one of the four bins: intact, renamed, replaced, gone?</li>
+      <li>Do you know which command shows the symbols that are new since your last tree?
+        <p class="deep-only" lang="en">Answer: <code>make listnewconfig</code>, or <code>make oldconfig</code> followed by <code>scripts/diffconfig .config.old .config</code> <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section class="closing" id="dong-lai" aria-labelledby="dong-lai-title">
+  <p class="eyebrow" id="dong-lai-title"><span class="vi-only">Đọng lại</span><span class="en-only" lang="en">What remains</span></p>
+  <blockquote>
+    <p class="standard-copy">Chương dài nhất của cuốn sách là chương chóng cũ nhất — và đó chính là bài học của nó. Vì phần lớn nội dung <span class="closing-accent">vốn là tài liệu nằm sẵn trong nhân</span>, thứ bạn thực sự học được không phải danh sách, mà là <span class="closing-accent">nơi danh sách ấy luôn được cập nhật</span>: cây mã trước mặt bạn.</p>
+    <p class="easy-only">Chương dài nhất cũng là chương cũ nhanh nhất. Nhưng vì lời giải thích trong đó <span class="closing-accent">vốn nằm sẵn trong mã nguồn nhân</span>, bạn chỉ cần học <span class="closing-accent">cách mở đúng chỗ</span> là không bao giờ lạc hậu. Nhớ nhé: sách chỉ đường, mã nguồn nói sự thật.</p>
+    <p class="en-only" lang="en">The book's longest chapter is its fastest-ageing one — and that is precisely its lesson. Because most of it <span class="closing-accent">was always the in-kernel documentation</span>, what you actually learn is not the list but <span class="closing-accent">where that list is always current</span>: the tree in front of you.</p>
+  </blockquote>
+</section>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-10-build-commands.html">
+    <span class="nav-label">◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span></span>
+    <span class="nav-title"><span class="vi-only">Chương 10 · Tham chiếu lệnh dựng nhân</span><span class="en-only" lang="en">Chapter 10 · Kernel Build Command-Line Reference</span></span>
+  </a>
+  <div class="nav-cell nav-next disabled" aria-disabled="true">
+    <span class="nav-label"><span class="vi-only">Hết phần chính</span><span class="en-only" lang="en">End of main body</span> ▶</span>
+    <span class="nav-title"><span class="vi-only">Phần IV · Phụ lục A &amp; B · sắp có</span><span class="en-only" lang="en">Part IV · Appendices A &amp; B · coming soon</span></span>
+  </div>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chương 11, “Kernel Configuration Option Reference” (trang 122–158). Trang này là <b>người đồng hành diễn giải</b>, không phải bản dịch: nó tóm lược, sắp xếp lại và chú giải nội dung chương, không thay thế việc đọc sách gốc. Các ví dụ và phép so sánh ở mức đọc <i>Dễ hiểu</i> là minh họa do trang này thêm vào, không có trong sách. <b>Cảnh báo về tuổi tác:</b> sách xuất bản năm 2006 cho dòng nhân 2.6; một phần đáng kể các ký hiệu <code>CONFIG_*</code> trong chương đã bị đổi tên, hợp nhất hoặc gỡ bỏ kể từ đó. Mọi mô tả ở trên đều được nêu như ảnh chụp 2006 của sách, và mọi khẳng định về tình hình hiện nay đều dẫn nguồn riêng tới tài liệu nhân hiện hành. Nguồn có thẩm quyền cho hành vi và ký hiệu hiện tại là tài liệu chính thức tại <a href="https://www.kernel.org/doc/html/latest/" target="_blank" rel="noopener noreferrer">kernel.org/doc</a> và chính các tệp <code>Kconfig</code> trong cây mã của bạn.</p>
+    <p class="en-only" lang="en"><b>Primary source.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chapter 11, “Kernel Configuration Option Reference” (pages 122–158). This page is an <b>interpretive study companion</b>, not a translation: it summarises, rearranges and annotates the chapter, and does not replace reading the book itself. Examples and analogies at the <i>Easy</i> reading level are illustrations added here, not the author's. <b>Age warning:</b> the book was published in 2006 for the 2.6 kernel series; a substantial share of the <code>CONFIG_*</code> symbols in this chapter have since been renamed, merged or removed. Every description above is presented as the book's 2006 snapshot, and every claim about the present day carries its own citation to current kernel documentation. The authoritative source for current behaviour and symbols is the official documentation at <a href="https://www.kernel.org/doc/html/latest/" target="_blank" rel="noopener noreferrer">kernel.org/doc</a> and the <code>Kconfig</code> files in your own tree.</p>
+
+    <p class="footer-label vi-only">Tham chiếu</p>
+    <p class="footer-label en-only" lang="en">References</p>
+    <ol class="ref-list">
+      <li id="ref-1">Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006, Chapter 11 “Kernel Configuration Option Reference”, p. 122 (câu định phạm vi: chương liệt kê “the most important configuration options”; phần lớn dựa trên tài liệu trong nhân do các nhà phát triển viết và phát hành theo GPL). Bản trực tuyến miễn phí: <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-2">Sđd., Chapter 11, pp. 122–129 — các mục <code>EXPERIMENTAL</code>, <code>LOCALVERSION</code>, <code>AUDIT</code>, <code>IKCONFIG</code>, <code>EMBEDDED</code>, <code>MODULES</code>, <code>IOSCHED_NOOP/AS/DEADLINE/CFQ</code>, <code>SMP</code>, <code>M386</code>, <code>X86_GENERIC</code>, <code>NR_CPUS</code>, <code>SCHED_SMT</code>, <code>PREEMPT_NONE/VOLUNTARY/PREEMPT/PREEMPT_BKL</code>, <code>NOHIGHMEM</code>, <code>HIGHMEM4G</code>, <code>HIGHMEM64G</code>, <code>FLATMEM_MANUAL</code>, <code>DISCONTIGMEM_MANUAL</code>, <code>SPARSEMEM_MANUAL</code>, <code>SECCOMP</code>, <code>KEXEC</code>. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-3">Sđd., Chapter 11, pp. 130–153 — các mục <code>HOTPLUG_CPU</code>, <code>PM</code>, <code>SOFTWARE_SUSPEND</code>, <code>ACPI</code>, <code>CPU_FREQ</code> và các governor, <code>PCI</code>, <code>PCCARD</code>, <code>NET</code>, <code>NETFILTER</code>, <code>IDE</code>, <code>SCSI</code>, <code>BLK_DEV_SD</code>, <code>BLK_DEV_MD</code>, <code>BLK_DEV_DM</code>, <code>SCSI_SATA</code>, <code>IEEE1394</code>, <code>INPUT</code>, <code>SOUND</code>, <code>SND</code>, <code>USB</code>. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-4">Sđd., Chapter 11, pp. 154–158 — các mục <code>EXT2_FS</code>, <code>EXT3_FS</code>, <code>REISERFS_FS</code>, <code>JFS_FS</code>, <code>XFS_FS</code>, <code>OCFS2_FS</code>, <code>INOTIFY</code>, <code>QUOTA</code>, <code>AUTOFS_FS</code>, <code>FUSE_FS</code>, <code>SMB_FS</code>, <code>CIFS</code>, <code>PROFILING</code>, <code>OPROFILE</code>, <code>KPROBES</code>, <code>PRINTK_TIME</code>, <code>MAGIC_SYSRQ</code>, <code>DEBUG_KERNEL</code>, <code>DEBUG_FS</code>, <code>SECURITY</code>, <code>SECURITY_SELINUX</code>. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-5">Sđd., Chapter 4 “Configuring and Building”, p. 17 — “The kernel contains almost two thousand different configuration options”. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-6">The Linux Kernel documentation, <a href="https://docs.kernel.org/kbuild/kconfig-language.html" target="_blank" rel="noopener noreferrer">“Kconfig Language”</a>, docs.kernel.org (cú pháp <code>config</code>/<code>menuconfig</code>/<code>choice</code>/<code>source</code>, <code>depends on</code> so với <code>select</code>, khuôn mẫu <code>HAVE_*</code>, <code>depends on … &amp;&amp; m</code>, <code>CC_HAS_*</code>; truy cập 22-09-2026).</li>
+      <li id="ref-7">The Linux Kernel documentation, <a href="https://docs.kernel.org/kbuild/kconfig.html" target="_blank" rel="noopener noreferrer">“Configuration targets and editors” (kconfig.html)</a>, docs.kernel.org — cảnh báo về việc đổi tên ký hiệu và <code>make oldconfig</code>; <code>make listnewconfig</code>; <code>scripts/diffconfig</code>; biến môi trường <code>CONFIG_</code>; trợ giúp nhúng của menuconfig/xconfig/nconfig (truy cập 22-09-2026).</li>
+      <li id="ref-8">The Linux Kernel documentation, <a href="https://www.kernel.org/doc/html/latest/" target="_blank" rel="noopener noreferrer">bản kết xuất mới nhất</a>, kernel.org — nguồn có thẩm quyền cho ký hiệu và hành vi hiện hành (truy cập 22-09-2026).</li>
+      <li id="ref-9">The Linux Kernel documentation, <a href="https://docs.kernel.org/mm/memory-model.html" target="_blank" rel="noopener noreferrer">“Physical Memory Model”</a>, docs.kernel.org — Linux trừu tượng hóa bộ nhớ vật lý bằng một trong <b>hai</b> mô hình, FLATMEM và SPARSEMEM; SPARSEMEM là mô hình linh hoạt nhất và là mô hình duy nhất hỗ trợ cắm/rút nóng bộ nhớ (truy cập 22-09-2026).</li>
+      <li id="ref-10">LWN.net, <a href="https://lwn.net/Articles/858333/" target="_blank" rel="noopener noreferrer">“Remove DISCONTIGMEM memory model”</a> (loạt vá của Mike Rapoport, 06-2021), và <a href="https://kernelnewbies.org/Linux_5.14" target="_blank" rel="noopener noreferrer">kernelnewbies — Linux 5.14</a>, mục “Remove DISCONTIGMEM memory model”.</li>
+      <li id="ref-11">LWN.net, <a href="https://lwn.net/Articles/520867/" target="_blank" rel="noopener noreferrer">“remove CONFIG_EXPERIMENTAL”</a>, và <a href="https://kernelnewbies.org/Linux_3.9" target="_blank" rel="noopener noreferrer">kernelnewbies — Linux 3.9</a>: <code>CONFIG_EXPERIMENTAL</code> bị gỡ; thay vào đó nhãn “(EXPERIMENTAL)” được đặt trong dòng nhắc của từng tùy chọn.</li>
+      <li id="ref-12">LWN.net, <a href="https://lwn.net/Articles/421304/" target="_blank" rel="noopener noreferrer">“init: rename CONFIG_EMBEDDED to CONFIG_EXPERT”</a>, và LKDDb, <a href="https://cateee.net/lkddb/web-lkddb/EXPERT.html" target="_blank" rel="noopener noreferrer">CONFIG_EXPERT</a> (xuất hiện từ nhân 2.6.38).</li>
+      <li id="ref-13">LWN.net, <a href="https://lwn.net/Articles/907635/" target="_blank" rel="noopener noreferrer">“Remove CONFIG_EMBEDDED”</a> (Lukas Bulwahn, 09-2022) — ký hiệu còn sót lại sau lần đổi tên hầu như không còn người dùng.</li>
+      <li id="ref-14">Jens Axboe, <a href="https://github.com/torvalds/linux/commit/f382fb0bcef4c37dc049e9f6963e3baf204d815c" target="_blank" rel="noopener noreferrer">“block: remove legacy IO schedulers”</a>, commit <code>f382fb0</code> (12-10-2018) — xóa <code>deadline-iosched.c</code>, <code>noop-iosched.c</code> và tài liệu cfq cùng tầng khối một hàng đợi; vào cây chính ở dòng nhân 5.0.</li>
+      <li id="ref-15">kernelnewbies, <a href="https://kernelnewbies.org/Linux_2_6_33" target="_blank" rel="noopener noreferrer">Linux 2.6.33 changelog</a>: “Remove the anticipatory IO scheduler (replaced by the default io scheduler, CFQ)”.</li>
+      <li id="ref-16">The Linux Kernel documentation, <a href="https://docs.kernel.org/block/bfq-iosched.html" target="_blank" rel="noopener noreferrer">“BFQ (Budget Fair Queueing)”</a>, docs.kernel.org — BFQ phân phối băng thông chứ không chỉ thời gian; cấu hình mặc định ưu tiên độ trễ hơn thông lượng (truy cập 22-09-2026).</li>
+      <li id="ref-17">kernelnewbies, <a href="https://kernelnewbies.org/Linux_5.12" target="_blank" rel="noopener noreferrer">Linux 5.12 changelog</a> — “Allow selecting preempting model at boot and run time”: tham số <code>preempt=none/voluntary/full</code>, công tắc trong debugfs, hiện thực bằng vá mã thời gian chạy; cùng trang ghi nhận “Remove oprofile and dcookies”.</li>
+      <li id="ref-18">The Register, <a href="https://www.theregister.com/2021/07/12/linux_5_14_rc1/" target="_blank" rel="noopener noreferrer">“Linux kernel sheds legacy IDE support…”</a> (12-07-2021) — <code>drivers/ide</code> bị xóa ở 5.14, mọi hỗ trợ IDE chuyển sang libata, tên thiết bị đổi từ <code>/dev/hdX</code> sang <code>/dev/sdX</code>; xem thêm <a href="https://kernelnewbies.org/Linux_5.14" target="_blank" rel="noopener noreferrer">kernelnewbies — Linux 5.14</a>.</li>
+      <li id="ref-19">LKDDb, <a href="https://cateee.net/lkddb/web-lkddb/SMB_FS.html" target="_blank" rel="noopener noreferrer">CONFIG_SMB_FS</a> — “SMB file system support (OBSOLETE, please use CIFS)”, nằm ở <code>fs/smbfs/Kconfig</code> trong nhân 2.6.29–2.6.36 rồi <code>drivers/staging/smbfs/Kconfig</code> ở 2.6.37–2.6.38, sau đó không còn; Khóa Nhân Lớn cũng được gỡ hoàn toàn ở 2.6.39 (<a href="https://kernelnewbies.org/Linux_2_6_39" target="_blank" rel="noopener noreferrer">kernelnewbies — Linux 2.6.39</a>).</li>
+      <li id="ref-20">LKDDb, <a href="https://cateee.net/lkddb/web-lkddb/HIBERNATION.html" target="_blank" rel="noopener noreferrer">CONFIG_HIBERNATION</a> (có từ nhân 2.6.23 trở đi) và <a href="https://cateee.net/lkddb/web-lkddb/SOFTWARE_SUSPEND.html" target="_blank" rel="noopener noreferrer">CONFIG_SOFTWARE_SUSPEND</a> (chỉ thấy tới 2.6.22) — một lần đổi tên, không phải một tính năng mới.</li>
+      <li id="ref-21">Daroc Alden, <a href="https://lwn.net/Articles/1034811/" target="_blank" rel="noopener noreferrer">“How many ways are there to configure the Linux kernel?”</a>, LWN.net, 10-09-2025 — nhân 6.16 có 32.468 tùy chọn cấu hình trên <span lang="en">x86_64</span>; số tổ hợp khả dĩ có 6.550 chữ số.</li>
+      <li id="ref-22">LKDDb (Linux Kernel Driver DataBase), <a href="https://cateee.net/lkddb/web-lkddb/" target="_blank" rel="noopener noreferrer">cateee.net/lkddb</a> — dải phiên bản nhân mà mỗi ký hiệu <code>CONFIG_*</code> xuất hiện; nguồn cho mọi khẳng định “còn/không còn” về từng ký hiệu trên trang này (truy cập 22-09-2026).</li>
+      <li id="ref-23">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/pm/sleep-states.html" target="_blank" rel="noopener noreferrer">“System Sleep States”</a>, docs.kernel.org — bốn trạng thái ngủ: suspend-to-idle, standby, suspend-to-RAM (đều dưới <code>CONFIG_SUSPEND</code>) và hibernation (truy cập 22-09-2026).</li>
+      <li id="ref-24">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/quickly-build-trimmed-linux.html" target="_blank" rel="noopener noreferrer">“Quickly build a trimmed Linux kernel”</a>, docs.kernel.org — <code>make localmodconfig</code> và ghi chú rằng nó giảm thời gian biên dịch “enormously” (truy cập 22-09-2026).</li>
+    </ol>
+
+    <p class="footer-label vi-only">Trong loạt bài</p>
+    <p class="footer-label en-only" lang="en">In this series</p>
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <p class="vi-only"><a href="index.html">Trang bìa</a> · <a href="chapter-10-build-commands.html">Chương 10 · Tham chiếu lệnh dựng nhân</a> · <span>Chương 11 · Tham chiếu tùy chọn cấu hình nhân (trang này)</span> · <span>Phần IV · Phụ lục A &amp; B (sắp có)</span></p>
+    <p class="en-only" lang="en"><a href="index.html">Cover</a> · <a href="chapter-10-build-commands.html">Chapter 10 · Kernel Build Command-Line Reference</a> · <span>Chapter 11 · Kernel Configuration Option Reference (this page)</span> · <span>Part IV · Appendices A &amp; B (coming soon)</span></p>
+    <!-- NAV:END -->
+  </div>
+  <div class="edition">LKN · CH 11 · VI/EN</div>
+</footer>
+
+</main>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  function sync() {
+    var mode = root.getAttribute("data-mode") || "standard";
+    var lang = root.getAttribute("data-lang") || "vi";
+    var dark = root.getAttribute("data-theme") === "dark";
+    document.querySelectorAll("[data-set-mode]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-mode") === mode));
+    });
+    document.querySelectorAll("[data-set-lang]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-lang") === lang));
+    });
+    document.querySelectorAll("[data-toggle-theme]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(dark));
+    });
+    root.setAttribute("lang", lang === "en" ? "en" : "vi");
+  }
+
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button.chip");
+    if (!b) return;
+    if (b.hasAttribute("data-set-mode")) {
+      root.setAttribute("data-mode", b.getAttribute("data-set-mode"));
+      store("lkn-reading-mode", b.getAttribute("data-set-mode"));
+    } else if (b.hasAttribute("data-set-lang")) {
+      root.setAttribute("data-lang", b.getAttribute("data-set-lang"));
+      store("lkn-lang", b.getAttribute("data-set-lang"));
+    } else if (b.hasAttribute("data-toggle-theme")) {
+      var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      store("lkn-theme", next);
+    }
+    sync();
+  });
+
+  sync();
+})();
+
+/* section-index rail: built at runtime from this page's own id'd sections */
+(function () {
+  var list = document.querySelector(".section-rail__list");
+  if (!list) return;
+  var sections = Array.prototype.slice.call(document.querySelectorAll("main section[id][aria-labelledby]"));
+  if (!sections.length) { var rail = document.querySelector(".section-rail"); if (rail) rail.remove(); return; }
+
+  /* headings carry all three reading levels + both languages as sibling spans,
+     so read only the ones actually visible under the current toggles */
+  function labelFor(sec) {
+    var head = document.getElementById(sec.getAttribute("aria-labelledby"));
+    if (!head) return sec.id;
+    var parts = [];
+    Array.prototype.forEach.call(head.children, function (el) {
+      if (el.offsetParent !== null || el.getClientRects().length) parts.push(el.textContent);
+    });
+    var label = (parts.length ? parts.join(" ") : head.textContent || "").replace(/\s+/g, " ").trim();
+    return label.length > 46 ? label.slice(0, 44) + "…" : label;
+  }
+
+  var links = sections.map(function (sec) {
+    var label = labelFor(sec);
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.href = "#" + sec.id;
+    var span = document.createElement("span");
+    span.className = "section-rail__label";
+    span.textContent = label;
+    a.appendChild(span);
+    li.appendChild(a);
+    list.appendChild(li);
+    return a;
+  });
+
+  function mark(id) {
+    links.forEach(function (a) {
+      if (a.getAttribute("href") === "#" + id) a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    });
+  }
+
+  if ("IntersectionObserver" in window) {
+    var seen = new Map();
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { seen.set(e.target.id, e.intersectionRatio); });
+      var best = null, bestR = 0;
+      seen.forEach(function (r, id) { if (r > bestR) { bestR = r; best = id; } });
+      if (best) mark(best);
+    }, { rootMargin: "-20% 0px -60% 0px", threshold: [0, .25, .5, 1] });
+    sections.forEach(function (s) { obs.observe(s); });
+  }
+
+  /* the rail labels change with the language toggle, so relabel on click */
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest("button.chip")) return;
+    sections.forEach(function (sec, i) {
+      links[i].firstChild.textContent = labelFor(sec);
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

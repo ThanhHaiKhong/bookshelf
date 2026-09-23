@@ -1,0 +1,548 @@
+<title>Thiết kế lõi chung kiểu Telegram — Rust + UniFFI</title>
+<style>
+  :root {
+    color-scheme: light;
+    --ground: #f7f4f7;
+    --surface: #ffffff;
+    --surface-2: #f0eaf0;
+    --ink: #1a121c;
+    --muted: #5d4f61;
+    --faint: #8d7d91;
+    --line: #e2d8e3;
+    --line-strong: #cbbbcd;
+    --accent: #7a2d68;
+    --accent-soft: #f4e6f1;
+    --brass: #8a5a1c;
+    --brass-soft: #f7ecd9;
+    --sage: #3d6b4f;
+    --sage-soft: #e2f0e6;
+    --code-bg: #1b131d;
+    --code-ink: #e0d6e2;
+    --code-line: #332536;
+
+    --serif: "Charter", "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    --mono: "SF Mono", "JetBrains Mono", "Menlo", "Consolas", ui-monospace, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+
+    --measure: 68ch;
+    --wide: 1160px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground: #120d14;
+      --surface: #1c151f;
+      --surface-2: #261c29;
+      --ink: #f0e8f1;
+      --muted: #a996ad;
+      --faint: #77677b;
+      --line: #2c2130;
+      --line-strong: #3e2f43;
+      --accent: #d982bd;
+      --accent-soft: #2d1a29;
+      --brass: #d9a35c;
+      --brass-soft: #2c2114;
+      --sage: #7cbf94;
+      --sage-soft: #16291c;
+      --code-bg: #0d090e;
+      --code-ink: #e0d6e2;
+      --code-line: #261c29;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #120d14;
+    --surface: #1c151f;
+    --surface-2: #261c29;
+    --ink: #f0e8f1;
+    --muted: #a996ad;
+    --faint: #77677b;
+    --line: #2c2130;
+    --line-strong: #3e2f43;
+    --accent: #d982bd;
+    --accent-soft: #2d1a29;
+    --brass: #d9a35c;
+    --brass-soft: #2c2114;
+    --sage: #7cbf94;
+    --sage-soft: #16291c;
+    --code-bg: #0d090e;
+    --code-ink: #e0d6e2;
+    --code-line: #261c29;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--serif); font-size: 19px; line-height: 1.66;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+
+  .wrap { max-width: var(--wide); margin: 0 auto; padding: 0 24px; }
+  .col { max-width: var(--measure); }
+  .band { padding: clamp(40px, 6vw, 74px) 0; border-top: 1px solid var(--line); }
+  .band:first-of-type { border-top: 0; }
+
+  p { margin: 0 0 1.05em; }
+  p + p { margin-top: -0.15em; }
+  ul { margin: 0 0 1.05em; padding-left: 1.3em; }
+  li { margin-bottom: 0.4em; }
+  a { color: var(--accent); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  a:hover { text-decoration-thickness: 2px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+  strong { font-weight: 700; } em { font-style: italic; }
+
+  code {
+    font-family: var(--mono); font-size: 0.82em; background: var(--surface-2);
+    border: 1px solid var(--line); padding: 0.08em 0.4em; border-radius: 5px; white-space: nowrap;
+  }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--faint); margin: 0 0 14px; display: flex; align-items: baseline; gap: 12px;
+  }
+  .eyebrow .n { color: var(--accent); font-weight: 600; }
+
+  h1 { font-weight: 800; font-size: clamp(33px, 5.6vw, 56px); line-height: 1.04; letter-spacing: -0.015em; text-wrap: balance; margin: 0 0 0.4em; }
+  h2 { font-weight: 750; font-size: clamp(25px, 3.5vw, 33px); line-height: 1.13; letter-spacing: -0.01em; text-wrap: balance; margin: 0 0 0.55em; }
+  h3 { font-family: var(--sans); font-weight: 640; font-size: 17px; margin: 1.7em 0 0.5em; }
+  .lede { font-size: clamp(20px, 2.4vw, 23px); line-height: 1.5; color: var(--muted); }
+
+  .hero { padding: clamp(52px, 8vw, 98px) 0 clamp(34px, 5vw, 56px); }
+  .kicker {
+    font-family: var(--mono); font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 22px; display: inline-flex; align-items: center; gap: 10px;
+  }
+  .kicker .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  .hero-meta { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .tag { font-family: var(--mono); font-size: 12.5px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 13px; }
+
+  .note { border-left: 3px solid var(--line-strong); padding: 4px 0 4px 20px; margin: 1.5em 0; color: var(--muted); font-size: 0.96em; }
+  .note.accent { border-color: var(--accent); }
+  .note.brass { border-color: var(--brass); }
+  .note.sage { border-color: var(--sage); }
+  .note b { color: var(--ink); }
+
+  /* figure */
+  .figure { margin: 10px 0 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 24px 20px 16px; }
+  .figure .scroll { overflow-x: auto; }
+  .figure svg { display: block; min-width: 700px; width: 100%; height: auto; }
+  .figcap { font-family: var(--mono); font-size: 12.5px; color: var(--faint); margin-top: 14px; }
+  .n-ui { fill: var(--surface-2); stroke: var(--line-strong); }
+  .n-bind { fill: var(--accent-soft); stroke: var(--accent); stroke-dasharray: 5 3; }
+  .n-core { fill: var(--code-bg); stroke: var(--code-line); }
+  .n-host { fill: var(--surface-2); stroke: var(--line-strong); }
+  .t-ink { fill: var(--ink); font-family: var(--sans); }
+  .t-core { fill: var(--code-ink); }
+  .t-acc { fill: var(--accent); font-family: var(--mono); }
+  .t-faint { fill: var(--faint); font-family: var(--mono); }
+  .ln { stroke: var(--accent); stroke-width: 2; fill: none; }
+  .ln-d { stroke: var(--line-strong); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  #arw path { fill: var(--accent); }
+
+  /* code */
+  .code { background: var(--code-bg); border: 1px solid var(--code-line); border-radius: 12px; margin: 20px 0; overflow: hidden; }
+  .code .bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--code-line); font-family: var(--mono); font-size: 12px; color: #9a8a9d; }
+  .code .bar .fname { color: #cfc0d1; }
+  .code .bar .lang { margin-left: auto; color: #7d6d80; text-transform: uppercase; letter-spacing: 0.12em; }
+  .code pre { margin: 0; padding: 16px 18px; overflow-x: auto; }
+  .code code { font-family: var(--mono); font-size: 13px; line-height: 1.7; background: none; border: 0; padding: 0; white-space: pre; color: var(--code-ink); display: block; }
+  .c-kw { color: #d982bd; } .c-str { color: #9cc98d; } .c-num { color: #d9a35c; }
+  .c-com { color: #776079; font-style: italic; } .c-fn { color: #e39ab5; } .c-ty { color: #74c2c0; }
+
+  /* dual column code */
+  .dual { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 22px 0; }
+  .dual .code { margin: 0; }
+  .dual-head { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: -8px; }
+  .dual-head div { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); padding-left: 2px; }
+  @media (max-width: 860px) { .dual, .dual-head { grid-template-columns: 1fr; } .dual-head div:last-child { display: none; } }
+
+  /* tables */
+  .tablewrap { overflow-x: auto; margin: 20px 0; border: 1px solid var(--line); border-radius: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  table.t-bound { min-width: 640px; }
+  table.t-bite { min-width: 780px; }
+  table.t-map { min-width: 760px; }
+  caption { text-align: left; font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); padding: 14px 16px 0; }
+  th, td { text-align: left; padding: 12px 15px; vertical-align: top; border-bottom: 1px solid var(--line); }
+  thead th { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); font-weight: 600; background: var(--surface-2); }
+  tbody tr:last-child td { border-bottom: 0; }
+  td .sub { display: block; color: var(--faint); font-family: var(--sans); font-size: 12.5px; margin-top: 3px; }
+  td.mono { font-family: var(--mono); font-size: 12.5px; }
+  .th-core { color: var(--accent); }
+  .th-nat { color: var(--brass); }
+
+  /* steps */
+  .steps { list-style: none; margin: 22px 0; padding: 0; display: grid; gap: 2px; counter-reset: s; }
+  .steps li {
+    position: relative; background: var(--surface); border: 1px solid var(--line);
+    padding: 16px 18px 16px 60px; counter-increment: s;
+  }
+  .steps li:first-child { border-radius: 12px 12px 0 0; }
+  .steps li:last-child { border-radius: 0 0 12px 12px; }
+  .steps li + li { border-top: 0; }
+  .steps li::before {
+    content: counter(s); position: absolute; left: 16px; top: 15px;
+    width: 29px; height: 29px; display: grid; place-items: center;
+    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    color: var(--accent); background: var(--accent-soft); border-radius: 8px;
+  }
+  .steps li.key { background: var(--accent-soft); }
+  .steps b { font-family: var(--sans); font-weight: 650; font-size: 16px; }
+  .steps span { display: block; color: var(--muted); font-size: 15px; margin-top: 4px; line-height: 1.5; }
+
+  .sources { display: grid; margin: 18px 0 0; padding: 0; list-style: none; }
+  .sources li { font-family: var(--mono); font-size: 13.5px; padding: 12px 0; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin: 0; }
+  .sources .what { color: var(--muted); }
+
+  footer { border-top: 1px solid var(--line); padding: 28px 0 60px; color: var(--faint); font-family: var(--mono); font-size: 12.5px; line-height: 1.6; }
+</style>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="col">
+      <span class="kicker"><span class="dot"></span>Thiết kế kiến trúc · lõi chung iOS + Android</span>
+      <h1>Một lõi, hai mặt</h1>
+      <p class="lede">Thiết kế lõi nghiệp vụ dùng chung theo đúng mô hình Telegram — nhưng bằng công cụ 2026. Trang này nói về hình dạng API, ranh giới, và những chỗ sẽ cắn bạn; không nói về lịch trình hay thủ tục.</p>
+      <div class="hero-meta">
+        <span class="tag">Rust core</span>
+        <span class="tag">UniFFI bindings</span>
+        <span class="tag">send / subscribe</span>
+        <span class="tag">SwiftUI + Compose</span>
+      </div>
+    </div>
+  </header>
+
+  <section class="band">
+    <div class="col">
+      <p class="eyebrow"><span class="n">01</span> Đính chính nền tảng</p>
+      <h2>TDLib không phải WASM</h2>
+      <p>Trước khi thiết kế, cần đặt đúng kỳ vọng. Telegram <strong>không</strong> chạy lõi trong máy ảo hay tải mã lúc runtime. TDLib là thư viện <strong>C++ biên dịch native</strong>, cho ra hai artifact khác nhau từ cùng một source: static library nhúng vào app iOS, và <code>.so</code> gọi qua JNI trên Android.</p>
+      <p>Vậy “cách tiếp cận Telegram” chuẩn xác là: <strong>một lõi native chung, kèm binding cho từng ngôn ngữ UI.</strong> Không phải wasm, không phải interpreter, không phải hot-swap. Điều này quan trọng vì nó loại bỏ cả một lớp phức tạp — không cần runtime trung gian, không cần cơ chế suspend/resume nhân tạo, không đụng chính sách store về tải mã.</p>
+      <div class="note accent"><b>Hệ quả thiết kế:</b> lõi được nạp như code thường của app. Gọi vào nó là lời gọi hàm trực tiếp, tốc độ native. Đổi lại, bạn phải build cho từng kiến trúc và ship trong bản phát hành — đúng như mọi thư viện native khác.</div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="col">
+      <p class="eyebrow"><span class="n">02</span> Công cụ</p>
+      <h2>Rust + UniFFI — TDLib phiên bản 2026</h2>
+      <p>Nếu viết lại TDLib hôm nay, gần như chắc chắn nó sẽ là Rust. Và mảnh ghép làm mô hình này khả thi với đội nhỏ là <strong>UniFFI</strong> của Mozilla.</p>
+      <p><strong>Điểm ăn tiền: UniFFI tự sinh binding cho cả Swift lẫn Kotlin</strong> từ một định nghĩa duy nhất. Telegram phải viết tay toàn bộ lớp cầu nối này cho từng nền tảng — bạn thì không. Mozilla dùng UniFFI trong Firefox mobile nhiều năm, nên đây không phải công nghệ thử nghiệm.</p>
+      <p>Ba lý do khác khớp riêng với hoàn cảnh của bạn: <strong>native speed</strong> đúng ưu tiên chất lượng bạn đặt ra; <strong>đội đã viết Rust rồi</strong> (lõi hiện tại là Rust) nên không phải tuyển kỹ năng mới; và bạn <strong>đã quen mô hình “lõi ra lệnh, host tuân theo”</strong> — đây chỉ là bỏ tầng trung gian đi, giữ nguyên triết lý.</p>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="col">
+      <p class="eyebrow"><span class="n">03</span> Kiến trúc</p>
+      <h2>Đối xứng quanh một lõi</h2>
+      <p>Điểm mấu chốt nằm ở hai chi tiết: <strong>lớp binding do máy sinh</strong> (nét đứt) và <strong>chiều mũi tên ở tầng host</strong> — lõi gọi xuống, không phải native gọi lên.</p>
+    </div>
+    <div class="col figure">
+      <div class="scroll">
+        <svg viewBox="0 0 800 400" role="img" aria-label="Sơ đồ kiến trúc: SwiftUI và Compose ở trên, lớp binding do UniFFI sinh, lõi Rust ở giữa, tầng host capabilities bên dưới do native hiện thực.">
+          <defs>
+            <marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z"/></marker>
+          </defs>
+
+          <!-- UI layer -->
+          <rect class="n-ui" x="30" y="20" width="290" height="62" rx="11"/>
+          <text class="t-ink" x="175" y="47" font-size="15" font-weight="700" text-anchor="middle">SwiftUI + TCA</text>
+          <text class="t-faint" x="175" y="67" font-size="11" text-anchor="middle">iOS</text>
+
+          <rect class="n-ui" x="480" y="20" width="290" height="62" rx="11"/>
+          <text class="t-ink" x="625" y="47" font-size="15" font-weight="700" text-anchor="middle">Compose</text>
+          <text class="t-faint" x="625" y="67" font-size="11" text-anchor="middle">Android</text>
+
+          <!-- bindings -->
+          <rect class="n-bind" x="30" y="104" width="290" height="52" rx="10"/>
+          <text class="t-acc" x="175" y="127" font-size="13" font-weight="700" text-anchor="middle">Swift bindings</text>
+          <text class="t-faint" x="175" y="145" font-size="10.5" text-anchor="middle">UniFFI tự sinh</text>
+
+          <rect class="n-bind" x="480" y="104" width="290" height="52" rx="10"/>
+          <text class="t-acc" x="625" y="127" font-size="13" font-weight="700" text-anchor="middle">Kotlin bindings</text>
+          <text class="t-faint" x="625" y="145" font-size="10.5" text-anchor="middle">UniFFI tự sinh</text>
+
+          <line class="ln-d" x1="175" y1="82" x2="175" y2="104"/>
+          <line class="ln-d" x1="625" y1="82" x2="625" y2="104"/>
+
+          <!-- core -->
+          <rect class="n-core" x="220" y="186" width="360" height="96" rx="12"/>
+          <text class="t-core" x="400" y="216" font-size="16" font-weight="700" text-anchor="middle" style="font-family:var(--sans)">Core — Rust</text>
+          <text class="t-core" x="400" y="238" font-size="11.5" text-anchor="middle" style="font-family:var(--mono);opacity:.8">API · streaming · auth · gating · cache</text>
+          <text class="t-core" x="400" y="262" font-size="11" text-anchor="middle" style="font-family:var(--mono);opacity:.55">một nguồn sự thật cho mọi nền tảng</text>
+
+          <!-- ui->core links -->
+          <path class="ln" d="M175,156 L175,208 L216,208" marker-end="url(#arw)"/>
+          <path class="ln" d="M625,156 L625,208 L584,208" marker-end="url(#arw)"/>
+          <text class="t-acc" x="128" y="177" font-size="10.5">send</text>
+          <text class="t-acc" x="642" y="177" font-size="10.5">send</text>
+
+          <!-- core->ui event links -->
+          <path class="ln" d="M216,262 L175,262 L175,160" marker-end="url(#arw)"/>
+          <path class="ln" d="M584,262 L625,262 L625,160" marker-end="url(#arw)"/>
+          <text class="t-acc" x="112" y="278" font-size="10.5">events</text>
+          <text class="t-acc" x="642" y="278" font-size="10.5">events</text>
+
+          <!-- host layer -->
+          <rect class="n-host" x="220" y="320" width="360" height="58" rx="11"/>
+          <text class="t-ink" x="400" y="344" font-size="13.5" font-weight="700" text-anchor="middle">Host capabilities</text>
+          <text class="t-faint" x="400" y="363" font-size="10.5" text-anchor="middle">HTTP · storage · clock · billing · ads</text>
+
+          <path class="ln" d="M400,282 L400,316" marker-end="url(#arw)"/>
+          <text class="t-acc" x="410" y="304" font-size="10.5">lõi ra lệnh</text>
+          <text class="t-faint" x="400" y="394" font-size="10.5" text-anchor="middle">native hiện thực — mỗi bên một bản</text>
+        </svg>
+      </div>
+      <p class="figcap">// Nét đứt = do máy sinh, bạn không viết. Mũi tên xuống ở tầng host = đảo chiều phụ thuộc.</p>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="col">
+      <p class="eyebrow"><span class="n">04</span> ABI</p>
+      <h2>Hai cửa, sao chép hình dạng TDLib</h2>
+      <p>Toàn bộ giá trị của mô hình nằm ở chỗ ranh giới phải <strong>hẹp</strong>. TDLib có <code>td_send</code> đi vào và <code>td_receive</code> đi ra. Bạn cũng chỉ cần hai cửa.</p>
+      <div class="code">
+        <div class="bar"><span class="fname">core/src/lib.rs</span><span class="lang">rust</span></div>
+<pre><code><span class="c-com">// ── Cửa 1: lệnh đi vào (tương ứng td_send) ─────────────────</span>
+<span class="c-kw">impl</span> <span class="c-ty">Core</span> {
+    <span class="c-com">/// Fire-and-forget. Gọi từ thread bất kỳ, không trả kết quả.</span>
+    <span class="c-kw">pub fn</span> <span class="c-fn">send</span>(&<span class="c-kw">self</span>, cmd: <span class="c-ty">Command</span>);
+
+    <span class="c-com">// ── Cửa 2: sự kiện đi ra (tương ứng td_receive) ────────</span>
+    <span class="c-kw">pub fn</span> <span class="c-fn">subscribe</span>(&<span class="c-kw">self</span>, listener: <span class="c-ty">Arc</span>&lt;<span class="c-kw">dyn</span> <span class="c-ty">EventListener</span>&gt;)
+        -&gt; <span class="c-ty">Arc</span>&lt;<span class="c-ty">Subscription</span>&gt;;
+}
+
+<span class="c-com">// Trait do Swift/Kotlin hiện thực — Rust đẩy event vào đây</span>
+<span class="c-kw">pub trait</span> <span class="c-ty">EventListener</span>: <span class="c-ty">Send</span> + <span class="c-ty">Sync</span> {
+    <span class="c-kw">fn</span> <span class="c-fn">on_event</span>(&<span class="c-kw">self</span>, event: <span class="c-ty">Event</span>);
+}
+
+<span class="c-kw">impl</span> <span class="c-ty">Subscription</span> {
+    <span class="c-kw">pub fn</span> <span class="c-fn">cancel</span>(&<span class="c-kw">self</span>);   <span class="c-com">// hủy tường minh — bắt buộc, xem mục 08</span>
+}
+
+<span class="c-com">// Command mang correlation id, đúng vai trò "@extra" của TDLib</span>
+<span class="c-kw">pub struct</span> <span class="c-ty">Command</span> { <span class="c-kw">pub</span> id: <span class="c-ty">String</span>, <span class="c-kw">pub</span> payload: <span class="c-ty">Payload</span> }
+<span class="c-kw">pub struct</span> <span class="c-ty">Event</span>   { <span class="c-kw">pub</span> id: <span class="c-ty">Option</span>&lt;<span class="c-ty">String</span>&gt;, <span class="c-kw">pub</span> kind: <span class="c-ty">EventKind</span> }
+<span class="c-com">//                     ↑ Some(id) = trả lời một lệnh; None = server đẩy</span></code></pre>
+      </div>
+      <div class="note brass"><b>Vì sao không phải <code>events() -&gt; Stream</code>?</b> Đây là chỗ dễ thiết kế sai nhất. <b>UniFFI không sinh được <code>Stream</code>/<code>Flow</code>/<code>AsyncSequence</code></b> — nó chỉ hỗ trợ Future một-lần (<code>async fn</code> → <code>suspend fun</code> / <code>async</code>). Mẫu đúng là đẩy event qua một trait do foreign hiện thực, rồi <b>mỗi bên tự bọc thành idiom của mình</b> — xem mục kế tiếp.</div>
+      <p>Điểm cần giữ kỷ luật: <strong>đừng thêm cửa thứ ba.</strong> Mỗi khi ai đó muốn “chỉ thêm một hàm tiện lợi”, ranh giới rộng ra một chút, và giá trị của mô hình mất đi một chút. TDLib giữ được hai cửa suốt nhiều năm — đó không phải ngẫu nhiên.</p>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="col">
+      <p class="eyebrow"><span class="n">05</span> Hai idiom</p>
+      <h2>Cùng một lõi, mỗi bên viết theo cách của mình</h2>
+      <p>Bạn viết một adapter mỏng cho mỗi nền tảng — chỉ một lần, dùng cho mọi domain. Sau lớp đó, đội iOS viết TCA như bình thường và đội Android viết Flow như bình thường. <strong>Không ai phải học idiom của bên kia.</strong></p>
+    </div>
+    <div class="col">
+      <div class="dual-head"><div>iOS — AsyncStream</div><div>Android — callbackFlow</div></div>
+      <div class="dual">
+        <div class="code">
+          <div class="bar"><span class="fname">Core+Stream.swift</span><span class="lang">swift</span></div>
+<pre><code><span class="c-com">// Adapter — viết một lần</span>
+<span class="c-kw">extension</span> <span class="c-ty">Core</span> {
+  <span class="c-kw">func</span> <span class="c-fn">events</span>() -&gt; <span class="c-ty">AsyncStream</span>&lt;<span class="c-ty">Event</span>&gt; {
+    <span class="c-ty">AsyncStream</span> { cont <span class="c-kw">in</span>
+      <span class="c-kw">let</span> sub = <span class="c-fn">subscribe</span>(
+        listener: <span class="c-ty">Sink</span> { cont.<span class="c-fn">yield</span>($0) }
+      )
+      cont.<span class="c-fn">onTermination</span> = { _ <span class="c-kw">in</span>
+        sub.<span class="c-fn">cancel</span>()
+      }
+    }
+  }
+}
+
+<span class="c-com">// Dùng trong TCA — y hệt mọi Effect khác</span>
+<span class="c-kw">case</span> .onAppear:
+  <span class="c-kw">return</span> .<span class="c-fn">run</span> { send <span class="c-kw">in</span>
+    <span class="c-kw">for await</span> ev <span class="c-kw">in</span> core.<span class="c-fn">events</span>() {
+      <span class="c-kw">await</span> send(.<span class="c-fn">received</span>(ev))
+    }
+  }</code></pre>
+        </div>
+        <div class="code">
+          <div class="bar"><span class="fname">CoreFlow.kt</span><span class="lang">kotlin</span></div>
+<pre><code><span class="c-com">// Adapter — viết một lần</span>
+<span class="c-kw">fun</span> <span class="c-ty">Core</span>.<span class="c-fn">events</span>(): <span class="c-ty">Flow</span>&lt;<span class="c-ty">Event</span>&gt; =
+  <span class="c-fn">callbackFlow</span> {
+    <span class="c-kw">val</span> sub = <span class="c-fn">subscribe</span>(
+      <span class="c-kw">object</span> : <span class="c-ty">EventListener</span> {
+        <span class="c-kw">override fun</span> <span class="c-fn">onEvent</span>(e: <span class="c-ty">Event</span>) {
+          <span class="c-fn">trySend</span>(e)
+        }
+      }
+    )
+    <span class="c-fn">awaitClose</span> { sub.<span class="c-fn">cancel</span>() }
+  }
+
+<span class="c-com">// Dùng trong ViewModel — Flow bình thường</span>
+<span class="c-fn">viewModelScope</span>.<span class="c-fn">launch</span> {
+  core.<span class="c-fn">events</span>().<span class="c-fn">collect</span> { ev -&gt;
+    <span class="c-fn">reduce</span>(ev)
+  }
+}</code></pre>
+        </div>
+      </div>
+      <div class="note accent"><b>Để ý sự đối xứng:</b> cả hai adapter đều làm đúng ba việc — đăng ký listener, bơm event ra, và <b>gọi <code>cancel()</code> khi consumer dừng</b>. Việc thứ ba là bắt buộc vì UniFFI không tự hủy giúp bạn.</div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="col">
+      <p class="eyebrow"><span class="n">06</span> Đảo chiều phụ thuộc</p>
+      <h2>Host capabilities — lõi ra lệnh, native tuân theo</h2>
+      <p>Lõi cần làm việc với thế giới bên ngoài: gọi mạng, lưu file, xem giờ, mua hàng. Nhưng nó <strong>không</strong> được biết <code>URLSession</code> hay <code>OkHttp</code> là gì. Giải pháp: lõi <em>định nghĩa</em> cái nó cần, native <em>cung cấp</em>.</p>
+      <div class="code">
+        <div class="bar"><span class="fname">core/src/host.rs</span><span class="lang">rust</span></div>
+<pre><code><span class="c-com">// Lõi định nghĩa cổng. Native cắm vào. Mọi tham số truyền by value.</span>
+<span class="c-kw">pub trait</span> <span class="c-ty">Host</span>: <span class="c-ty">Send</span> + <span class="c-ty">Sync</span> {
+    <span class="c-kw">fn</span> <span class="c-fn">http</span>(&<span class="c-kw">self</span>, req: <span class="c-ty">HttpRequest</span>) -&gt; <span class="c-ty">HttpResponse</span>;
+    <span class="c-kw">fn</span> <span class="c-fn">store_read</span>(&<span class="c-kw">self</span>, key: <span class="c-ty">String</span>) -&gt; <span class="c-ty">Option</span>&lt;<span class="c-ty">Vec</span>&lt;<span class="c-ty">u8</span>&gt;&gt;;
+    <span class="c-kw">fn</span> <span class="c-fn">store_write</span>(&<span class="c-kw">self</span>, key: <span class="c-ty">String</span>, val: <span class="c-ty">Vec</span>&lt;<span class="c-ty">u8</span>&gt;);
+    <span class="c-kw">fn</span> <span class="c-fn">now_ms</span>(&<span class="c-kw">self</span>) -&gt; <span class="c-ty">u64</span>;
+}
+
+<span class="c-com">// Cổng thanh toán — cùng một trait, hai hiện thực</span>
+<span class="c-kw">pub trait</span> <span class="c-ty">Billing</span>: <span class="c-ty">Send</span> + <span class="c-ty">Sync</span> {
+    <span class="c-kw">fn</span> <span class="c-fn">purchase</span>(&<span class="c-kw">self</span>, sku: <span class="c-ty">String</span>) -&gt; <span class="c-ty">PurchaseResult</span>;
+    <span class="c-kw">fn</span> <span class="c-fn">entitlements</span>(&<span class="c-kw">self</span>) -&gt; <span class="c-ty">Vec</span>&lt;<span class="c-ty">String</span>&gt;;
+}
+<span class="c-com">// iOS → StoreKit.  Android → Play Billing.  Lõi không biết, không cần biết.</span></code></pre>
+      </div>
+      <p>Đây chính là chỗ StoreKit/Play Billing, AdMob, Firebase, và mọi SDK nền tảng cắm vào — <strong>qua cổng do lõi định nghĩa</strong>, không phải bằng cách lõi gọi thẳng SDK. Nhờ vậy logic “khi nào hiện paywall”, “gate ra sao” nằm trong lõi, còn “mua hàng bằng API nào” nằm ở native.</p>
+      <div class="note"><b>Ba lưu ý kỹ thuật khi hiện thực trait phía native:</b> tham số <b>không nhận reference</b>, phải truyền by value. Phía Swift, protocol UniFFI sinh ra yêu cầu <code>Sendable</code> nên implementation của bạn phải conform. Phía Kotlin, nếu Rust spawn thread gọi ngược vào JVM, nhớ <code>AttachCurrentThread</code> — không thì mỗi lời gọi phải attach/detach, rất tốn.</div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="col">
+      <p class="eyebrow"><span class="n">07</span> Ranh giới</p>
+      <h2>Cái gì vào lõi, cái gì ở lại</h2>
+      <p>Đây là quyết định bạn sẽ phải đưa ra hàng chục lần. Có một quy tắc phân loại gọn:</p>
+      <div class="note accent"><b>Quy tắc một câu:</b> thứ trả lời câu hỏi <b>“nên làm gì”</b> → vào lõi. Thứ trả lời <b>“vẽ / chụp / phát thế nào”</b> → ở lại native.</div>
+      <div class="tablewrap">
+        <table class="t-bound">
+          <caption>Phân chia trách nhiệm</caption>
+          <thead><tr><th class="th-core">Vào lõi — viết một lần</th><th class="th-nat">Ở lại native — viết hai lần</th></tr></thead>
+          <tbody>
+            <tr><td>Gọi API backend, streaming SSE</td><td><b>Toàn bộ UI</b> — SwiftUI / Compose</td></tr>
+            <tr><td>Auth, JWT, trạng thái premium</td><td>Camera — AVFoundation ↔ CameraX</td></tr>
+            <tr><td>Gating paywall/ads, credit, cooldown</td><td>Xử lý ảnh — CoreImage/Metal ↔ GPU Android</td></tr>
+            <tr><td>Đọc &amp; diễn giải Remote Config</td><td>AR — ARKit/RoomPlan ↔ ARCore</td></tr>
+            <tr><td>Cache dữ liệu domain</td><td>Push, permission, file picker</td></tr>
+            <tr><td>Định tuyến analytics event</td><td>SDK store/ads — <b>nhưng qua cổng lõi định nghĩa</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Áp vào portfolio của bạn: <strong>home decor và photo editor bị chia đôi</strong> — phần <em>quyết định</em> (gọi model nào, tham số gì, gate ra sao, lưu kết quả thế nào) vào lõi; phần <em>xử lý pixel và render</em> ở lại native. Đúng như Telegram: logic chat ở TDLib, còn vẽ bong bóng tin nhắn là native thuần.</p>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="col">
+      <p class="eyebrow"><span class="n">08</span> Thực tế</p>
+      <h2>Những chỗ UniFFI sẽ cắn bạn</h2>
+      <p>UniFFI rất tốt nhưng chưa 1.0, và có vài giới hạn ảnh hưởng trực tiếp đến thiết kế. Biết trước thì né được; biết muộn thì phải sửa API.</p>
+    </div>
+    <div class="col">
+      <div class="tablewrap">
+        <table class="t-bite">
+          <caption>Giới hạn và cách xử lý</caption>
+          <thead><tr><th>Giới hạn</th><th>Cách xử lý</th></tr></thead>
+          <tbody>
+            <tr><td><b>Không có Stream/Flow</b><span class="sub">chỉ Future một-lần</span></td><td>Dùng <code>subscribe(listener)</code>, bọc thành <code>AsyncStream</code> / <code>callbackFlow</code> ở mỗi bên</td></tr>
+            <tr><td><b>Không có cancellation</b><span class="sub">không map sang CancellationError</span></td><td>Tự làm kênh riêng: <code>cancel()</code> set cờ, Rust poll định kỳ, trả về error variant</td></tr>
+            <tr><td><b>Swift 6 — async chưa Sendable</b><span class="sub">code sinh ra phần lớn conform, async thì chưa</span></td><td>Pin phiên bản, cô lập chỗ async, theo dõi changelog trước khi nâng</td></tr>
+            <tr><td><b>Kotlin cần JNA + AttachCurrentThread</b></td><td>JNA ≥ 5.12.0; attach thread khi Rust gọi ngược, tránh chi phí attach/detach mỗi call</td></tr>
+            <tr><td><b>Foreign trait không nhận reference</b></td><td>Thiết kế mọi tham số by value ngay từ đầu — đừng để phát hiện muộn</td></tr>
+            <tr><td><b>Dễ tạo cycle Rust ↔ foreign</b><span class="sub">gây memory leak</span></td><td>Kỷ luật vòng đời: listener luôn có <code>cancel()</code> và luôn được gọi khi consumer dừng</td></tr>
+            <tr><td><b>Callback interface đã soft-deprecated</b></td><td>Dùng <b>exported trait / foreign trait</b> (<code>[Trait, WithForeign]</code>), đừng dùng cú pháp cũ</td></tr>
+            <tr><td><b>Chưa 1.0 — API nâng cao có thể breaking</b></td><td><b>Pin version</b>. Giữ bề mặt FFI đơn giản thì rủi ro nâng cấp thấp</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note brass"><b>Một quan sát:</b> gần như mọi giới hạn trên đều nhẹ đi nếu bề mặt FFI của bạn <b>hẹp và đơn giản</b>. Đó là thêm một lý do nữa để giữ đúng hai cửa.</div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="col">
+      <p class="eyebrow"><span class="n">09</span> Cách triển khai</p>
+      <h2>Tăng dần — và bước 2 là bước quyết định</h2>
+      <ol class="steps">
+        <li>
+          <b>Một domain trước: chatbot</b>
+          <span>Lõi chỉ chứa chat + auth + gating. Mục tiêu duy nhất: chứng minh vòng <code>send</code> → <code>subscribe</code> chạy trên cả hai nền tảng với adapter thật.</span>
+        </li>
+        <li class="key">
+          <b>Bọc lại iOS bằng chính lõi đó</b>
+          <span>Đây là bước hay bị bỏ qua nhất và quan trọng nhất. iOS phải <b>dùng chính lõi mới</b> cho domain đó, không phải giữ code Swift cũ song song. Nếu bỏ qua, bạn có hai nguồn sự thật và chúng <em>sẽ</em> lệch nhau — đúng cái bẫy khiến Dropbox phải từ bỏ chiến lược shared code.</span>
+        </li>
+        <li>
+          <b>Kéo domain thứ hai vào lõi</b>
+          <span>Live score hoặc assistant. Tái dùng toàn bộ hạ tầng binding và adapter đã dựng — chi phí giảm mạnh so với domain đầu.</span>
+        </li>
+        <li>
+          <b>Chỉ khi đó mới đụng home decor / photo editor</b>
+          <span>Đây là các domain bị chia đôi giữa lõi và native. Làm sau cùng, khi ranh giới đã được kiểm chứng qua hai domain đơn giản hơn.</span>
+        </li>
+      </ol>
+      <div class="note sage"><b>Vì sao bước 2 quyết định:</b> lõi chung chỉ có giá trị khi nó là <b>nguồn sự thật duy nhất</b>. Một lõi mà chỉ Android dùng thì không phải lõi chung — nó là codebase thứ hai, và bạn vừa tăng gấp đôi chi phí bảo trì thay vì giảm.</div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="col">
+      <p class="eyebrow"><span class="n">10</span> Nối lại</p>
+      <h2>TDLib ↔ Core của bạn ↔ TCA</h2>
+      <p>Ba tài liệu trong bộ này nói về cùng một ý tưởng ở ba lớp vỏ khác nhau. Bảng này ghép chúng lại:</p>
+      <div class="tablewrap">
+        <table class="t-map">
+          <caption>Cùng một kiến trúc, ba cách gọi tên</caption>
+          <thead><tr><th>TDLib (Telegram)</th><th>Core của bạn</th><th>TCA (đã quen)</th><th>Ý nghĩa</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">td_send(json)</td><td class="mono">core.send(cmd)</td><td class="mono">store.send(Action)</td><td>Gửi ý định vào, không trả kết quả</td></tr>
+            <tr><td class="mono">td_receive(timeout)</td><td class="mono">subscribe(listener)</td><td class="mono">long-running Effect</td><td>Kết quả &amp; sự kiện quay về một chiều</td></tr>
+            <tr><td class="mono">@extra</td><td class="mono">Command.id</td><td class="mono">effect id</td><td>Khớp response với request</td></tr>
+            <tr><td class="mono">updateNewMessage</td><td class="mono">Event { id: None }</td><td class="mono">stream Effect</td><td>Server đẩy, không ai hỏi</td></tr>
+            <tr><td class="mono">Lõi C++</td><td class="mono">Core Rust</td><td class="mono">Reducer + Effect</td><td>Nơi duy nhất chứa logic</td></tr>
+            <tr><td class="mono">UI native mỗi bên</td><td class="mono">SwiftUI / Compose</td><td class="mono">View</td><td>Chỉ vẽ và bắt chạm</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note accent"><b>Điều đáng nhớ nhất:</b> bạn không học một kiến trúc mới. Bạn <b>đã viết nó mỗi ngày</b> trong TCA — chỉ là ở phạm vi một app, một ngôn ngữ. Việc cần làm là kéo cùng đường ranh giới đó ra một tầng cao hơn, để nó cắt ngang cả hai nền tảng.</div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="col">
+      <p class="eyebrow"><span class="n">11</span> Nguồn</p>
+      <h2>Kiểm chứng từ đâu</h2>
+      <ul class="sources">
+        <li><a href="https://mozilla.github.io/uniffi-rs/latest/foreign_traits.html">UniFFI — Foreign traits</a><span class="what">— mẫu <code>[Trait, WithForeign]</code>, ràng buộc by-value</span></li>
+        <li><a href="https://mozilla.github.io/uniffi-rs/0.28/futures.html">UniFFI — Async/Future support</a><span class="what">— chỉ Future, không Stream; không có cancellation</span></li>
+        <li><a href="https://mozilla.github.io/uniffi-rs/latest/swift/overview.html">UniFFI — Swift bindings</a><span class="what">— trạng thái Swift 6 &amp; <code>Sendable</code></span></li>
+        <li><a href="https://mozilla.github.io/uniffi-rs/latest/kotlin/gradle.html">UniFFI — Kotlin / Gradle</a><span class="what">— JNA, coroutines, <code>AttachCurrentThread</code></span></li>
+        <li><a href="https://github.com/mozilla/uniffi-rs">github.com/mozilla/uniffi-rs</a><span class="what">— mã nguồn &amp; changelog (pin version)</span></li>
+        <li><a href="https://core.telegram.org/tdlib/getting-started">core.telegram.org/tdlib</a><span class="what">— mô hình gốc: send / receive / ordered updates</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <div class="col">tài liệu thiết kế kỹ thuật nội bộ · giải thích kiến trúc công khai<br>không liên kết chính thức với Telegram hay Mozilla</div>
+  </footer>
+
+</div>

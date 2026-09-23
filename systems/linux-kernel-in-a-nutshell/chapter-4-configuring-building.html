@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="vi" data-mode="standard" data-lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 4 · Cấu hình và dựng nhân — Linux Kernel in a Nutshell</title>
+<meta name="description" content="Người đồng hành song ngữ Việt/Anh cho Chương 4 &quot;Configuring and Building&quot; của Linux Kernel in a Nutshell (Greg Kroah-Hartman, O'Reilly, 2006): tạo tệp .config, sửa cấu hình bằng menuconfig/gconfig/xconfig, chạy make, và các tùy chọn dựng nâng cao như -j, M=, O=, ARCH= và CROSS_COMPILE=.">
+<script>
+/* pre-hydration: đọc lựa chọn đã lưu trước khi vẽ, tránh nháy màn hình */
+(function () {
+  try {
+    var m = localStorage.getItem("lkn-reading-mode");
+    var l = localStorage.getItem("lkn-lang");
+    if (m === "standard" || m === "easy" || m === "deep") document.documentElement.setAttribute("data-mode", m);
+    if (l === "vi" || l === "en") document.documentElement.setAttribute("data-lang", l);
+    if (localStorage.getItem("lkn-theme") === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  } catch (e) {}
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --teal: #0f766e;
+  --blue: #1d4ed8;
+  --amber: #b45309;
+  --leaf: #4d7c0f;
+  --ink: #16202a;
+  --ink-soft: #4a5a68;
+  --ink-faint: #7c8b98;
+  --surface: #fbfaf7;
+  --surface-2: #ffffff;
+  --surface-3: #f2efe8;
+  --line: #ded8cd;
+  --line-soft: #ebe6dc;
+  --shadow: 0 1px 2px rgba(22, 32, 42, .05), 0 8px 24px rgba(22, 32, 42, .06);
+  --serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --measure: 34rem;
+}
+:root[data-theme="dark"] {
+  --teal: #5eead4;
+  --blue: #93b4ff;
+  --amber: #fbbf24;
+  --leaf: #a3e635;
+  --ink: #e8eef4;
+  --ink-soft: #a6b6c4;
+  --ink-faint: #74869a;
+  --surface: #11171d;
+  --surface-2: #171f27;
+  --surface-3: #1e2831;
+  --line: #2d3945;
+  --line-soft: #232e38;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --teal: #5eead4; --blue: #93b4ff; --amber: #fbbf24; --leaf: #a3e635;
+    --ink: #e8eef4; --ink-soft: #a6b6c4; --ink-faint: #74869a;
+    --surface: #11171d; --surface-2: #171f27; --surface-3: #1e2831;
+    --line: #2d3945; --line-soft: #232e38;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.72;
+  -webkit-font-smoothing: antialiased;
+}
+main { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem 4rem; }
+p { margin: 0 0 1.05rem; max-width: var(--measure); }
+a { color: var(--blue); }
+h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; line-height: 1.22; color: var(--ink); }
+code, kbd, samp { font-family: var(--mono); font-size: .88em; background: var(--surface-3); padding: .12em .38em; border-radius: 4px; }
+
+/* ---------- reading mode + bilingual visibility ---------- */
+.easy-only, .deep-only, .en-only { display: none; }
+:root[data-mode="standard"] .standard-copy,
+:root[data-mode="deep"] .standard-copy { display: revert; }
+:root[data-mode="deep"] .deep-only { display: revert; }
+:root[data-mode="easy"] .standard-copy { display: none; }
+:root[data-mode="easy"] .easy-only { display: revert; }
+:root[data-lang="vi"] .vi-only { display: revert; }
+:root[data-lang="en"] .vi-only,
+:root[data-lang="en"] .standard-copy,
+:root[data-lang="en"] .easy-only,
+:root[data-lang="en"] .deep-only { display: none; }
+:root[data-lang="en"] .en-only { display: revert; }
+:root[data-lang="en"] .mode-switch { opacity: .35; pointer-events: none; }
+
+/* ---------- topbar ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: .7rem 1.5rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.book-label { font-size: .78rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-right: auto; }
+.switch-group { display: flex; gap: .3rem; align-items: center; }
+.switch-group + .switch-group { margin-left: .35rem; }
+.switch-label { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin-right: .25rem; }
+button.chip {
+  font: inherit; font-size: .78rem; font-weight: 600;
+  padding: .3rem .72rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft);
+  transition: background .15s, color .15s, border-color .15s;
+}
+button.chip:hover { border-color: var(--teal); color: var(--teal); }
+button.chip[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: var(--surface); }
+:root[data-theme="dark"] button.chip[aria-pressed="true"] { color: #0b1116; }
+
+/* ---------- hero ---------- */
+.hero {
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  gap: 2.75rem; align-items: center;
+  padding: 3.75rem 0 3rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.hero::after {
+  content: "LKN / 04";
+  position: absolute; top: 1.15rem; right: 0;
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .22em;
+  color: var(--ink-faint);
+}
+.eyebrow { font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--teal); font-weight: 700; margin: 0 0 .85rem; }
+.hero h1 { font-size: clamp(2.05rem, 4.6vw, 3.1rem); margin: 0 0 1.15rem; letter-spacing: -.015em; }
+.hero p { font-size: 1.06rem; color: var(--ink-soft); }
+.thesis {
+  margin-top: 1.5rem; padding: 1.05rem 1.25rem 1.05rem 2.6rem;
+  position: relative; max-width: var(--measure);
+  background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--amber);
+  border-radius: 0 10px 10px 0; box-shadow: var(--shadow);
+}
+.thesis::before { content: "∴"; position: absolute; left: .95rem; top: .95rem; font-size: 1.15rem; color: var(--amber); }
+.thesis p { margin: 0; font-size: .97rem; color: var(--ink); }
+
+/* ---------- CSS diagrams ---------- */
+.system-map {
+  position: relative; display: grid; gap: .75rem;
+  padding: 1.5rem; border-radius: 16px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.system-map .core {
+  justify-self: center; text-align: center;
+  padding: .85rem 1.25rem; border-radius: 999px;
+  background: var(--teal); color: var(--surface); font-weight: 700; font-size: .9rem;
+  max-width: 100%;
+}
+:root[data-theme="dark"] .system-map .core { color: #0b1116; }
+.system-map .spokes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
+.system-map .node {
+  padding: .8rem .85rem; border-radius: 12px; text-align: center;
+  background: var(--surface-3); border: 1px solid var(--line-soft);
+}
+.system-map .node b { display: block; font-size: .82rem; color: var(--ink); margin-bottom: .3rem; }
+.system-map .node small { display: block; font-size: .73rem; line-height: 1.5; color: var(--ink-soft); }
+.loop-diagram { display: grid; gap: .55rem; padding: 1.25rem; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.loop-diagram .step { padding: .6rem .8rem; border-radius: 10px; background: var(--surface-3); border-left: 3px solid var(--blue); font-size: .82rem; }
+
+/* ---------- chapter path ---------- */
+.chapter-path {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem;
+  margin: 2.5rem 0 3rem;
+}
+.chapter-path a {
+  display: block; padding: .9rem 1rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+  transition: border-color .15s, transform .15s;
+}
+.chapter-path a:hover { border-color: var(--teal); transform: translateY(-2px); }
+.chapter-path span { display: block; font-size: .67rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.chapter-path b { display: block; font-family: var(--serif); font-size: .96rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- sections ---------- */
+.section { padding: 2.75rem 0; border-top: 1px solid var(--line-soft); }
+.section-heading h2 { font-size: clamp(1.5rem, 3vw, 2.05rem); margin: 0 0 .9rem; }
+.section-heading p { color: var(--ink-soft); }
+.surprise-lead {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem;
+  margin: 1.75rem 0 2rem;
+}
+.definition, .equation { padding: 1rem 1.15rem; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); font-size: .92rem; }
+.definition { border-left: 3px solid var(--blue); }
+.equation { border-left: 3px solid var(--leaf); font-family: var(--mono); font-size: .82rem; line-height: 1.7; }
+.definition p, .equation p { margin: 0; max-width: none; }
+
+.surprise-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.1rem; }
+.trap-grid { grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
+.surprise-grid > li {
+  padding: 1.25rem 1.35rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.english-term { display: inline-block; font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--amber); margin-bottom: .45rem; }
+.surprise-grid h3 { font-size: 1.05rem; margin: 0 0 .7rem; }
+.surprise-grid p { font-size: .93rem; max-width: none; }
+.opportunity {
+  margin-top: .9rem; padding: .75rem .9rem; border-radius: 10px;
+  background: var(--surface-3); border-left: 3px solid var(--leaf); font-size: .87rem;
+}
+.opportunity p { margin: 0; font-size: .87rem; }
+.mechanics { margin-top: .9rem; display: grid; gap: .7rem; }
+.info-block { padding: .75rem .9rem; border-radius: 10px; border: 1px dashed var(--line); background: var(--surface); }
+.info-block h4 { font-size: .85rem; margin: 0 0 .35rem; color: var(--teal); }
+.info-block p { margin: 0; font-size: .86rem; }
+.result { margin-top: .7rem; font-size: .86rem; color: var(--ink-soft); }
+
+.signal {
+  margin: 2rem 0 0; padding: 1.1rem 1.3rem; border-radius: 12px;
+  background: var(--surface-3); border: 1px solid var(--line-soft); border-top: 3px solid var(--blue);
+}
+.signal p { margin: 0 0 .6rem; font-size: .93rem; }
+.signal p:last-child { margin-bottom: 0; }
+
+/* ---------- misconceptions ---------- */
+.trap-comparison { margin: 2.5rem 0; }
+.comparison-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; margin-top: 1.25rem; }
+.comparison-card {
+  padding: 1.1rem 1.25rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); border-top: 3px solid var(--amber);
+}
+.comparison-card h3 { font-size: .98rem; margin: 0 0 .6rem; }
+.comparison-card p { font-size: .9rem; max-width: none; }
+.comparison-card .myth { color: var(--amber); font-weight: 600; }
+.comparison-card .fact { color: var(--teal); font-weight: 600; }
+
+/* ---------- diagnostic ---------- */
+.diagnostic { padding: 1.75rem; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.diagnostic-intro p { font-size: .97rem; }
+.question-list { counter-reset: q; list-style: none; margin: 1.25rem 0 0; padding: 0; display: grid; gap: .9rem; }
+.question-list > li { counter-increment: q; position: relative; padding-left: 2.4rem; font-size: .93rem; }
+.question-list > li::before {
+  content: counter(q, decimal-leading-zero);
+  position: absolute; left: 0; top: .05rem;
+  font-family: var(--mono); font-size: .78rem; font-weight: 600; color: var(--teal);
+  border: 1px solid var(--line); border-radius: 6px; padding: .05rem .38rem;
+}
+.question-list .deep-only { margin-top: .4rem; font-size: .87rem; color: var(--ink-soft); }
+
+/* ---------- closing ---------- */
+.closing { padding: 3rem 0 1rem; border-top: 1px solid var(--line-soft); }
+.closing blockquote {
+  margin: 0; padding: 1.5rem 0 0; max-width: 46rem;
+  font-family: var(--serif); font-size: clamp(1.15rem, 2.4vw, 1.55rem); line-height: 1.5; color: var(--ink);
+}
+.closing blockquote p { max-width: none; font-size: inherit; line-height: inherit; }
+.closing-accent { color: var(--teal); font-style: italic; }
+
+/* ---------- chapter nav ---------- */
+.chapter-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 3rem 0 0; }
+.nav-cell {
+  display: block; padding: 1rem 1.15rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); transition: border-color .15s, transform .15s;
+}
+a.nav-cell:hover { border-color: var(--teal); transform: translateY(-2px); }
+.nav-cell.disabled { opacity: .5; background: var(--surface-3); cursor: default; }
+.nav-next { text-align: right; }
+.nav-label { display: block; font-size: .68rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.nav-title { display: block; font-family: var(--serif); font-size: .95rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- footer + references ---------- */
+footer {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.5rem; align-items: start;
+  margin-top: 3rem; padding: 2rem 0 3rem; border-top: 1px solid var(--line);
+  font-size: .85rem; color: var(--ink-soft);
+}
+.footer-main p { max-width: 48rem; font-size: .85rem; }
+.footer-label { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; margin: 1.5rem 0 .6rem; }
+.ref-list { margin: 0; padding-left: 1.4rem; display: grid; gap: .5rem; }
+.ref-list li { font-size: .82rem; line-height: 1.6; }
+.edition { font-family: var(--mono); font-size: .7rem; letter-spacing: .12em; color: var(--ink-faint); white-space: nowrap; }
+.cite { font-size: .7em; vertical-align: super; line-height: 0; margin-left: .1em; }
+.cite a { text-decoration: none; padding: 0 .12em; }
+
+/* SECTION-RAIL:START */
+.section-rail {
+  position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+  z-index: 30; padding: .6rem .5rem; display: none;
+}
+.section-rail__list { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+.section-rail__list a {
+  display: flex; align-items: center; gap: .55rem;
+  text-decoration: none; color: var(--ink-faint); font-size: .74rem; line-height: 1.25;
+}
+.section-rail__list a::before {
+  content: ""; flex: 0 0 auto; width: 1.15rem; height: 2px; border-radius: 2px;
+  background: var(--line); transition: width .2s, background .2s;
+}
+.section-rail__label {
+  max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0;
+  transition: max-width .24s ease, opacity .18s ease;
+}
+.section-rail:hover .section-rail__label,
+.section-rail:focus-within .section-rail__label { max-width: 13rem; opacity: 1; }
+.section-rail:hover, .section-rail:focus-within {
+  background: color-mix(in srgb, var(--surface-2) 94%, transparent);
+  border: 1px solid var(--line-soft); border-left: 0; border-radius: 0 12px 12px 0; box-shadow: var(--shadow);
+}
+.section-rail__list a:hover,
+.section-rail__list a[aria-current="true"] { color: var(--teal); }
+.section-rail__list a[aria-current="true"]::before { width: 1.9rem; background: var(--teal); }
+@media (min-width: 1180px) { .section-rail { display: block; } }
+/* SECTION-RAIL:END */
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 2rem; padding-top: 2.5rem; }
+  .hero::after { position: static; display: block; margin-bottom: .75rem; }
+  .system-map .spokes { grid-template-columns: minmax(0, 1fr); }
+  footer { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 620px) {
+  body { font-size: 16px; }
+  main { padding: 0 1.1rem 3rem; }
+  .topbar { padding: .6rem 1.1rem; gap: .5rem; }
+  .book-label { width: 100%; margin-right: 0; }
+  .chapter-nav { grid-template-columns: minmax(0, 1fr); }
+  .nav-next { text-align: left; }
+  .diagnostic { padding: 1.25rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">Linux Kernel in a Nutshell · <span class="vi-only">Chương 4 · Cấu hình và dựng nhân</span><span class="en-only" lang="en">Chapter 4 · Configuring and Building</span></div>
+  <div class="switch-group mode-switch">
+    <span class="switch-label vi-only">Mức đọc</span><span class="switch-label en-only" lang="en">Level</span>
+    <button class="chip" type="button" data-set-mode="easy" aria-pressed="false"><span class="vi-only">Dễ hiểu</span><span class="en-only" lang="en">Easy</span></button>
+    <button class="chip" type="button" data-set-mode="standard" aria-pressed="true"><span class="vi-only">Tiêu chuẩn</span><span class="en-only" lang="en">Standard</span></button>
+    <button class="chip" type="button" data-set-mode="deep" aria-pressed="false"><span class="vi-only">Đầy đủ</span><span class="en-only" lang="en">Deep</span></button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-set-lang="vi" aria-pressed="true">VI</button>
+    <button class="chip" type="button" data-set-lang="en" aria-pressed="false">EN</button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-toggle-theme aria-pressed="false"><span class="vi-only">Tối</span><span class="en-only" lang="en">Dark</span></button>
+  </div>
+</header>
+
+<nav class="section-rail" aria-label="Mục lục trong trang"><ul class="section-rail__list"></ul></nav>
+
+<main>
+
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow"><span class="vi-only">Phần I · Dựng nhân · Chương 4</span><span class="en-only" lang="en">Part I · Building the Kernel · Chapter 4</span></p>
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Cấu hình và dựng: hai bước, một công cụ</span>
+      <span class="easy-only">Chọn đồ, rồi lắp máy</span>
+      <span class="en-only" lang="en">Configuring and building: two steps, one tool</span>
+    </h1>
+    <p class="standard-copy">Đây là chương thực hành trung tâm của Phần I. Mã nguồn đã tải về và giải nén xong; Kroah-Hartman mở chương bằng một câu chia việc rất gọn: bước đầu là <em>cấu hình</em> nhân với các tùy chọn thích hợp, sau đó nhân mới được <em>biên dịch</em> — và cả hai việc đều làm thông qua tiện ích <code>make</code> tiêu chuẩn <span class="cite"><a href="#ref-1">1</a></span>. Toàn bộ chương chỉ là khai triển hai câu ấy.</p>
+    <p class="easy-only">Bạn đã có mã nguồn rồi. Giờ có hai việc: một là <em>chọn</em> xem cái nhân của bạn gồm những gì, hai là <em>lắp</em> nó lại thành một tệp chạy được. Cả hai việc đều gọi bằng cùng một lệnh tên là <code>make</code> <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: chọn trước, lắp sau.</p>
+    <p class="en-only" lang="en">This is the practical heart of Part I. The source is downloaded and unpacked; Kroah-Hartman opens the chapter by dividing the work very tidily: the first step is to <em>configure</em> the kernel with the appropriate options, and the kernel can then be <em>compiled</em> — both tasks done through the standard <code>make</code> utility <span class="cite"><a href="#ref-1">1</a></span>. The whole chapter is an unpacking of those two sentences.</p>
+    <p class="deep-only">Chú ý chỗ tinh tế: <code>make</code> ở đây đóng hai vai rất khác nhau. Với <code>make config</code> hay <code>make menuconfig</code>, nó chỉ là bệ phóng cho một chương trình cấu hình — sách in ra dòng <code>scripts/kconfig/conf arch/i386/Kconfig</code> ngay dưới <code>make config</code>, tức <code>make</code> đang chạy một trình đọc ngôn ngữ Kconfig <span class="cite"><a href="#ref-1">1</a></span>. Với <code>make</code> trần, nó mới thật sự là trình quản lý phụ thuộc, biên dịch từng tệp và liên kết ảnh nhân cuối cùng <span class="cite"><a href="#ref-5">5</a></span>. Một cái tên, hai hệ thống con: kconfig và kbuild.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận điểm chương 4.</b> Cấu hình nhân sống trong một tệp duy nhất tên <code>.config</code> ở thư mục gốc cây mã nguồn <span class="cite"><a href="#ref-1">1</a></span>. Bạn gần như không bao giờ nên tạo nó từ con số không: hãy lấy một cấu hình dựng sẵn làm nền, rồi sửa những gì máy bạn thật sự cần <span class="cite"><a href="#ref-1">1</a></span>. Sau đó, dựng nhân “đơn giản đến mức chỉ là gõ một lệnh một từ” <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      <p class="easy-only"><b>Ý chính.</b> Mọi lựa chọn của bạn được ghi vào một tệp tên <code>.config</code> <span class="cite"><a href="#ref-1">1</a></span>. Đừng ngồi trả lời từng câu hỏi từ đầu — hãy lấy bản mẫu có sẵn rồi sửa <span class="cite"><a href="#ref-1">1</a></span>. Xong rồi thì việc dựng chỉ là gõ đúng một từ: <code>make</code> <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: một tệp để nhớ, một lệnh để dựng.</p>
+      <p class="en-only" lang="en"><b>Chapter 4 thesis.</b> The kernel configuration lives in a single file called <code>.config</code> in the top directory of the kernel source tree <span class="cite"><a href="#ref-1">1</a></span>. You should almost never create it from scratch: base it on a pre-built configuration and then change what your machine actually needs <span class="cite"><a href="#ref-1">1</a></span>. After that, building the kernel “is as simple as entering a one-word command” <span class="cite"><a href="#ref-5">5</a></span>.</p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: tệp .config là trung tâm, nhận đầu vào từ ba lối — make defconfig, các công cụ menu, và make oldconfig. Diagram: the .config file at the centre, fed by three routes — make defconfig, the interactive menu tools, and make oldconfig.">
+    <div class="core"><code>.config</code></div>
+    <div class="spokes">
+      <div class="node">
+        <b><span class="vi-only">Tạo nền</span><span class="en-only" lang="en">Create a base</span></b>
+        <small class="standard-copy"><code>make defconfig</code> — cấu hình mặc định của kiến trúc, do người bảo trì chọn.</small>
+        <small class="easy-only"><code>make defconfig</code> lấy bản mẫu có sẵn.</small>
+        <small class="en-only" lang="en"><code>make defconfig</code> — the architecture's default, chosen by its maintainer.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Sửa cho vừa</span><span class="en-only" lang="en">Adjust it</span></b>
+        <small class="standard-copy"><code>menuconfig</code> · <code>gconfig</code> · <code>xconfig</code> — ba giao diện tương tác.</small>
+        <small class="easy-only">Ba cửa sổ để bật/tắt từng thứ.</small>
+        <small class="en-only" lang="en"><code>menuconfig</code> · <code>gconfig</code> · <code>xconfig</code> — three interactive tools.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Chuyển bản mới</span><span class="en-only" lang="en">Carry it forward</span></b>
+        <small class="standard-copy"><code>make oldconfig</code> — giữ lựa chọn cũ, chỉ hỏi tùy chọn mới.</small>
+        <small class="easy-only"><code>make oldconfig</code> giữ cái cũ, chỉ hỏi cái mới.</small>
+        <small class="en-only" lang="en"><code>make oldconfig</code> — keeps old answers, asks only about new options.</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<nav class="chapter-path" aria-label="Lối đi trong chương">
+  <a href="#tao-cau-hinh">
+    <span>01</span>
+    <b><span class="standard-copy">Tạo cấu hình: <code>.config</code> và bốn chữ cái</span><span class="easy-only">Tệp ghi lựa chọn của bạn</span><span class="en-only" lang="en">Creating a configuration</span></b>
+  </a>
+  <a href="#sua-cau-hinh">
+    <span>02</span>
+    <b><span class="standard-copy">Sửa cấu hình: ba giao diện</span><span class="easy-only">Ba cách bật/tắt</span><span class="en-only" lang="en">Modifying the configuration</span></b>
+  </a>
+  <a href="#dung-nhan">
+    <span>03</span>
+    <b><span class="standard-copy">Dựng nhân: một lệnh một từ</span><span class="easy-only">Gõ một từ là xong</span><span class="en-only" lang="en">Building the kernel</span></b>
+  </a>
+  <a href="#dung-nang-cao">
+    <span>04</span>
+    <b><span class="standard-copy">Tùy chọn dựng nâng cao</span><span class="easy-only">Mẹo dựng nhanh hơn</span><span class="en-only" lang="en">Advanced building options</span></b>
+  </a>
+  <a href="#tu-kiem">
+    <span>05</span>
+    <b><span class="standard-copy">Tự kiểm trước khi sang chương 5</span><span class="easy-only">Tự hỏi mình vài câu</span><span class="en-only" lang="en">Self-check before Chapter 5</span></b>
+  </a>
+</nav>
+
+<section class="section" id="tao-cau-hinh" aria-labelledby="tao-cau-hinh-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 01</span><span class="en-only" lang="en">Concept cluster 01</span></p>
+    <h2 id="tao-cau-hinh-title">
+      <span class="standard-copy">Tạo cấu hình: một tệp, bốn chữ cái, hai lối vào</span>
+      <span class="easy-only">Tệp ghi lại mọi lựa chọn của bạn</span>
+      <span class="en-only" lang="en">Creating a configuration: one file, four letters, two routes</span>
+    </h2>
+    <p class="standard-copy">Cấu hình nhân được giữ trong một tệp tên <code>.config</code> nằm ở thư mục trên cùng của cây mã nguồn; cây vừa giải nén thì chưa có tệp này, nên phải tạo ra <span class="cite"><a href="#ref-1">1</a></span>. Ông nêu bốn cách tạo: từ con số không, dựa trên “cấu hình mặc định”, lấy từ một nhân đang chạy, hoặc lấy từ nhân của một bản phân phối — và nói rõ chương 4 chỉ bàn hai cách đầu, hai cách sau để dành cho Chương 7 <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    <p class="easy-only">Mọi lựa chọn của bạn được ghi vào một tệp tên <code>.config</code>, nằm ngay trong thư mục mã nguồn. Cây mã mới giải nén thì chưa có tệp đó, nên phải làm ra nó <span class="cite"><a href="#ref-1">1</a></span>. Có bốn cách làm, và chương này chỉ dạy hai cách dễ nhất <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: tất cả nằm trong một tệp duy nhất.</p>
+    <p class="en-only" lang="en">The kernel configuration is kept in a file called <code>.config</code> in the top directory of the kernel source tree; a freshly expanded tree has no <code>.config</code>, so one needs to be created <span class="cite"><a href="#ref-1">1</a></span>. He names four ways to create it: from scratch, based on the “default configuration,” taken from a running kernel, or taken from a distribution kernel release — and says plainly that Chapter 4 covers the first two, leaving the last two to Chapter 7 <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    <p class="deep-only">Dấu chấm ở đầu tên tệp không phải trang trí: trên Unix nó khiến <code>ls</code> giấu tệp đi. Hệ quả rất thực tế — sau một lần <code>make defconfig</code>, bạn gõ <code>ls</code> và không thấy gì thay đổi, dễ tưởng lệnh không chạy. Dùng <code>ls -a</code>. Tài liệu nhân hiện hành còn cho phép đổi hẳn tên tệp này qua biến môi trường <code>KCONFIG_CONFIG</code>, thứ không có trong phạm vi cuốn sách <span class="cite"><a href="#ref-9">9</a></span>.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Tùy chọn cấu hình (<span lang="en">configuration option</span>).</b> Một câu hỏi có/không/module về một tính năng của nhân. Sách ghi nhận nhân “chứa gần hai nghìn tùy chọn cấu hình khác nhau”, nên việc bị hỏi từng cái một sẽ rất lâu <span class="cite"><a href="#ref-1">1</a></span>. Đây là con số của dòng nhân 2.6 năm 2006, không phải con số hôm nay.</p>
+      <p class="easy-only"><b>Tùy chọn là gì.</b> Là một câu hỏi kiểu “có cần thứ này không?”. Năm 2006 sách đếm được gần hai nghìn câu hỏi như thế <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: nhiều quá nên đừng trả lời tay từng câu.</p>
+      <p class="en-only" lang="en"><b>Configuration option.</b> A yes/no/module question about one kernel feature. The book records that the kernel “contains almost two thousand different configuration options,” so being asked about every individual one takes a very long time <span class="cite"><a href="#ref-1">1</a></span>. That is a 2006 figure for the 2.6 series, not a present-day count.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">y → dựng thẳng vào nhân<br>m → dựng thành module, nạp khi cần<br>n → loại hẳn ra<br>? → in mô tả ngắn, rồi hỏi lại</p>
+      <p class="easy-only">y = gắn luôn vào nhân<br>m = để rời, cần thì nạp<br>n = bỏ hẳn<br>? = giải thích rồi hỏi lại</p>
+      <p class="en-only" lang="en">y → build directly into the kernel<br>m → build as a module, loaded if needed<br>n → leave entirely out<br>? → print a brief message, repeat the prompt</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">make config</span>
+      <h3>
+        <span class="standard-copy"><code>make config</code> — cách cơ bản nhất, và cũng là cách bạn sẽ không dùng</span>
+        <span class="easy-only"><code>make config</code> — hỏi từng câu một</span>
+        <span class="en-only" lang="en"><code>make config</code> — the most basic method, and the one you will not use</span>
+      </h3>
+      <p class="standard-copy">Sách gọi đây là “phương pháp cơ bản nhất”: vào thư mục mã nguồn rồi gõ <code>make config</code> <span class="cite"><a href="#ref-1">1</a></span>. Chương trình đi qua <em>mọi</em> tùy chọn và hỏi bạn có bật hay không; lựa chọn hiện ra dưới dạng <code>[Y/m/n/?]</code>, trong đó chữ cái viết hoa là mặc định và chỉ cần nhấn Enter để chọn <span class="cite"><a href="#ref-1">1</a></span>. Bốn lựa chọn là <code>y</code>, <code>n</code>, <code>m</code> và <code>?</code> <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="easy-only">Gõ <code>make config</code> thì máy sẽ hỏi bạn từng thứ một, có bật hay không <span class="cite"><a href="#ref-1">1</a></span>. Trong ngoặc như <code>[Y/m/n/?]</code>, chữ in hoa là câu trả lời mặc định — cứ Enter là chọn nó <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: biết cách này để hiểu, đừng dùng nó để làm thật.</p>
+      <p class="en-only" lang="en">The book calls this “the most basic method”: change into the source directory and type <code>make config</code> <span class="cite"><a href="#ref-1">1</a></span>. The program steps through <em>every</em> configuration option and asks whether you want it; the choices appear in the form <code>[Y/m/n/?]</code>, where the capitalized letter is the default and can be selected by just pressing Enter <span class="cite"><a href="#ref-1">1</a></span>. The four choices are <code>y</code>, <code>n</code>, <code>m</code> and <code>?</code> <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Mỗi khi đọc một bản vá kèm dòng <code>CONFIG_USB_SERIAL=m</code>, bạn đang đọc đúng ba chữ cái ấy được ghi ra tệp. <code>y</code>/<code>m</code>/<code>n</code> không phải giao diện — chúng là <em>nội dung</em> của <code>.config</code>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Khi thấy dòng kiểu <code>CONFIG_USB_SERIAL=m</code> trong tệp cấu hình, đó chính là chữ <code>m</code> bạn đã chọn. Nhớ nhé: chữ cái bạn gõ được lưu lại nguyên vẹn.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Every time you read a line like <code>CONFIG_USB_SERIAL=m</code>, you are reading those same letters written to disk. <code>y</code>/<code>m</code>/<code>n</code> are not an interface — they are the <em>contents</em> of <code>.config</code>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao có bốn chứ không phải ba</h4>
+          <p>Ba chữ đầu là trạng thái, chữ thứ tư là <em>trợ giúp</em>: <code>?</code> in ra một mô tả ngắn rồi lặp lại câu hỏi <span class="cite"><a href="#ref-1">1</a></span>. Đây là điểm khác biệt quan trọng — nó không thay đổi cấu hình, nên gõ nhầm <code>?</code> hoàn toàn vô hại. Trong <code>menuconfig</code>, cũng đúng văn bản trợ giúp ấy hiện ra khi nhấn phím <kbd>?</kbd>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Con số hai nghìn: một mốc 2006</h4>
+          <p>“Gần hai nghìn tùy chọn” là lý lẽ sách dùng để bác <code>make config</code> <span class="cite"><a href="#ref-1">1</a></span>. Cây mã hôm nay lớn hơn nhiều bậc, và tài liệu nhân hiện hành thậm chí không còn giới thiệu <code>config</code> như một lối vào bình thường — nó liệt kê <code>menuconfig</code>, <code>nconfig</code>, <code>xconfig</code>, <code>gconfig</code> làm “các lệnh cấu hình thay thế” và bảo dùng <code>make help</code> để xem hết <span class="cite"><a href="#ref-10">10</a></span><span class="cite"><a href="#ref-9">9</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">make defconfig</span>
+      <h3>
+        <span class="standard-copy"><code>make defconfig</code> — mượn lựa chọn của người bảo trì</span>
+        <span class="easy-only"><code>make defconfig</code> — lấy bản mẫu sẵn có</span>
+        <span class="en-only" lang="en"><code>make defconfig</code> — borrowing the maintainer's answers</span>
+      </h3>
+      <p class="standard-copy">Mỗi phiên bản nhân đi kèm một cấu hình “mặc định”, dựa một cách lỏng lẻo trên những gì người bảo trì kiến trúc đó cho là tùy chọn tốt nhất <span class="cite"><a href="#ref-2">2</a></span>. Sách kể một chi tiết đáng nhớ: trong nhiều trường hợp, đó đơn giản là cấu hình mà chính người bảo trì dùng cho máy cá nhân của mình — và với kiến trúc i386, cấu hình mặc định khớp khá sát với thứ Linus Torvalds dùng trên máy phát triển chính của ông <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Mỗi bản nhân có sẵn một bộ lựa chọn “mặc định” do người phụ trách chọn <span class="cite"><a href="#ref-2">2</a></span>. Thú vị là nhiều khi đó chính là cấu hình họ dùng cho máy riêng — với máy i386, nó gần giống cấu hình máy của Linus Torvalds <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: bạn đang mượn lựa chọn của người rành nhất.</p>
+      <p class="en-only" lang="en">Every kernel version ships a “default” configuration, loosely based on the defaults the maintainer of that architecture feels are best <span class="cite"><a href="#ref-2">2</a></span>. The book offers a memorable detail: in some cases it is merely the configuration the maintainer himself uses on his personal machines — and for the i386 architecture, the default matches closely what Linus Torvalds uses for his main development machine <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Chạy <code>make defconfig</code> và một lượng lớn tùy chọn sẽ trôi vụt qua màn hình, rồi một tệp <code>.config</code> được ghi ra thư mục nhân <span class="cite"><a href="#ref-2">2</a></span>. Sách nói ngay: nhân “đã được cấu hình thành công, nhưng vẫn nên tùy biến cho máy của bạn để chắc chắn nó chạy đúng” <span class="cite"><a href="#ref-2">2</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Gõ <code>make defconfig</code>, màn hình chạy vèo một loạt chữ, rồi tệp <code>.config</code> xuất hiện <span class="cite"><a href="#ref-2">2</a></span>. Nhưng chưa xong: vẫn phải sửa cho hợp máy bạn <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: mặc định là điểm xuất phát, không phải đích đến.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Run <code>make defconfig</code> and a huge number of options scroll quickly by, then a <code>.config</code> file is written into the kernel directory <span class="cite"><a href="#ref-2">2</a></span>. The book immediately adds that the kernel “is now successfully configured, but it should be customized to your machine in order to make sure it will operate correctly” <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Mặc định của <em>kiến trúc nào</em></h4>
+          <p><code>defconfig</code> luôn là mặc định của một kiến trúc cụ thể. Sách cho ví dụ đổi kiến trúc ngay trên dòng lệnh: <code>make ARCH=x86_64 defconfig</code> lấy cấu hình mặc định của x86_64 <span class="cite"><a href="#ref-8">8</a></span>. Tài liệu hiện hành mô tả cùng cơ chế — giá trị mặc định lấy từ <code>arch/$ARCH/configs/defconfig</code> hoặc một biến thể theo nền tảng <span class="cite"><a href="#ref-10">10</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Hai lối vào còn lại</h4>
+          <p>Sách hoãn hai cách kia sang Chương 7 <span class="cite"><a href="#ref-1">1</a></span>, nhưng chúng mới là cách phổ biến nhất hôm nay: tài liệu nhân khuyên dùng <code>make localmodconfig</code>, lấy cấu hình của bản phân phối làm nền rồi tắt các module có vẻ thừa — “giảm thời gian biên dịch một cách khổng lồ” — với cảnh báo kèm theo là nó dễ tắt luôn những tính năng bạn chưa dùng kể từ lúc khởi động <span class="cite"><a href="#ref-11">11</a></span>.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Đến đây bạn đã có một <code>.config</code> hợp lệ nhưng chưa vừa. Sách chuyển ngay sang câu hỏi kế: làm sao <em>sửa</em> nó mà không phải trả lời lại hai nghìn câu hỏi? Câu trả lời là ba giao diện tương tác.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Có tệp rồi, nhưng chưa vừa máy bạn. Giờ học cách sửa nó bằng cửa sổ chọn, thay vì trả lời lại từ đầu. Nhớ nhé: sửa dễ hơn làm lại.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> You now have a valid <code>.config</code> that does not yet fit. The book moves straight to the next question: how do you <em>modify</em> it without answering two thousand questions again? The answer is three interactive tools.</p>
+  </aside>
+</section>
+
+<section class="section" id="sua-cau-hinh" aria-labelledby="sua-cau-hinh-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 02</span><span class="en-only" lang="en">Concept cluster 02</span></p>
+    <h2 id="sua-cau-hinh-title">
+      <span class="standard-copy">Sửa cấu hình: ba giao diện, cùng một tệp</span>
+      <span class="easy-only">Ba cửa sổ để bật và tắt</span>
+      <span class="en-only" lang="en">Modifying the configuration: three tools, one file</span>
+    </h2>
+    <p class="standard-copy">Có ba công cụ cấu hình tương tác: một công cụ chạy trên terminal tên <code>menuconfig</code>, một công cụ đồ họa dựa trên GTK+ tên <code>gconfig</code>, và một công cụ đồ họa dựa trên QT tên <code>xconfig</code> <span class="cite"><a href="#ref-2">2</a></span>. Điều cần nắm là cả ba đọc và ghi <em>cùng một tệp</em> <code>.config</code>; chúng khác nhau ở cách hiển thị, không ở kết quả. Sách nói thẳng rằng <code>gconfig</code> và <code>xconfig</code> “gần như giống hệt nhau, khác biệt duy nhất là bộ công cụ đồ họa dùng để viết chúng” <span class="cite"><a href="#ref-4">4</a></span>.</p>
+    <p class="easy-only">Có ba cửa sổ để bạn bật/tắt từng thứ: <code>menuconfig</code> chạy trong màn hình chữ, còn <code>gconfig</code> và <code>xconfig</code> là cửa sổ đồ họa <span class="cite"><a href="#ref-2">2</a></span>. Ba cái này chỉ khác nhau ở hình dáng, còn làm ra kết quả y hệt nhau <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: chọn cái nào bạn thấy dễ nhìn nhất.</p>
+    <p class="en-only" lang="en">There are three interactive kernel configuration tools: a terminal-based one called <code>menuconfig</code>, a GTK+-based graphical one called <code>gconfig</code>, and a QT-based graphical one called <code>xconfig</code> <span class="cite"><a href="#ref-2">2</a></span>. The point to hold on to is that all three read and write the <em>same</em> <code>.config</code>; they differ in presentation, not in outcome. The book says as much: <code>gconfig</code> and <code>xconfig</code> are “almost identical, the only difference being the different graphical toolkit with which they are written” <span class="cite"><a href="#ref-4">4</a></span>.</p>
+    <p class="deep-only">Cũng đáng lưu ý điều sách <em>không</em> hứa: nó chỉ chỉ cho bạn cách chọn tùy chọn bạn muốn đổi, còn việc <em>tìm ra</em> tùy chọn nào cần cho phần cứng của bạn thì để sang Chương 7 <span class="cite"><a href="#ref-2">2</a></span>. Đó là ranh giới thật giữa “biết bấm” và “biết chọn”, và nhiều người dựng nhân lần đầu vấp đúng chỗ này.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Phân mục (<span lang="en">section</span>) và phân mục con.</b> Cấu hình nhân được chia thành các phân mục, mỗi phân mục chứa các tùy chọn ứng với một chủ đề cụ thể, và bên trong có thể có phân mục con cho các chủ đề chuyên biệt hơn <span class="cite"><a href="#ref-3">3</a></span>. Ví dụ sách dùng: mọi trình điều khiển thiết bị nằm dưới mục chính <span lang="en">Device Drivers</span> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only"><b>Cách sắp xếp.</b> Các lựa chọn được gom thành từng nhóm theo chủ đề, trong nhóm lại có nhóm nhỏ hơn <span class="cite"><a href="#ref-3">3</a></span>. Ví dụ tất cả trình điều khiển thiết bị nằm trong mục <span lang="en">Device Drivers</span> <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: giống như thư mục lồng thư mục.</p>
+      <p class="en-only" lang="en"><b>Sections and submenus.</b> The kernel configuration is divided into sections, each containing options for a specific topic, and within those sections there can be subsections for specialized topics <span class="cite"><a href="#ref-3">3</a></span>. The book's example: all kernel device drivers are found under the main menu option <span lang="en">Device Drivers</span> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">menuconfig<br>&nbsp;[*] = bật&nbsp;&nbsp;&nbsp;[ ] = tắt<br>&nbsp;&lt;*&gt; = vào nhân<br>&nbsp;&lt;M&gt; = module<br>&nbsp;&lt; &gt; = bỏ</p>
+      <p class="easy-only">[*] có bật<br>[ ] không bật<br>&lt;*&gt; gắn vào nhân<br>&lt;M&gt; để rời<br>&lt; &gt; bỏ hẳn</p>
+      <p class="en-only" lang="en">menuconfig<br>&nbsp;[*] = on&nbsp;&nbsp;&nbsp;[ ] = off<br>&nbsp;&lt;*&gt; = built in<br>&nbsp;&lt;M&gt; = module<br>&nbsp;&lt; &gt; = left out</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">menuconfig</span>
+      <h3>
+        <span class="standard-copy"><code>make menuconfig</code> — bàn phím, dấu ngoặc, và ý nghĩa của chúng</span>
+        <span class="easy-only"><code>make menuconfig</code> — chọn bằng phím mũi tên</span>
+        <span class="en-only" lang="en"><code>make menuconfig</code> — the keyboard, the brackets, and what they mean</span>
+      </h3>
+      <p class="standard-copy">Đây là chương trình chạy trên console, cho phép đi lại trong cấu hình bằng các phím mũi tên; khởi động bằng <code>make menuconfig</code> <span class="cite"><a href="#ref-3">3</a></span>. Hướng dẫn di chuyển và ý nghĩa các ký tự được in ngay ở đầu màn hình <span class="cite"><a href="#ref-3">3</a></span>. Hai kiểu ngoặc mang hai ý nghĩa khác nhau: <code>[ ]</code> là tùy chọn có-hoặc-không, còn <code>&lt; &gt;</code> là tùy chọn ba trạng thái — dựng vào nhân (Y), dựng thành module (M), hoặc bỏ hẳn (N) <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Gõ <code>make menuconfig</code> để mở bảng chọn trong cửa sổ chữ, đi lại bằng phím mũi tên <span class="cite"><a href="#ref-3">3</a></span>. Có hai kiểu ô: ô vuông <code>[ ]</code> chỉ có bật hoặc tắt; ô nhọn <code>&lt; &gt;</code> có ba mức — gắn vào nhân, để rời, hoặc bỏ <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: nhìn kiểu ngoặc là biết có mấy lựa chọn.</p>
+      <p class="en-only" lang="en">This is a console-based program that lets you move around the configuration with the arrow keys; start it with <code>make menuconfig</code> <span class="cite"><a href="#ref-3">3</a></span>. The navigation instructions and the meanings of the different characters are shown at the top of the screen <span class="cite"><a href="#ref-3">3</a></span>. The two bracket styles mean two different things: <code>[ ]</code> marks a yes-or-no option, while <code>&lt; &gt;</code> marks a tri-state — built into the kernel (Y), built as a module (M), or left out altogether (N) <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Sách đi qua một ví dụ cụ thể: vào <span lang="en">Device Drivers → Generic Driver Options</span>, rồi nhấn Y cho tùy chọn thứ nhất, N cho thứ hai, M cho thứ ba — chỉ chọn trình điều khiển không cần <span lang="en">firmware</span> lúc biên dịch, chặn việc dựng firmware, và dựng trình nạp firmware phía người dùng thành module <span class="cite"><a href="#ref-3">3</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Sách làm mẫu: vào mục <span lang="en">Device Drivers</span>, rồi <span lang="en">Generic Driver Options</span>, bấm Y – N – M cho ba dòng đầu <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: bấm chữ cái là đổi trạng thái ngay.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The book walks a concrete example: enter <span lang="en">Device Drivers → Generic Driver Options</span>, then press Y for the first option, N for the second and M for the third — selecting only drivers that need no firmware at compile time, disabling firmware from being built, and building the userspace firmware loader as a module <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Thoát và lưu</h4>
+          <p>Rời một phân mục con bằng phím Escape, hoặc mũi tên phải rồi Enter <span class="cite"><a href="#ref-3">3</a></span>. Ở menu chính, Escape sẽ hỏi bạn có lưu cấu hình đã đổi hay không: Enter để lưu, hoặc mũi tên phải sang <code>&lt;No&gt;</code> rồi Enter để vứt bỏ mọi thay đổi <span class="cite"><a href="#ref-3">3</a></span>. Đây là chỗ duy nhất trong toàn chương mà một thao tác sai sẽ làm mất việc bạn vừa làm.</p>
+        </div>
+        <div class="info-block">
+          <h4>Tên thật của các công cụ</h4>
+          <p>Tài liệu nhân hiện hành gọi chúng bằng tên chương trình: <code>menuconfig</code> là <code>mconf</code>, <code>xconfig</code> là <code>qconf</code>, <code>gconfig</code> là <code>gconf</code> — và bổ sung một lựa chọn thứ tư mà sách 2006 chưa có, <code>nconfig</code> (tức <code>nconf</code>), “một trình cấu hình dạng văn bản thay thế” <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">gconfig / xconfig</span>
+      <h3>
+        <span class="standard-copy"><code>gconfig</code> và <code>xconfig</code> — hai khung cửa sổ, hai quy ước ký hiệu</span>
+        <span class="easy-only">Hai cửa sổ đồ họa, ký hiệu khác nhau</span>
+        <span class="en-only" lang="en"><code>gconfig</code> and <code>xconfig</code> — two windows, two symbol conventions</span>
+      </h3>
+      <p class="standard-copy"><code>gconfig</code> viết bằng bộ công cụ GTK+ và có màn hình hai khung; <code>xconfig</code> viết bằng bộ công cụ QT và có màn hình ba khung <span class="cite"><a href="#ref-4">4</a></span>. Điểm bẫy nằm ở ký hiệu <em>module</em>: trong <code>gconfig</code>, ô đánh dấu nghĩa là tùy chọn được dựng thẳng vào nhân, còn một <em>gạch ngang qua ô</em> nghĩa là dựng thành module; trong <code>xconfig</code>, tùy chọn dựng thành module hiện ra với một <em>dấu chấm</em> trong ô <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only"><code>gconfig</code> có hai khung, <code>xconfig</code> có ba khung, dùng chuột để bấm <span class="cite"><a href="#ref-4">4</a></span>. Cẩn thận chỗ này: ở <code>gconfig</code>, ô bị gạch ngang nghĩa là “để rời”; ở <code>xconfig</code>, ô có dấu chấm mới là “để rời” <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: cùng ý nghĩa nhưng vẽ khác nhau.</p>
+      <p class="en-only" lang="en"><code>gconfig</code> is written with the GTK+ toolkit and has a two-pane screen; <code>xconfig</code> is written with the QT toolkit and has a three-pane screen <span class="cite"><a href="#ref-4">4</a></span>. The trap is the <em>module</em> marking: in <code>gconfig</code> a checked box means the option will be built into the kernel, whereas a <em>line through the box</em> means it will be built as a module; in <code>xconfig</code>, a module is shown with a <em>dot</em> in the box <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Cả hai đều nhắc bạn lưu cấu hình đã đổi khi thoát, và đều cho phép ghi cấu hình ấy ra <em>một tệp khác</em> — nhờ đó bạn có thể tạo nhiều cấu hình khác nhau và giữ song song <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Khi đóng cửa sổ, cả hai đều hỏi có lưu không, và cho lưu ra tệp tên khác — nên bạn giữ được nhiều bộ cấu hình cùng lúc <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: lưu ra tên khác để không mất bản cũ.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Both prompt you to save the changed configuration on exit, and both offer to write it out to a <em>different file</em> — which is how you create multiple, differing configurations side by side <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Nhãn “QT”/“GTK+” là nhãn 2006</h4>
+          <p>Sách viết “QT” và “GTK+” theo cách gọi năm 2006 <span class="cite"><a href="#ref-4">4</a></span>. Tài liệu nhân hiện hành mô tả ngắn gọn: <code>make xconfig</code> là “công cụ cấu hình dựa trên Qt”, <code>make gconfig</code> là “công cụ cấu hình dựa trên GTK” <span class="cite"><a href="#ref-10">10</a></span>. Bản chất không đổi; chỉ phiên bản bộ công cụ là đã đi rất xa.</p>
+        </div>
+        <div class="info-block">
+          <h4>Chuyển cấu hình sang bản nhân mới</h4>
+          <p>Ở Chương 6 sách nêu một quy trình quan trọng cho việc dùng lâu dài: khi đã có một cấu hình chạy tốt, thứ duy nhất cần làm khi lên bản mới là cập nhật những tùy chọn vừa được thêm vào — và dùng <code>make oldconfig</code> hoặc <code>make silentoldconfig</code> cho việc đó <span class="cite"><a href="#ref-12">12</a></span>. <code>oldconfig</code> in ra mọi câu hỏi và tự trả lời những gì đã có trong <code>.config</code>, chỉ dừng lại ở tùy chọn mới <span class="cite"><a href="#ref-12">12</a></span>.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Ba giao diện, một tệp, và một quy trình duy trì lâu dài. Phần cấu hình kết thúc ở đây — và phần khó hình dung nhất của chương hóa ra lại là phần ngắn nhất: việc dựng.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Xong phần chọn. Giờ tới phần lắp, và phần này ngắn bất ngờ. Nhớ nhé: chọn mới mất công, lắp thì chỉ một lệnh.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> Three interfaces, one file, and one long-term maintenance routine. The configuration half ends here — and the part that sounds hardest turns out to be the shortest in the chapter: the build.</p>
+  </aside>
+</section>
+
+<section class="section" id="dung-nhan" aria-labelledby="dung-nhan-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 03</span><span class="en-only" lang="en">Concept cluster 03</span></p>
+    <h2 id="dung-nhan-title">
+      <span class="standard-copy">Dựng nhân: một lệnh một từ</span>
+      <span class="easy-only">Lắp máy: gõ đúng một từ</span>
+      <span class="en-only" lang="en">Building the kernel: a one-word command</span>
+    </h2>
+    <p class="standard-copy">Sau tất cả công sức cấu hình, phần dựng được sách mô tả bằng một câu: “việc này đơn giản như gõ một lệnh một từ” — <code>make</code> <span class="cite"><a href="#ref-5">5</a></span>. Chạy <code>make</code> khiến hệ thống dựng dùng cấu hình bạn đã chọn để tạo ra một nhân và <em>tất cả</em> các module cần thiết cho cấu hình ấy <span class="cite"><a href="#ref-5">5</a></span>. Trong lúc chạy, <code>make</code> hiển thị tên từng tệp đang được xử lý, kèm mọi cảnh báo hoặc lỗi biên dịch <span class="cite"><a href="#ref-5">5</a></span>.</p>
+    <p class="easy-only">Phần này ngắn đến bất ngờ: chỉ cần gõ <code>make</code> <span class="cite"><a href="#ref-5">5</a></span>. Máy sẽ tự lắp nhân và tất cả các phần rời cần thiết <span class="cite"><a href="#ref-5">5</a></span>. Màn hình sẽ chạy tên từng tệp — đó là bình thường <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: thấy chữ chạy nghĩa là nó đang làm việc.</p>
+    <p class="en-only" lang="en">After all that configuring, the build itself gets one sentence: “This is as simple as entering a one-word command” — <code>make</code> <span class="cite"><a href="#ref-5">5</a></span>. Running <code>make</code> causes the build system to use the configuration you selected to build a kernel and <em>all</em> the modules needed to support it <span class="cite"><a href="#ref-5">5</a></span>. While it runs, <code>make</code> displays the individual filenames of what is currently happening, along with any build warnings or errors <span class="cite"><a href="#ref-5">5</a></span>.</p>
+    <p class="deep-only">Câu “tất cả module cần thiết” mang một ghi chú lịch sử mà sách đặt ở chân trang: các bản nhân cũ hơn, trước bản 2.6, còn đòi thêm một bước <code>make modules</code> để dựng mọi module cần thiết; điều đó không còn cần nữa <span class="cite"><a href="#ref-5">5</a></span>. Nếu bạn gặp một hướng dẫn trên mạng bảo phải chạy <code>make modules</code>, rất có thể bạn đang đọc tài liệu viết cho dòng 2.4.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Ảnh nhân (<span lang="en">kernel image</span>).</b> Tệp kết quả của việc dựng. Nếu quá trình dựng kết thúc không lỗi, bạn đã tạo thành công một ảnh nhân — nhưng nó còn phải được <em>cài đặt</em> đúng cách trước khi bạn thử khởi động từ nó, và đó là nội dung Chương 5 <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      <p class="easy-only"><b>Kết quả là gì.</b> Là một tệp nhân đã lắp xong. Dựng xong chưa dùng được ngay — còn phải cài đặt đúng chỗ rồi mới khởi động được, việc đó ở Chương 5 <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: lắp xong chưa phải là chạy được.</p>
+      <p class="en-only" lang="en"><b>Kernel image.</b> The file the build produces. If the build finished without errors you have successfully created a kernel image — but it still needs to be installed properly before you try to boot from it, which is Chapter 5's subject <span class="cite"><a href="#ref-5">5</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">$ make<br>&nbsp; CC&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; init/main.o<br>&nbsp; HOSTCC&nbsp; scripts/kallsyms<br>&nbsp; ...<br>→ ảnh nhân + module</p>
+      <p class="easy-only">$ make<br>&nbsp; (màn hình chạy tên tệp)<br>→ có nhân và các phần rời</p>
+      <p class="en-only" lang="en">$ make<br>&nbsp; CC&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; init/main.o<br>&nbsp; HOSTCC&nbsp; scripts/kallsyms<br>&nbsp; ...<br>→ kernel image + modules</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">build errors are unusual</span>
+      <h3>
+        <span class="standard-copy">Lỗi biên dịch là chuyện rất hiếm — và là chuyện đáng báo</span>
+        <span class="easy-only">Bị lỗi là hiếm, mà hiếm thì nên báo</span>
+        <span class="en-only" lang="en">Build errors are very unusual — and worth reporting</span>
+      </h3>
+      <p class="standard-copy">Ông viết một câu vừa trấn an vừa giao việc: “Rất hiếm khi gặp lỗi dựng khi dựng một phiên bản nhân đã phát hành. Nếu bạn gặp, xin hãy báo cho các nhà phát triển nhân Linux để họ sửa” <span class="cite"><a href="#ref-5">5</a></span>. Đây là một trong những chỗ cuốn sách lộ rõ mục đích sâu xa của nó: người dùng dựng nhân cũng là một phần của vòng phản hồi chất lượng.</p>
+      <p class="easy-only">Nhân đã phát hành chính thức thì rất hiếm khi dựng bị lỗi. Nếu bạn gặp lỗi, hãy báo cho những người làm nhân để họ sửa <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: gặp lỗi không phải lỗi của bạn — đó là thông tin quý.</p>
+      <p class="en-only" lang="en">He writes a sentence that both reassures and assigns work: “It is very unusual to get any build errors when building a released kernel version. If you do, please report them to the Linux kernel developers so they can be fixed” <span class="cite"><a href="#ref-5">5</a></span>. This is one of the places the book shows its deeper purpose: a user who builds a kernel is part of the quality feedback loop.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Phân biệt cho đúng: <em>cảnh báo</em> (<span lang="en">warning</span>) trong lúc dựng là bình thường và không chặn quá trình; <em>lỗi</em> (<span lang="en">error</span>) mới làm <code>make</code> dừng lại. Sách nói <code>make</code> in ra cả hai <span class="cite"><a href="#ref-5">5</a></span>, nên đừng hoảng khi thấy chữ “warning”.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Chữ “warning” chỉ là nhắc nhở, máy vẫn chạy tiếp. Chữ “error” mới làm dừng lại <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: đừng nhầm lời nhắc với lỗi thật.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Keep the distinction: a <em>warning</em> during the build is normal and does not stop anything; an <em>error</em> is what halts <code>make</code>. The book notes that <code>make</code> prints both <span class="cite"><a href="#ref-5">5</a></span>, so do not panic at the word “warning”.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đọc đầu ra dựng</h4>
+          <p>Các nhãn viết hoa ở đầu mỗi dòng là loại hành động: <code>CC</code> biên dịch một tệp nguồn của nhân, <code>HOSTCC</code> biên dịch một công cụ chạy trên máy dựng (chẳng hạn <code>scripts/kallsyms</code>), <code>GEN</code> sinh tệp, <code>SYMLINK</code> tạo liên kết tượng trưng — sách in nguyên đoạn đầu ra này làm ví dụ <span class="cite"><a href="#ref-5">5</a></span>. Biết đọc nhãn giúp bạn định vị ngay lỗi nằm ở phần nào.</p>
+        </div>
+        <div class="info-block">
+          <h4>Khi cần xem lệnh đầy đủ</h4>
+          <p>Đầu ra gọn ấy cố tình giấu dòng lệnh biên dịch thật. Tài liệu nhân hiện hành khuyên khi gỡ lỗi thì dựng lại với <code>make V=1</code> để thấy lệnh đầy đủ, và lưu ý rằng lúc đó nên bỏ luôn tùy chọn song song đã dùng trước đó <span class="cite"><a href="#ref-11">11</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">make help</span>
+      <h3>
+        <span class="standard-copy">Hệ thống dựng biết làm nhiều hơn là dựng</span>
+        <span class="easy-only">Còn nhiều lệnh khác nữa</span>
+        <span class="en-only" lang="en">The build system does more than build</span>
+      </h3>
+      <p class="standard-copy">Sách mở phần nâng cao bằng một lời nhắc: hệ thống dựng cho phép làm nhiều việc hơn là chỉ dựng nhân và module; Chương 10 liệt kê đầy đủ, còn để biết cách dùng các tùy chọn nâng cao khác thì xem tài liệu ngay trong nhân, ở thư mục <code>Documentation/kbuild</code> <span class="cite"><a href="#ref-6">6</a></span>. Và có một lệnh tra cứu tại chỗ: chạy <code>make help</code> trong thư mục dựng sẽ in ra phần lớn các đích <span lang="en">make</span> thông dụng <span class="cite"><a href="#ref-13">13</a></span>.</p>
+      <p class="easy-only">Hệ thống dựng còn làm được nhiều việc khác, không chỉ mỗi việc lắp nhân <span class="cite"><a href="#ref-6">6</a></span>. Muốn xem có những lệnh gì, cứ gõ <code>make help</code> <span class="cite"><a href="#ref-13">13</a></span>. Nhớ nhé: quên lệnh thì hỏi <code>make help</code>.</p>
+      <p class="en-only" lang="en">The book opens its advanced section with a reminder: the build system lets you do many more things than just build the kernel and modules; Chapter 10 has the full list, and for the other advanced options you should read the in-kernel documentation in the <code>Documentation/kbuild</code> directory <span class="cite"><a href="#ref-6">6</a></span>. And there is a lookup command on the spot: running <code>make help</code> inside the build directory prints out most of the common make targets <span class="cite"><a href="#ref-13">13</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Nhiều đích có thể gộp chung trên một dòng lệnh; ví dụ của sách là <code>make mrproper xconfig</code> — dọn sạch cây mã rồi mở ngay giao diện cấu hình <span class="cite"><a href="#ref-13">13</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Bạn có thể ghép nhiều việc vào một dòng, ví dụ <code>make mrproper xconfig</code> vừa dọn sạch vừa mở bảng chọn <span class="cite"><a href="#ref-13">13</a></span>. Nhớ nhé: ghép lệnh tiết kiệm thời gian.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Several targets can be grouped on one command line; the book's example is <code>make mrproper xconfig</code> — clean the tree out, then open the configuration tool <span class="cite"><a href="#ref-13">13</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4><code>make help</code> hôm nay</h4>
+          <p>Lời khuyên này còn nguyên giá trị: tài liệu Kconfig hiện hành cũng bảo “dùng <code>make help</code> để liệt kê mọi đích cấu hình khả dĩ”, vì danh sách đó đã dài thêm đáng kể từ 2006 <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Đích thông tin</h4>
+          <p>Chương 10 phân loại các đích, trong đó có nhóm đích thông tin như <code>kernelrelease</code> và <code>kernelversion</code> — in phiên bản nhân, thường được các script dùng để xác định bản đang dựng <span class="cite"><a href="#ref-13">13</a></span>. Chúng không dựng gì cả; chúng chỉ trả lời câu hỏi “đây là bản nào”.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> <code>make</code> trần đã đủ để có một nhân. Phần còn lại của chương trả lời câu hỏi thực dụng: làm sao để nó <em>nhanh hơn</em>, <em>nhỏ hơn về phạm vi</em>, và dựng được cho <em>máy khác</em>.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Chỉ <code>make</code> là đủ rồi. Phần sau là mẹo: nhanh hơn, dựng từng phần, và dựng cho máy khác. Nhớ nhé: cơ bản trước, mẹo sau.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> Plain <code>make</code> is enough to get a kernel. The rest of the chapter answers practical questions: how to make it <em>faster</em>, how to build <em>only part</em> of it, and how to build for <em>another machine</em>.</p>
+  </aside>
+</section>
+
+<section class="section" id="dung-nang-cao" aria-labelledby="dung-nang-cao-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 04</span><span class="en-only" lang="en">Concept cluster 04</span></p>
+    <h2 id="dung-nang-cao-title">
+      <span class="standard-copy">Tùy chọn dựng nâng cao: nhanh hơn, hẹp hơn, khác máy</span>
+      <span class="easy-only">Mẹo: nhanh hơn, gọn hơn, cho máy khác</span>
+      <span class="en-only" lang="en">Advanced building options: faster, narrower, elsewhere</span>
+    </h2>
+    <p class="standard-copy">Bốn mẹo trong phần này giải quyết bốn nhu cầu rất khác nhau, nhưng đều là tham số truyền cho cùng một lệnh <code>make</code>: <code>-j</code> để dùng hết nhiều bộ xử lý, một đường dẫn hoặc <code>M=</code> để chỉ dựng một phần cây mã, <code>O=</code> để tách nơi chứa mã nguồn khỏi nơi chứa kết quả, và <code>ARCH=</code> cùng <code>CROSS_COMPILE=</code> để dựng cho kiến trúc khác <span class="cite"><a href="#ref-6">6</a></span><span class="cite"><a href="#ref-7">7</a></span><span class="cite"><a href="#ref-8">8</a></span>.</p>
+    <p class="easy-only">Phần này có bốn mẹo, đều là thêm chữ vào sau lệnh <code>make</code>: <code>-j</code> để chạy nhanh hơn, <code>M=</code> để chỉ làm một phần, <code>O=</code> để để kết quả ra chỗ khác, và <code>ARCH=</code> để dựng cho loại máy khác <span class="cite"><a href="#ref-6">6</a></span><span class="cite"><a href="#ref-7">7</a></span><span class="cite"><a href="#ref-8">8</a></span>. Nhớ nhé: vẫn là <code>make</code>, chỉ thêm chữ phía sau.</p>
+    <p class="en-only" lang="en">The four techniques here answer four very different needs, but all of them are arguments to the same <code>make</code>: <code>-j</code> to use several processors, a path or <code>M=</code> to build only part of the tree, <code>O=</code> to separate source from output, and <code>ARCH=</code> plus <code>CROSS_COMPILE=</code> to build for another architecture <span class="cite"><a href="#ref-6">6</a></span><span class="cite"><a href="#ref-7">7</a></span><span class="cite"><a href="#ref-8">8</a></span>.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Dựng đa luồng (<span lang="en">multithreaded build</span>).</b> Sách nhận xét rằng việc dựng nhân chia nhỏ thành nhiều mẩu giao cho nhiều bộ xử lý rất tốt, nhờ đó tận dụng được toàn bộ sức mạnh của máy nhiều bộ xử lý và giảm đáng kể thời gian dựng <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      <p class="easy-only"><b>Dựng song song là gì.</b> Là chia việc lắp ra cho nhiều bộ xử lý làm cùng lúc, nên nhanh hơn nhiều <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: nhiều người làm thì xong sớm.</p>
+      <p class="en-only" lang="en"><b>Multithreaded build.</b> The book observes that a kernel build splits into little pieces handed to different processors very well, letting you use the full power of a multiprocessor machine and reduce build time considerably <span class="cite"><a href="#ref-6">6</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">2 bộ xử lý → make -j4<br>4 bộ xử lý → make -j8<br>make -j (không số) → NGUY HIỂM</p>
+      <p class="easy-only">2 nhân → -j4<br>4 nhân → -j8<br>-j trống → đừng dùng</p>
+      <p class="en-only" lang="en">2 processors → make -j4<br>4 processors → make -j8<br>make -j (no number) → DANGEROUS</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">make -jN</span>
+      <h3>
+        <span class="standard-copy"><code>-j</code> có số — và vì sao <code>-j</code> trống là một cái bẫy</span>
+        <span class="easy-only">Luôn ghi số sau <code>-j</code></span>
+        <span class="en-only" lang="en"><code>-j</code> with a number — and why bare <code>-j</code> is a trap</span>
+      </h3>
+      <p class="standard-copy">Quy tắc của sách rất cụ thể: nên đưa cho <code>-j</code> một con số bằng <em>gấp đôi</em> số bộ xử lý có trong máy — máy hai bộ xử lý thì <code>make -j4</code>, máy bốn bộ xử lý thì <code>make -j8</code> <span class="cite"><a href="#ref-6">6</a></span>. Còn nếu bạn không truyền giá trị nào, hệ thống dựng sẽ tạo một luồng mới cho <em>mỗi thư mục con</em> trong cây nhân, thứ dễ dàng làm máy bạn treo cứng và khiến quá trình dựng lâu hơn nhiều; vì vậy sách khuyên luôn luôn truyền một con số <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      <p class="easy-only">Sau chữ <code>-j</code> phải có số. Số đó nên gấp đôi số bộ xử lý: máy 2 nhân thì <code>make -j4</code>, máy 4 nhân thì <code>make -j8</code> <span class="cite"><a href="#ref-6">6</a></span>. Nếu gõ <code>-j</code> mà không có số, máy sẽ mở quá nhiều việc cùng lúc, có thể đơ và còn chậm hơn <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: không bao giờ gõ <code>-j</code> trống.</p>
+      <p class="en-only" lang="en">The book's rule is concrete: give <code>-j</code> a number corresponding to <em>twice</em> the number of processors in the system — <code>make -j4</code> on a two-processor machine, <code>make -j8</code> on a four-processor one <span class="cite"><a href="#ref-6">6</a></span>. If you pass no value at all, the build system creates a new thread for every subdirectory in the kernel tree, which can easily make your machine unresponsive and take much longer to finish; so it recommends you always pass a number <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Con số “gấp đôi” là lời khuyên 2006 cho máy vài bộ xử lý. Tài liệu nhân hiện hành dùng một công thức khác, gọn hơn: <code>make -j $(nproc --all)</code>, tức đúng bằng số lõi CPU trong máy <span class="cite"><a href="#ref-11">11</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Ngày nay tài liệu chính thức thường viết <code>make -j $(nproc --all)</code> — máy tự đếm số lõi giúp bạn <span class="cite"><a href="#ref-11">11</a></span>. Nhớ nhé: để máy tự đếm là an toàn nhất.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The “twice” figure is 2006 advice for machines with a few processors. Current kernel documentation uses a tidier formula: <code>make -j $(nproc --all)</code>, matching every CPU core in the system <span class="cite"><a href="#ref-11">11</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hai lời khuyên khác nhau, không mâu thuẫn</h4>
+          <p>Sách 2006 nói “gấp đôi số bộ xử lý” <span class="cite"><a href="#ref-6">6</a></span>; tài liệu hiện hành dùng “bằng số lõi” <span class="cite"><a href="#ref-11">11</a></span>. Chúng đến từ hai bối cảnh khác nhau: năm 2006, “bộ xử lý” thường là một lõi vật lý không có siêu phân luồng, và đĩa cứng quay khiến tác vụ hay phải chờ vào/ra — nhân đôi để lấp chỗ chờ. Máy hiện đại đã đếm sẵn cả lõi luận lý, nên <code>nproc --all</code> đã bao hàm phần bù ấy. Trang này giữ nguyên con số của sách trong phần thân và ghi chú khác biệt ở đây, thay vì chọn im lặng một bên.</p>
+        </div>
+        <div class="info-block">
+          <h4>Dựng nhanh bằng cách khác</h4>
+          <p>Sách cũng chỉ ra rằng việc đổi trình biên dịch có ích ngay cả khi không dựng chéo: <code>distcc</code> và <code>ccache</code> “đều giúp giảm đáng kể thời gian dựng nhân”, dùng qua <code>make CC="ccache gcc"</code>, hoặc kết hợp cả hai với <code>make CC="ccache distcc"</code> <span class="cite"><a href="#ref-8">8</a></span>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">M= and a path</span>
+      <h3>
+        <span class="standard-copy">Dựng một phần — và cái bẫy “quên liên kết lại”</span>
+        <span class="easy-only">Chỉ làm một phần thôi</span>
+        <span class="en-only" lang="en">Building only a portion — and the relink trap</span>
+      </h3>
+      <p class="standard-copy">Để dựng chọn lọc một thư mục, chỉ cần nêu nó trên dòng lệnh, ví dụ <code>make drivers/usb/serial</code> <span class="cite"><a href="#ref-7">7</a></span>. Nhưng cú pháp này <em>không</em> dựng ra ảnh module cuối cùng trong thư mục đó; muốn vậy phải dùng tham số <code>M=</code>: <code>make M=drivers/usb/serial</code> sẽ dựng mọi tệp cần thiết và liên kết các ảnh module <span class="cite"><a href="#ref-7">7</a></span>. Bạn cũng có thể chỉ đích danh một tệp, chẳng hạn <code>make drivers/usb/serial/visor.ko</code> <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      <p class="easy-only">Muốn làm lại chỉ một thư mục thì ghi tên thư mục sau <code>make</code> <span class="cite"><a href="#ref-7">7</a></span>. Nhưng cách đó chưa ra tệp module hoàn chỉnh — muốn có thì thêm <code>M=</code> phía trước, như <code>make M=drivers/usb/serial</code> <span class="cite"><a href="#ref-7">7</a></span>. Hoặc chỉ luôn một tệp, như <code>make drivers/usb/serial/visor.ko</code> <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: làm một phần thì nhanh, nhưng chưa xong hẳn.</p>
+      <p class="en-only" lang="en">To selectively build one directory, name it on the command line, as in <code>make drivers/usb/serial</code> <span class="cite"><a href="#ref-7">7</a></span>. But that syntax will <em>not</em> build the final module images in that directory; for that you use the <code>M=</code> argument: <code>make M=drivers/usb/serial</code> builds all the needed files and links the final module images <span class="cite"><a href="#ref-7">7</a></span>. You can also name a single file, such as <code>make drivers/usb/serial/visor.ko</code> <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Cái bẫy sách cảnh báo rất đáng nhớ: khi dựng một thư mục đơn lẻ, ảnh nhân cuối cùng <em>không</em> được liên kết lại, nên những thay đổi trong thư mục con sẽ không ảnh hưởng tới ảnh nhân — “điều có lẽ không phải thứ bạn mong muốn”. Hãy chạy một lệnh <code>make</code> trần ở cuối để hệ thống kiểm tra mọi tệp đối tượng đã đổi và liên kết ảnh nhân cho đúng <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Làm riêng một thư mục thì nhân chính chưa được lắp lại, nên thay đổi của bạn chưa vào nhân. Chạy thêm một lần <code>make</code> trần là xong <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: cuối cùng vẫn phải gõ <code>make</code> một lần.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The trap the book flags is worth remembering: when you build a single directory, the final kernel image is not relinked, so changes in the subdirectory will not affect it — “which is probably not what you desire”. Run a final plain <code>make</code> so the build system checks all changed object files and does the final link properly <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Khi nào dùng</h4>
+          <p>Sách đặt kỹ thuật này vào đúng bối cảnh của nó: “khi làm phát triển nhân, đôi khi bạn chỉ muốn dựng một thư mục con cụ thể hoặc một tệp đơn lẻ trong toàn bộ cây nhân” <span class="cite"><a href="#ref-7">7</a></span>. Với người dùng chỉ muốn một cái nhân chạy được, <code>make</code> trần vẫn là lối đi đúng.</p>
+        </div>
+        <div class="info-block">
+          <h4>Đường dẫn hay <code>M=</code>?</h4>
+          <p>Khác biệt duy nhất giữa hai dạng là bước liên kết: dạng đường dẫn trần dựng các tệp đối tượng; dạng <code>M=</code> còn liên kết chúng thành tệp <code>.ko</code> nạp được <span class="cite"><a href="#ref-7">7</a></span>. Nếu bạn định <code>insmod</code> kết quả, bạn cần dạng thứ hai.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">O= and ARCH=</span>
+      <h3>
+        <span class="standard-copy"><code>O=</code> tách nguồn khỏi kết quả, <code>ARCH=</code> đổi kiến trúc</span>
+        <span class="easy-only">Để kết quả ra chỗ khác, hoặc dựng cho máy khác</span>
+        <span class="en-only" lang="en"><code>O=</code> separates source from output, <code>ARCH=</code> changes architecture</span>
+      </h3>
+      <p class="standard-copy">Đôi khi tiện hơn nếu mã nguồn nằm ở nơi chỉ-đọc — một đĩa CD-ROM, hoặc một hệ quản lý mã nguồn — còn kết quả dựng đặt ở chỗ khác để không làm bẩn cây gốc. Hệ thống dựng xử lý việc này chỉ bằng một tham số <code>O=</code> <span class="cite"><a href="#ref-7">7</a></span>. Ví dụ của sách: mã nguồn nằm ở <code>/mnt/cdrom/linux-2.6.17.11</code>, kết quả đặt vào thư mục cục bộ bằng <code>make O=~/linux/linux-2.6.17.11</code> <span class="cite"><a href="#ref-7">7</a></span>. Với kiến trúc, tham số là <code>ARCH=</code>, và trình biên dịch chéo chỉ định qua <code>CROSS_COMPILE=</code> <span class="cite"><a href="#ref-8">8</a></span>.</p>
+      <p class="easy-only">Nếu mã nguồn nằm ở chỗ không cho ghi (như đĩa CD), bạn vẫn dựng được — chỉ cần bảo máy để kết quả ra chỗ khác bằng <code>O=</code> <span class="cite"><a href="#ref-7">7</a></span>. Còn muốn dựng nhân cho loại máy khác thì thêm <code>ARCH=</code>, và nếu cần bộ công cụ riêng thì thêm <code>CROSS_COMPILE=</code> <span class="cite"><a href="#ref-8">8</a></span>. Nhớ nhé: một chữ là đổi được chỗ để, một chữ là đổi được loại máy.</p>
+      <p class="en-only" lang="en">Sometimes it is easier to keep the source in a read-only location — a CD-ROM, or a source control system — and put the build output elsewhere so the original tree is undisturbed. The build system handles this with the single argument <code>O=</code> <span class="cite"><a href="#ref-7">7</a></span>. The book's example: source on <code>/mnt/cdrom/linux-2.6.17.11</code>, output into your local directory via <code>make O=~/linux/linux-2.6.17.11</code> <span class="cite"><a href="#ref-7">7</a></span>. For architecture the argument is <code>ARCH=</code>, and a cross-compile toolchain is named with <code>CROSS_COMPILE=</code> <span class="cite"><a href="#ref-8">8</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Sách nhấn mạnh một điều dễ quên: <code>O=</code> cũng phải được truyền cho các <em>lệnh cấu hình</em>, để tệp cấu hình được đặt đúng vào thư mục kết quả chứ không phải vào thư mục chứa mã nguồn <span class="cite"><a href="#ref-7">7</a></span>. Tài liệu hiện hành nói cùng một điều gắt hơn: nếu dùng <code>O=</code> thì “phải dùng cho <em>mọi</em> lần gọi <code>make</code>” <span class="cite"><a href="#ref-10">10</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Nếu đã dùng <code>O=</code> thì phải dùng nó cho <em>tất cả</em> các lệnh, kể cả lệnh cấu hình <span class="cite"><a href="#ref-7">7</a></span><span class="cite"><a href="#ref-10">10</a></span>. Nhớ nhé: đã dùng thì dùng cho đều, đừng dùng nửa chừng.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The book stresses a point that is easy to forget: <code>O=</code> must also be passed to the <em>configuration</em> targets so the config lands in the output directory and not in the directory holding the source <span class="cite"><a href="#ref-7">7</a></span>. Current documentation puts it more strictly: if <code>O=output/dir</code> is used, “it must be used for all invocations of make” <span class="cite"><a href="#ref-10">10</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Dựng chéo: hai ví dụ của sách</h4>
+          <p>Để lấy cấu hình mặc định của kiến trúc x86_64: <code>make ARCH=x86_64 defconfig</code>. Để dựng toàn bộ nhân bằng bộ công cụ ARM nằm ở <code>/usr/local/bin/</code>: <code>make ARCH=arm CROSS_COMPILE=/usr/local/bin/arm-linux-</code> <span class="cite"><a href="#ref-8">8</a></span>. Lưu ý dấu gạch nối ở cuối — đó là <em>tiền tố</em> tên công cụ, không phải đường dẫn tệp.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao dựng chéo hữu ích cả khi không cần</h4>
+          <p>Sách nêu hai động cơ: cho một máy mạnh dựng nhân giúp một hệ nhúng nhỏ, hoặc đơn giản là kiểm tra thử một bản dựng cho kiến trúc khác để chắc rằng thay đổi trong mã nguồn không làm hỏng thứ gì ngoài dự kiến <span class="cite"><a href="#ref-8">8</a></span>. Động cơ thứ hai là kiểm thử, không phải triển khai.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <div class="trap-comparison deep-only">
+    <p class="eyebrow"><span class="vi-only">Ba hiểu lầm thường gặp</span><span class="en-only" lang="en">Three common misconceptions</span></p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Cấu hình nhân là phải trả lời hết mọi câu hỏi”</span><span class="en-only" lang="en">“Configuring means answering every question”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> phải đi qua <code>make config</code> từ đầu đến cuối. <span class="fact">Thực tế:</span> chính sách nói đó là cách “cơ bản nhất” nhưng sẽ “rất lâu” vì gần hai nghìn tùy chọn, và “may thay, có một cách dễ hơn: dựa cấu hình trên một cấu hình đã dựng sẵn” <span class="cite"><a href="#ref-1">1</a></span>. Lấy nền rồi sửa mới là quy trình sách dạy <span class="cite"><a href="#ref-2">2</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> you must walk <code>make config</code> end to end. <span class="fact">Fact:</span> the book itself calls it “the most basic method” but says it “will take a very long time” given almost two thousand options, and that “luckily, there is an easier way: base the configuration on a pre-built configuration” <span class="cite"><a href="#ref-1">1</a></span>. Take a base, then edit — that is the workflow it teaches <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“<code>menuconfig</code> và <code>xconfig</code> cho kết quả khác nhau”</span><span class="en-only" lang="en">“<code>menuconfig</code> and <code>xconfig</code> give different results”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> chọn sai công cụ thì ra nhân khác. <span class="fact">Thực tế:</span> cả ba công cụ chỉ là giao diện lên cùng một tệp <code>.config</code> <span class="cite"><a href="#ref-1">1</a></span>; <code>gconfig</code> và <code>xconfig</code> “gần như giống hệt nhau, khác biệt duy nhất là bộ công cụ đồ họa” <span class="cite"><a href="#ref-4">4</a></span>. Thứ khác nhau là <em>ký hiệu hiển thị</em> — gạch ngang ô trong <code>gconfig</code>, dấu chấm trong <code>xconfig</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> picking the wrong tool yields a different kernel. <span class="fact">Fact:</span> all three are front-ends onto the same <code>.config</code> <span class="cite"><a href="#ref-1">1</a></span>; <code>gconfig</code> and <code>xconfig</code> are “almost identical, the only difference being the different graphical toolkit” <span class="cite"><a href="#ref-4">4</a></span>. What differs is the <em>notation</em> — a line through the box in <code>gconfig</code>, a dot in <code>xconfig</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“<code>-j</code> càng lớn càng nhanh”</span><span class="en-only" lang="en">“A bigger <code>-j</code> is always faster”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> bỏ số đi để máy chạy hết công suất. <span class="fact">Thực tế:</span> <code>make -j</code> không số tạo một luồng cho mỗi thư mục con, “dễ dàng khiến máy bạn không phản hồi và mất nhiều thời gian hơn để hoàn tất” <span class="cite"><a href="#ref-6">6</a></span>. Luôn truyền một con số <span class="cite"><a href="#ref-6">6</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> drop the number so the machine runs flat out. <span class="fact">Fact:</span> a bare <code>make -j</code> creates a thread for every subdirectory, which “can easily cause your machine to become unresponsive and take a much longer time to complete the build” <span class="cite"><a href="#ref-6">6</a></span>. Always pass a number <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      </div>
+    </div>
+  </div>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Chương 4 kết thúc ở chỗ bạn có một ảnh nhân trên đĩa nhưng chưa khởi động được từ nó. Chương 5 nhận lấy đúng điểm dừng ấy — và là chương đầu tiên trong sách yêu cầu quyền <code>root</code>.</p>
+    <p class="easy-only"><b>Nối sang chương sau.</b> Bạn đã có tệp nhân, nhưng máy chưa dùng nó. Chương 5 dạy cách cài và khởi động — và đó là lúc mới cần quyền quản trị. Nhớ nhé: tới đây vẫn chưa cần root.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> Chapter 4 ends with a kernel image on disk that you cannot yet boot. Chapter 5 picks up exactly there — and it is the first chapter in the book that requires <code>root</code>.</p>
+  </aside>
+</section>
+
+<section class="section" id="tu-kiem" aria-labelledby="tu-kiem-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Tự kiểm</span><span class="en-only" lang="en">Self-check</span></p>
+    <h2 id="tu-kiem-title">
+      <span class="standard-copy">Tự kiểm trước khi sang chương 5</span>
+      <span class="easy-only">Tự hỏi mình vài câu</span>
+      <span class="en-only" lang="en">Self-check before Chapter 5</span>
+    </h2>
+  </div>
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Khác với Chương 1, chương này có lệnh để gõ thật. Hãy trả lời được các câu sau <em>trước khi</em> chuyển sang cài đặt — vì một cấu hình sai sẽ chỉ lộ ra ở lần khởi động, khi việc sửa đã tốn kém hơn nhiều.</p>
+      <p class="easy-only">Chương này có lệnh gõ thật rồi. Trả lời được mấy câu dưới đây thì hãy sang phần cài đặt. Nhớ nhé: chọn sai bây giờ, tới lúc khởi động mới biết thì khó sửa hơn.</p>
+      <p class="en-only" lang="en">Unlike Chapter 1, this one has commands you actually type. Be able to answer the following <em>before</em> you move on to installing — a wrong configuration only shows up at boot, when fixing it costs far more.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>Bạn chỉ ra được tệp cấu hình nằm ở đâu và tên chính xác của nó?
+        <p class="deep-only">Đáp án: <code>.config</code>, ở thư mục trên cùng của cây mã nguồn; cây mới giải nén thì chưa có nó <span class="cite"><a href="#ref-1">1</a></span>. Dấu chấm đầu tên khiến <code>ls</code> thường không hiện nó ra.</p>
+      </li>
+      <li>Bạn nói được khác biệt giữa <code>y</code>, <code>m</code> và <code>n</code> — và chữ thứ tư <code>?</code> làm gì?
+        <p class="deep-only">Đáp án: dựng thẳng vào nhân / dựng thành module nạp khi cần / loại hẳn; <code>?</code> in một mô tả ngắn rồi hỏi lại, không đổi gì cả <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </li>
+      <li>Bạn chọn được một lối tạo <code>.config</code> phù hợp với hoàn cảnh của mình, thay vì mặc định chạy <code>make config</code>?
+        <p class="deep-only">Sách chỉ dạy hai lối trong chương này — từ con số không và từ <code>make defconfig</code> — và hoãn hai lối còn lại (từ nhân đang chạy, từ nhân của bản phân phối) sang Chương 7 <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </li>
+      <li>Trong <code>menuconfig</code>, bạn phân biệt được <code>[ ]</code> với <code>&lt; &gt;</code> chỉ bằng cách nhìn?
+        <p class="deep-only">Đáp án: <code>[ ]</code> là có-hoặc-không; <code>&lt; &gt;</code> là ba trạng thái Y/M/N — <code>*</code> nghĩa là vào nhân, <code>M</code> nghĩa là module, khoảng trắng nghĩa là bỏ <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      </li>
+      <li>Bạn biết con số nào nên đặt sau <code>-j</code> trên máy của mình, và vì sao không được để trống?
+        <p class="deep-only">Sách: gấp đôi số bộ xử lý <span class="cite"><a href="#ref-6">6</a></span>. Tài liệu hiện hành: <code>$(nproc --all)</code> <span class="cite"><a href="#ref-11">11</a></span>. Để trống thì mỗi thư mục con thành một luồng — máy có thể treo <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      </li>
+      <li>Nếu bạn vừa dựng lại riêng <code>drivers/usb/serial</code>, bước tiếp theo bắt buộc là gì?
+        <p class="deep-only">Đáp án: chạy một lệnh <code>make</code> trần, để hệ thống kiểm tra các tệp đối tượng đã đổi và liên kết lại ảnh nhân cuối cùng cho đúng <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li>Tệp ghi lựa chọn của bạn tên là gì, nằm ở đâu?</li>
+      <li>Chữ <code>y</code>, <code>m</code>, <code>n</code> mỗi chữ nghĩa là gì?</li>
+      <li>Bạn sẽ lấy bản mẫu nào làm nền, thay vì trả lời từ đầu?</li>
+      <li>Trong bảng chọn, ô vuông và ô nhọn khác nhau chỗ nào?</li>
+      <li>Máy bạn có mấy nhân, nên gõ <code>-j</code> mấy?</li>
+      <li>Nhớ nhé: trả lời được hết thì sang chương 5 cài đặt được rồi.</li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>Can you say where the configuration file lives and its exact name?
+        <p class="deep-only" lang="en">Answer: <code>.config</code>, in the top directory of the source tree; a freshly expanded tree has none <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </li>
+      <li>Can you state the difference between <code>y</code>, <code>m</code> and <code>n</code> — and what the fourth choice <code>?</code> does?</li>
+      <li>Can you pick a route to a <code>.config</code> that suits your situation, rather than defaulting to <code>make config</code>?</li>
+      <li>In <code>menuconfig</code>, can you tell <code>[ ]</code> from <code>&lt; &gt;</code> at a glance?</li>
+      <li>Do you know what number belongs after <code>-j</code> on your machine, and why it must not be empty?
+        <p class="deep-only" lang="en">The book: twice the number of processors <span class="cite"><a href="#ref-6">6</a></span>. Current docs: <code>$(nproc --all)</code> <span class="cite"><a href="#ref-11">11</a></span>.</p>
+      </li>
+      <li>If you just rebuilt <code>drivers/usb/serial</code> alone, what step is mandatory next?</li>
+    </ol>
+  </div>
+</section>
+
+<section class="closing" id="dong-lai" aria-labelledby="dong-lai-title">
+  <p class="eyebrow" id="dong-lai-title"><span class="vi-only">Đọng lại</span><span class="en-only" lang="en">What remains</span></p>
+  <blockquote>
+    <p class="standard-copy">Toàn bộ quyền lực của chương này nằm trong <span class="closing-accent">một tệp ẩn tên <code>.config</code></span> và <span class="closing-accent">một lệnh một từ</span>. Phần khó không phải là dựng — mà là biết mình muốn gì trước khi dựng.</p>
+    <p class="easy-only">Cả chương này gói trong <span class="closing-accent">một tệp tên <code>.config</code></span> và <span class="closing-accent">một lệnh tên <code>make</code></span>. Phần khó không phải là gõ lệnh, mà là biết mình cần gì. Nhớ nhé: chọn kỹ rồi hãy lắp.</p>
+    <p class="en-only" lang="en">All the power in this chapter sits in <span class="closing-accent">one hidden file called <code>.config</code></span> and <span class="closing-accent">one one-word command</span>. The hard part is not the building — it is knowing what you want before you build.</p>
+  </blockquote>
+</section>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-3-retrieving-source.html">
+    <span class="nav-label">◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span></span>
+    <span class="nav-title"><span class="vi-only">Chương 3 · Lấy mã nguồn nhân</span><span class="en-only" lang="en">Chapter 3 · Retrieving the Kernel Source</span></span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-5-installing-booting.html">
+    <span class="nav-label"><span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶</span>
+    <span class="nav-title"><span class="vi-only">Chương 5 · Cài đặt và khởi động</span><span class="en-only" lang="en">Chapter 5 · Installing and Booting from a Kernel</span></span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chương 4, “Configuring and Building” (trang 17–28). Trang này là <b>người đồng hành diễn giải</b>, không phải bản dịch: nó tóm lược, sắp xếp lại và chú giải nội dung chương, không thay thế việc đọc sách gốc. Các ví dụ và phép so sánh ở mức đọc <i>Dễ hiểu</i> là minh họa do trang này thêm vào, không có trong sách. Sách xuất bản năm 2006 và viết cho dòng nhân 2.6 (các ví dụ dùng <code>linux-2.6.17.10</code> và <code>linux-2.6.17.11</code>); mọi con số và ghi chú về tình hình hiện nay đều được dẫn nguồn riêng.</p>
+    <p class="en-only" lang="en"><b>Primary source.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chapter 4, “Configuring and Building” (pages 17–28). This page is an <b>interpretive study companion</b>, not a translation: it summarises, rearranges and annotates the chapter, and does not replace reading the book itself. Examples and analogies at the <i>Easy</i> reading level are illustrations added here, not the author's. The book was published in 2006 and targets the 2.6 kernel series (its examples use <code>linux-2.6.17.10</code> and <code>linux-2.6.17.11</code>); every figure or note about the present day carries its own citation.</p>
+
+    <p class="footer-label vi-only">Tham chiếu</p>
+    <p class="footer-label en-only" lang="en">References</p>
+    <ol class="ref-list">
+      <li id="ref-1">Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006, Chapter 4 “Configuring and Building”, pp. 17–18 — mở chương và “Creating a Configuration”: <code>.config</code> ở thư mục gốc, bốn lối tạo, <code>make config</code>, bốn lựa chọn <code>y/n/m/?</code>, và ghi nhận “almost two thousand different configuration options” (con số năm 2006). Bản trực tuyến miễn phí: <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-2">Sđd., Chapter 4, “Default Configuration Options” và “Modifying the Configuration”, p. 18 — <code>make defconfig</code>, cấu hình mặc định của người bảo trì kiến trúc, ghi chú về i386 và máy phát triển của Linus Torvalds, và ba công cụ cấu hình tương tác. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-3">Sđd., Chapter 4, “Console Configuration Method”, pp. 19–21 — <code>make menuconfig</code>, cấu trúc phân mục, ví dụ <span lang="en">Device Drivers → Generic Driver Options</span>, ý nghĩa <code>[*]</code> và <code>&lt; &gt;</code>, thao tác thoát và lưu. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-4">Sđd., Chapter 4, “Graphical Configuration Methods”, p. 22 — <code>gconfig</code> (GTK+, hai khung) và <code>xconfig</code> (QT, ba khung), quy ước gạch-ô so với dấu-chấm cho module, và khả năng ghi cấu hình ra tệp khác. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-5">Sđd., Chapter 4, “Building the Kernel”, pp. 23–26 — “as simple as entering a one-word command”, đầu ra <code>CC</code>/<code>HOSTCC</code>, chú thích chân trang về <code>make modules</code> trước bản 2.6, và khuyến nghị báo lỗi dựng cho các nhà phát triển nhân. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-6">Sđd., Chapter 4, “Advanced Building Options” và “Building Faster on Multiprocessor Machines”, p. 26 — tham chiếu tới <code>Documentation/kbuild</code>, quy tắc <code>-j</code> bằng gấp đôi số bộ xử lý (<code>make -j4</code>, <code>make -j8</code>), và cảnh báo về <code>make -j</code> không số. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-7">Sđd., Chapter 4, “Building Only a Portion of the Kernel” và “Source in One Place, Output in Another”, p. 27 — <code>make drivers/usb/serial</code>, <code>make M=drivers/usb/serial</code>, <code>make drivers/usb/serial/visor.ko</code>, yêu cầu chạy lại <code>make</code> để liên kết, và <code>make O=~/linux/linux-2.6.17.11</code>. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-8">Sđd., Chapter 4, “Different Architectures”, p. 28 — <code>make ARCH=x86_64 defconfig</code>, <code>make ARCH=arm CROSS_COMPILE=/usr/local/bin/arm-linux-</code>, và <code>make CC="ccache gcc"</code> / <code>make CC="ccache distcc"</code>. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-9">The Linux Kernel documentation, <a href="https://docs.kernel.org/kbuild/kconfig.html" target="_blank" rel="noopener noreferrer">“Kconfig make config”</a>, docs.kernel.org — tên chương trình <code>mconf</code>/<code>qconf</code>/<code>gconf</code>/<code>nconf</code>, biến môi trường <code>KCONFIG_CONFIG</code>, và khuyến nghị dùng <code>make help</code> để liệt kê mọi đích cấu hình (truy cập 22-09-2026).</li>
+      <li id="ref-10">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/README.html" target="_blank" rel="noopener noreferrer">“Linux kernel release 6.x”</a> (admin-guide README), docs.kernel.org — “Qt based configuration tool” / “GTK based configuration tool”, mô tả <code>oldconfig</code>, <code>defconfig</code> lấy giá trị từ <code>arch/$ARCH/configs/defconfig</code>, <code>localmodconfig</code>, và quy tắc <code>O=output/dir</code> “must be used for all invocations of make” (truy cập 22-09-2026).</li>
+      <li id="ref-11">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/quickly-build-trimmed-linux.html" target="_blank" rel="noopener noreferrer">“Quickly build a trimmed Linux kernel”</a>, docs.kernel.org — <code>make -j $(nproc --all)</code>, <code>make V=1</code> khi gỡ lỗi, và <code>localmodconfig</code> “will reduce the compile time enormously” kèm cảnh báo nó dễ tắt những tính năng chưa dùng từ lúc khởi động (truy cập 22-09-2026).</li>
+      <li id="ref-12">Kroah-Hartman, sđd., Chapter 6 “Upgrading a Kernel”, “Reconfigure the Kernel”, p. 40 — <code>make oldconfig</code> và <code>make silentoldconfig</code> để chuyển một cấu hình đang chạy sang bản nhân mới. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-13">Sđd., Chapter 10 “Kernel Build Command-Line Reference”, p. 117 — <code>make help</code> in ra phần lớn các đích thông dụng, ví dụ gộp đích <code>make mrproper xconfig</code>, và nhóm đích thông tin <code>kernelrelease</code> / <code>kernelversion</code>. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+    </ol>
+
+    <p class="footer-label vi-only">Trong loạt bài</p>
+    <p class="footer-label en-only" lang="en">In this series</p>
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <p class="vi-only"><a href="index.html">Trang bìa</a> · <a href="chapter-3-retrieving-source.html">Chương 3 · Lấy mã nguồn nhân</a> · <span>Chương 4 · Cấu hình và dựng nhân (trang này)</span> · <a href="chapter-5-installing-booting.html">Chương 5 · Cài đặt và khởi động</a></p>
+    <p class="en-only" lang="en"><a href="index.html">Cover</a> · <a href="chapter-3-retrieving-source.html">Chapter 3 · Retrieving the Kernel Source</a> · <span>Chapter 4 · Configuring and Building (this page)</span> · <a href="chapter-5-installing-booting.html">Chapter 5 · Installing and Booting from a Kernel</a></p>
+    <!-- NAV:END -->
+  </div>
+  <div class="edition">LKN · CH 04 · VI/EN</div>
+</footer>
+</main>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  function sync() {
+    var mode = root.getAttribute("data-mode") || "standard";
+    var lang = root.getAttribute("data-lang") || "vi";
+    var dark = root.getAttribute("data-theme") === "dark";
+    document.querySelectorAll("[data-set-mode]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-mode") === mode));
+    });
+    document.querySelectorAll("[data-set-lang]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-lang") === lang));
+    });
+    document.querySelectorAll("[data-toggle-theme]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(dark));
+    });
+    root.setAttribute("lang", lang === "en" ? "en" : "vi");
+  }
+
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button.chip");
+    if (!b) return;
+    if (b.hasAttribute("data-set-mode")) {
+      root.setAttribute("data-mode", b.getAttribute("data-set-mode"));
+      store("lkn-reading-mode", b.getAttribute("data-set-mode"));
+    } else if (b.hasAttribute("data-set-lang")) {
+      root.setAttribute("data-lang", b.getAttribute("data-set-lang"));
+      store("lkn-lang", b.getAttribute("data-set-lang"));
+    } else if (b.hasAttribute("data-toggle-theme")) {
+      var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      store("lkn-theme", next);
+    }
+    sync();
+  });
+
+  sync();
+})();
+
+/* section-index rail: built at runtime from this page's own id'd sections */
+(function () {
+  var list = document.querySelector(".section-rail__list");
+  if (!list) return;
+  var sections = Array.prototype.slice.call(document.querySelectorAll("main section[id][aria-labelledby]"));
+  if (!sections.length) { var rail = document.querySelector(".section-rail"); if (rail) rail.remove(); return; }
+
+  /* headings carry all three reading levels + both languages as sibling spans,
+     so read only the ones actually visible under the current toggles */
+  function labelFor(sec) {
+    var head = document.getElementById(sec.getAttribute("aria-labelledby"));
+    if (!head) return sec.id;
+    var parts = [];
+    Array.prototype.forEach.call(head.children, function (el) {
+      if (el.offsetParent !== null || el.getClientRects().length) parts.push(el.textContent);
+    });
+    var label = (parts.length ? parts.join(" ") : head.textContent || "").replace(/\s+/g, " ").trim();
+    return label.length > 46 ? label.slice(0, 44) + "…" : label;
+  }
+
+  var links = sections.map(function (sec) {
+    var label = labelFor(sec);
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.href = "#" + sec.id;
+    var span = document.createElement("span");
+    span.className = "section-rail__label";
+    span.textContent = label;
+    a.appendChild(span);
+    li.appendChild(a);
+    list.appendChild(li);
+    return a;
+  });
+
+  function mark(id) {
+    links.forEach(function (a) {
+      if (a.getAttribute("href") === "#" + id) a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    });
+  }
+
+  if ("IntersectionObserver" in window) {
+    var seen = new Map();
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { seen.set(e.target.id, e.intersectionRatio); });
+      var best = null, bestR = 0;
+      seen.forEach(function (r, id) { if (r > bestR) { bestR = r; best = id; } });
+      if (best) mark(best);
+    }, { rootMargin: "-20% 0px -60% 0px", threshold: [0, .25, .5, 1] });
+    sections.forEach(function (s) { obs.observe(s); });
+  }
+
+  /* the rail labels change with the language toggle, so relabel on click */
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest("button.chip")) return;
+    sections.forEach(function (sec, i) {
+      links[i].firstChild.textContent = labelFor(sec);
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

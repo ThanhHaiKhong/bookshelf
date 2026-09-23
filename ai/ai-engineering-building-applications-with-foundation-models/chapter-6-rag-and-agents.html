@@ -1,0 +1,1707 @@
+<!doctype html>
+<html lang="vi" data-reading-mode="deep">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Chương 6 — RAG và tác tử — trong bộ bài diễn giải song ngữ Việt–Anh cuốn AI Engineering của Chip Huyen: truy xuất theo từ khóa và theo ngữ nghĩa, tìm lai và cắt mẩu, tác tử với công cụ, kế hoạch và phản tỉnh, cùng ba tầng bộ nhớ của mô hình.">
+<title>Chương 6 · RAG và tác tử · AI Engineering</title>
+<link rel="icon" href="data:,">
+<script>
+  (function () {
+    const validModes = ["easy", "quick", "deep"];
+    let storedMode = "deep";
+    let storedLang = "vi";
+    try {
+      const preference = localStorage.getItem("aie-reading-mode");
+      if (validModes.includes(preference)) storedMode = preference;
+      if (localStorage.getItem("aie-lang") === "en") storedLang = "en";
+    } catch (_) {}
+    document.documentElement.dataset.readingMode = storedMode;
+    document.documentElement.dataset.lang = storedLang;
+    document.documentElement.setAttribute("lang", storedLang);
+  })();
+</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&family=Noto+Serif:wght@600;700&display=swap">
+
+<style>
+  :root {
+    --bg: #eef4ec;
+    --surface: #f5faf3;
+    --surface-strong: #ffffff;
+    --ink: #17281c;
+    --muted: #566b56;
+    --line: #cfe3c9;
+    --teal: #3f7d52;
+    --teal-soft: #d9ecdb;
+    --blue: #2f7d78;
+    --blue-soft: #d3e9e6;
+    --amber: #b0812b;
+    --amber-soft: #f0e5cb;
+    --leaf: #5aa15f;
+    --leaf-soft: #dcecd6;
+    --shadow: 0 22px 60px rgba(20, 50, 28, 0.14);
+    --display: "Noto Serif", Georgia, serif;
+    --body: "Be Vietnam Pro", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10231a;
+      --surface: #163020;
+      --surface-strong: #1d3b28;
+      --ink: #e9f5ea;
+      --muted: #9fc3a3;
+      --line: #294a35;
+      --teal: #6fce86;
+      --teal-soft: #163a24;
+      --blue: #63c3bc;
+      --blue-soft: #123833;
+      --amber: #e0b45f;
+      --amber-soft: #3a2f18;
+      --leaf: #7fd08a;
+      --leaf-soft: #163a22;
+      --shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #10231a;
+    --surface: #163020;
+    --surface-strong: #1d3b28;
+    --ink: #e9f5ea;
+    --muted: #9fc3a3;
+    --line: #294a35;
+    --teal: #6fce86;
+    --teal-soft: #163a24;
+    --blue: #63c3bc;
+    --blue-soft: #123833;
+    --amber: #e0b45f;
+    --amber-soft: #3a2f18;
+    --leaf: #7fd08a;
+    --leaf-soft: #163a22;
+    --shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(circle at 8% 4%, color-mix(in srgb, var(--teal-soft) 74%, transparent), transparent 31rem),
+      var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    line-height: 1.72;
+    overflow-x: hidden;
+  }
+
+  a { color: var(--teal); }
+
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible {
+    outline: 3px solid var(--amber);
+    outline-offset: 4px;
+  }
+
+  .page {
+    width: min(1180px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 28px 0 72px;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 10px 0 28px;
+  }
+
+  .book-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .book-label::before {
+    content: "";
+    width: 28px;
+    height: 2px;
+    background: var(--teal);
+  }
+
+  .reading-controls {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+  }
+
+  .reading-controls button {
+    min-height: 44px;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 13px;
+    background: transparent;
+    color: var(--muted);
+    font: 600 0.8rem var(--body);
+    cursor: pointer;
+  }
+
+  html[data-reading-mode="easy"] .reading-controls button[data-mode="easy"],
+  html[data-reading-mode="quick"] .reading-controls button[data-mode="quick"],
+  html[data-reading-mode="deep"] .reading-controls button[data-mode="deep"] {
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+    align-items: center;
+    gap: clamp(36px, 7vw, 92px);
+    min-height: 620px;
+    padding: 46px clamp(24px, 5vw, 64px);
+    border: 1px solid var(--line);
+    border-radius: 34px 34px 8px 34px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .hero::after {
+    content: "AI ENGINEERING / 06";
+    position: absolute;
+    right: 22px;
+    bottom: 16px;
+    color: var(--line);
+    font: 500 0.72rem var(--mono);
+    letter-spacing: 0.14em;
+  }
+
+  .eyebrow {
+    color: var(--teal);
+    font: 500 0.78rem var(--mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--display);
+    line-height: 1.13;
+    text-wrap: balance;
+  }
+
+  h1 {
+    max-width: 720px;
+    margin: 18px 0 24px;
+    font-size: clamp(3rem, 6.4vw, 6.2rem);
+    letter-spacing: -0.045em;
+  }
+
+  html[data-reading-mode="easy"] h1 {
+    font-size: clamp(2.6rem, 5.2vw, 5rem);
+  }
+
+  .hero-title-accent {
+    color: var(--teal);
+    font-style: italic;
+  }
+
+  .hero-copy > p {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: clamp(1.02rem, 1.5vw, 1.22rem);
+  }
+
+  .thesis {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    align-items: start;
+    margin-top: 34px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+  }
+
+  .thesis-mark {
+    color: var(--amber);
+    font: 700 1.5rem var(--display);
+  }
+
+  .thesis strong { display: block; margin-bottom: 4px; }
+  .thesis p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+
+  .system-map {
+    position: relative;
+    width: min(100%, 470px);
+    aspect-ratio: 1;
+    margin: auto;
+  }
+
+  .system-map::before,
+  .system-map::after {
+    content: "";
+    position: absolute;
+    inset: 14%;
+    border: 1px dashed var(--line);
+    border-radius: 50%;
+  }
+
+  .system-map::after {
+    inset: 29%;
+    border-style: solid;
+    opacity: 0.75;
+  }
+
+  .core {
+    position: absolute;
+    inset: 36%;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--surface);
+    text-align: center;
+    font: 600 0.77rem/1.35 var(--mono);
+    letter-spacing: 0.05em;
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--teal-soft) 72%, transparent);
+  }
+
+  .node {
+    position: absolute;
+    width: 132px;
+    min-height: 92px;
+    display: grid;
+    align-content: center;
+    gap: 4px;
+    padding: 15px;
+    border: 1px solid var(--line);
+    border-radius: 22px 22px 5px 22px;
+    background: var(--surface-strong);
+    box-shadow: 0 12px 30px color-mix(in srgb, var(--ink) 10%, transparent);
+  }
+
+  .node b { font-family: var(--display); font-size: 1rem; }
+  .node small { color: var(--muted); font-size: 0.7rem; line-height: 1.4; }
+  .node-resilience { top: 2%; left: 50%; transform: translateX(-50%); }
+  .node-organization { left: 2%; bottom: 8%; }
+  .node-hierarchy { right: 2%; bottom: 8%; }
+
+  .node-resilience b { color: var(--teal); }
+  .node-organization b { color: var(--blue); }
+  .node-hierarchy b { color: var(--amber); }
+
+  .pulse {
+    position: absolute;
+    inset: 29%;
+    border-radius: 50%;
+    border: 2px solid var(--teal);
+    opacity: 0;
+    animation: pulse 4.8s ease-out infinite;
+  }
+
+  @keyframes pulse {
+    0% { transform: scale(0.6); opacity: 0; }
+    18% { opacity: 0.34; }
+    78%, 100% { transform: scale(1.9); opacity: 0; }
+  }
+
+  .section {
+    padding: clamp(74px, 10vw, 128px) clamp(4px, 3vw, 28px) 0;
+  }
+
+  .section-heading {
+    display: grid;
+    grid-template-columns: minmax(210px, 0.42fr) minmax(0, 1fr);
+    gap: clamp(28px, 7vw, 86px);
+    align-items: end;
+    margin-bottom: 44px;
+  }
+
+  .section-heading h2 {
+    margin: 8px 0 0;
+    font-size: clamp(2rem, 4vw, 3.8rem);
+    letter-spacing: -0.035em;
+  }
+
+  .section-heading p {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: 1.04rem;
+  }
+
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .overview-card {
+    display: grid;
+    gap: 18px;
+    min-height: 280px;
+    padding: 26px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .overview-card:first-child { border-radius: 28px 8px 8px 8px; }
+  .overview-card:last-child { border-radius: 8px 28px 8px 8px; }
+
+  .overview-card .term {
+    font: 500 0.7rem var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .overview-card h3 { margin: 0; font-size: 1.72rem; }
+  .overview-card p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+  .overview-card .result { align-self: end; padding-top: 14px; border-top: 1px solid var(--line); font-weight: 600; }
+  .overview-card.teal .term, .overview-card.teal .result { color: var(--teal); }
+  .overview-card.blue .term, .overview-card.blue .result { color: var(--blue); }
+  .overview-card.amber .term, .overview-card.amber .result { color: var(--amber); }
+
+  .info-block {
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface-strong);
+  }
+
+  .info-block h4 {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font: 500 0.72rem var(--mono);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .info-block p { margin: 0; font-size: 0.92rem; }
+
+  .signal {
+    padding: 18px 20px;
+    border-left: 4px solid var(--teal);
+    background: var(--teal-soft);
+    color: var(--ink);
+    font-size: 0.92rem;
+  }
+
+  .signal strong { display: block; margin-bottom: 4px; }
+
+  html:not([data-reading-mode="easy"]) .easy-only,
+  html[data-reading-mode="easy"] .standard-copy,
+  html:not([data-reading-mode="deep"]) .deep-only {
+    display: none !important;
+  }
+
+  /* Bilingual: EN shows the single standard translation; VN keeps 3 modes.
+     .vi-only marks Vietnamese text outside the reading-mode system. */
+  html:not([data-lang="en"]) .en-only { display: none !important; }
+  html[data-lang="en"] .standard-copy,
+  html[data-lang="en"] .easy-only,
+  html[data-lang="en"] .deep-only,
+  html[data-lang="en"] .vi-only,
+  html[data-lang="en"] .reading-controls { display: none !important; }
+
+  .lang-controls {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+  }
+
+  .lang-controls button {
+    min-height: 44px;
+    min-width: 48px;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 13px;
+    background: transparent;
+    color: var(--muted);
+    font: 600 0.8rem var(--body);
+    cursor: pointer;
+  }
+
+  html:not([data-lang="en"]) .lang-controls button[data-lang-option="vi"],
+  html[data-lang="en"] .lang-controls button[data-lang-option="en"] {
+    background: var(--teal);
+    color: var(--surface);
+  }
+
+  .topbar-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .synthesis {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  .loop-diagram,
+  .synthesis-copy {
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .loop-diagram {
+    min-height: 500px;
+    position: relative;
+    display: grid;
+    place-items: center;
+    padding: 38px;
+    border-radius: 34px 8px 8px 8px;
+    overflow: hidden;
+  }
+
+  .loop-diagram::before {
+    content: "";
+    width: 65%;
+    aspect-ratio: 1;
+    border: 2px solid var(--line);
+    border-radius: 50%;
+  }
+
+  .loop-center {
+    position: absolute;
+    width: 150px;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--surface);
+    text-align: center;
+    font: 600 0.9rem/1.45 var(--body);
+  }
+
+  .loop-label {
+    position: absolute;
+    width: 150px;
+    padding: 13px 15px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-strong);
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .loop-label.top { top: 11%; color: var(--teal); }
+  .loop-label.left { left: 7%; bottom: 14%; color: var(--blue); }
+  .loop-label.right { right: 7%; bottom: 14%; color: var(--amber); }
+
+  .synthesis-copy {
+    display: grid;
+    align-content: center;
+    gap: 24px;
+    padding: clamp(28px, 5vw, 54px);
+    border-radius: 8px 34px 34px 8px;
+  }
+
+  .synthesis-copy h3 { margin: 0; font-size: clamp(2rem, 3.4vw, 3rem); }
+  .synthesis-copy > p { margin: 0; color: var(--muted); }
+
+  .equation {
+    display: grid;
+    gap: 10px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    background: var(--surface-strong);
+  }
+
+  .equation-row {
+    display: grid;
+    grid-template-columns: minmax(110px, 0.65fr) 1fr;
+    gap: 16px;
+    align-items: baseline;
+    font-size: 0.9rem;
+  }
+
+  .equation-row b { font-family: var(--display); font-size: 1.05rem; }
+  .equation-row span { color: var(--muted); }
+
+  .surprise-lead {
+    display: grid;
+    grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
+    gap: clamp(28px, 6vw, 72px);
+    align-items: center;
+    margin-bottom: 22px;
+    padding: clamp(28px, 5vw, 52px);
+    border: 1px solid var(--line);
+    border-radius: 34px 8px 34px 8px;
+    background: var(--surface);
+  }
+
+  .surprise-lead-copy {
+    display: grid;
+    gap: 18px;
+  }
+
+  .surprise-lead-copy p { margin: 0; }
+  .surprise-lead-copy .deep-only { color: var(--muted); font-size: 0.94rem; }
+
+  .definition {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--display);
+    font-size: clamp(1.25rem, 2vw, 1.62rem);
+    line-height: 1.5;
+  }
+
+  .english-term { color: var(--muted); font: 500 0.75rem var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+
+  .surprise-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .surprise-mechanism {
+    --mechanism-accent: var(--teal);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 18px;
+    align-content: start;
+    padding: 26px;
+    border: 1px solid var(--line);
+    border-top: 4px solid var(--mechanism-accent);
+    border-radius: 8px 24px 8px 24px;
+    background: var(--surface);
+  }
+
+  .surprise-number {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--mechanism-accent);
+    color: var(--surface);
+    font: 500 0.76rem var(--mono);
+  }
+
+  .surprise-content {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .surprise-content h3 {
+    margin: 0;
+    font-size: clamp(1.35rem, 2.3vw, 1.85rem);
+  }
+
+  .surprise-content > p { margin: 0; color: var(--muted); }
+  .surprise-content .info-block { margin-top: 2px; }
+  .surprise-connection { margin-top: 22px; }
+
+  .mechanics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .chapter-path {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 18px 0 0;
+  }
+
+  .chapter-path a {
+    display: grid;
+    gap: 5px;
+    min-height: 82px;
+    align-content: center;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .chapter-path a:first-child { border-radius: 20px 5px 5px 5px; }
+  .chapter-path a:last-child { border-radius: 5px 20px 5px 5px; }
+  .chapter-path a:hover { border-color: var(--teal); background: var(--surface-strong); }
+  .chapter-path b { font-family: var(--display); }
+  .chapter-path span { color: var(--muted); font: 500 0.7rem var(--mono); letter-spacing: 0.05em; text-transform: uppercase; }
+
+  .trap-lead { border-top: 4px solid var(--leaf); }
+  .trap-grid { margin-top: 22px; }
+  .trap-card { --mechanism-accent: var(--leaf); }
+  .trap-card:nth-child(4n + 2) { --mechanism-accent: var(--teal); }
+  .trap-card:nth-child(4n + 3) { --mechanism-accent: var(--blue); }
+  .trap-card:nth-child(4n) { --mechanism-accent: var(--amber); }
+  .trap-card .english-term { overflow-wrap: anywhere; }
+
+  .opportunity {
+    margin-top: 2px;
+    padding: 18px 20px;
+    border-left: 4px solid var(--leaf);
+    background: var(--leaf-soft);
+    color: var(--ink);
+    font-size: 0.92rem;
+  }
+
+  .opportunity strong { display: block; margin-bottom: 4px; color: var(--leaf); }
+
+  .trap-comparison {
+    display: grid;
+    gap: 18px;
+    margin-top: 24px;
+    padding: clamp(26px, 5vw, 46px);
+    border: 1px solid var(--line);
+    border-radius: 28px 8px 28px 8px;
+    background: var(--surface);
+  }
+
+  .trap-comparison h3 { margin: 0; font-size: clamp(1.65rem, 3vw, 2.35rem); }
+
+  .comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .comparison-card {
+    display: grid;
+    gap: 10px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--leaf);
+    background: var(--surface-strong);
+  }
+
+  .comparison-card h4 { margin: 0; font: 700 1rem var(--body); }
+  .comparison-card p { margin: 0; color: var(--muted); font-size: 0.88rem; }
+
+  .myths {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .myth {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 16px;
+    padding: 23px;
+    border-top: 1px solid var(--line);
+  }
+
+  .myth-mark {
+    color: var(--amber);
+    font: 700 1.4rem var(--display);
+  }
+
+  .myth h3 { margin: 0 0 6px; font: 700 1.08rem var(--body); }
+  .myth p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+  .diagnostic {
+    display: grid;
+    grid-template-columns: 0.72fr 1.28fr;
+    gap: clamp(28px, 7vw, 84px);
+    padding: clamp(34px, 6vw, 64px);
+    border-radius: 34px 8px 34px 8px;
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .diagnostic h2 { margin: 10px 0 18px; font-size: clamp(2.3rem, 4.5vw, 4rem); }
+  .diagnostic .eyebrow { color: var(--surface); }
+  .diagnostic-intro p { margin: 0; color: color-mix(in srgb, var(--surface) 70%, transparent); }
+
+  .question-list {
+    display: grid;
+    gap: 0;
+    counter-reset: question;
+  }
+
+  .question {
+    counter-increment: question;
+    display: grid;
+    grid-template-columns: 38px 1fr;
+    gap: 14px;
+    padding: 18px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--surface) 22%, transparent);
+  }
+
+  .question::before {
+    content: counter(question, decimal-leading-zero);
+    color: var(--teal);
+    font: 500 0.74rem var(--mono);
+  }
+
+  .question strong { display: block; margin-bottom: 5px; }
+  .question span { color: color-mix(in srgb, var(--surface) 70%, transparent); font-size: 0.88rem; }
+
+  .closing {
+    display: grid;
+    grid-template-columns: 0.45fr 1.55fr;
+    gap: clamp(28px, 8vw, 100px);
+    align-items: start;
+    padding: clamp(74px, 10vw, 128px) clamp(4px, 3vw, 28px) 40px;
+  }
+
+  .closing .eyebrow { padding-top: 12px; }
+  .closing blockquote {
+    margin: 0;
+    font: 600 clamp(1.7rem, 3.6vw, 3.25rem)/1.35 var(--display);
+    letter-spacing: -0.025em;
+  }
+
+  .closing-accent { color: var(--teal); }
+
+  .chapter-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: clamp(24px, 3.5vw, 40px);
+    padding-top: clamp(24px, 3.5vw, 40px);
+    border-top: 1px solid var(--line);
+  }
+
+  .chapter-nav .nav-cell {
+    display: grid;
+    gap: 5px;
+    align-content: start;
+    padding: 18px 22px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .chapter-nav a.nav-cell:hover {
+    border-color: var(--teal);
+    background: var(--surface-strong);
+  }
+
+  .chapter-nav .nav-next { text-align: right; }
+
+  .chapter-nav .nav-cell.disabled { opacity: 0.55; }
+
+  .chapter-nav .nav-label {
+    color: var(--muted);
+    font: 500 0.7rem var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .chapter-nav .nav-title {
+    font-family: var(--display);
+    font-size: clamp(1.05rem, 1.8vw, 1.28rem);
+    line-height: 1.25;
+  }
+
+  @media (max-width: 620px) {
+    .chapter-nav { grid-template-columns: 1fr; }
+    .chapter-nav .nav-next { text-align: left; }
+  }
+
+  .cite { font: 500 0.82em var(--mono); white-space: nowrap; }
+  .cite a { color: var(--amber); text-decoration: none; }
+  .cite a:hover { text-decoration: underline; }
+  .cite a::before { content: "["; }
+  .cite a::after { content: "]"; }
+
+  .footer-main { display: grid; gap: 10px; }
+
+  .ref-list { margin: 2px 0 0; padding-left: 1.4em; display: grid; gap: 4px; }
+  .ref-list li { font-size: 0.78rem; }
+  .ref-list li:target { color: var(--ink); font-weight: 600; }
+
+  footer {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    margin-top: clamp(24px, 3.5vw, 40px);
+    padding: clamp(24px, 3.5vw, 40px) clamp(4px, 3vw, 28px) 0;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+
+  footer p { max-width: 80ch; margin: 0; }
+  footer .edition { font-family: var(--mono); white-space: nowrap; }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; min-height: auto; }
+    .system-map { width: min(100%, 420px); }
+    .section-heading,
+    .synthesis,
+    .surprise-lead,
+    .surprise-grid,
+    .comparison-grid,
+    .diagnostic,
+    .closing { grid-template-columns: 1fr; }
+    .chapter-path { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .overview-grid { grid-template-columns: 1fr; }
+    .overview-card { min-height: auto; border-radius: 18px !important; }
+    .loop-diagram { min-height: 440px; }
+  }
+
+  @media (max-width: 620px) {
+    .page { width: min(100% - 20px, 1180px); padding-top: 12px; }
+    .topbar { flex-direction: column; align-items: stretch; gap: 14px; }
+    .book-label { max-width: none; }
+    .reading-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+    .reading-controls button { width: 100%; padding: 8px 6px; font-size: 0.78rem; white-space: nowrap; }
+    .hero { padding: 34px 20px 54px; border-radius: 24px 24px 6px 24px; }
+    h1 { font-size: clamp(2.7rem, 14vw, 4rem); }
+    .system-map { aspect-ratio: auto; display: grid; gap: 10px; }
+    .system-map::before,
+    .system-map::after,
+    .core,
+    .pulse { display: none; }
+    .node { position: static; transform: none; width: 100%; min-height: auto; }
+    .mechanics, .myths { grid-template-columns: 1fr; }
+    .chapter-path { grid-template-columns: 1fr; }
+    .chapter-path a { min-height: auto; border-radius: 12px !important; }
+    .surprise-lead { padding: 28px 20px; }
+    .surprise-mechanism { grid-template-columns: 1fr; padding: 22px 20px; }
+    .trap-comparison { padding: 24px 20px; }
+    .equation-row { grid-template-columns: 1fr; gap: 3px; }
+    .loop-diagram { min-height: 390px; padding: 20px; }
+    .loop-label { width: 122px; padding: 10px; font-size: 0.7rem; }
+    .loop-label.left { left: 2%; }
+    .loop-label.right { right: 2%; }
+    .diagnostic { padding: 32px 22px; }
+    footer { grid-template-columns: 1fr; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .pulse { animation: none; }
+  }
+
+  /* SECTION-RAIL:START — on-page section index (scroll-spy); markup injected by the bottom script */
+  .section-rail {
+    position: fixed;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 50;
+    padding: 10px;
+    pointer-events: none;
+  }
+  .section-rail::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--surface-strong);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    transform: translateX(-6px);
+    transform-origin: left center;
+    transition: opacity 0.18s ease, transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+  }
+  .section-rail::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 42px;
+    pointer-events: auto;
+  }
+  .section-rail:hover::before,
+  .section-rail:focus-within::before {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .section-rail__list {
+    position: relative;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .section-rail__list::before {
+    content: "";
+    position: absolute;
+    left: 13px;
+    top: 16px;
+    bottom: 16px;
+    width: 2px;
+    transform: translateX(-50%);
+    background: var(--line);
+    border-radius: 2px;
+  }
+  .section-rail__link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--muted);
+    pointer-events: none;
+    transition: background-color 0.16s ease, color 0.16s ease;
+  }
+  .section-rail:hover .section-rail__link,
+  .section-rail:focus-within .section-rail__link { pointer-events: auto; }
+  .section-rail__tick {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: 0 0 0 2px var(--line);
+    transition: transform 0.2s cubic-bezier(0.34, 1.28, 0.64, 1), background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .section-rail__label {
+    white-space: nowrap;
+    font: 500 0.78rem/1.35 var(--body);
+    letter-spacing: -0.005em;
+    opacity: 0;
+    transition: opacity 0.16s ease;
+  }
+  .section-rail:hover .section-rail__label,
+  .section-rail:focus-within .section-rail__label { opacity: 1; }
+  .section-rail__link:hover { background: var(--teal-soft); color: var(--ink); }
+  .section-rail__link:hover .section-rail__tick { box-shadow: 0 0 0 2px var(--teal); }
+  .section-rail__item.is-active .section-rail__link { color: var(--ink); }
+  .section-rail__item.is-active .section-rail__tick {
+    background: var(--teal);
+    box-shadow: 0 0 0 3px var(--teal-soft);
+    transform: scale(1.5);
+  }
+  @media (max-width: 1279px) { .section-rail { display: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .section-rail::before,
+    .section-rail__tick,
+    .section-rail__label,
+    .section-rail__link { transition: none; }
+  }
+  /* SECTION-RAIL:END */
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="topbar">
+    <div class="book-label"><span class="standard-copy">AI Engineering · Chip Huyen · Chương 6</span><span class="easy-only">AI Engineering · Chip Huyen · Chương 6</span><span class="en-only" lang="en">AI Engineering · Chip Huyen · Chapter 6</span></div>
+    <div class="topbar-controls">
+      <div class="lang-controls" role="group" aria-label="Ngôn ngữ / Language">
+        <button type="button" data-lang-option="vi" aria-pressed="true">VI</button>
+        <button type="button" data-lang-option="en" aria-pressed="false">EN</button>
+      </div>
+      <div class="reading-controls" role="group" aria-label="Chế độ đọc">
+        <button type="button" data-mode="easy" aria-label="Dễ hiểu: giải thích bằng ví dụ cho người mới và trẻ nhỏ" aria-pressed="false">Dễ hiểu</button>
+        <button type="button" data-mode="quick" aria-pressed="false">Tóm tắt</button>
+        <button type="button" data-mode="deep" aria-pressed="true">Đầy đủ</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="hero" aria-labelledby="page-title">
+    <div class="hero-copy">
+      <div class="eyebrow"><span class="standard-copy">Chương 6 · RAG và tác tử</span><span class="easy-only">Chương 6 · Tra cứu và trợ lý máy</span><span class="en-only" lang="en">Chapter 6 · RAG and Agents</span></div>
+      <h1 id="page-title"><span class="standard-copy">Hai cách đưa <span class="hero-title-accent">đúng thông tin</span> vào ngữ cảnh</span><span class="easy-only">Cho máy <span class="hero-title-accent">tra cứu</span> và <span class="hero-title-accent">dùng công cụ</span></span><span class="en-only" lang="en">Two ways to put <span class="hero-title-accent">the right information</span> into the context</span></h1>
+      <p class="standard-copy">Để giải một tác vụ, mô hình cần hai thứ: hướng dẫn làm thế nào, và thông tin cần thiết để làm. Chương trước lo phần hướng dẫn. Chương này lo phần còn lại — và Huyen mở đầu bằng một quan sát rất người: cũng như con người dễ trả lời sai khi thiếu thông tin, mô hình dễ sai và dễ bịa khi thiếu ngữ cảnh.<span class="cite"><a href="#ref-1">1</a></span> Hai khuôn mẫu đang thống trị việc dựng ngữ cảnh là <span lang="en">RAG</span> — truy xuất rồi mới sinh — và <span lang="en">agent</span>, tác tử biết dùng công cụ.</p>
+      <p class="easy-only">Muốn máy làm đúng một việc, ta phải cho nó hai thứ: lời dặn phải làm gì, và tài liệu để tra. Bài trước nói về lời dặn. Bài này nói về tài liệu. Có hai cách đưa tài liệu cho máy: một là tự mình tìm rồi đưa tận tay, hai là đưa cho máy cái chìa khóa tủ hồ sơ để nó tự lấy. Nhớ nhé: máy thiếu thông tin thì sẽ bịa, y như người bị hỏi bài mà chưa kịp học.</p>
+      <p class="en-only" lang="en">To solve a task, a model needs both the instructions on how to do it and the information it needs to do it. The last chapter covered the instructions. This chapter covers the rest — and Huyen opens with a very human observation: just as a person is more likely to give a wrong answer when lacking information, AI models are more likely to make mistakes and hallucinate when they are missing context.<span class="cite"><a href="#ref-1">1</a></span> The two dominating patterns for constructing that context are <span lang="en">RAG</span> — retrieve, then generate — and agents, models that can use tools.</p>
+      <div class="thesis">
+        <div class="thesis-mark">∴</div>
+        <div>
+          <strong class="standard-copy">Luận đề của chương</strong>
+          <strong class="easy-only">Ý chính</strong>
+          <strong class="en-only" lang="en">The chapter's thesis</strong>
+          <p class="standard-copy">Huyen xếp hai khuôn mẫu theo đúng mức độ trưởng thành của chúng. <span lang="en">RAG</span> là khuôn mẫu xuất hiện trước, đã được hiểu rõ và đã được áp dụng rộng rãi trong cả sản phẩm tiêu dùng lẫn doanh nghiệp. Tác tử mạnh hơn — nó không chỉ dựng ngữ cảnh mà còn tác động trực tiếp lên thế giới — nhưng bà cảnh báo ngay rằng đây là lĩnh vực mới nổi, chưa có khung lý thuyết ổn định để định nghĩa, phát triển và đánh giá; phần viết về tác tử, theo lời bà, mang tính thử nghiệm hơn phần còn lại của sách.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Có hai cách. Cách thứ nhất — cho máy tra tài liệu — đã có nhiều người dùng và chạy tốt. Cách thứ hai — cho máy tự dùng công cụ như người — mạnh hơn nhiều nhưng còn mới, còn hay hỏng, và chưa ai biết cách chấm điểm nó cho chuẩn. Nhớ nhé: mạnh hơn thì cũng dễ hỏng to hơn.</p>
+          <p class="en-only" lang="en">Huyen ranks the two patterns by how mature they actually are. RAG came first, is better understood, and has been rapidly adopted across both consumer and enterprise use cases. Agents are more powerful — they do not just construct context, they act on the world — but she warns up front that this is an emerging field with no established theoretical frameworks for defining, developing, and evaluating them; the agent material, in her words, is more experimental than the rest of the book.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="system-map" role="img" aria-label="Ba lớp dựng ngữ cảnh: truy xuất, công cụ và kế hoạch, và bộ nhớ — tất cả đều phục vụ ngữ cảnh mà mô hình đọc. Three layers that build context: retrieval, tools and planning, and memory — all feeding the context the model reads.">
+      <div class="pulse"></div>
+      <div class="core"><span class="vi-only">NGỮ<br>CẢNH</span><span class="en-only" lang="en">CON<br>TEXT</span></div>
+      <div class="node node-part1">
+        <b><span class="vi-only">Truy xuất</span><span class="en-only" lang="en">Retrieval</span></b>
+        <small class="standard-copy">RAG: lấy đúng mẩu tài liệu cho từng truy vấn</small>
+        <small class="easy-only">Tìm đúng trang sách rồi mới trả lời.</small>
+        <small class="en-only" lang="en">RAG: fetch the right chunks per query</small>
+      </div>
+      <div class="node node-part2">
+        <b><span class="vi-only">Công cụ &amp; kế hoạch</span><span class="en-only" lang="en">Tools &amp; planning</span></b>
+        <small class="standard-copy">Tác tử: quan sát môi trường rồi hành động</small>
+        <small class="easy-only">Máy tự cầm đồ nghề mà làm.</small>
+        <small class="en-only" lang="en">Agents: perceive the environment, then act</small>
+      </div>
+      <div class="node node-part3">
+        <b><span class="vi-only">Bộ nhớ</span><span class="en-only" lang="en">Memory</span></b>
+        <small class="standard-copy">Ba tầng: nội tại, ngắn hạn, dài hạn</small>
+        <small class="easy-only">Chỗ cất những gì cần nhớ.</small>
+        <small class="en-only" lang="en">Three tiers: internal, short-term, long-term</small>
+      </div>
+    </div>
+  </section>
+
+  <nav class="chapter-path" aria-label="Mục lục chương">
+    <a href="#retrieval">
+      <span class="vi-only">01 · Truy xuất</span><span class="en-only" lang="en">01 · Retrieval</span>
+      <b><span class="standard-copy">Truy xuất trước, sinh sau</span><span class="easy-only">Tra tài liệu rồi mới nói</span><span class="en-only" lang="en">Retrieve, then generate</span></b>
+    </a>
+    <a href="#agents">
+      <span class="vi-only">02 · Tác tử</span><span class="en-only" lang="en">02 · Agents</span>
+      <b><span class="standard-copy">Công cụ, kế hoạch, phản tỉnh</span><span class="easy-only">Máy tự dùng đồ nghề</span><span class="en-only" lang="en">Tools, planning, reflection</span></b>
+    </a>
+    <a href="#memory">
+      <span class="vi-only">03 · Bộ nhớ</span><span class="en-only" lang="en">03 · Memory</span>
+      <b><span class="standard-copy">Ba tầng ghi nhớ</span><span class="easy-only">Ba chỗ cất trí nhớ</span><span class="en-only" lang="en">Three memory tiers</span></b>
+    </a>
+    <a href="#diagnostic">
+      <span class="vi-only">04 · Tự kiểm</span><span class="en-only" lang="en">04 · Diagnostic</span>
+      <b><span class="standard-copy">Hệ của bạn hỏng ở đâu</span><span class="easy-only">Kiểm tra xem hỏng chỗ nào</span><span class="en-only" lang="en">Where your system breaks</span></b>
+    </a>
+  </nav>
+
+  <section class="section" id="retrieval" aria-labelledby="retrieval-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Cụm 01 · RAG</span><span class="easy-only">Phần 1 · Tra tài liệu</span><span class="en-only" lang="en">Cluster 01 · RAG</span></div>
+        <h2 id="retrieval-title"><span class="standard-copy">Truy xuất trước, sinh sau</span><span class="easy-only">Tra tài liệu rồi mới trả lời</span><span class="en-only" lang="en">Retrieve, then generate</span></h2>
+      </div>
+      <p class="standard-copy">Khuôn mẫu “truy xuất rồi sinh” xuất hiện lần đầu trong bài “<span lang="en">Reading Wikipedia to Answer Open-Domain Questions</span>” (Chen và cộng sự, 2017): hệ thống lấy năm trang Wikipedia liên quan nhất đến câu hỏi, rồi một mô hình đọc chúng để soạn câu trả lời.<span class="cite"><a href="#ref-2">2</a></span> Thuật ngữ <span lang="en">retrieval-augmented generation</span> được đặt ra ba năm sau đó, trong bài của Lewis và cộng sự (2020), như lời giải cho những tác vụ nặng tri thức mà toàn bộ tri thức không thể nhồi hết vào mô hình.<span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only">Hồi 2017 có người nghĩ ra cách này: máy không trả lời ngay, mà đi tìm năm trang Wikipedia hợp nhất với câu hỏi, đọc xong mới trả lời. Ba năm sau người ta đặt cho nó cái tên RAG. Nhớ nhé: tra rồi hẵng nói, đó là toàn bộ ý tưởng.</p>
+      <p class="en-only" lang="en">The retrieve-then-generate pattern first appeared in “Reading Wikipedia to Answer Open-Domain Questions” (Chen et al., 2017): the system retrieves the five Wikipedia pages most relevant to a question, then a model reads them to generate an answer.<span class="cite"><a href="#ref-2">2</a></span> The term <em>retrieval-augmented generation</em> was coined three years later by Lewis et al. (2020), as a solution for knowledge-intensive tasks where all the available knowledge cannot be fed into the model directly.<span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="deep-only">Huyen đặt một phép so sánh đáng nhớ: dựng ngữ cảnh cho mô hình nền tảng tương đương với kỹ thuật đặc trưng (<span lang="en">feature engineering</span>) cho học máy cổ điển — cả hai cùng một mục đích, đưa cho mô hình đúng thông tin nó cần để xử lý một đầu vào. Nhìn như vậy thì RAG không phải một thủ thuật vá víu, mà là lớp kỹ thuật dữ liệu của thời mô hình nền tảng.</p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">RAG là kỹ thuật dựng ngữ cảnh <em>riêng cho từng truy vấn</em>, thay vì dùng chung một ngữ cảnh cho mọi truy vấn.</p>
+        <p class="definition easy-only">RAG là: mỗi câu hỏi được đưa kèm đúng những trang tài liệu hợp với nó, chứ không phải cả tủ hồ sơ.</p>
+        <p class="definition en-only" lang="en">RAG is a technique for constructing context <em>specific to each query</em>, instead of using the same context for all queries.</p>
+        <p class="deep-only">Cách nhìn này có một hệ quả thực dụng mà Huyen nhấn mạnh: vì ngữ cảnh gắn với truy vấn, dữ liệu của một người dùng chỉ xuất hiện trong những truy vấn của chính người đó — quản trị dữ liệu trở nên dễ hơn hẳn.</p>
+      </div>
+      <div class="equation">
+        <div class="equation-row"><b><span class="vi-only">Lập chỉ mục</span><span class="en-only" lang="en">Indexing</span></b><span class="standard-copy">Xử lý trước dữ liệu để sau này lấy ra nhanh</span><span class="easy-only">Sắp tài liệu vào ngăn cho dễ tìm</span><span class="en-only" lang="en">Process data so it can be fetched quickly later</span></div>
+        <div class="equation-row"><b><span class="vi-only">Truy vấn</span><span class="en-only" lang="en">Querying</span></b><span class="standard-copy">Gửi câu hỏi để lấy về dữ liệu liên quan</span><span class="easy-only">Hỏi tủ hồ sơ để lấy đúng tờ</span><span class="en-only" lang="en">Send a query to retrieve data relevant to it</span></div>
+        <div class="equation-row"><b><span class="vi-only">Bộ truy xuất</span><span class="en-only" lang="en">Retriever</span></b><span class="standard-copy">Xếp hạng tài liệu theo độ liên quan với truy vấn</span><span class="easy-only">Người chọn ra tờ hợp nhất</span><span class="en-only" lang="en">Ranks documents by their relevance to the query</span></div>
+        <div class="equation-row"><b><span class="vi-only">Bộ sinh</span><span class="en-only" lang="en">Generator</span></b><span class="standard-copy">Viết câu trả lời dựa trên phần đã truy xuất</span><span class="easy-only">Người đọc xong rồi viết trả lời</span><span class="en-only" lang="en">Writes the response from the retrieved information</span></div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">01</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Term-based retrieval</div>
+          <h3><span class="standard-copy">Truy xuất theo từ khóa — đếm chữ, không hiểu nghĩa</span><span class="easy-only">Tìm theo chữ — như tra mục lục cuối sách</span><span class="en-only" lang="en">Term-based retrieval — counting words, not meaning</span></h3>
+          <p class="standard-copy">Cách trực tiếp nhất là tìm theo từ khóa. Hai đại lượng chi phối nó: tần suất từ (<span lang="en">TF</span>) — một từ xuất hiện bao nhiêu lần trong tài liệu — và tần suất tài liệu nghịch đảo (<span lang="en">IDF</span>) — càng nhiều tài liệu chứa một từ thì từ đó càng ít thông tin. Nếu có 10 tài liệu và 5 trong số đó chứa một từ, IDF của từ ấy là 10 / 5 = 2.<span class="cite"><a href="#ref-1">1</a></span> <span lang="en">BM25</span> — thế hệ thứ 25 của thuật toán <span lang="en">Best Matching</span>, do Robertson và cộng sự phát triển trong thập niên 1980 — là một biến thể của TF-IDF có chuẩn hóa theo độ dài tài liệu.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Cách dễ nhất là tìm theo chữ. Hai mẹo: chữ nào lặp nhiều trong một tờ thì tờ đó chắc nói về nó; còn chữ nào tờ nào cũng có — như “và”, “của” — thì chẳng nói lên điều gì. Nhớ nhé: chữ hiếm mới là chữ quý.</p>
+          <p class="en-only" lang="en">The most direct approach is keyword search. Two quantities drive it: term frequency (TF) — how often a term appears in a document — and inverse document frequency (IDF) — the more documents contain a term, the less informative it is. With 10 documents and 5 containing a term, that term's IDF is 10 / 5 = 2.<span class="cite"><a href="#ref-1">1</a></span> BM25 — the 25th generation of the Best Matching algorithm, developed by Robertson et al. in the 1980s — modifies TF-IDF by normalising term frequency by document length.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Elasticsearch và BM25 vẫn đang chạy vô số hệ tìm kiếm. Huyen gọi chúng là “đối thủ đáng gờm” để so sánh với các thuật toán hiện đại hơn — mạnh sẵn từ lúc cài, nhưng ít chỗ để tinh chỉnh về sau.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Đây vẫn là cách mà hầu hết ô tìm kiếm trên mạng đang dùng. Rẻ, nhanh, và khó đánh bại.</span>
+            <span class="en-only" lang="en">Elasticsearch and BM25 still power countless search systems. Huyen calls them formidable baselines to compare modern algorithms against — strong out of the box, but with few knobs to improve later.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Chỉ mục ngược</h4>
+              <p>Elasticsearch, dựng trên Lucene, dùng cấu trúc gọi là chỉ mục ngược (<span lang="en">inverted index</span>): một từ điển ánh xạ từ <em>thuật ngữ</em> sang <em>các tài liệu chứa nó</em>, kèm tần suất từ và số tài liệu — đủ để tính điểm TF-IDF ngay khi tra.</p>
+            </div>
+            <div class="info-block">
+              <h4>Bẫy tách từ</h4>
+              <p>Tách truy vấn thành từng từ nghe đơn giản, nhưng “hot dog” tách ra thành “hot” và “dog” thì cả hai đều mất nghĩa gốc. Cách chữa là coi những cụm n-gram phổ biến như một thuật ngữ duy nhất.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">02</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Embedding-based retrieval</div>
+          <h3><span class="standard-copy">Truy xuất theo ngữ nghĩa — so ý, không so chữ</span><span class="easy-only">Tìm theo nghĩa — hiểu ý rồi mới tìm</span><span class="en-only" lang="en">Embedding-based retrieval — matching meaning, not letters</span></h3>
+          <p class="standard-copy">Truy xuất theo từ khóa tính độ liên quan ở mức từ vựng chứ không phải ngữ nghĩa. Huyen lấy ví dụ: hỏi “<span lang="en">transformer architecture</span>” có thể nhận về tài liệu nói về máy biến áp hoặc về bộ phim <em lang="en">Transformers</em>.<span class="cite"><a href="#ref-1">1</a></span> Truy xuất theo embedding xếp hạng tài liệu theo mức gần gũi <em>về nghĩa</em>. Lúc lập chỉ mục, mỗi mẩu dữ liệu được chuyển thành vector và cất vào cơ sở dữ liệu vector; lúc truy vấn, câu hỏi cũng được chuyển thành vector rồi tìm <em>k</em> vector gần nhất.</p>
+          <p class="easy-only">Tìm theo chữ có lúc dở: gõ “transformer” thì máy đưa cả bài về cục biến áp lẫn bộ phim robot. Cách thứ hai là dạy máy biến mỗi câu thành một điểm trên bản đồ, câu nào cùng ý thì nằm gần nhau. Rồi chỉ việc tìm điểm gần nhất. Nhớ nhé: gần nghĩa mới quý, chứ không phải giống chữ.</p>
+          <p class="en-only" lang="en">Term-based retrieval computes relevance at a lexical level, not a semantic one. Huyen's example: querying “transformer architecture” might return documents about the electrical device or the movie <em>Transformers</em>.<span class="cite"><a href="#ref-1">1</a></span> Embedding-based retrieval instead ranks documents by how closely their <em>meanings</em> align with the query. Indexing converts each chunk into a vector stored in a vector database; querying embeds the question and fetches the <em>k</em> nearest vectors.</p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Tìm kiếm vector không phải phát minh của AI sinh. Nó là xương sống của tìm kiếm, gợi ý, phân cụm và phát hiện gian lận — và các thư viện lâu đời như FAISS, ScaNN, Annoy, Hnswlib đều dùng được cho RAG.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Cái bản đồ ý nghĩa này đã có từ lâu: nó chính là thứ giúp app nhạc đoán bài bạn thích.</span>
+            <span class="en-only" lang="en">Vector search was not invented for generative AI. It is the backbone of search, recommendation, clustering and fraud detection — and long-standing libraries like FAISS, ScaNN, Annoy and Hnswlib all work for RAG.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Xấp xỉ, không chính xác</h4>
+              <p>Tìm <em>k</em> láng giềng gần nhất một cách ngây thơ (<span lang="en">k-NN</span>) cho kết quả chính xác nhưng rất nặng, chỉ hợp với tập nhỏ. Dữ liệu lớn dùng láng giềng gần xấp xỉ (<span lang="en">ANN</span>): LSH băm các vector giống nhau vào cùng rổ, HNSW dựng đồ thị nhiều tầng, IVF gom cụm bằng K-means, Annoy dựng nhiều cây nhị phân ngẫu nhiên.</p>
+            </div>
+            <div class="info-block">
+              <h4>Cái giá của nghĩa</h4>
+              <p>Sinh embedding tốn tiền, nhất là khi dữ liệu thay đổi liên tục và phải sinh lại. Huyen ghi nhận rằng chi cho cơ sở dữ liệu vector bằng một phần năm, thậm chí một nửa, chi cho API mô hình là chuyện không hiếm gặp ở các công ty.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">03</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Hybrid search &amp; reranking</div>
+          <h3><span class="standard-copy">Tìm lai — rẻ trước, tinh sau</span><span class="easy-only">Lọc thô rồi lọc tinh</span><span class="en-only" lang="en">Hybrid search — cheap first, precise second</span></h3>
+          <p class="standard-copy">Hệ truy xuất chạy thật thường kết hợp nhiều thuật toán; ghép truy xuất theo từ khóa với truy xuất theo embedding gọi là <em lang="en">hybrid search</em>. Có thể ghép <em>nối tiếp</em>: một bộ truy xuất rẻ và thô lấy về ứng viên, rồi một cơ chế đắt và tinh hơn chọn lại — bước sau gọi là <em lang="en">reranking</em>. Cũng có thể chạy <em>song song</em> rồi gộp các bảng xếp hạng; thuật toán gộp phổ biến là <span lang="en">reciprocal rank fusion</span> (RRF), trong đó điểm của một tài liệu là tổng của 1/(k + thứ hạng) qua các bộ truy xuất, với hằng số k thường lấy bằng 60.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Không ai chỉ dùng một cách. Người ta lấy cách rẻ để vớt một nắm tài liệu, rồi lấy cách đắt hơn để chọn ra vài tờ hay nhất. Hoặc cho hai cách cùng chấm, rồi cộng điểm lại. Nhớ nhé: lọc thô trước, lọc tinh sau — vừa rẻ vừa chuẩn.</p>
+          <p class="en-only" lang="en">Production retrieval systems typically combine several algorithms; pairing term-based with embedding-based retrieval is called <em>hybrid search</em>. They can run <em>in sequence</em>: a cheap, coarse retriever fetches candidates, then a more precise but more expensive mechanism picks among them — that second step is reranking. Or <em>in parallel</em>, merging the rankings; a common merge algorithm is reciprocal rank fusion (RRF), where a document's score sums 1/(k + rank) across retrievers, with k typically 60.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Huyen lấy lại chính ví dụ “transformer”: trước hết vớt mọi tài liệu chứa chữ ấy, rồi dùng tìm kiếm vector để lọc ra những tài liệu thật sự nói về thứ bạn đang hỏi.<span class="cite"><a href="#ref-1">1</a></span> Bộ xếp lại cũng có thể ưu tiên dữ liệu mới — hữu ích cho tin tức, hộp thư, hay phân tích thị trường.</span>
+            <span class="easy-only">Ví dụ: gõ “transformer”, vớt hết mọi bài có chữ đó, rồi mới lọc lấy bài đúng ý mình.</span>
+            <span class="en-only" lang="en">Huyen reuses the “transformer” example: first fetch every document containing the word, then use vector search to keep the ones actually about what you meant.<span class="cite"><a href="#ref-1">1</a></span> Rerankers can also favour recency — useful for news, email assistants, or market analysis.</span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Xếp lại khác xếp hạng tìm kiếm</h4>
+              <p>Trong tìm kiếm, vị trí thứ nhất hay thứ năm là chuyện sống còn. Trong xếp lại ngữ cảnh, thứ tự vẫn có ảnh hưởng — mô hình hiểu phần đầu và phần cuối ngữ cảnh tốt hơn — nhưng miễn là tài liệu <em>có mặt</em> trong ngữ cảnh, vị trí của nó ít quan trọng hơn hẳn.</p>
+            </div>
+            <div class="info-block">
+              <h4>Vì sao cần lai</h4>
+              <p>Chuyển dữ liệu thành embedding có thể làm mờ chính những từ khóa ta cần: mã lỗi như <span lang="en">EADDRNOTAVAIL (99)</span> hay tên sản phẩm rất khó tìm lại sau khi đã bị nhúng.<span class="cite"><a href="#ref-1">1</a></span> Ghép với truy xuất theo từ khóa là cách chữa trực tiếp cho điểm yếu này.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">04</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Chunking &amp; contextual retrieval</div>
+          <h3><span class="standard-copy">Cắt mẩu và vá ngữ cảnh cho từng mẩu</span><span class="easy-only">Cắt tài liệu ra sao cho không mất ý</span><span class="en-only" lang="en">Chunking, and patching context back into each chunk</span></h3>
+          <p class="standard-copy">Không thể truy xuất nguyên cả tài liệu — ngữ cảnh sẽ dài vô hạn — nên tài liệu được cắt thành mẩu. Cắt sai thì hỏng: Huyen lấy câu “<span lang="en">I left my wife a note</span>”, cắt thành “<span lang="en">I left my wife</span>” và “<span lang="en">a note</span>” thì cả hai mẩu đều không còn giữ được ý gốc.<span class="cite"><a href="#ref-1">1</a></span> Chồng lấn mẩu là cách bảo toàn thông tin ở ranh giới. Một mẩu nhỏ cho phép nhồi nhiều mẩu hơn vào ngữ cảnh, nhưng dễ mất thông tin và tăng chi phí xử lý — Huyen kết luận thẳng: không có kích thước mẩu tối ưu phổ quát, phải thử.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Tài liệu dài quá thì phải cắt nhỏ. Nhưng cắt ẩu thì hỏng: câu “tôi để lại cho vợ một mẩu giấy” mà cắt làm đôi thì nửa nào cũng vô nghĩa. Mẩu nhỏ thì nhét được nhiều nhưng dễ mất ý; mẩu to thì giữ được ý nhưng nhét được ít. Nhớ nhé: không có cỡ nào đúng cho mọi trường hợp — phải thử.</p>
+          <p class="en-only" lang="en">You cannot retrieve whole documents — the context would grow without bound — so documents are split into chunks. Split badly and you lose the point: Huyen's example is “I left my wife a note”, which split into “I left my wife” and “a note” leaves neither chunk carrying the original meaning.<span class="cite"><a href="#ref-1">1</a></span> Overlapping chunks preserve boundary information. Smaller chunks let you fit more of them into the context but risk losing information and raise processing cost — Huyen is blunt: there is no universal best chunk size, you have to experiment.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Anthropic dùng chính mô hình AI để sinh một đoạn ngữ cảnh ngắn — thường 50–100 token — giải thích mẩu đó nằm ở đâu trong tài liệu gốc, rồi dán đoạn ấy vào đầu mẩu trước khi lập chỉ mục.<span class="cite"><a href="#ref-4">4</a></span></span>
+            <span class="easy-only">Mẹo hay: trước khi cất một mẩu vào tủ, dán lên đó một dòng ghi chú “mẩu này nói về gì, trích từ đâu”. Sau này tìm dễ hơn hẳn.</span>
+            <span class="en-only" lang="en">Anthropic uses an AI model to generate a short context — usually 50–100 tokens — explaining where a chunk sits within its original document, then prepends it to the chunk before indexing.<span class="cite"><a href="#ref-4">4</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Vá bằng siêu dữ liệu</h4>
+              <p>Ngoài đoạn ngữ cảnh sinh tự động, mỗi mẩu còn có thể được bổ sung thẻ, từ khóa, thực thể trích xuất, hoặc chính những câu hỏi mà nó trả lời được. Bài hướng dẫn đặt lại mật khẩu có thể được gắn kèm “tôi quên mật khẩu”, “tôi không đăng nhập được”, “tôi không tìm thấy tài khoản”.</p>
+            </div>
+            <div class="info-block">
+              <h4>Viết lại truy vấn</h4>
+              <p>Câu hỏi “Thế còn Emily Doe?” là vô nghĩa nếu tách khỏi hội thoại. Trước khi truy xuất, cần viết lại nó thành một câu đứng độc lập. Huyen cảnh báo: nếu phải giải danh tính mà không có dữ liệu — “thế còn vợ anh ấy?” — thì bộ viết lại phải thừa nhận là không giải được, chứ không được bịa ra một cái tên.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Cầu nối · Bộ truy xuất tốt đến đâu, hệ RAG tốt đến đó</strong>
+      <strong class="easy-only">Nối sang phần sau</strong>
+      <strong class="en-only" lang="en">Bridge · A RAG system is only as good as its retriever</strong>
+      <p class="standard-copy">Hai thước đo mà các khung đánh giá RAG hay dùng là <em>độ chính xác ngữ cảnh</em> (trong số tài liệu lấy về, bao nhiêu phần trăm thật sự liên quan) và <em>độ bao phủ ngữ cảnh</em> (trong số tài liệu liên quan, bao nhiêu phần trăm được lấy về). Huyen lưu ý rằng nhiều khung chỉ hỗ trợ cái thứ nhất, vì tính cái thứ hai đòi hỏi phải gán nhãn độ liên quan cho <em>toàn bộ</em> cơ sở dữ liệu.<span class="cite"><a href="#ref-1">1</a></span> Nhưng RAG chỉ là một trường hợp riêng: bà viết rằng có thể xem RAG như một tác tử mà bộ truy xuất là công cụ của nó. Đó là cầu dẫn sang phần tiếp theo.</p>
+      <p class="easy-only">Muốn biết máy tra tài liệu có giỏi không thì hỏi hai câu: những tờ nó lấy về có đúng không, và nó có bỏ sót tờ nào quan trọng không. Nhớ nhé: tra dở thì trả lời dở, dù máy có thông minh mấy. Và cái máy tra tài liệu này thật ra chỉ là một công cụ — phần sau sẽ cho máy cả một hộp đồ nghề.</p>
+      <p class="en-only" lang="en">Two metrics RAG evaluation frameworks commonly use are <em>context precision</em> (of the documents retrieved, what percentage is relevant) and <em>context recall</em> (of the documents that are relevant, what percentage was retrieved). Huyen notes that many frameworks support only the first, because computing recall requires annotating the relevance of every document in your database.<span class="cite"><a href="#ref-1">1</a></span> But RAG is only a special case: she writes that RAG can be seen as an agent where the retriever is a tool the model can use. That is the bridge to what follows.</p>
+    </aside>
+  </section>
+
+  <section class="section" id="agents" aria-labelledby="agents-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Cụm 02 · Tác tử</span><span class="easy-only">Phần 2 · Trợ lý máy</span><span class="en-only" lang="en">Cluster 02 · Agents</span></div>
+        <h2 id="agents-title"><span class="standard-copy">Công cụ, kế hoạch, và những kiểu hỏng mới</span><span class="easy-only">Máy tự cầm đồ nghề mà làm</span><span class="en-only" lang="en">Tools, plans, and new ways to fail</span></h2>
+      </div>
+      <p class="standard-copy">Huyen mở phần này bằng một định nghĩa cũ hơn cả học sâu: tác tử là bất cứ thứ gì có thể cảm nhận môi trường và tác động lên môi trường đó — bà dẫn <em lang="en">Artificial Intelligence: A Modern Approach</em> của Russell và Norvig, cuốn sách định nghĩa chính ngành trí tuệ nhân tạo là “nghiên cứu và thiết kế những tác tử duy lý”.<span class="cite"><a href="#ref-1">1</a></span> Một tác tử vì thế được đặc trưng bởi hai thứ: môi trường nó hoạt động, và tập hành động nó thực hiện được.</p>
+      <p class="easy-only">Tác tử nghĩa là gì? Là thứ biết nhìn quanh và biết làm. Con mèo là một tác tử. Cái máy hút bụi tự chạy cũng là một tác tử. Và một chương trình AI biết mở trình duyệt đi tra giá vé máy bay cũng vậy. Nhớ nhé: nhìn được và làm được, thế là thành tác tử.</p>
+      <p class="en-only" lang="en">Huyen opens with a definition older than deep learning: an agent is anything that can perceive its environment and act upon that environment — citing Russell and Norvig's <em>Artificial Intelligence: A Modern Approach</em>, the book that defines the field of AI research itself as “the study and design of rational agents”.<span class="cite"><a href="#ref-1">1</a></span> An agent is therefore characterised by two things: the environment it operates in, and the set of actions it can perform.</p>
+      <p class="deep-only">Điểm tinh tế: quan hệ giữa môi trường và công cụ đi cả hai chiều. Môi trường quyết định công cụ nào <em>có thể</em> dùng — trong một ván cờ, hành động khả dĩ duy nhất là các nước đi hợp lệ. Nhưng kho công cụ lại giới hạn ngược môi trường: một con robot chỉ biết bơi thì mãi mãi bị nhốt trong nước.</p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Trong một tác tử, AI là bộ não: nó xử lý tác vụ và phản hồi từ môi trường, lập kế hoạch hành động, rồi tự xác định xem tác vụ đã xong chưa.</p>
+        <p class="definition easy-only">Trong một trợ lý máy, AI đóng vai cái đầu: nghĩ xem phải làm gì, sai tay chân làm, rồi xem đã xong chưa.</p>
+        <p class="definition en-only" lang="en">In an AI agent, AI is the brain: it processes the task and the feedback from the environment, plans a sequence of actions, and determines whether the task has been accomplished.</p>
+        <p class="deep-only">Bà cũng phân biệt tác tử mô hình nền tảng với tác tử học tăng cường: cả hai đều được đặc trưng bởi môi trường và hành động, nhưng ở tác tử RL bộ lập kế hoạch phải được <em>huấn luyện</em> bằng thuật toán RL — tốn thời gian và tài nguyên — còn ở tác tử mô hình nền tảng, chính mô hình <em>là</em> bộ lập kế hoạch, chỉ cần prompt hoặc tinh chỉnh.<span class="cite"><a href="#ref-1">1</a></span> Bà dự đoán về dài hạn hai dòng này sẽ hợp nhất.</p>
+      </div>
+      <div class="equation">
+        <div class="equation-row"><b><span class="vi-only">Bổ sung tri thức</span><span class="en-only" lang="en">Knowledge augmentation</span></b><span class="standard-copy">Bộ truy xuất, SQL, duyệt web — công cụ để <em>đọc</em></span><span class="easy-only">Đồ nghề để tra cứu</span><span class="en-only" lang="en">Retrievers, SQL, web browsing — tools to <em>read</em></span></div>
+        <div class="equation-row"><b><span class="vi-only">Mở rộng năng lực</span><span class="en-only" lang="en">Capability extension</span></b><span class="standard-copy">Máy tính bỏ túi, trình thông dịch mã, OCR — vá chỗ mô hình yếu</span><span class="easy-only">Đồ nghề bù chỗ máy dốt</span><span class="en-only" lang="en">Calculator, code interpreter, OCR — patching model weaknesses</span></div>
+        <div class="equation-row"><b><span class="vi-only">Hành động ghi</span><span class="en-only" lang="en">Write actions</span></b><span class="standard-copy">Gửi email, chuyển tiền, sửa cơ sở dữ liệu — công cụ để <em>làm</em></span><span class="easy-only">Đồ nghề để làm thật</span><span class="en-only" lang="en">Sending email, transfers, editing databases — tools to <em>act</em></span></div>
+        <div class="equation-row"><b><span class="vi-only">Kế hoạch</span><span class="en-only" lang="en">Planning</span></b><span class="standard-copy">Sinh — thẩm định — thực thi — phản tỉnh</span><span class="easy-only">Nghĩ — duyệt — làm — xem lại</span><span class="en-only" lang="en">Generate — validate — execute — reflect</span></div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">05</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Tool inventory</div>
+          <h3><span class="standard-copy">Kho công cụ — nhiều hơn không phải lúc nào cũng tốt hơn</span><span class="easy-only">Hộp đồ nghề — không phải cứ nhiều là hay</span><span class="en-only" lang="en">Tool inventory — more is not always better</span></h3>
+          <p class="standard-copy">Không cần công cụ ngoài mới là tác tử, nhưng thiếu chúng thì năng lực rất hạn chế: tự thân mô hình thường chỉ làm được một hành động. Huyen dẫn Chameleon (Lu và cộng sự, 2023): một tác tử chạy trên GPT-4 với 13 công cụ vượt chính GPT-4 trơ trọi — cải thiện 11,37% so với kết quả <span lang="en">few-shot</span> tốt nhất từng công bố trên ScienceQA, và tăng 17% độ chính xác trên TabMWP.<span class="cite"><a href="#ref-5">5</a></span> Nhưng phổ kho công cụ trong tài liệu nghiên cứu rất rộng: Toolformer tinh chỉnh GPT-J để học năm công cụ,<span class="cite"><a href="#ref-6">6</a></span> còn Gorilla thử cho tác tử chọn đúng lời gọi trong 1.645 API.<span class="cite"><a href="#ref-7">7</a></span></p>
+          <p class="easy-only">Máy không có đồ nghề thì chỉ biết làm một việc: nói. Đưa cho nó máy tính bỏ túi, nó tính được. Đưa trình duyệt, nó tra tin mới được. Nhưng đưa quá nhiều đồ thì nó lại rối, y như người thợ có cả nghìn món mà chẳng biết dùng món nào. Nhớ nhé: đồ nghề đúng chứ không phải đồ nghề nhiều.</p>
+          <p class="en-only" lang="en">A system does not need external tools to be an agent, but without them its capabilities are limited: by itself, a model can typically perform one action. Huyen cites Chameleon (Lu et al., 2023): a GPT-4-powered agent with 13 tools outperforms GPT-4 alone — improving the best published few-shot result on ScienceQA by 11.37%, and raising TabMWP accuracy by 17%.<span class="cite"><a href="#ref-5">5</a></span> But the range in the literature is wide: Toolformer finetuned GPT-J to learn five tools,<span class="cite"><a href="#ref-6">6</a></span> while Gorilla attempted to have agents pick the right call among 1,645 APIs.<span class="cite"><a href="#ref-7">7</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Huyen chỉ ra rằng ChatGPT chính là một tác tử: nó tra web, chạy mã Python, và sinh ảnh bằng cách gọi DALL-E như một công cụ.<span class="cite"><a href="#ref-1">1</a></span> Và chính hệ RAG cũng là tác tử, với bộ truy xuất văn bản, bộ truy xuất ảnh và bộ thực thi SQL là công cụ của nó.</span>
+            <span class="easy-only">Chính ChatGPT là một trợ lý máy kiểu này: nó biết lên mạng tìm, biết chạy chương trình, biết nhờ một máy khác vẽ tranh hộ.</span>
+            <span class="en-only" lang="en">Huyen points out that ChatGPT is itself an agent: it searches the web, executes Python, and generates images by calling DALL-E as a tool.<span class="cite"><a href="#ref-1">1</a></span> RAG systems are agents too, with text retrievers, image retrievers and SQL executors as their tools.</span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Cách chọn công cụ</h4>
+              <p>Không có chỉ dẫn nào chắc thắng. Huyen gợi ý làm thực nghiệm: so sánh hiệu năng với các bộ công cụ khác nhau; làm nghiên cứu cắt bỏ (<span lang="en">ablation</span>) xem bỏ một công cụ đi thì tụt bao nhiêu — không tụt thì bỏ hẳn; tìm những công cụ mà tác tử hay dùng sai; và vẽ phân bố lời gọi để biết công cụ nào dùng nhiều, công cụ nào bỏ xó.</p>
+            </div>
+            <div class="info-block">
+              <h4>Công cụ đẻ ra công cụ</h4>
+              <p>Chameleon đề xuất nghiên cứu <em lang="en">chuyển tiếp công cụ</em>: sau công cụ X thì khả năng gọi công cụ Y là bao nhiêu — hai công cụ hay đi với nhau có thể gộp thành một công cụ lớn hơn.<span class="cite"><a href="#ref-5">5</a></span> Voyager đi xa hơn với một bộ quản lý kỹ năng lưu lại những kỹ năng mới mà tác tử tạo ra, mỗi kỹ năng là một chương trình, để dùng lại về sau.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">06</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Planning, decoupled from execution</div>
+          <h3><span class="standard-copy">Tách kế hoạch khỏi thực thi</span><span class="easy-only">Duyệt kế hoạch trước, làm sau</span><span class="en-only" lang="en">Decoupling planning from execution</span></h3>
+          <p class="standard-copy">Có thể gộp lập kế hoạch và thực thi vào cùng một prompt — bảo mô hình nghĩ từng bước rồi làm luôn. Nhưng Huyen đặt câu hỏi phản biện: nếu mô hình nghĩ ra một kế hoạch 1.000 bước mà chẳng tới đâu thì sao? Không ai giám sát, tác tử sẽ chạy hàng giờ, đốt thời gian và tiền gọi API, trước khi ta kịp nhận ra.<span class="cite"><a href="#ref-1">1</a></span> Cách chữa là tách: sinh kế hoạch trước, chỉ thực thi sau khi kế hoạch đã được thẩm định — bằng luật đơn giản (loại kế hoạch có hành động không tồn tại, loại kế hoạch quá X bước) hoặc bằng chính một mô hình làm giám khảo.</p>
+          <p class="easy-only">Nếu vừa nghĩ vừa làm thì dễ đi lạc rất xa mới biết mình sai. Nên làm thế này: bắt máy viết kế hoạch ra giấy trước, mình đọc duyệt, thấy được mới cho làm. Nhớ nhé: duyệt trước khi làm, đỡ tốn công đi lạc.</p>
+          <p class="en-only" lang="en">You can couple planning and execution in one prompt — ask the model to think step by step, then execute. But Huyen pushes back: what if the model produces a 1,000-step plan that does not accomplish the goal? Without oversight the agent will run for hours, burning time and API calls, before you realise it is going nowhere.<span class="cite"><a href="#ref-1">1</a></span> The fix is to decouple: generate the plan first, and only execute it once validated — by simple heuristics (drop plans with invalid actions, drop plans over X steps) or by an AI judge.</p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Tách ra rồi thì hệ có ba thành phần — sinh kế hoạch, thẩm định, thực thi — và nếu coi mỗi thành phần là một tác tử thì đây đã là một hệ đa tác tử.<span class="cite"><a href="#ref-1">1</a></span> Con người cũng có thể xen vào bất kỳ khâu nào: nêu kế hoạch cấp cao, duyệt kế hoạch, hoặc tự tay thực thi những thao tác rủi ro như cập nhật cơ sở dữ liệu hay hợp nhất một thay đổi mã.</span>
+            <span class="easy-only">Chia ra ba vai: một đứa nghĩ, một đứa duyệt, một đứa làm. Việc nào nguy hiểm thì để người thật bấm nút.</span>
+            <span class="en-only" lang="en">Once decoupled, the system has three components — plan generation, plan validation, plan execution — and if you consider each an agent, this is already a multi-agent system.<span class="cite"><a href="#ref-1">1</a></span> Humans can step into any stage: supplying a high-level plan, validating one, or executing risky operations like updating a database or merging a code change themselves.</span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Độ hạt của kế hoạch</h4>
+              <p>Có một đánh đổi: kế hoạch chi tiết khó sinh nhưng dễ thực thi; kế hoạch cấp cao dễ sinh nhưng khó thực thi. Cách vòng qua là lập kế hoạch phân tầng — sinh kế hoạch quý trước, rồi từ mỗi quý sinh kế hoạch tháng. Viết kế hoạch bằng ngôn ngữ tự nhiên thay vì tên hàm chính xác giúp kế hoạch bền trước thay đổi API, nhưng phải thêm một bộ phiên dịch — mà phiên dịch là việc đơn giản hơn lập kế hoạch nhiều.</p>
+            </div>
+            <div class="info-block">
+              <h4>Luồng điều khiển</h4>
+              <p>Kế hoạch tuần tự chỉ là một loại. Còn có song song (lấy 100 sản phẩm bán chạy rồi tra giá từng cái cùng lúc), rẽ nhánh (đọc báo cáo tài chính rồi mới quyết mua hay bán), và vòng lặp (sinh số ngẫu nhiên cho đến khi gặp số nguyên tố).<span class="cite"><a href="#ref-1">1</a></span> Trong phần mềm truyền thống, điều kiện rẽ nhánh là chính xác; với tác tử, chính mô hình AI quyết định luồng điều khiển — nên kế hoạch phi tuần tự vừa khó sinh vừa khó dịch thành lệnh.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">07</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Reflection &amp; error correction</div>
+          <h3><span class="standard-copy">Phản tỉnh — rẻ, dễ làm, và hiệu quả bất ngờ</span><span class="easy-only">Tự xem lại mình làm đúng chưa</span><span class="en-only" lang="en">Reflection — cheap, easy, surprisingly effective</span></h3>
+          <p class="standard-copy">Phản tỉnh không bắt buộc để một tác tử <em>vận hành</em>, nhưng Huyen viết rằng nó cần thiết để tác tử <em>thành công</em>.<span class="cite"><a href="#ref-1">1</a></span> Khuôn mẫu phổ biến nhất do ReAct đề xuất (Yao và cộng sự, 2022): đan xen suy luận và hành động theo nhịp Thought — Act — Observation, lặp cho tới khi tác tử tự xác định là đã xong.<span class="cite"><a href="#ref-8">8</a></span> Reflexion (Shinn và cộng sự, 2023) tách phản tỉnh thành hai mô-đun riêng: một bộ đánh giá kết quả, và một mô-đun tự phản tỉnh phân tích xem đã sai ở đâu.<span class="cite"><a href="#ref-9">9</a></span></p>
+          <p class="easy-only">Làm xong thì phải xem lại. Cách làm rất giống cách ta giải toán: nghĩ một câu, làm một bước, nhìn kết quả, rồi lại nghĩ tiếp. Sai thì hỏi “vì sao mình sai?” rồi làm lại. Nhớ nhé: biết mình sai ở đâu là đã sửa được một nửa.</p>
+          <p class="en-only" lang="en">Reflection is not strictly necessary for an agent to <em>operate</em>, but Huyen writes it is necessary for an agent to <em>succeed</em>.<span class="cite"><a href="#ref-1">1</a></span> The most common pattern comes from ReAct (Yao et al., 2022): interleaving reasoning and action in a Thought — Act — Observation rhythm, repeated until the agent decides the task is finished.<span class="cite"><a href="#ref-8">8</a></span> Reflexion (Shinn et al., 2023) splits reflection into two separate modules: an evaluator that scores the outcome, and a self-reflection module that analyses what went wrong.<span class="cite"><a href="#ref-9">9</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ví dụ Huyen đưa ra rất cụ thể: với một tác vụ sinh mã, bộ đánh giá phát hiện mã hỏng một phần ba số ca kiểm thử; tác tử phản tỉnh rằng nó đã quên trường hợp mảng toàn số âm; rồi sinh lại mã có tính tới trường hợp đó.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Ví dụ: máy viết chương trình, chạy thử thấy sai một phần ba, nó tự nhận ra “à, mình quên trường hợp toàn số âm”, rồi viết lại.</span>
+            <span class="en-only" lang="en">Huyen's example is concrete: on a code generation task, an evaluator finds the generated code fails a third of the test cases; the agent reflects that it failed to consider all-negative arrays; it then regenerates the code accounting for them.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Cái giá của việc nghĩ ra tiếng</h4>
+              <p>So với sinh kế hoạch, phản tỉnh dễ cài đặt và cải thiện hiệu năng đáng ngạc nhiên. Nhược điểm nằm ở độ trễ và chi phí: suy nghĩ, quan sát và đôi khi cả hành động đều tốn rất nhiều token. Cả nhóm ReAct lẫn Reflexion đều phải nhồi nhiều ví dụ vào prompt để mô hình bám đúng định dạng — lại tốn thêm token đầu vào và chiếm mất chỗ trong ngữ cảnh.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Mô hình có biết lập kế hoạch không?</h4>
+              <p>Huyen trình bày cả hai phía. Yann LeCun khẳng định mô hình ngôn ngữ tự hồi quy không lập kế hoạch được; Kambhampati lập luận rằng các bài báo nhầm lẫn giữa <em>tri thức chung về lập kế hoạch</em> trích ra từ mô hình với <em>kế hoạch thực thi được</em>.<span class="cite"><a href="#ref-10">10</a></span> Bà phản biện lập luận “không quay lui được”: một mô hình chạy nhánh A, thấy không ổn, hoàn toàn có thể sửa sang nhánh B — đó chính là quay lui. Và bà để ngỏ khả năng mô hình kém lập kế hoạch đơn giản vì chưa được cho đủ công cụ để làm việc đó.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">08</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Compound mistakes</div>
+          <h3><span class="standard-copy">Sai số dồn — vì sao tác tử cần mô hình mạnh hơn</span><span class="easy-only">Sai nhỏ cộng lại thành sai to</span><span class="en-only" lang="en">Compound mistakes — why agents need stronger models</span></h3>
+          <p class="standard-copy">Đây là con số đáng nhớ nhất của chương. Tác tử thường phải đi nhiều bước, và độ chính xác tổng thể giảm theo số bước: nếu mô hình đúng 95% mỗi bước, thì qua 10 bước độ chính xác còn 60%, và qua 100 bước chỉ còn 0,6%.<span class="cite"><a href="#ref-1">1</a></span> Cộng thêm lý do thứ hai — rủi ro cao hơn: có công cụ trong tay, tác tử làm được việc có ảnh hưởng lớn hơn, nên mỗi lần hỏng cũng nặng nề hơn.</p>
+          <p class="easy-only">Đây là con số nên nhớ. Cứ cho là mỗi bước máy làm đúng 95 lần trên 100 — nghe rất giỏi. Nhưng đi 10 bước liền thì chỉ còn đúng 6 trên 10. Đi 100 bước thì gần như chắc chắn hỏng. Nhớ nhé: đi càng nhiều bước, càng dễ lạc — nên mỗi bước phải thật chắc.</p>
+          <p class="en-only" lang="en">This is the chapter's most memorable number. An agent often needs many steps, and overall accuracy decreases as steps accumulate: at 95% accuracy per step, accuracy drops to 60% over 10 steps, and to just 0.6% over 100 steps.<span class="cite"><a href="#ref-1">1</a></span> Add the second reason — higher stakes: with tools, agents perform more impactful tasks, so any failure has more severe consequences.</p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Huyen phân loại kiểu hỏng rất rõ. Hỏng lập kế hoạch, phổ biến nhất là hỏng khi dùng công cụ: gọi công cụ không tồn tại; gọi đúng công cụ nhưng sai số lượng tham số; gọi đúng công cụ đúng tham số nhưng sai <em>giá trị</em>. Hỏng mục tiêu: kế hoạch không giải được tác vụ, hoặc giải được nhưng phá vỡ ràng buộc. Và kiểu hỏng lạ nhất — hỏng vì phản tỉnh sai: tác tử tin chắc mình đã xong trong khi chưa.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Máy hỏng theo mấy kiểu: gọi món đồ không có trong hộp; cầm đúng đồ nhưng dùng sai cách; làm xong việc khác chứ không phải việc được giao; và tệ nhất là làm dở dang nhưng khăng khăng “xong rồi”.</span>
+            <span class="en-only" lang="en">Huyen classifies the failure modes precisely. Planning failures, most commonly tool-use failures: calling a tool that is not in the inventory; calling a valid tool with the wrong number of parameters; calling a valid tool with correct parameters but wrong <em>values</em>. Goal failures: the plan does not solve the task, or solves it while breaking the constraints. And the strangest one — failure caused by errors in reflection: the agent is convinced it has accomplished a task when it has not.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Thời gian cũng là ràng buộc</h4>
+              <p>Huyen chỉ ra một ràng buộc thường bị bỏ quên khi đánh giá tác tử: thời gian. Nhiều lúc thời gian không quan trọng vì ta cứ giao việc rồi quay lại lấy. Nhưng nếu ta nhờ tác tử soạn một hồ sơ xin tài trợ mà nó soạn xong sau hạn nộp, thì tác tử ấy chẳng giúp được gì.</p>
+            </div>
+            <div class="info-block">
+              <h4>Hỏng công cụ, không phải hỏng kế hoạch</h4>
+              <p>Có một lớp hỏng riêng: dùng đúng công cụ nhưng công cụ trả kết quả sai — bộ chú thích ảnh mô tả sai, bộ sinh SQL sinh sai truy vấn. Cách chữa là hành chính chứ không tinh vi: kiểm thử từng công cụ độc lập, và luôn in ra mọi lời gọi cùng kết quả của nó để soi. Một lớp nữa là <em>thiếu</em> công cụ — nếu tác tử hay hỏng ở một lĩnh vực, hãy hỏi chuyên gia lĩnh vực đó xem họ sẽ dùng công cụ gì.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Cầu nối · Càng tự động, hỏng càng nặng</strong>
+      <strong class="easy-only">Nối sang phần sau</strong>
+      <strong class="en-only" lang="en">Bridge · The more automated, the more catastrophic</strong>
+      <p class="standard-copy">Huyen không né tránh phần đáng sợ. Bà viết: cũng như bạn không giao cho một thực tập sinh quyền xóa cơ sở dữ liệu sản xuất, bạn không nên để một AI chưa đáng tin khởi tạo lệnh chuyển tiền.<span class="cite"><a href="#ref-1">1</a></span> Nhưng bà cũng không đứng về phía cấm đoán: nếu con người đã tin máy móc đủ để lên vũ trụ, thì một ngày nào đó các biện pháp an toàn sẽ đủ để ta tin những hệ AI tự chủ — và bà thêm, khá thẳng, rằng con người cũng hỏng được vậy. Cả RAG lẫn tác tử đều làm việc với khối thông tin vượt giới hạn ngữ cảnh, nên cả hai đều cần đến thứ còn lại của chương: một hệ bộ nhớ.</p>
+      <p class="easy-only">Cho máy quyền làm thật thì phải rất cẩn thận. Người ta không giao chìa khóa két cho một người mới vào làm; máy cũng vậy. Nhớ nhé: càng cho máy làm được nhiều, càng phải khóa chặt. Và vì cả hai cách đều phải xử lý rất nhiều thông tin, chúng cần một chỗ để cất — đó là phần sau.</p>
+      <p class="en-only" lang="en">Huyen does not dodge the frightening part. Just as you should not give an intern the authority to delete your production database, she writes, you should not allow an unreliable AI to initiate bank transfers.<span class="cite"><a href="#ref-1">1</a></span> But she does not side with prohibition either: if we can get people to trust a machine to take us into space, she hopes security measures will one day be sufficient to trust autonomous AI systems — adding, bluntly, that humans can fail too. Both RAG and agents work with information exceeding the context limit, so both need what the rest of the chapter covers: a memory system.</p>
+    </aside>
+  </section>
+
+  <section class="section" id="memory" aria-labelledby="memory-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Cụm 03 · Bộ nhớ</span><span class="easy-only">Phần 3 · Trí nhớ</span><span class="en-only" lang="en">Cluster 03 · Memory</span></div>
+        <h2 id="memory-title"><span class="standard-copy">Ba tầng ghi nhớ của một mô hình</span><span class="easy-only">Ba chỗ cất trí nhớ</span><span class="en-only" lang="en">A model's three memory tiers</span></h2>
+      </div>
+      <p class="standard-copy">Huyen khép chương bằng thành phần mà cả hai khuôn mẫu đều dựa vào. Một mô hình AI có ba cơ chế ghi nhớ: <em>tri thức nội tại</em> — chính mô hình, giữ lại những gì nó học từ dữ liệu huấn luyện, chỉ đổi khi mô hình được cập nhật; <em>bộ nhớ ngắn hạn</em> — ngữ cảnh, truy cập nhanh nhưng dung lượng giới hạn và không tồn tại qua tác vụ; và <em>bộ nhớ dài hạn</em> — nguồn dữ liệu ngoài truy xuất được, bền qua các tác vụ và xóa được mà không cần cập nhật mô hình.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Máy nhớ theo ba kiểu, y như người. Kiểu thứ nhất là thứ đã ăn vào máu — như bạn biết thở, chẳng cần nghĩ. Kiểu thứ hai là thứ vừa nghe xong, như tên người mới gặp, nhớ được một lúc rồi quên. Kiểu thứ ba là sổ tay, sách vở, máy tính — cất ở ngoài, cần thì mở ra xem. Nhớ nhé: ba chỗ nhớ, ba việc khác nhau.</p>
+      <p class="en-only" lang="en">Huyen closes the chapter with the component both patterns rest on. An AI model has three memory mechanisms: <em>internal knowledge</em> — the model itself, retaining what it learned from training data and changing only when the model is updated; <em>short-term memory</em> — the context, fast to access but limited in capacity and not persistent across tasks; and <em>long-term memory</em> — external data sources reachable via retrieval, persistent across tasks and deletable without updating the model.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="deep-only">Bà đặt một quy tắc chọn tầng theo tần suất dùng: thông tin thiết yếu cho <em>mọi</em> tác vụ nên được đưa vào tri thức nội tại qua huấn luyện hoặc tinh chỉnh; thông tin hiếm khi cần thì để ở bộ nhớ dài hạn; còn bộ nhớ ngắn hạn dành riêng cho thông tin tức thời, gắn với ngữ cảnh hiện tại.</p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Bộ nhớ là cơ chế cho phép mô hình giữ lại và sử dụng thông tin — và nó gồm đúng hai chức năng: quản trị bộ nhớ, và truy xuất bộ nhớ.</p>
+        <p class="definition easy-only">Bộ nhớ gồm hai việc thôi: quyết định cất gì ở đâu, và lúc cần thì lấy ra.</p>
+        <p class="definition en-only" lang="en">Memory refers to mechanisms that let a model retain and use information — and it has exactly two functions: memory management, and memory retrieval.</p>
+        <p class="deep-only">Truy xuất bộ nhớ chính là truy xuất RAG, vì bộ nhớ dài hạn là một nguồn dữ liệu ngoài — nên phần lớn chương này đã nói về nó rồi. Phần còn lại, quản trị bộ nhớ, rút gọn thành hai thao tác: thêm và xóa. Với bộ nhớ dài hạn, xóa thường không cần vì lưu trữ ngoài rẻ và dễ mở rộng; nhưng bộ nhớ ngắn hạn bị chặn bởi độ dài ngữ cảnh tối đa nên bắt buộc phải có chiến lược. Huyen lấy một mốc minh họa: nếu dành sẵn 30% ngữ cảnh cho phần truy xuất từ bộ nhớ dài hạn, thì bộ nhớ ngắn hạn dùng được tối đa 70%.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="equation">
+        <div class="equation-row"><b><span class="vi-only">Tri thức nội tại</span><span class="en-only" lang="en">Internal knowledge</span></b><span class="standard-copy">Có trong mọi truy vấn; chỉ đổi khi mô hình đổi</span><span class="easy-only">Biết sẵn, không cần tra</span><span class="en-only" lang="en">Available in every query; changes only with the model</span></div>
+        <div class="equation-row"><b><span class="vi-only">Ngắn hạn</span><span class="en-only" lang="en">Short-term</span></b><span class="standard-copy">Ngữ cảnh: nhanh, nhỏ, mất sau mỗi tác vụ</span><span class="easy-only">Nhớ tạm rồi quên</span><span class="en-only" lang="en">The context: fast, small, gone after each task</span></div>
+        <div class="equation-row"><b><span class="vi-only">Dài hạn</span><span class="en-only" lang="en">Long-term</span></b><span class="standard-copy">Dữ liệu ngoài: bền, lớn, xóa được riêng lẻ</span><span class="easy-only">Sổ tay để ngoài, cần thì mở</span><span class="en-only" lang="en">External data: persistent, large, individually deletable</span></div>
+        <div class="equation-row"><b><span class="vi-only">Tràn ngữ cảnh</span><span class="en-only" lang="en">Overflow</span></b><span class="standard-copy">Dành sẵn 30% ngữ cảnh cho truy xuất ⇒ ngắn hạn tối đa 70%</span><span class="easy-only">Chừa chỗ cho tài liệu tra được</span><span class="en-only" lang="en">Reserve 30% for retrieval ⇒ short-term gets at most 70%</span></div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">09</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">FIFO and its blind spot</div>
+          <h3><span class="standard-copy">Vào trước ra trước — và điểm mù chết người của nó</span><span class="easy-only">Quên cái cũ nhất trước — và cái bẫy</span><span class="en-only" lang="en">First in, first out — and its fatal blind spot</span></h3>
+          <p class="standard-copy">Chiến lược đơn giản nhất là FIFO: thứ vào bộ nhớ ngắn hạn trước sẽ bị đẩy ra ngoài trước. Huyen ghi nhận rằng khi hội thoại dài ra, các nhà cung cấp API có thể bắt đầu cắt bỏ phần đầu, và các khung như LangChain cho giữ lại N tin nhắn hoặc N token cuối.<span class="cite"><a href="#ref-1">1</a></span> Giả định nằm dưới là tin nhắn sớm ít liên quan hơn tới cuộc bàn hiện tại — và bà gọi thẳng giả định ấy là có thể <em>sai chí mạng</em>, vì trong nhiều hội thoại chính những tin nhắn đầu tiên mới nêu ra mục đích của cả cuộc trò chuyện.</p>
+          <p class="easy-only">Cách dễ nhất để dọn trí nhớ là vứt cái cũ nhất đi. Nhưng thử nghĩ xem: câu đầu tiên trong một cuộc nói chuyện thường là câu quan trọng nhất — nó nói ta đang bàn chuyện gì. Vứt nó đi thì máy quên mất mình đang làm gì. Nhớ nhé: cũ không có nghĩa là không quan trọng.</p>
+          <p class="en-only" lang="en">The simplest strategy is FIFO: whatever entered short-term memory first is moved out first. Huyen notes that as conversations lengthen, API providers may start removing the beginning, and frameworks like LangChain let you retain the last N messages or N tokens.<span class="cite"><a href="#ref-1">1</a></span> The underlying assumption is that early messages are less relevant to the current discussion — and she calls that assumption potentially <em>fatally</em> wrong, because in many conversations the earliest messages are exactly the ones stating the purpose of the whole conversation.</p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Chiến lược tinh vi hơn nhắm vào chỗ dư thừa. Ngôn ngữ người vốn dư thừa để tăng độ rõ; tóm tắt hội thoại, kèm theo dõi các thực thể có tên, là cách gọn nhất để cắt dư thừa ấy. Bae và cộng sự (2022) đi xa hơn: huấn luyện một bộ phân loại xét từng câu trong bộ nhớ và từng câu trong bản tóm tắt để quyết định câu nào — một, cả hai, hay không câu nào — được đưa vào bộ nhớ mới.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Cách khá hơn: đừng vứt, mà hãy tóm tắt lại. Một trang giấy dài có thể gói thành ba dòng mà vẫn đủ ý.</span>
+            <span class="en-only" lang="en">More sophisticated strategies target redundancy. Human language is redundant by design, to aid clarity; summarising the conversation, together with tracking named entities, is the most economical way to cut that redundancy. Bae et al. (2022) went further: a classifier examines each sentence in the memory and each in the summary to decide which — one, both, or neither — enters the new memory.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Phản tỉnh để nhớ</h4>
+              <p>Liu và cộng sự (2023) dùng cách tiếp cận phản tỉnh: sau mỗi hành động, tác tử được yêu cầu nghĩ lại về thông tin vừa sinh ra, rồi quyết định nên <em>chèn</em> nó vào bộ nhớ, <em>hợp nhất</em> với thứ đã có, hay <em>thay thế</em> một mẩu khác — đặc biệt khi mẩu cũ đã lỗi thời và mâu thuẫn với thông tin mới.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Khi hai mẩu nhớ cãi nhau</h4>
+              <p>Có người chọn giữ mẩu mới hơn; có người nhờ mô hình phán xử nên giữ cái nào. Huyen không đưa ra đáp án duy nhất: cách xử lý mâu thuẫn tùy tình huống — mâu thuẫn có thể làm tác tử rối, nhưng cũng có thể giúp nó nhìn vấn đề từ nhiều phía.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">10</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Why memory earns its keep</div>
+          <h3><span class="standard-copy">Bộ nhớ trả lại những gì</span><span class="easy-only">Có trí nhớ thì được lợi gì</span><span class="en-only" lang="en">What a memory system buys you</span></h3>
+          <p class="standard-copy">Huyen liệt kê bốn khoản lợi. Quản trị tràn thông tin <em>trong</em> một phiên: tác vụ dài sinh ra lượng thông tin vượt độ dài ngữ cảnh, phần dư đẩy xuống bộ nhớ dài hạn. Giữ thông tin <em>giữa</em> các phiên: một huấn luyện viên AI gần như vô dụng nếu mỗi lần xin lời khuyên bạn phải kể lại cả đời mình. Tăng tính nhất quán: mô hình tham chiếu được câu trả lời cũ thì hiệu chỉnh được câu trả lời mới. Và giữ toàn vẹn cấu trúc dữ liệu: văn bản vốn phi cấu trúc, nhét một bảng vào ngữ cảnh từng dòng một không bảo đảm mô hình hiểu đó là bảng.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Có trí nhớ thì được bốn cái lợi. Một, làm việc dài mà không bị quên giữa chừng. Hai, lần sau gặp lại không phải kể lại từ đầu. Ba, trả lời trước sao thì sau vậy, không tiền hậu bất nhất. Bốn, cất được bảng biểu cho ra bảng biểu. Nhớ nhé: nhớ được thì mới thành bạn đồng hành, chứ không chỉ là cái máy trả lời.</p>
+          <p class="en-only" lang="en">Huyen lists four benefits. Managing overflow <em>within</em> a session: a long task generates more information than the context can hold, and the excess goes to long-term memory. Persisting information <em>between</em> sessions: an AI coach is practically useless if you have to explain your whole life story every time you want advice. Boosting consistency: a model that can reference its previous answers can calibrate future ones. And maintaining structural integrity: text is inherently unstructured, and feeding a table into the context line by line does not guarantee the model understands it is a table.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ví dụ của bà rất đời: nếu mô hình nhớ rằng bạn từng thích <em lang="en">The Three-Body Problem</em>, nó có thể gợi ý những cuốn tương tự khi bạn hỏi sách. Còn ở phía cấu trúc: một tác tử tìm khách hàng tiềm năng có thể dùng một bảng tính để lưu danh sách, hoặc dùng một hàng đợi để lưu chuỗi hành động cần làm.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Ví dụ: máy nhớ bạn từng thích một cuốn sách, lần sau nó gợi ý đúng gu. Hoặc nó dùng một bảng tính để ghi danh sách việc, thay vì cố nhớ trong đầu.</span>
+            <span class="en-only" lang="en">Her examples are everyday: if the model remembers you loved <em>The Three-Body Problem</em>, it can suggest similar books next time you ask. On the structural side: an agent finding sales leads can use a spreadsheet to store them, or a queue to store the sequence of actions to perform.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Không phải phát minh của AI</h4>
+              <p>Huyen nhắc lại điều bà nhắc suốt chương: quản trị bộ nhớ là nền móng của mọi hệ dữ liệu, và đã có vô số chiến lược dùng bộ nhớ hiệu quả từ trước khi có mô hình nền tảng. AI không phải bắt đầu lại từ đầu — nó thừa kế.</p>
+            </div>
+            <div class="info-block">
+              <h4>Điều chương này bỏ ngỏ</h4>
+              <p>Bà tự đánh dấu giới hạn: phần bộ nhớ chỉ là “một thảo luận ngắn” khép lại chương, và toàn bộ phần tác tử mang tính thử nghiệm hơn phần còn lại của sách. Đọc chương này nên đọc như một bản đồ đang được vẽ, không phải một giáo trình đã đóng.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Cầu nối · Cả hai đều là phương pháp dựa trên prompt</strong>
+      <strong class="easy-only">Nối sang chương sau</strong>
+      <strong class="en-only" lang="en">Bridge · Both are prompt-based methods</strong>
+      <p class="standard-copy">Huyen kết chương bằng một câu xếp loại rất gọn: RAG và tác tử đều là phương pháp dựa trên prompt — chúng tác động tới chất lượng mô hình <em>chỉ qua đầu vào</em>, không đụng tới bản thân mô hình.<span class="cite"><a href="#ref-1">1</a></span> Chúng mở ra rất nhiều ứng dụng đáng kinh ngạc; nhưng sửa chính mô hình còn mở ra nhiều hơn. Đó là đề tài của chương sau.</p>
+      <p class="easy-only">Hai cách trong bài này đều không đụng gì tới bộ não của máy — chúng chỉ khéo léo đưa thêm tài liệu và đồ nghề cho nó. Nhớ nhé: muốn đổi chính bộ não thì phải sang bài sau.</p>
+      <p class="en-only" lang="en">Huyen ends with a tidy classification: RAG and agents are both prompt-based methods — they influence the model's quality <em>solely through inputs</em>, without modifying the model itself.<span class="cite"><a href="#ref-1">1</a></span> They enable many incredible applications; but modifying the underlying model opens up even more. That is the topic of the next chapter.</p>
+    </aside>
+
+    <div class="trap-comparison deep-only">
+      <h3><span class="standard-copy">Ba ngộ nhận thường gặp khi đọc chương này</span><span class="en-only" lang="en">Three misconceptions this chapter corrects</span></h3>
+      <div class="comparison-grid">
+        <div class="comparison-card">
+          <h4><span class="standard-copy">“Ngữ cảnh dài rồi thì RAG hết thời”</span><span class="en-only" lang="en">“Long context makes RAG obsolete”</span></h4>
+          <p class="standard-copy">Huyen nói thẳng là bà không nghĩ vậy, với hai lý do. Một: dù ngữ cảnh dài tới đâu vẫn sẽ có ứng dụng cần dài hơn — dữ liệu chỉ tăng theo thời gian, người ta tạo thêm chứ hiếm khi xóa bớt. Hai: mô hình xử lý được ngữ cảnh dài không có nghĩa là <em>dùng tốt</em> ngữ cảnh đó — càng dài thì càng dễ chú ý nhầm chỗ, và mỗi token thừa đều tốn tiền và có thể tăng độ trễ.<span class="cite"><a href="#ref-1">1</a></span> Bà có dẫn hướng dẫn của Anthropic rằng nếu kho tri thức nhỏ hơn 200.000 token — khoảng 500 trang — thì cứ nhét cả vào prompt, không cần RAG.<span class="cite"><a href="#ref-4">4</a></span> Nhưng đó là ngưỡng cho một trường hợp cụ thể, không phải lời cáo chung.</p>
+          <p class="en-only" lang="en">Huyen says plainly that she does not think so, for two reasons. One: however long the context, some applications will need more — data only grows, people add and rarely delete. Two: a model that can <em>process</em> long context does not necessarily <em>use</em> it well — the longer the context, the likelier it focuses on the wrong part, and every extra token costs money and can add latency.<span class="cite"><a href="#ref-1">1</a></span> She does quote Anthropic's guidance that a knowledge base under 200,000 tokens — about 500 pages — can simply go into the prompt, with no need for RAG.<span class="cite"><a href="#ref-4">4</a></span> But that is a threshold for one case, not an obituary.</p>
+        </div>
+        <div class="comparison-card">
+          <h4><span class="standard-copy">“Tác tử là thứ gì đó hoàn toàn mới”</span><span class="en-only" lang="en">“Agents are something entirely new”</span></h4>
+          <p class="standard-copy">Định nghĩa mà Huyen dùng đến từ năm 1995, trong <em lang="en">Artificial Intelligence: A Modern Approach</em>.<span class="cite"><a href="#ref-1">1</a></span> Điều mới không phải khái niệm tác tử, mà là năng lực chưa từng có của mô hình nền tảng đã mở cánh cửa cho những ứng dụng tác tử trước đây không tưởng tượng nổi. Bà cũng nhắc rằng tác tử được dựng trên những khái niệm đã xuất hiện ở các chương trước của chính cuốn sách: tự phê bình, chuỗi suy nghĩ, và đầu ra có cấu trúc.</p>
+          <p class="en-only" lang="en">The definition Huyen uses dates to 1995, from <em>Artificial Intelligence: A Modern Approach</em>.<span class="cite"><a href="#ref-1">1</a></span> What is new is not the concept of an agent but the unprecedented capabilities of foundation models, which opened the door to agentic applications that were previously unimaginable. She also notes that agents are built on concepts already introduced earlier in the book: self-critique, chain-of-thought, and structured outputs.</p>
+        </div>
+        <div class="comparison-card">
+          <h4><span class="standard-copy">“Cứ thêm công cụ là tác tử giỏi lên”</span><span class="en-only" lang="en">“More tools always means a better agent”</span></h4>
+          <p class="standard-copy">Nhiều công cụ cho nhiều năng lực hơn, nhưng Huyen cân ngay: càng nhiều công cụ thì càng khó hiểu và khó dùng chúng cho tốt — giống như con người cũng khó thành thạo một bộ đồ nghề quá lớn — và mô tả công cụ nhiều lên thì có khi không còn vừa ngữ cảnh.<span class="cite"><a href="#ref-1">1</a></span> Thực nghiệm của Lu và cộng sự còn cho thấy lựa chọn công cụ phụ thuộc cả vào <em>mô hình</em>: GPT-4 chọn bộ công cụ rộng hơn ChatGPT, và ChatGPT nghiêng về chú thích ảnh trong khi GPT-4 nghiêng về truy xuất tri thức.<span class="cite"><a href="#ref-5">5</a></span></p>
+          <p class="en-only" lang="en">More tools give more capabilities, but Huyen immediately counterweights: the more tools there are, the harder they are to understand and use well — much as humans struggle to master too large a toolkit — and growing tool descriptions may no longer fit the context.<span class="cite"><a href="#ref-1">1</a></span> Lu et al.'s experiments further show that tool choice depends on the <em>model</em>: GPT-4 selects a wider set than ChatGPT, and ChatGPT favours image captioning while GPT-4 favours knowledge retrieval.<span class="cite"><a href="#ref-5">5</a></span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="diagnostic" aria-labelledby="diagnostic-title">
+    <div class="diagnostic">
+      <div class="diagnostic-intro">
+        <div class="eyebrow"><span class="standard-copy">Tự kiểm · 06</span><span class="easy-only">Tự kiểm · 06</span><span class="en-only" lang="en">Diagnostic · 06</span></div>
+        <h2 id="diagnostic-title"><span class="standard-copy">Hệ của bạn hỏng ở đâu</span><span class="easy-only">Kiểm tra xem hỏng chỗ nào</span><span class="en-only" lang="en">Where does your system break</span></h2>
+        <p class="standard-copy">Huyen viết rằng đánh giá là việc phát hiện hỏng hóc, và tác vụ càng phức tạp thì càng nhiều chỗ có thể hỏng. Bảy câu dưới đây bám theo chính những điểm hỏng mà chương này nêu tên.</p>
+        <p class="easy-only">Muốn biết hệ của mình có ổn không thì tự hỏi mấy câu này.</p>
+        <p class="en-only" lang="en">Huyen writes that evaluation is about detecting failures, and the more complex the task, the more possible failure points. These seven questions track the failure points this chapter names.</p>
+      </div>
+      <div>
+        <div class="question-list standard-copy">
+          <div class="question"><strong>Bộ truy xuất của bạn được đo bằng gì?</strong><span>Độ chính xác ngữ cảnh hay cả độ bao phủ? Nếu chỉ đo cái thứ nhất, bạn không biết mình đang bỏ sót những gì. <span class="deep-only">Huyen lưu ý rằng tính độ bao phủ đòi hỏi gán nhãn độ liên quan cho toàn bộ cơ sở dữ liệu — đắt, nên nhiều khung bỏ qua.</span></span></div>
+          <div class="question"><strong>Bạn đã thử tìm lai chưa?</strong><span>Từ khóa bắt được mã lỗi và tên sản phẩm; embedding bắt được ý. Bỏ một trong hai là tự bỏ một nửa. <span class="deep-only">Kiểu nối tiếp rẻ hơn: một bộ thô vớt ứng viên, một bộ tinh xếp lại. Kiểu song song cần một thuật toán gộp hạng như RRF.</span></span></div>
+          <div class="question"><strong>Cỡ mẩu của bạn đến từ đâu?</strong><span>Từ thực nghiệm, hay từ một con số ai đó gợi ý trên mạng? Chương này nói rõ là không có cỡ tối ưu phổ quát. <span class="deep-only">Giảm cỡ mẩu đi một nửa thì số mẩu, số vector, và không gian tìm kiếm đều nhân đôi — hãy tính cả cái giá đó.</span></span></div>
+          <div class="question"><strong>Tác tử của bạn đi bao nhiêu bước?</strong><span>Nhân độ chính xác mỗi bước với chính nó theo số bước, rồi nhìn con số. 95% mười bước là 60%. <span class="deep-only">Nếu con số đó không chấp nhận được, lựa chọn là rút ngắn kế hoạch, dùng mô hình mạnh hơn, hoặc chèn phản tỉnh giữa các bước.</span></span></div>
+          <div class="question"><strong>Bạn có in ra mọi lời gọi công cụ không?</strong><span>Huyen khuyên luôn bắt hệ báo cáo giá trị tham số của từng lời gọi và tự tay soi chúng. <span class="deep-only">Hỏng “đúng công cụ, sai giá trị tham số” là kiểu hỏng lặng lẽ nhất — nó không ném lỗi, nó chỉ trả về đáp án sai.</span></span></div>
+          <div class="question"><strong>Kế hoạch có được thẩm định trước khi chạy không?</strong><span>Nếu không, bạn đang trả tiền cho những kế hoạch hỏng chạy tới cùng. <span class="deep-only">Luật đơn giản đã chặn được phần lớn: loại kế hoạch chứa hành động không có trong kho công cụ, loại kế hoạch quá X bước.</span></span></div>
+          <div class="question"><strong>Bạn dọn bộ nhớ ngắn hạn theo cách nào?</strong><span>Nếu là FIFO, hãy đọc lại những tin nhắn đầu tiên bị cắt — rất có thể chúng nêu chính mục đích của cả cuộc hội thoại. <span class="deep-only">Tóm tắt kèm theo dõi thực thể có tên là bước tiến rẻ nhất so với FIFO.</span></span></div>
+        </div>
+        <div class="question-list easy-only">
+          <div class="question"><strong>Máy tra tài liệu có lấy đúng tờ không?</strong><span>Và có bỏ sót tờ nào quan trọng không?</span></div>
+          <div class="question"><strong>Bạn có dùng cả hai cách tìm không?</strong><span>Tìm theo chữ và tìm theo nghĩa, mỗi cách giỏi một kiểu.</span></div>
+          <div class="question"><strong>Bạn cắt tài liệu thành mẩu to hay nhỏ?</strong><span>Và bạn đã thử vài cỡ khác nhau chưa?</span></div>
+          <div class="question"><strong>Máy phải đi mấy bước mới xong việc?</strong><span>Càng nhiều bước càng dễ hỏng — thử đếm xem.</span></div>
+          <div class="question"><strong>Bạn có xem máy dùng đồ nghề thế nào không?</strong><span>In ra mà nhìn, đừng chỉ nhìn kết quả cuối.</span></div>
+          <div class="question"><strong>Bạn có đọc kế hoạch trước khi cho máy làm không?</strong><span>Duyệt trước thì đỡ tốn công.</span></div>
+          <div class="question"><strong>Khi trí nhớ đầy, bạn vứt cái gì đi?</strong><span>Đừng vứt câu đầu tiên — nó thường là câu quan trọng nhất.</span></div>
+        </div>
+        <div class="question-list en-only" lang="en">
+          <div class="question"><strong>What do you measure your retriever with?</strong><span>Context precision only, or recall too? Measuring just the first leaves you blind to what you miss.</span></div>
+          <div class="question"><strong>Have you tried hybrid search?</strong><span>Terms catch error codes and product names; embeddings catch meaning. Dropping either drops half.</span></div>
+          <div class="question"><strong>Where did your chunk size come from?</strong><span>From experiments, or from a number someone posted online? This chapter is explicit that no universal best size exists.</span></div>
+          <div class="question"><strong>How many steps does your agent take?</strong><span>Raise per-step accuracy to the power of the step count and look at the result. 95% over ten steps is 60%.</span></div>
+          <div class="question"><strong>Do you print every tool call?</strong><span>Huyen advises always asking the system to report the parameter values it uses, and inspecting them yourself.</span></div>
+          <div class="question"><strong>Are plans validated before execution?</strong><span>If not, you are paying for broken plans to run to completion.</span></div>
+          <div class="question"><strong>How do you evict short-term memory?</strong><span>If it is FIFO, reread the early messages you cut — they often state the purpose of the entire conversation.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="closing" id="closing" aria-labelledby="closing-title">
+    <div class="eyebrow" id="closing-title"><span class="standard-copy">Đọng lại</span><span class="easy-only">Đọng lại</span><span class="en-only" lang="en">Distilled</span></div>
+    <blockquote>
+      <span class="standard-copy">RAG dựng <span class="closing-accent">ngữ cảnh</span>; tác tử dựng cả <span class="closing-accent">hành động</span>. Cái thứ nhất đã chín và đã chạy trong sản xuất; cái thứ hai mạnh hơn, hỏng nặng hơn, và vẫn đang được dò đường.</span>
+      <span class="easy-only">Cách thứ nhất là <span class="closing-accent">đưa đúng tài liệu</span> cho máy. Cách thứ hai là <span class="closing-accent">đưa cả hộp đồ nghề</span>. Cách hai mạnh hơn, nhưng cũng dễ hỏng to hơn.</span>
+      <span class="en-only" lang="en">RAG builds <span class="closing-accent">context</span>; agents build <span class="closing-accent">action</span>. The first is mature and running in production; the second is more powerful, fails harder, and is still being charted.</span>
+    </blockquote>
+  </section>
+
+  <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+  <nav class="chapter-nav" aria-label="Điều hướng chương">
+    <a class="nav-cell nav-prev" href="chapter-5-prompt-engineering.html">
+      <span class="nav-label"><span aria-hidden="true">◀</span> <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span></span>
+      <span class="nav-title"><span class="vi-only">Chương 5 · Kỹ thuật prompt</span><span class="en-only" lang="en">Chapter 5 · Prompt Engineering</span></span>
+    </a>
+    <a class="nav-cell nav-next" href="chapter-7-finetuning.html">
+      <span class="nav-label"><span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> <span aria-hidden="true">▶</span></span>
+      <span class="nav-title"><span class="vi-only">Chương 7 · Tinh chỉnh</span><span class="en-only" lang="en">Chapter 7 · Finetuning</span></span>
+    </a>
+  </nav>
+  <!-- NAV:END -->
+
+  <footer>
+    <div class="footer-main">
+      <p class="standard-copy"><strong>Nguồn chính:</strong> Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, ấn bản thứ nhất, tháng 12 năm 2024 (ISBN 9781098166304) — Chương 6, “<span lang="en">RAG and Agents</span>”. Trang này là bản diễn giải và tổng hợp phục vụ học tập, không phải bản dịch nguyên văn hoặc bản sao nội dung sách. Các ví dụ trong chế độ “Dễ hiểu” là minh họa do người biên soạn thêm vào.</p>
+      <p class="en-only" lang="en"><strong>Primary source:</strong> Chip Huyen, <em>AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, first edition, December 2024 (ISBN 9781098166304) — Chapter 6, “RAG and Agents”. This page is an interpretive study companion, not a verbatim translation or reproduction of the book. Examples in the “Dễ hiểu” mode are added illustrations by the compiler.</p>
+      <p class="vi-only"><strong>Tham chiếu</strong></p>
+      <p class="en-only" lang="en"><strong>References</strong></p>
+      <ol class="ref-list">
+        <li id="ref-1">Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em> — Chapter 6, “RAG and Agents” (O’Reilly Media, 2024). <a href="https://www.oreilly.com/library/view/ai-engineering/9781098166298/" target="_blank" rel="noopener noreferrer">oreilly.com — trang sách</a> · <a href="https://huyenchip.com/books/" target="_blank" rel="noopener noreferrer">huyenchip.com/books</a></li>
+        <li id="ref-2">Danqi Chen, Adam Fisch, Jason Weston, Antoine Bordes — “Reading Wikipedia to Answer Open-Domain Questions” (2017). <a href="https://arxiv.org/abs/1704.00051" target="_blank" rel="noopener noreferrer">arxiv.org/abs/1704.00051</a></li>
+        <li id="ref-3">Patrick Lewis et al. — “Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks” (2020). <a href="https://arxiv.org/abs/2005.11401" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2005.11401</a></li>
+        <li id="ref-4">Anthropic — “Introducing Contextual Retrieval” (2024). <a href="https://www.anthropic.com/news/contextual-retrieval" target="_blank" rel="noopener noreferrer">anthropic.com/news/contextual-retrieval</a></li>
+        <li id="ref-5">Pan Lu et al. — “Chameleon: Plug-and-Play Compositional Reasoning with Large Language Models” (2023). <a href="https://arxiv.org/abs/2304.09842" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2304.09842</a></li>
+        <li id="ref-6">Timo Schick et al. — “Toolformer: Language Models Can Teach Themselves to Use Tools” (2023). <a href="https://arxiv.org/abs/2302.04761" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2302.04761</a></li>
+        <li id="ref-7">Shishir G. Patil et al. — “Gorilla: Large Language Model Connected with Massive APIs” (2023). <a href="https://arxiv.org/abs/2305.15334" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2305.15334</a></li>
+        <li id="ref-8">Shunyu Yao et al. — “ReAct: Synergizing Reasoning and Acting in Language Models” (2022). <a href="https://arxiv.org/abs/2210.03629" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2210.03629</a></li>
+        <li id="ref-9">Noah Shinn et al. — “Reflexion: Language Agents with Verbal Reinforcement Learning” (2023). <a href="https://arxiv.org/abs/2303.11366" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2303.11366</a></li>
+        <li id="ref-10">Subbarao Kambhampati et al. — “Can Large Language Models Reason and Plan?” / “LLMs Can’t Plan, But Can Help Planning in LLM-Modulo Frameworks” (2024). <a href="https://arxiv.org/abs/2403.04121" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2403.04121</a></li>
+        <li id="ref-11">Mã nguồn và tài liệu bổ trợ chính thức của sách, gồm cả benchmark minh họa các kiểu hỏng của tác tử — <a href="https://github.com/chiphuyen/aie-book" target="_blank" rel="noopener noreferrer">github.com/chiphuyen/aie-book</a></li>
+      </ol>
+      <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+      <p class="vi-only"><strong>Trong bộ:</strong> <a href="index.html">Trang bìa</a> · <a href="chapter-5-prompt-engineering.html">Chương 5 · Kỹ thuật prompt</a> · <a href="chapter-7-finetuning.html">Chương 7 · Tinh chỉnh</a></p>
+      <p class="en-only" lang="en"><strong>In this series:</strong> <a href="index.html">Cover</a> · <a href="chapter-5-prompt-engineering.html">Chapter 5 · Prompt Engineering</a> · <a href="chapter-7-finetuning.html">Chapter 7 · Finetuning</a></p>
+      <!-- NAV:END -->
+    </div>
+    <div class="edition"><span class="standard-copy">VI · 2026</span><span class="easy-only">VI · 2026</span><span class="en-only" lang="en">EN · 2026</span></div>
+  </footer>
+</main>
+
+
+
+<script>
+  (function () {
+    const STORAGE_KEY = "aie-reading-mode";
+    const VALID_MODES = ["easy", "quick", "deep"];
+    const modeButtons = document.querySelectorAll(".reading-controls [data-mode]");
+
+    function setMode(requestedMode, persist) {
+      const mode = VALID_MODES.includes(requestedMode) ? requestedMode : "deep";
+      document.documentElement.dataset.readingMode = mode;
+      modeButtons.forEach(function (button) {
+        button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
+      });
+      if (persist) {
+        try { localStorage.setItem(STORAGE_KEY, mode); } catch (_) {}
+      }
+    }
+
+    setMode(document.documentElement.dataset.readingMode, false);
+    modeButtons.forEach(function (button) {
+      button.addEventListener("click", function () { setMode(button.dataset.mode, true); });
+    });
+
+    const LANG_KEY = "aie-lang";
+    const langButtons = document.querySelectorAll(".lang-controls [data-lang-option]");
+
+    function setLang(requestedLang, persist) {
+      const lang = requestedLang === "en" ? "en" : "vi";
+      document.documentElement.dataset.lang = lang;
+      document.documentElement.setAttribute("lang", lang);
+      langButtons.forEach(function (button) {
+        button.setAttribute("aria-pressed", String(button.dataset.langOption === lang));
+      });
+      if (persist) {
+        try { localStorage.setItem(LANG_KEY, lang); } catch (_) {}
+      }
+    }
+
+    setLang(document.documentElement.dataset.lang, false);
+    langButtons.forEach(function (button) {
+      button.addEventListener("click", function () { setLang(button.dataset.langOption, true); });
+    });
+  })();
+
+  /* SECTION-RAIL: on-page section index (scroll-spy). Built from the page's own id'd
+     sections; reuses each heading's vi-only/en-only + reading-mode spans so language
+     and reading mode are handled by the existing CSS. No per-page markup. */
+  (function () {
+    if (document.querySelector(".section-rail")) return;
+    var main = document.querySelector("main") || document.body;
+    var targets = Array.prototype.slice.call(
+      document.querySelectorAll("main .section[id], main .closing[id]")
+    );
+    if (targets.length < 2) return;
+
+    function labelFor(sec) {
+      var id = sec.getAttribute("aria-labelledby");
+      var el = (id && document.getElementById(id)) ||
+               sec.querySelector(".section-heading h2, h2, h3, .eyebrow");
+      return el ? el.innerHTML : sec.id;
+    }
+
+    var nav = document.createElement("nav");
+    nav.className = "section-rail";
+    nav.setAttribute("aria-label", "Mục lục trang");
+    var list = document.createElement("ol");
+    list.className = "section-rail__list";
+    var byId = {};
+
+    targets.forEach(function (sec) {
+      var li = document.createElement("li");
+      li.className = "section-rail__item";
+      var a = document.createElement("a");
+      a.className = "section-rail__link";
+      a.href = "#" + sec.id;
+      a.innerHTML =
+        '<span class="section-rail__tick" aria-hidden="true"></span>' +
+        '<span class="section-rail__label">' + labelFor(sec) + "</span>";
+      li.appendChild(a);
+      list.appendChild(li);
+      byId[sec.id] = li;
+    });
+    nav.appendChild(list);
+    main.appendChild(nav);
+
+    var activeId = null;
+    function setActive(id) {
+      if (id === activeId) return;
+      if (activeId && byId[activeId]) byId[activeId].classList.remove("is-active");
+      if (id && byId[id]) byId[id].classList.add("is-active");
+      activeId = id;
+    }
+    function update() {
+      var line = window.innerHeight * 0.3;
+      var current = targets[0].id;
+      for (var i = 0; i < targets.length; i++) {
+        if (targets[i].getBoundingClientRect().top - line <= 0) current = targets[i].id;
+      }
+      setActive(current);
+    }
+    var ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(function () { update(); ticking = false; });
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    update();
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,1557 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 13 · Môi trường người dùng — How Linux Works</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 13 “User Environments” trong How Linux Works (Brian Ward, No Starch Press, 3rd ed., 2021): tệp khởi động của shell, đường dẫn lệnh, dấu nhắc, alias, umask, thứ tự đọc tệp của bash và tcsh, mặc định cho người dùng mới.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('hlw-reading-mode'),
+l=localStorage.getItem('hlw-lang'),
+t=localStorage.getItem('hlw-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"HOW LINUX WORKS / 13";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    How Linux Works
+    <span>Chương 13 · User Environments</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 13 · Môi trường người dùng</span>
+      <span class="en-only" lang="en">Chapter 13 · User Environments</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Hệ thống và người dùng phải gặp nhau ở đâu đó — chỗ đó là tệp khởi động</span>
+      <span class="easy-only">Mấy tệp nhỏ quyết định máy chào bạn thế nào</span>
+      <span class="en-only" lang="en">The system and the user have to meet somewhere — that somewhere is the startup file</span>
+    </h1>
+
+    <p class="standard-copy">Brian Ward mở chương bằng một lời thú nhận về phạm vi: quyển sách chủ yếu nói về những phần của hệ thống Linux nằm <i>dưới</i> các tiến trình máy chủ và các phiên làm việc tương tác. Nhưng rốt cuộc, hệ thống và người dùng vẫn phải gặp nhau ở đâu đó — và <b>tệp khởi động</b> chính là điểm gặp ấy, vì chúng đặt giá trị mặc định cho shell cùng các chương trình tương tác khác, và quyết định hệ thống cư xử ra sao khi một người dùng đăng nhập.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Khi bạn mở cửa sổ dòng lệnh, máy không hiện ra một cách ngẫu nhiên đâu. Có vài tệp nhỏ nằm sẵn trong thư mục nhà của bạn, ghi những câu như “tìm lệnh ở đâu”, “dấu nhắc trông thế nào”, “mở tệp văn bản bằng chương trình nào”. Máy đọc mấy tệp đó rồi mới chào bạn. <b>Nhớ nhé: máy chào bạn theo đúng những gì bạn viết sẵn trong tệp khởi động.</b></p>
+    <p class="en-only" lang="en">Brian Ward opens the chapter with an admission about scope: the book focuses mainly on the parts of the Linux system that normally <i>underlie</i> server processes and interactive user sessions. But eventually the system and the user have to meet somewhere — and <b>startup files</b> are that meeting point, because they set defaults for the shell and other interactive programs, and determine how the system behaves when a user logs in.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Ward mô tả chính xác cái vòng đời khiến các tệp này trở thành vấn đề: phần lớn người dùng không mấy để tâm tới tệp khởi động của mình, chỉ đụng vào khi muốn thêm một thứ gì đó cho tiện — chẳng hạn một <span lang="en">alias</span>. Theo thời gian, các tệp ấy bị chất đống bởi những biến môi trường không cần thiết và những phép kiểm tra thừa, dẫn tới các vấn đề gây khó chịu — hoặc khá nghiêm trọng.<span class="cite"><a href="#ref-1">1</a></span> Đó là lý do một chương chỉ dài mười một trang lại đứng ngang hàng với các chương về nhân và hệ thống tệp: nó nói về thứ duy nhất trong hệ thống mà <i>bạn</i> là tác giả.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> tệp khởi động shell nên <b>ít, ngắn, đơn giản và có chú thích đầy đủ</b>; bạn chỉ cần nắm một nhúm thành phần thiết yếu — đường dẫn lệnh, dấu nhắc, <span lang="en">alias</span>, mặt nạ quyền — và nắm đúng <b>thứ tự</b> mà shell đọc các tệp, bởi vì chính việc chọn sai tệp mới là phần khó nhất.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> viết ít thôi, viết ngắn thôi, và ghi chú cho rõ. Rồi nhớ xem máy đọc tệp nào trước, tệp nào sau. <b>Nhớ nhé: ít mà đúng chỗ, hơn nhiều mà rối.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> shell startup files should be <b>few, short, simple and heavily commented</b>; you only need a handful of essential elements — the command path, the prompt, <span lang="en">aliases</span>, the permissions mask — plus a correct grasp of the <b>order</b> in which the shell reads those files, because choosing the right file is the genuinely hard part.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: tệp khởi động đứng giữa hệ thống và người dùng, gồm đường dẫn lệnh, dấu nhắc và alias, mặt nạ quyền umask. Diagram: startup files sit between the system and the user, holding the command path, the prompt and aliases, and the umask permissions mask.">
+    <div class="core">
+      <b>Startup files</b>
+      <small class="standard-copy">Nơi hệ thống và người dùng gặp nhau</small>
+      <small class="easy-only">Chỗ bạn dặn máy phải làm gì</small>
+      <small class="en-only" lang="en">Where the system and the user meet</small>
+    </div>
+
+    <div class="node">
+      <b>Command path</b>
+      <small class="standard-copy">Tối thiểu, theo thứ tự: <code>/usr/local/bin</code>, <code>/usr/bin</code>, <code>/bin</code></small>
+      <small class="easy-only">Danh sách chỗ máy đi tìm lệnh</small>
+      <small class="en-only" lang="en">At minimum, in order: <code>/usr/local/bin</code>, <code>/usr/bin</code>, <code>/bin</code></small>
+    </div>
+
+    <div class="node">
+      <b>Prompt &amp; aliases</b>
+      <small class="standard-copy"><code>PS1='\u\$ '</code> — ngắn, không chứa ký tự đặc biệt của shell</small>
+      <small class="easy-only">Dòng chữ máy hiện ra trước khi bạn gõ</small>
+      <small class="en-only" lang="en"><code>PS1='\u\$ '</code> — short, free of shell-significant characters</small>
+    </div>
+
+    <div class="node">
+      <b>umask</b>
+      <small class="standard-copy"><code>022</code> hoặc <code>077</code> — quyền mặc định cho mọi tệp bạn tạo</small>
+      <small class="easy-only">Ai được xem tệp bạn vừa tạo</small>
+      <small class="en-only" lang="en"><code>022</code> or <code>077</code> — the default permissions on every file you create</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#tep-dot">
+    <span>01</span>
+    <b class="standard-copy">Tệp dot và hai nguyên tắc thiết kế</b>
+    <b class="easy-only">Tệp chấm là gì</b>
+    <b class="en-only" lang="en">Dot files and two design goals</b>
+  </a>
+  <a href="#thanh-phan">
+    <span>02</span>
+    <b class="standard-copy">Năm thành phần của một tệp khởi động</b>
+    <b class="easy-only">Trong tệp có những gì</b>
+    <b class="en-only" lang="en">Five elements of a startup file</b>
+  </a>
+  <a href="#thu-tu-doc">
+    <span>03</span>
+    <b class="standard-copy">Thứ tự đọc tệp: bash và tcsh</b>
+    <b class="easy-only">Máy đọc tệp nào trước</b>
+    <b class="en-only" lang="en">Startup file order: bash and tcsh</b>
+  </a>
+  <a href="#mac-dinh">
+    <span>04</span>
+    <b class="standard-copy">Mặc định cho người dùng mới và các cạm bẫy</b>
+    <b class="easy-only">Đặt mặc định cho người khác</b>
+    <b class="en-only" lang="en">Defaults for new users, and the pitfalls</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>05</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="tep-dot" aria-labelledby="tep-dot-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="tep-dot-title">
+      <span class="standard-copy">Tệp dot, hai mục tiêu thiết kế, và khi nào thì nên sửa</span>
+      <span class="easy-only">Tệp chấm là gì, và khi nào nên đụng vào</span>
+      <span class="en-only" lang="en">Dot files, two design goals, and when to alter them</span>
+    </h2>
+    <p class="standard-copy">Nếu bạn đã dùng máy Linux một thời gian, thư mục nhà của bạn hẳn đã tích tụ một lượng tệp khởi động nhiều đến mức khó hiểu. Ward gọi chúng là <b>dot file</b>, vì chúng gần như luôn bắt đầu bằng một dấu chấm — nhờ đó bị loại khỏi phần hiển thị mặc định của <code>ls</code> và của hầu hết trình quản lý tệp. Nhiều tệp trong số đó được tự động tạo ra lần đầu bạn chạy một chương trình, và bạn sẽ chẳng bao giờ cần sửa chúng; chương này chủ yếu bàn về <b>tệp khởi động shell</b> — nhóm bạn có nhiều khả năng sửa hoặc viết lại từ đầu nhất.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Trong thư mục nhà của bạn có nhiều tệp tên bắt đầu bằng dấu chấm, ví dụ <code>.bashrc</code>. Vì có dấu chấm nên bình thường bạn không thấy chúng — muốn thấy thì phải bảo <code>ls</code> hiện ra. Phần lớn là do các chương trình tự tạo, bạn cứ để yên. Chương này chỉ nói về vài tệp của shell thôi. <b>Nhớ nhé: tệp bắt đầu bằng dấu chấm là tệp ẩn, và bạn chỉ cần quan tâm mấy tệp của shell.</b></p>
+    <p class="en-only" lang="en">If you've had your Linux machine for a while, your home directory has probably accumulated a bafflingly large array of startup files. Ward calls them <b>dot files</b>, because they nearly always start with a dot — which excludes them from the default display of <code>ls</code> and of most file managers. Many are created automatically the first time you run a program, and you'll never need to change them; this chapter primarily covers <b>shell startup files</b>, the ones you're most likely to modify or rewrite from scratch.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Tệp khởi động</i> (startup file) là tệp mà shell đọc và thực thi khi nó bắt đầu chạy, trước khi trao dấu nhắc cho bạn. Trong bash, tài liệu chính thức mô tả nhóm này gồm <code>/etc/profile</code>, <code>~/.bash_profile</code>, <code>~/.bash_login</code>, <code>~/.profile</code> và <code>~/.bashrc</code>; nếu một tệp tồn tại nhưng không đọc được, bash báo lỗi.<span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Tệp khởi động là tờ giấy dặn dò bạn để sẵn cho shell: “trước khi nói chuyện với tôi, hãy làm mấy việc này”. <b>Nhớ nhé: shell đọc tờ giấy đó trước, rồi mới chào bạn.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A <i>startup file</i> is a file the shell reads and executes as it starts, before handing you a prompt. For bash, the reference manual describes this group as <code>/etc/profile</code>, <code>~/.bash_profile</code>, <code>~/.bash_login</code>, <code>~/.profile</code> and <code>~/.bashrc</code>; if any of these files exists but cannot be read, bash reports an error.<span class="cite"><a href="#ref-2">2</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">Simplicity → ít tệp, ngắn, khó hỏng<br>Readability → chú thích dày đặc<br>---<br>mỗi mục thêm vào<br>&nbsp;&nbsp;= một thứ nữa có thể hỏng</p>
+      <p class="easy-only">Ít tệp + ngắn gọn<br>+ ghi chú rõ ràng<br>= tệp khởi động tốt</p>
+      <p class="en-only" lang="en">Simplicity → few files, short, hard to break<br>Readability → extensive comments<br>---<br>each item you add<br>&nbsp;&nbsp;= one more thing that can break</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">dot file</span>
+      <h3>
+        <span class="standard-copy">Dot file — tệp cấu hình ẩn trong thư mục nhà</span>
+        <span class="easy-only">Dot file — tệp có dấu chấm ở đầu tên</span>
+        <span class="en-only" lang="en">Dot file — the hidden config in your home directory</span>
+      </h3>
+      <p class="standard-copy">Cái tên chỉ mô tả một quy ước đặt tên, không phải một cơ chế của nhân: vì tên bắt đầu bằng dấu chấm, công cụ liệt kê tệp bỏ qua chúng trong danh sách mặc định.<span class="cite"><a href="#ref-1">1</a></span> Bản thân <code>ls</code> chỉ hiện chúng khi bạn yêu cầu tường minh bằng <code>-a</code> (hiện tất cả) hoặc <code>-A</code> (tất cả, trừ <code>.</code> và <code>..</code>).<span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only">Dấu chấm ở đầu tên chỉ là một quy ước để giấu bớt cho đỡ rối mắt, chứ không phải khoá bảo mật gì cả. Gõ <code>ls -a</code> là thấy hết. <b>Nhớ nhé: ẩn không có nghĩa là bí mật.</b></p>
+      <p class="en-only" lang="en">The name describes a naming convention, not a kernel mechanism: because the name begins with a dot, listing tools omit these files from the default display.<span class="cite"><a href="#ref-1">1</a></span> <code>ls</code> itself shows them only when you ask explicitly, with <code>-a</code> (show all) or <code>-A</code> (all except <code>.</code> and <code>..</code>).<span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lần đầu bạn chạy một chương trình mới và nó lặng lẽ sinh ra một thư mục cấu hình trong <code>$HOME</code> mà bạn không hề thấy trong <code>ls</code>.</span>
+        <span class="easy-only">Mỗi lần bạn mở một phần mềm mới và nó tự nhớ thiết lập của bạn cho lần sau.</span>
+        <span class="en-only" lang="en">The first time you run a new program and it quietly creates a configuration directory in <code>$HOME</code> that never shows up in <code>ls</code>.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Lời dặn của tác giả</h4>
+          <p>Ward nói rõ rằng phần lớn các dot file này <i>bạn sẽ không bao giờ cần sửa</i>; chỉ có nhóm tệp khởi động shell mới đáng để bạn bỏ công.<span class="cite"><a href="#ref-1">1</a></span> Đây là một phép chọn lọc chủ động: biết cái gì <i>không</i> cần động tới cũng quan trọng ngang biết cái gì cần.</p>
+        </div>
+        <div class="info-block">
+          <h4>Cái giá của sự tích tụ</h4>
+          <p>Theo thời gian, các tệp trở nên bừa bộn với những biến môi trường không cần thiết và những phép kiểm tra thừa, dẫn tới các vấn đề gây khó chịu hoặc khá nghiêm trọng.<span class="cite"><a href="#ref-1">1</a></span> Cái đắt không phải một dòng sai, mà là một trăm dòng không ai còn nhớ vì sao có ở đó.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">simplicity &amp; readability</span>
+      <h3>
+        <span class="standard-copy">Đơn giản và dễ đọc — hai mục tiêu duy nhất</span>
+        <span class="easy-only">Viết ngắn và ghi chú rõ</span>
+        <span class="en-only" lang="en">Simplicity and readability — the only two goals</span>
+      </h3>
+      <p class="standard-copy">Khi tạo tệp khởi động cho người khác, Ward yêu cầu giữ hai mục tiêu thiết yếu trong đầu. <b>Simplicity:</b> giữ số tệp ít, và giữ mỗi tệp ngắn và đơn giản nhất có thể, sao cho chúng dễ sửa mà khó hỏng — vì “mỗi mục trong một tệp khởi động chỉ là thêm một thứ nữa có thể hỏng”. <b>Readability:</b> dùng chú thích thật rộng rãi, để người dùng hình dung được mỗi phần của tệp làm gì.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Chỉ cần nhớ hai điều: viết ít thôi, và viết chú thích cho rõ. Càng thêm nhiều dòng, càng nhiều chỗ có thể hỏng. <b>Nhớ nhé: mỗi dòng bạn thêm vào là một dòng có thể làm bạn khổ sau này.</b></p>
+      <p class="en-only" lang="en">When creating startup files for other users, Ward asks you to keep two essential goals in mind. <b>Simplicity:</b> keep the number of startup files small, and keep each file as short and simple as possible, so they're easy to modify but hard to break — because "each item in a startup file is just one more thing that can break." <b>Readability:</b> use extensive comments so users get a good picture of what each part of a file does.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bạn chép tệp khởi động của mình sang một máy mới và mất nửa buổi để hiểu dòng thứ ba mình viết năm ngoái để làm gì.</span>
+        <span class="easy-only">Khi bạn mở lại tệp cũ của chính mình và không còn nhớ nổi mình đã viết gì.</span>
+        <span class="en-only" lang="en">When you copy your own startup files to a new machine and lose half a morning working out what line three was for.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao quy mô thay đổi mọi thứ</h4>
+          <p>Ward đặt bài toán rất cụ thể: nếu bạn là người dùng duy nhất trên máy thì chẳng có gì phải lo, vì lỗi chỉ ảnh hưởng tới bạn và dễ sửa. Nhưng nếu bạn đang tạo tệp khởi động làm mặc định cho <i>mọi</i> người dùng mới trên một máy hay một mạng, quá trình này trở nên nghiêm trọng hơn hẳn — “nếu bạn phạm một lỗi trong tệp khởi động rồi phát cho 10 người dùng, bạn có thể sẽ phải sửa lỗi đó 10 lần”.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Rủi ro lan truyền</h4>
+          <p>Ông thêm một trường hợp dễ bị bỏ sót: ngay cả khi bạn không cố ý phân phát, vẫn có khả năng ai đó chép tệp của bạn để dùng trên một máy khác.<span class="cite"><a href="#ref-1">1</a></span> Tệp khởi động là thứ lan truyền bằng sao chép, không bằng cài đặt — nên nó không có cơ chế cập nhật nào cả.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">when to alter</span>
+      <h3>
+        <span class="standard-copy">Khi nào thì nên sửa — ba lý do chính đáng</span>
+        <span class="easy-only">Ba lúc nên sửa, còn lại thì thôi</span>
+        <span class="en-only" lang="en">When to alter — three good reasons</span>
+      </h3>
+      <p class="standard-copy">Trước khi thay đổi một tệp khởi động, Ward bảo hãy tự hỏi liệu bạn có thật sự nên làm việc đó không. Ông liệt kê ba lý do chính đáng: bạn muốn đổi dấu nhắc mặc định; bạn cần đáp ứng một phần mềm cài đặt cục bộ có tính then chốt (dù vậy, hãy cân nhắc dùng <span lang="en">wrapper script</span> trước đã); hoặc các tệp khởi động hiện có của bạn đã hỏng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Chỉ sửa khi: bạn muốn đổi dòng chữ dấu nhắc, bạn cần chạy một phần mềm riêng, hoặc tệp cũ đang hỏng. Ngoài ba lý do đó thì cứ để yên. <b>Nhớ nhé: không hỏng thì đừng sửa.</b></p>
+      <p class="en-only" lang="en">Before changing a startup file, Ward asks you to question whether you really should. He lists three good reasons: you want to change the default prompt; you need to accommodate some critical locally installed software (though consider a <span lang="en">wrapper script</span> first); or your existing startup files are broken.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một trình cài đặt hỏi xin “thêm một dòng vào <code>.bashrc</code> của bạn” — đó đúng là lúc nên hỏi lại: có cách nào khác không?</span>
+        <span class="easy-only">Khi một phần mềm xin tự thêm dòng vào tệp của bạn.</span>
+        <span class="en-only" lang="en">When an installer asks to "add one line to your <code>.bashrc</code>" — precisely the moment to ask whether there is another way.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cảnh báo về tương tác</h4>
+          <p>Ward dặn: nếu mọi thứ trong bản phân phối Linux của bạn đang chạy tốt, hãy cẩn thận — đôi khi các tệp khởi động mặc định tương tác với những tệp khác trong <code>/etc</code>.<span class="cite"><a href="#ref-1">1</a></span> Nói cách khác, tệp trong thư mục nhà của bạn không sống một mình; nó là một mắt trong chuỗi mà quản trị viên bản phân phối đã dựng sẵn.</p>
+        </div>
+        <div class="info-block">
+          <h4>Wrapper script: lựa chọn thay thế</h4>
+          <p>“Hãy cân nhắc dùng wrapper script trước” không phải một lời khuyên vu vơ. Ward dùng lại đúng kỹ thuật ấy ở Chương 15 cho trường hợp <code>LD_LIBRARY_PATH</code>: thay vì đặt biến trong tệp khởi động — ảnh hưởng tới mọi chương trình — bạn viết một script ngắn đặt biến rồi <code>exec</code> chương trình cần chạy, giới hạn tác động vào đúng một chỗ.<span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Hai mục tiêu ấy nghe như lời khuyên về phong cách, nhưng chúng thật ra là một <i>ràng buộc kỹ thuật</i>: tệp khởi động chạy trong mọi shell tương tác của bạn, nên mỗi dòng bạn thêm đều là mã chạy hàng chục lần mỗi ngày mà không ai kiểm thử. Phần tiếp theo cắt nhỏ “nội dung tối thiểu” ấy thành năm thành phần cụ thể.</p>
+    <p class="easy-only">Mấy lời khuyên trên không phải chuyện thẩm mỹ đâu: những dòng đó chạy thật, mỗi ngày, rất nhiều lần. Giờ ta xem trong tệp nên có những gì. <b>Nhớ nhé: cái gì chạy mỗi ngày thì phải thật đơn giản.</b></p>
+    <p class="en-only" lang="en">Those two goals sound like style advice, but they are really a <i>technical constraint</i>: a startup file runs in every interactive shell you open, so each line you add is code executed dozens of times a day that nobody tests. The next section cuts that "minimum contents" into five concrete elements.</p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="thanh-phan" aria-labelledby="thanh-phan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="thanh-phan-title">
+      <span class="standard-copy">Năm thành phần: đường dẫn lệnh, đường dẫn man, dấu nhắc, alias, mặt nạ quyền</span>
+      <span class="easy-only">Trong tệp khởi động nên có những gì</span>
+      <span class="en-only" lang="en">Five elements: command path, manual path, prompt, aliases, permissions mask</span>
+    </h2>
+    <p class="standard-copy">Ward đặt câu hỏi mở đầu rất thẳng: cái gì nên nằm trong một tệp khởi động shell? Vài thứ có vẻ hiển nhiên — đường dẫn lệnh và một thiết lập dấu nhắc. Nhưng chính xác thì trong đường dẫn nên có gì, một dấu nhắc hợp lý trông ra sao, và bao nhiêu là <i>quá nhiều</i> để nhét vào một tệp khởi động?<span class="cite"><a href="#ref-1">1</a></span> Phần này đi qua đúng năm thứ thiết yếu ông liệt kê.</p>
+    <p class="easy-only">Trong tệp khởi động chỉ cần năm thứ: chỗ tìm lệnh, chỗ tìm trang hướng dẫn, dòng dấu nhắc, mấy lối viết tắt, và quyền mặc định cho tệp mới. <b>Nhớ nhé: năm thứ thôi, đừng thêm.</b></p>
+    <p class="en-only" lang="en">Ward's opening question is blunt: what goes into a shell startup file? Some things seem obvious — the command path and a prompt setting. But what exactly should be in the path, what does a reasonable prompt look like, and how much is <i>too much</i> to put in a startup file?<span class="cite"><a href="#ref-1">1</a></span> This section walks the five essentials he lists.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>PATH</code> là chuỗi các tiền tố thư mục mà shell và nhiều chương trình khác dùng khi tìm một tệp thực thi được chỉ định bằng tên đơn giản (tên không chứa dấu gạch chéo). Các tiền tố ngăn cách bằng dấu hai chấm, và danh sách được duyệt <b>từ đầu đến cuối</b>.<span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> <code>PATH</code> là danh sách các ngăn tủ. Bạn gõ tên một lệnh, máy mở lần lượt từng ngăn từ trái sang phải, thấy ở ngăn nào trước thì dùng cái đó. <b>Nhớ nhé: ngăn đứng trước thì thắng.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>PATH</code> is the sequence of directory prefixes the shell and many other programs use when searching for an executable named by a simple filename (one containing no slashes). Prefixes are separated by colons, and the list is searched <b>from beginning to end</b>.<span class="cite"><a href="#ref-5">5</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy"># tối thiểu, đúng thứ tự<br>/usr/local/bin<br>/usr/bin<br>/bin<br><br># tuỳ chọn, thêm vào đầu<br>$HOME/bin</p>
+      <p class="easy-only">/usr/local/bin<br>/usr/bin<br>/bin<br>(+ $HOME/bin nếu muốn)</p>
+      <p class="en-only" lang="en"># minimum, in this order<br>/usr/local/bin<br>/usr/bin<br>/bin<br><br># optional, at the front<br>$HOME/bin</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">the command path</span>
+      <h3>
+        <span class="standard-copy">Command path — phần quan trọng nhất của tệp</span>
+        <span class="easy-only">Đường dẫn lệnh — chỗ máy đi tìm lệnh</span>
+        <span class="en-only" lang="en">The command path — the most important part of the file</span>
+      </h3>
+      <p class="standard-copy">Ward gọi đường dẫn lệnh là phần quan trọng nhất của bất kỳ tệp khởi động shell nào. Nó phải bao phủ các thư mục chứa mọi ứng dụng mà một người dùng thông thường quan tâm, và tối thiểu phải chứa ba thành phần này, <b>theo thứ tự</b>: <code>/usr/local/bin</code>, <code>/usr/bin</code>, <code>/bin</code>. Thứ tự ấy bảo đảm rằng bạn có thể ghi đè các chương trình mặc định chuẩn bằng biến thể riêng của site đặt trong <code>/usr/local</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Đây là phần quan trọng nhất. Ba ngăn tủ theo đúng thứ tự: <code>/usr/local/bin</code> trước, rồi <code>/usr/bin</code>, rồi <code>/bin</code>. Đặt ngăn “của riêng máy này” lên trước để nó thắng ngăn chung. <b>Nhớ nhé: cái riêng đứng trước cái chung.</b></p>
+      <p class="en-only" lang="en">Ward calls the command path the most important part of any shell startup file. It should cover the directories containing every application of interest to a regular user, and at minimum must contain these three components, <b>in order</b>: <code>/usr/local/bin</code>, <code>/usr/bin</code>, <code>/bin</code>. That order ensures you can override standard default programs with site-specific variants located in <code>/usr/local</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi hai phiên bản của cùng một công cụ cùng tồn tại trên máy và bạn cần biết phiên bản nào sẽ chạy — câu trả lời nằm ở thứ tự trong <code>PATH</code>.</span>
+        <span class="easy-only">Khi máy chạy nhầm phiên bản cũ của một lệnh.</span>
+        <span class="en-only" lang="en">When two versions of the same tool coexist on a machine and you need to know which one runs — the answer is the order inside <code>PATH</code>.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao /usr/local đứng trước</h4>
+          <p>Chuẩn FHS dành riêng cây <code>/usr/local</code> cho quản trị viên khi cài phần mềm cục bộ, và nó phải an toàn trước việc bị ghi đè khi phần mềm hệ thống được cập nhật; phần mềm cài cục bộ <i>phải</i> được đặt trong <code>/usr/local</code> thay vì <code>/usr</code>, trừ khi nó nhằm thay thế hoặc nâng cấp phần mềm trong <code>/usr</code>.<span class="cite"><a href="#ref-6">6</a></span> Quy tắc thứ tự của Ward chỉ là hệ quả thực hành của ranh giới ấy.</p>
+        </div>
+        <div class="info-block">
+          <h4>Đừng nối dài PATH theo từng phần mềm</h4>
+          <p>Ward dặn đừng đổi đường dẫn mặc định trong môi trường người dùng để chiều theo mỗi thư mục cài đặt phần mềm mới; cách rẻ tiền để dung nạp các thư mục cài đặt riêng là dùng <b>liên kết tượng trưng</b> trong <code>/usr/local/bin</code>.<span class="cite"><a href="#ref-1">1</a></span> Ông cũng lưu ý rằng nếu một chương trình dùng chung nào đó không truy cập được qua các thư mục nói trên, thì hệ thống của bạn có lẽ đang vượt khỏi tầm kiểm soát.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Thư mục riêng và các thư mục sbin</h4>
+          <p>Nhiều người tạo một thư mục <code>bin</code> của riêng mình để chứa script và chương trình, nên bạn có thể muốn thêm <code>$HOME/bin</code> vào <i>đầu</i> đường dẫn; Ward ghi chú rằng một quy ước mới hơn là đặt các tệp nhị phân trong <code>$HOME/.local/bin</code>.<span class="cite"><a href="#ref-1">1</a></span> Quy ước ấy cũng được đặc tả phân cấp tệp của UAPI/systemd liệt kê như vị trí chuẩn cho tệp thực thi thuộc về một người dùng.<span class="cite"><a href="#ref-7">7</a></span> Nếu bạn quan tâm tới các tiện ích hệ thống như <code>sysctl</code>, <code>fdisk</code>, <code>lsmod</code>, hãy thêm <code>/usr/local/sbin</code>, <code>/usr/sbin</code>, <code>/sbin</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Dấu chấm trong PATH: đừng</h4>
+          <p>Ward dành hẳn một khung cho một thành phần nhỏ nhưng gây tranh cãi: dấu chấm. Đặt <code>.</code> vào đường dẫn cho phép bạn chạy chương trình trong thư mục hiện tại mà không cần <code>./</code> ở đầu tên — nhưng đó là một ý tồi vì hai lý do. <b>Một,</b> nó là vấn đề an ninh: bạn không bao giờ nên đặt dấu chấm ở <i>đầu</i> đường dẫn, vì kẻ tấn công có thể đặt một con ngựa thành Troy tên <code>ls</code> trong một kho lưu trữ phát tán trên internet; và ngay cả khi dấu chấm nằm ở cuối, bạn vẫn dễ tổn thương trước kẻ đoán trước các lỗi gõ nhầm như <code>sl</code> hay <code>ks</code>. <b>Hai,</b> nó thiếu nhất quán và dễ gây lẫn lộn: một dấu chấm trong đường dẫn có nghĩa là hành vi của một lệnh sẽ thay đổi tuỳ theo thư mục hiện tại.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">the manual page path</span>
+      <h3>
+        <span class="standard-copy">MANPATH — thành phần bạn nên <i>không</i> đặt</span>
+        <span class="easy-only">Đường dẫn trang hướng dẫn — cứ để yên</span>
+        <span class="en-only" lang="en">MANPATH — the element you should <i>not</i> set</span>
+      </h3>
+      <p class="standard-copy">Đây là mục ngắn nhất trong chương, và nội dung của nó là một lời từ chối: đường dẫn trang hướng dẫn theo truyền thống được quy định bởi biến môi trường <code>MANPATH</code>, nhưng bạn <b>không nên</b> đặt nó, vì làm vậy sẽ ghi đè các mặc định hệ thống trong <code>/etc/manpath.config</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Có một biến tên <code>MANPATH</code> chỉ chỗ chứa trang hướng dẫn. Đừng đặt nó. Hệ thống tự biết rồi. <b>Nhớ nhé: biết một thứ không nên đụng vào cũng là kiến thức.</b></p>
+      <p class="en-only" lang="en">This is the shortest item in the chapter, and its content is a refusal: the traditional manual page path was determined by the <code>MANPATH</code> environment variable, but you <b>shouldn't</b> set it, because doing so overrides the system defaults in <code>/etc/manpath.config</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một trang <code>man</code> đáng lẽ phải tồn tại bỗng “không tìm thấy” — thủ phạm rất hay là một <code>MANPATH</code> do ai đó đặt cứng nhiều năm trước.</span>
+        <span class="easy-only">Khi gõ <code>man</code> một lệnh mà máy bảo không có trang hướng dẫn.</span>
+        <span class="en-only" lang="en">When a <code>man</code> page that ought to exist comes back "not found" — the culprit is very often a hard-coded <code>MANPATH</code> someone set years ago.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cơ chế tự suy ra</h4>
+          <p>Lý do lời khuyên này đứng vững: theo mặc định, <span lang="en">man-db</span> tự khảo sát <code>$PATH</code> của người dùng, và với mỗi thành phần đường dẫn nó thêm một thành phần manpath tương ứng vào đường dẫn tìm kiếm — nếu tệp cấu hình không có dòng <code>MANPATH_MAP</code> cho thành phần đó, nó thêm các thư mục <code>path_element/../man</code>, <code>path_element/man</code>, <code>path_element/../share/man</code> và <code>path_element/share/man</code> nào thật sự tồn tại.<span class="cite"><a href="#ref-8">8</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đặt rồi thì hệ thống nhường</h4>
+          <p>Trang hướng dẫn về định dạng tệp cấu hình nói thẳng: nếu biến môi trường <code>$MANPATH</code> đã được đặt, thông tin trong tệp cấu hình <i>sẽ không</i> ghi đè lên nó.<span class="cite"><a href="#ref-8">8</a></span> Nghĩa là một dòng bạn viết vội trong <code>.bashrc</code> sẽ âm thầm vô hiệu hoá toàn bộ cấu hình của bản phân phối — đúng thứ Ward muốn bạn tránh.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">the prompt</span>
+      <h3>
+        <span class="standard-copy">Dấu nhắc — ngắn, và tránh ký tự nguy hiểm</span>
+        <span class="easy-only">Dấu nhắc — dòng chữ trước con trỏ</span>
+        <span class="en-only" lang="en">The prompt — short, and free of dangerous characters</span>
+      </h3>
+      <p class="standard-copy">Ward quan sát rằng người dùng có kinh nghiệm thường tránh các dấu nhắc dài, phức tạp và vô dụng, trong khi nhiều quản trị viên và bản phân phối lại lôi mọi thứ vào dấu nhắc mặc định — ngay cả nhiều dấu nhắc mặc định của shell cũng bừa bộn hoặc gần như vô ích; ví dụ dấu nhắc bash mặc định chứa tên shell và số hiệu phiên bản. Lựa chọn của bạn nên phản ánh nhu cầu của người dùng: hãy đặt thư mục làm việc hiện tại, tên máy và tên người dùng vào dấu nhắc <i>nếu</i> nó thật sự giúp ích.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Dấu nhắc là dòng chữ máy hiện ra trước chỗ bạn gõ. Đừng nhét quá nhiều thứ vào đó. Chỉ để những gì bạn thật sự cần nhìn. <b>Nhớ nhé: dấu nhắc ngắn thì nhìn lệnh của mình mới rõ.</b></p>
+      <p class="en-only" lang="en">Ward observes that experienced users tend to avoid long, complicated, useless prompts, while many administrators and distributions drag everything into the default — even many shell default prompts are cluttered or mostly useless; the default bash prompt, for example, contains the shell name and version number. Your choice should reflect your users' needs: put the current working directory, hostname and username in the prompt <i>if</i> it really helps.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bạn chụp màn hình terminal để nhờ người khác xem và nửa bề ngang đã bị dấu nhắc chiếm mất.</span>
+        <span class="easy-only">Khi dòng dấu nhắc dài đến mức lệnh của bạn bị đẩy xuống dòng.</span>
+        <span class="en-only" lang="en">When you screenshot a terminal to ask for help and half the width is already taken by the prompt.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ký tự phải tránh</h4>
+          <p>Trên hết, Ward dặn tránh những ký tự có ý nghĩa đặc biệt với shell, cụ thể là: <code>{ } = &amp; &lt; &gt;</code>. Ông ghi chú riêng ký tự <code>&gt;</code>: hãy đặc biệt cẩn thận với nó, vì nó có thể khiến những tệp rỗng xuất hiện thất thường trong thư mục hiện tại nếu bạn vô tình sao chép rồi dán một đoạn cửa sổ shell — bởi <code>&gt;</code> chuyển hướng đầu ra vào một tệp.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Thiết lập tối thiểu</h4>
+          <p>Thiết lập đơn giản mà ông đưa ra cho bash kết thúc bằng ký tự <code>$</code> theo thông lệ (dấu nhắc csh truyền thống kết thúc bằng <code>%</code>): <code>PS1='\u\$ '</code>. Trong đó <code>\u</code> là một biểu thức mà shell ước lượng thành tên người dùng hiện tại — xem mục <span lang="en">PROMPTING</span> của trang hướng dẫn <code>bash(1)</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Bốn biểu thức thông dụng khác</h4>
+          <p>Ward liệt kê: <code>\h</code> tên máy (dạng ngắn, không có tên miền); <code>\!</code> số hiệu lịch sử; <code>\w</code> thư mục hiện tại — vì nó có thể dài, bạn có thể giới hạn hiển thị chỉ còn thành phần cuối bằng <code>\W</code>; và <code>\$</code> cho ra <code>$</code> nếu đang chạy dưới tài khoản người dùng, <code>#</code> nếu là root.<span class="cite"><a href="#ref-1">1</a></span> Trang <code>bash(1)</code> xác nhận từng mục: <code>\h</code> là tên máy tính tới dấu chấm đầu tiên, <code>\w</code> là giá trị <code>$PWD</code> với <code>$HOME</code> viết tắt thành dấu ngã, <code>\W</code> là thành phần cuối của <code>$PWD</code>, <code>\!</code> là số hiệu lịch sử của lệnh này, và <code>\$</code> cho <code>#</code> nếu UID hiệu dụng bằng 0, ngược lại cho <code>$</code>.<span class="cite"><a href="#ref-9">9</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">aliases</span>
+      <h3>
+        <span class="standard-copy">Alias — tiện, nhưng hãy tránh khi có thể</span>
+        <span class="easy-only">Alias — lối viết tắt cho lệnh</span>
+        <span class="en-only" lang="en">Aliases — handy, but avoid them where you can</span>
+      </h3>
+      <p class="standard-copy">Ward xếp alias vào “những điểm gai góc hơn” của môi trường người dùng đương đại: đó là một tính năng của shell thay thế một chuỗi này bằng một chuỗi khác trước khi thực thi lệnh. Alias có thể là lối tắt hiệu quả giúp đỡ phải gõ, nhưng chúng có vài nhược điểm — thao tác với tham số có thể rắc rối; chúng gây lẫn lộn, vì lệnh dựng sẵn <code>which</code> của shell có thể cho bạn biết một thứ có phải alias hay không nhưng không nói nó được định nghĩa ở đâu; và chúng bị xem thường trong <span lang="en">subshell</span> và shell không tương tác, vì không được truyền xuống shell con.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Alias là lối viết tắt: bạn đặt một tên ngắn cho một lệnh dài. Tiện thật, nhưng dễ làm bạn quên mất lệnh thật trông thế nào, và nó không theo bạn vào các shell khác. <b>Nhớ nhé: viết tắt cho mình thì được, đừng ép người khác dùng.</b></p>
+      <p class="en-only" lang="en">Ward files aliases under the "stickier points" of contemporary user environments: an alias is a shell feature that substitutes one string for another before executing a command. Aliases can be efficient shortcuts that save typing, but they have several drawbacks — manipulating arguments can be tricky; they're confusing, since a shell's built-in <code>which</code> can tell you whether something is an alias but not where it was defined; and they're frowned upon in <span lang="en">subshells</span> and noninteractive shells, since they aren't passed on to child shells.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một script bạn viết chạy khác hẳn lúc bạn gõ tay cùng lệnh đó — vì script là shell không tương tác, và alias không có ở đó.</span>
+        <span class="easy-only">Khi lệnh chạy trong script không giống lúc bạn tự gõ.</span>
+        <span class="en-only" lang="en">When a script you wrote behaves differently from the same command typed by hand — because a script is a noninteractive shell, and your alias isn't there.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Sai lầm kinh điển</h4>
+          <p>Ward chỉ đích danh: một sai lầm kinh điển khi định nghĩa alias là thêm tham số phụ vào một lệnh sẵn có — chẳng hạn đặt alias <code>ls</code> thành <code>ls -F</code>. Tốt nhất thì nó khiến bạn khó gỡ bỏ tham số <code>-F</code> khi không muốn dùng; tệ nhất thì nó gây hậu quả nghiêm trọng cho người dùng không hiểu rằng họ <i>không</i> đang dùng tham số mặc định.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hàm shell thay vì alias</h4>
+          <p>Kết luận của ông: với những nhược điểm ấy, bạn nên tránh alias bất cứ khi nào có thể — viết một hàm shell hay hẳn một script mới còn dễ hơn; máy tính khởi động và thực thi shell nhanh đến mức khác biệt giữa một alias và một lệnh hoàn toàn mới là không đáng kể.<span class="cite"><a href="#ref-1">1</a></span> Trang <code>bash(1)</code> nói cùng một điều theo lối kỹ thuật: không có cơ chế dùng tham số trong văn bản thay thế của alias — nếu cần tham số, hãy dùng hàm shell; và “với hầu hết mọi mục đích, hàm shell được ưa chuộng hơn alias”.<span class="cite"><a href="#ref-9">9</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Chỗ alias vẫn hữu dụng</h4>
+          <p>Ward không cấm tuyệt đối: alias vẫn tiện khi bạn muốn thay đổi một phần <i>môi trường</i> của shell. Bạn không thể đổi một biến môi trường bằng một script, vì script chạy như subshell — nhưng bạn có thể định nghĩa hàm shell để làm việc đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">the permissions mask</span>
+      <h3>
+        <span class="standard-copy">umask — 022 hay 077, và vì sao</span>
+        <span class="easy-only">umask — ai được xem tệp bạn tạo</span>
+        <span class="en-only" lang="en">umask — 022 or 077, and why</span>
+      </h3>
+      <p class="standard-copy">Như đã mô tả ở Chương 2, tiện ích dựng sẵn <code>umask</code> (mặt nạ quyền) của shell đặt quyền mặc định của bạn. Ward khuyên đưa lệnh <code>umask</code> vào một trong các tệp khởi động để chắc chắn rằng mọi chương trình bạn chạy đều tạo tệp với quyền bạn mong muốn, và ông đưa ra hai lựa chọn hợp lý: <b>077</b> — mặt nạ hạn chế nhất, không cho người dùng nào khác truy cập tệp và thư mục mới; và <b>022</b> — cho người khác quyền đọc với tệp và thư mục mới.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><code>umask</code> quyết định người khác có xem được tệp bạn vừa tạo hay không. <code>022</code> nghĩa là người khác đọc được; <code>077</code> nghĩa là chỉ mình bạn. <b>Nhớ nhé: 022 là mở cho xem, 077 là giữ riêng.</b></p>
+      <p class="en-only" lang="en">As described in Chapter 2, a shell's built-in <code>umask</code> (permissions mask) facility sets your default permissions. Ward recommends including the <code>umask</code> command in one of your startup files to be certain that any program you run creates files with the permissions you want, and offers two reasonable choices: <b>077</b> — the most restrictive mask, giving no other user access to new files and directories; and <b>022</b> — giving other users read access to new files and directories.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một tiến trình nền chạy dưới một tài khoản khác báo “permission denied” với đúng tệp bạn vừa tạo.</span>
+        <span class="easy-only">Khi bạn gửi tệp cho bạn bè mà họ mở không được.</span>
+        <span class="en-only" lang="en">When a background process running as another account reports "permission denied" on precisely the file you just created.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đánh đổi giữa hai lựa chọn</h4>
+          <p>Ward cân nhắc cả hai chiều. <code>077</code> thường thích hợp trên hệ thống nhiều người dùng khi bạn không muốn ai xem tệp của mình; nhưng khi đặt làm mặc định, nó đôi khi gây rắc rối cho người dùng muốn chia sẻ tệp mà không hiểu cách đặt quyền cho đúng — người thiếu kinh nghiệm có xu hướng đặt tệp thành chế độ ai cũng ghi được. Ngược lại, <code>022</code> là lựa chọn tốt trên hệ thống một người dùng, vì nhiều daemon chạy dưới dạng “người dùng giả” sẽ không thấy được tệp và thư mục tạo ra với mặt nạ <code>077</code> chặt hơn.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Cơ chế: mặt nạ là phép trừ</h4>
+          <p>Trang <code>umask(2)</code> mô tả chính xác cơ chế: lời gọi đặt mặt nạ tạo chế độ tệp của tiến trình thành <code>mask &amp; 0777</code>, và mặt nạ được dùng bởi <code>open(2)</code>, <code>mkdir(2)</code> cùng các lời gọi tạo tệp khác — cụ thể, các quyền có trong umask bị <i>tắt</i> khỏi đối số chế độ. Giá trị mặc định điển hình của umask tiến trình đúng là octal <code>022</code>.<span class="cite"><a href="#ref-10">10</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Có chương trình ghi đè umask</h4>
+          <p>Ward ghi chú: một số ứng dụng — đặc biệt là các chương trình thư điện tử — ghi đè umask, đổi nó thành <code>077</code>, vì chúng cho rằng tệp của chúng không phải việc của ai ngoài chủ sở hữu.<span class="cite"><a href="#ref-1">1</a></span> Nói cách khác, dòng <code>umask</code> trong tệp khởi động của bạn là một <i>mặc định</i>, không phải một chính sách bắt buộc.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Năm thành phần trên trả lời câu hỏi “viết <i>gì</i>”. Nhưng Ward nói thẳng rằng đó không phải phần khó: điều đáng ngạc nhiên là một trong những phần khó và gây bối rối nhất khi tạo tệp khởi động lại là xác định <b>dùng tệp nào</b> trong số nhiều tệp khả dĩ.<span class="cite"><a href="#ref-1">1</a></span> Phần tiếp theo giải đúng câu hỏi đó.</p>
+    <p class="easy-only">Biết viết gì rồi, giờ tới phần khó hơn: viết vào tệp nào? Máy đọc nhiều tệp, và không phải lúc nào cũng đọc hết. <b>Nhớ nhé: viết đúng nội dung vào sai tệp thì cũng như không viết.</b></p>
+    <p class="en-only" lang="en">Those five elements answer "what to write." But Ward says plainly that this isn't the hard part: surprisingly, one of the most difficult and confusing parts of creating startup files is determining <b>which of several possible files</b> to use.<span class="cite"><a href="#ref-1">1</a></span> The next section answers exactly that.</p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="thu-tu-doc" aria-labelledby="thu-tu-doc-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="thu-tu-doc-title">
+      <span class="standard-copy">Thứ tự đọc tệp: shell đăng nhập, shell không đăng nhập, và tcsh</span>
+      <span class="easy-only">Máy đọc tệp nào, theo thứ tự nào</span>
+      <span class="en-only" lang="en">Startup file order: login shells, non-login shells, and tcsh</span>
+    </h2>
+    <p class="standard-copy">Trong bash, bạn có thể chọn giữa các tên tệp khởi động <code>.bash_profile</code>, <code>.profile</code>, <code>.bash_login</code> và <code>.bashrc</code>. Cái nào phù hợp cho đường dẫn lệnh, đường dẫn man, dấu nhắc, alias và mặt nạ quyền của bạn? Câu trả lời của Ward: bạn nên có một tệp <code>.bashrc</code> kèm theo một <b>liên kết tượng trưng</b> <code>.bash_profile</code> trỏ tới <code>.bashrc</code> — bởi có vài kiểu thể hiện shell bash khác nhau.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Bash có tới bốn tên tệp khởi động khác nhau, nghe rối lắm. Mẹo đơn giản: viết mọi thứ vào <code>.bashrc</code>, rồi làm một lối tắt tên <code>.bash_profile</code> trỏ về nó. Thế là dù máy mở kiểu nào cũng đọc đúng một tệp. <b>Nhớ nhé: một tệp thật, một lối tắt, hết rối.</b></p>
+    <p class="en-only" lang="en">In bash you can choose among the startup filenames <code>.bash_profile</code>, <code>.profile</code>, <code>.bash_login</code> and <code>.bashrc</code>. Which is right for your command path, manual path, prompt, aliases and permissions mask? Ward's answer: you should have a <code>.bashrc</code> accompanied by a <code>.bash_profile</code> <b>symbolic link</b> pointing at <code>.bashrc</code> — because there are a few different kinds of bash shell instance.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Hai kiểu thể hiện shell chính là <b>tương tác</b> và <b>không tương tác</b>, nhưng ta chỉ quan tâm shell tương tác, vì shell không tương tác (như loại chạy script) thường không đọc tệp khởi động nào. Shell tương tác là loại bạn dùng để chạy lệnh từ một terminal, và chúng lại được phân thành <b>đăng nhập</b> (login) và <b>không đăng nhập</b> (non-login).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Có hai loại cửa sổ dòng lệnh: loại “vừa mới đăng nhập vào máy”, và loại “mở thêm sau khi đã vào rồi”. Hai loại đọc hai bộ tệp khác nhau. <b>Nhớ nhé: cửa đầu tiên và cửa mở thêm không giống nhau.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> The two main shell instance types are <b>interactive</b> and <b>noninteractive</b>, but only interactive shells matter here, because noninteractive shells (such as those running shell scripts) usually don't read any startup files. Interactive shells are the ones you use to run commands from a terminal, and they are further classified as <b>login</b> or <b>non-login</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">login shell:<br>&nbsp;&nbsp;/etc/profile<br>&nbsp;&nbsp;→ .bash_profile<br>&nbsp;&nbsp;→ .bash_login<br>&nbsp;&nbsp;→ .profile<br>&nbsp;&nbsp;&nbsp;&nbsp;(chỉ tệp ĐẦU TIÊN thấy)<br><br>non-login shell:<br>&nbsp;&nbsp;/etc/bash.bashrc<br>&nbsp;&nbsp;→ .bashrc</p>
+      <p class="easy-only">Cửa đầu tiên:<br>&nbsp;&nbsp;.bash_profile<br>&nbsp;&nbsp;(hoặc .bash_login,<br>&nbsp;&nbsp;&nbsp;hoặc .profile)<br><br>Cửa mở thêm:<br>&nbsp;&nbsp;.bashrc</p>
+      <p class="en-only" lang="en">login shell:<br>&nbsp;&nbsp;/etc/profile<br>&nbsp;&nbsp;→ .bash_profile<br>&nbsp;&nbsp;→ .bash_login<br>&nbsp;&nbsp;→ .profile<br>&nbsp;&nbsp;&nbsp;&nbsp;(ONLY the first one seen)<br><br>non-login shell:<br>&nbsp;&nbsp;/etc/bash.bashrc<br>&nbsp;&nbsp;→ .bashrc</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">login shell</span>
+      <h3>
+        <span class="standard-copy">Login shell — shell khởi đầu, và chuỗi bốn tệp</span>
+        <span class="easy-only">Shell đăng nhập — cửa đầu tiên</span>
+        <span class="en-only" lang="en">Login shell — the initial shell, and its chain of four files</span>
+      </h3>
+      <p class="standard-copy">Theo truyền thống, shell đăng nhập là thứ bạn nhận được khi lần đầu đăng nhập vào hệ thống qua terminal bằng một chương trình như <code>/bin/login</code>; đăng nhập từ xa bằng SSH cũng cho bạn một shell đăng nhập. Ý tưởng cơ bản: shell đăng nhập là <i>shell khởi đầu</i>. Bạn có thể biết một shell có phải shell đăng nhập không bằng cách chạy <code>echo $0</code> — nếu ký tự đầu tiên là một dấu gạch nối, đó là shell đăng nhập.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Khi bạn vừa đăng nhập vào máy, cửa sổ đầu tiên mở ra là “shell đăng nhập”. Muốn kiểm tra thì gõ <code>echo $0</code>: nếu thấy có dấu gạch nối ở đầu thì đúng rồi. <b>Nhớ nhé: có dấu gạch nối ở đầu nghĩa là shell đăng nhập.</b></p>
+      <p class="en-only" lang="en">Traditionally, a login shell is what you get when you first log in to a system with a terminal, via a program such as <code>/bin/login</code>; logging in remotely with SSH also gives you a login shell. The basic idea is that a login shell is an <i>initial shell</i>. You can tell whether a shell is a login shell by running <code>echo $0</code> — if the first character is a <code>-</code>, it's a login shell.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi phiên <code>ssh</code> vào một máy chủ; và mỗi lần bạn đăng nhập trên console thật của máy.</span>
+        <span class="easy-only">Mỗi lần bạn <code>ssh</code> vào một máy khác.</span>
+        <span class="en-only" lang="en">Every <code>ssh</code> session into a server; and every login on the machine's real console.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Thứ tự chính xác</h4>
+          <p>Ward viết: khi bash chạy như một shell đăng nhập, nó chạy <code>/etc/profile</code>. Sau đó nó tìm các tệp <code>.bash_profile</code>, <code>.bash_login</code> và <code>.profile</code> của người dùng, và <i>chỉ chạy tệp đầu tiên nó thấy</i>.<span class="cite"><a href="#ref-1">1</a></span> Tài liệu tham chiếu chính thức của bash nói cùng một trình tự, với một chi tiết bổ sung đáng nhớ: nó đọc và thực thi lệnh từ tệp đầu tiên <i>tồn tại và đọc được</i>.<span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Định nghĩa chuẩn của “login”</h4>
+          <p>Trang <code>bash(1)</code> định nghĩa hình thức: shell đăng nhập là shell có ký tự đầu tiên của đối số số không là một dấu gạch nối, hoặc được khởi động với tuỳ chọn <code>--login</code>.<span class="cite"><a href="#ref-9">9</a></span> Đó chính là lý do phép thử <code>echo $0</code> của Ward hoạt động — nó đang đọc trực tiếp đối số số không ấy.</p>
+        </div>
+        <div class="info-block">
+          <h4>Ép một shell không tương tác thành login</h4>
+          <p>Ward lưu ý một khả năng nghe lạ tai: có thể chạy một shell <i>không tương tác</i> như một shell đăng nhập để buộc nó chạy các tệp khởi động — khởi động shell với tuỳ chọn <code>-l</code> hoặc <code>--login</code>.<span class="cite"><a href="#ref-1">1</a></span> Tài liệu bash xác nhận: một shell không tương tác với <code>--login</code> vẫn đọc <code>/etc/profile</code> rồi tệp profile đầu tiên của người dùng.<span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Còn lúc thoát?</h4>
+          <p>Chương 13 không bàn tới tệp thoát, nhưng chuỗi ấy khép lại đối xứng: theo tài liệu bash, khi một shell đăng nhập tương tác thoát ra, bash đọc và thực thi lệnh từ <code>~/.bash_logout</code> nếu tệp đó tồn tại.<span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">non-login shell</span>
+      <h3>
+        <span class="standard-copy">Non-login shell — mọi cửa sổ terminal bạn mở thêm</span>
+        <span class="easy-only">Shell không đăng nhập — cửa mở thêm</span>
+        <span class="en-only" lang="en">Non-login shell — every terminal window you open afterwards</span>
+      </h3>
+      <p class="standard-copy">Shell không đăng nhập là một shell bổ sung mà bạn chạy <i>sau</i> khi đã đăng nhập — đơn giản là bất kỳ shell tương tác nào không phải shell đăng nhập. Các chương trình terminal của hệ thống cửa sổ (<code>xterm</code>, GNOME Terminal, v.v.) khởi động shell không đăng nhập, trừ khi bạn yêu cầu tường minh một shell đăng nhập. Khi khởi động ở dạng này, Ward viết, bash chạy <code>/etc/bash.bashrc</code> rồi chạy <code>.bashrc</code> của người dùng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Khi bạn đã vào máy rồi và mở thêm một cửa sổ dòng lệnh nữa, cửa sổ đó là “không đăng nhập”. Nó chỉ đọc <code>.bashrc</code> thôi. <b>Nhớ nhé: cửa sổ mở thêm chỉ đọc .bashrc.</b></p>
+      <p class="en-only" lang="en">A non-login shell is an additional shell you run <i>after</i> logging in — simply any interactive shell that isn't a login shell. Windowing-system terminal programs (<code>xterm</code>, GNOME Terminal and so on) start non-login shells unless you specifically ask for a login shell. On starting up this way, Ward writes, bash runs <code>/etc/bash.bashrc</code> and then the user's <code>.bashrc</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi tab mới trong ứng dụng terminal trên máy để bàn của bạn — đó là lý do một thay đổi trong <code>.bash_profile</code> có thể “không có tác dụng” cho tới khi bạn đăng xuất.</span>
+        <span class="easy-only">Mỗi tab mới bạn mở trong cửa sổ dòng lệnh.</span>
+        <span class="en-only" lang="en">Every new tab in your desktop terminal app — which is why a change in <code>.bash_profile</code> can seem to "do nothing" until you log out.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Một khác biệt giữa các nguồn — và nên tin ai</h4>
+          <p>Về shell không đăng nhập, bản văn của Ward nêu <b>hai</b> tệp: <code>/etc/bash.bashrc</code> rồi <code>.bashrc</code>.<span class="cite"><a href="#ref-1">1</a></span> Tài liệu tham chiếu bash thượng nguồn của GNU chỉ nêu <b>một</b>: khi bash chạy như shell tương tác không phải shell đăng nhập, nó đọc và thực thi lệnh từ <code>~/.bashrc</code>, nếu tệp đó tồn tại.<span class="cite"><a href="#ref-2">2</a></span> Không bên nào sai: <code>/etc/bash.bashrc</code> là một tệp khởi động toàn hệ thống do các bản phân phối (Debian, Ubuntu và họ hàng) thêm vào qua bản vá, và trang <code>bash(1)</code> của Debian ghi rõ điều đó — “bash đọc và thực thi lệnh từ <code>/etc/bash.bashrc</code> và <code>~/.bashrc</code>, nếu các tệp này tồn tại”.<span class="cite"><a href="#ref-11">11</a></span> Bài học thực hành: <i>phần của bạn</i> luôn là <code>~/.bashrc</code>; tệp trong <code>/etc</code> có hay không là tuỳ bản phân phối.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao lại có hai loại shell</h4>
+          <p>Ward giải thích bằng lịch sử: ngày trước, người dùng đăng nhập qua terminal truyền thống bằng một shell đăng nhập, rồi khởi động các subshell không đăng nhập bằng hệ thống cửa sổ hoặc chương trình <code>screen</code>. Với các subshell ấy, việc lặp lại thiết lập môi trường và chạy lại một loạt chương trình đã chạy rồi bị xem là lãng phí. Với shell đăng nhập, bạn có thể chạy các lệnh khởi động “nặng đô” trong một tệp như <code>.bash_profile</code>, chỉ để lại alias và những thứ “nhẹ” khác cho <code>.bashrc</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">display manager</span>
+      <h3>
+        <span class="standard-copy">Vì sao mô hình cũ vỡ trên máy để bàn hiện đại</span>
+        <span class="easy-only">Vì sao bây giờ hơi rối</span>
+        <span class="en-only" lang="en">Why the old model breaks on a modern desktop</span>
+      </h3>
+      <p class="standard-copy">Ngày nay, Ward viết, phần lớn người dùng máy để bàn đăng nhập qua một <b>trình quản lý hiển thị</b> đồ hoạ. Hầu hết các trình này khởi động bằng <i>một</i> shell đăng nhập không tương tác để bảo toàn mô hình đăng nhập/không đăng nhập. Khi chúng <i>không</i> làm vậy, bạn buộc phải thiết lập toàn bộ môi trường của mình — đường dẫn, đường dẫn man, v.v. — trong <code>.bashrc</code>, nếu không bạn sẽ chẳng bao giờ thấy môi trường của mình trong các shell cửa sổ terminal.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Máy để bàn bây giờ cho bạn đăng nhập bằng màn hình đồ hoạ, nên cái mô hình cũ không còn gọn nữa. Cách an toàn: viết mọi thứ vào <code>.bashrc</code>, rồi cho <code>.bash_profile</code> gọi nó. <b>Nhớ nhé: một chỗ viết, hai đường vào.</b></p>
+      <p class="en-only" lang="en">Nowadays, Ward writes, most desktop users log in through a graphical <b>display manager</b>. Most of these start with <i>one</i> noninteractive login shell in order to preserve the login versus non-login model. When they do not, you have to set up your entire environment — path, manual path and so on — in your <code>.bashrc</code>, or you'll never see any of your environment in your terminal-window shells.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một biến bạn đặt chạy tốt trong terminal nhưng ứng dụng khởi động từ menu đồ hoạ lại không thấy nó.</span>
+        <span class="easy-only">Khi thiết lập chạy được trong terminal nhưng không chạy trong ứng dụng đồ hoạ.</span>
+        <span class="en-only" lang="en">When a variable you set works in the terminal but an app launched from the graphical menu can't see it.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Nhưng vẫn cần .bash_profile</h4>
+          <p>Ward khép lại lập luận bằng một vế ngược: bạn <i>cũng</i> cần một <code>.bash_profile</code> nếu có lúc nào đó bạn muốn đăng nhập trên console hoặc từ xa, vì những shell đăng nhập ấy không bao giờ bận tâm tới <code>.bashrc</code>.<span class="cite"><a href="#ref-1">1</a></span> Hai vế cộng lại chính là lý do của mẹo “một tệp, một liên kết”.</p>
+        </div>
+        <div class="info-block">
+          <h4>Liên kết hay một dòng?</h4>
+          <p>Ông đưa hai cách hiện thực tương đương: chia sẻ tệp <code>.bashrc</code> với <code>.bash_profile</code> qua một liên kết tượng trưng, hoặc làm quan hệ ấy rõ ràng hơn bằng cách tạo <code>.bash_profile</code> chỉ gồm một dòng: <code>. $HOME/.bashrc</code>.<span class="cite"><a href="#ref-1">1</a></span> Tài liệu bash cũng ghi đúng khuôn mẫu này như cách làm điển hình: <code>if [ -f ~/.bashrc ]; then . ~/.bashrc; fi</code>.<span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">example .bashrc</span>
+      <h3>
+        <span class="standard-copy">Tệp mẫu — và phép kiểm tra <code>$-</code></span>
+        <span class="easy-only">Một tệp mẫu rất ngắn</span>
+        <span class="en-only" lang="en">The example file — and the <code>$-</code> test</span>
+      </h3>
+      <p class="standard-copy">Để thoả mãn cả shell đăng nhập lẫn không đăng nhập, Ward đưa ra một ví dụ mà ông gọi là “rất sơ đẳng, nhưng hoàn toàn đủ dùng”: đặt đường dẫn lệnh (với <code>$HOME/bin</code> ở phía trước để các tệp thực thi ở đó được ưu tiên hơn phiên bản hệ thống), đặt <code>PS1='\u\$ '</code>, đặt <code>EDITOR</code> và <code>VISUAL</code> thành <code>vi</code>, <code>PAGER</code> thành <code>less</code>, <code>LESS=meiX</code>, rồi <b>export</b> các biến môi trường ấy, và cuối cùng là <code>umask 022</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Tệp mẫu của tác giả chỉ có mấy dòng: chỗ tìm lệnh, dấu nhắc, chương trình sửa văn bản, chương trình xem văn bản, và quyền mặc định. Thế thôi. <b>Nhớ nhé: một tệp tốt có thể chỉ dài bằng nửa màn hình.</b></p>
+      <p class="en-only" lang="en">To satisfy both non-login and login shells, Ward gives an example he calls "very elementary (yet perfectly sufficient)": set the command path (with <code>$HOME/bin</code> at the front so executables there take precedence over the system versions), set <code>PS1='\u\$ '</code>, set <code>EDITOR</code> and <code>VISUAL</code> to <code>vi</code>, <code>PAGER</code> to <code>less</code>, <code>LESS=meiX</code>, then <b>export</b> those environment variables, and finally <code>umask 022</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bạn dựng một máy mới và muốn một tệp khởi động đủ chạy ngay mà không cần chép từ máy cũ.</span>
+        <span class="easy-only">Khi bạn muốn bắt đầu lại từ một tệp sạch.</span>
+        <span class="en-only" lang="en">When you set up a new machine and want a startup file that just works, without copying one from the old box.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao phải export</h4>
+          <p>Dòng <code>export PATH EDITOR VISUAL PAGER LESS</code> không phải nghi thức thừa: Ward chú thích thẳng trong tệp mẫu rằng “bạn phải export các biến môi trường”.<span class="cite"><a href="#ref-1">1</a></span> Không export thì chúng chỉ là biến của riêng shell hiện tại và không đi theo các chương trình bạn khởi chạy.</p>
+        </div>
+        <div class="info-block">
+          <h4>EDITOR, VISUAL, PAGER nghĩa là gì</h4>
+          <p>Chú thích của Ward trong tệp mẫu: <code>EDITOR</code> và <code>VISUAL</code> quyết định trình soạn thảo mà các chương trình như <code>less</code> và trình thư điện tử gọi khi được yêu cầu sửa một tệp; <code>PAGER</code> là trình xem tệp văn bản mặc định cho những chương trình như <code>man</code>.<span class="cite"><a href="#ref-1">1</a></span> Trang <code>environ(7)</code> mô tả cùng quy ước ở mức hệ thống: <code>PAGER</code> là tiện ích người dùng ưa dùng để hiển thị tệp văn bản, <code>EDITOR</code>/<code>VISUAL</code> là tiện ích ưa dùng để sửa tệp văn bản.<span class="cite"><a href="#ref-5">5</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>LESS=meiX và biến thể FRX</h4>
+          <p>Ward đưa <code>LESS=meiX</code> và ghi một kiểu khác là <code>LESS=FRX</code>, chú thích ngay trong tệp: F = thoát khi hết nội dung, R = hiện ký tự thô, X = không dùng màn hình thay thế.<span class="cite"><a href="#ref-1">1</a></span> Trang <code>less(1)</code> khớp với từng chữ: <code>-F</code> tự thoát nếu toàn bộ tệp hiển thị vừa màn hình đầu; <code>-R</code> xuất một tập giới hạn các chuỗi thoát ở dạng thô trong khi vẫn giữ đúng bố cục màn hình; <code>-X</code> vô hiệu hoá việc gửi chuỗi khởi tạo/kết thúc termcap tới terminal.<span class="cite"><a href="#ref-12">12</a></span> Các chữ trong <code>meiX</code> cũng có nghĩa xác định: <code>-m</code> nhắc dài kèm phần trăm vị trí, <code>-e</code> tự thoát ở lần chạm cuối tệp thứ hai, <code>-i</code> tìm kiếm bỏ qua phân biệt hoa thường.<span class="cite"><a href="#ref-12">12</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tách hành vi login và non-login</h4>
+          <p>Với một <code>.bashrc</code> trùng khớp <code>.bash_profile</code>, bình thường bạn không chạy lệnh phụ nào cho shell đăng nhập. Nhưng nếu muốn định nghĩa hành động khác nhau, Ward đưa ra một phép kiểm tra thêm vào <code>.bashrc</code>: dùng <code>case $- in</code> để kiểm tra biến <code>$-</code> của shell xem có ký tự <code>i</code> hay không, nhánh <code>*i*)</code> chứa lệnh tương tác, nhánh <code>*)</code> chứa lệnh không tương tác.<span class="cite"><a href="#ref-1">1</a></span> Trang <code>bash(1)</code> lý giải vì sao phép thử ấy hợp lệ: bash đặt <code>PS1</code> và <code>$-</code> có chứa <code>i</code> nếu shell là tương tác, nên một script hay một tệp khởi động có thể kiểm tra trạng thái này.<span class="cite"><a href="#ref-9">9</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">the tcsh shell</span>
+      <h3>
+        <span class="standard-copy">tcsh — một thứ tự đơn giản hơn hẳn</span>
+        <span class="easy-only">tcsh — một shell khác, đơn giản hơn</span>
+        <span class="en-only" lang="en">tcsh — a distinctly simpler order</span>
+      </h3>
+      <p class="standard-copy">Ward giới thiệu <code>tcsh</code> là bản <code>csh</code> chuẩn trên hầu như mọi hệ thống Linux — một C shell được tăng cường, đã phổ biến hoá những tính năng như soạn thảo dòng lệnh và hoàn thành tên tệp cùng tên lệnh nhiều chế độ. Ngay cả khi bạn không dùng tcsh làm shell mặc định cho người dùng mới (bash nên là mặc định), bạn vẫn nên cung cấp tệp khởi động tcsh phòng khi người dùng của bạn tình cờ gặp nó.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ngoài bash còn có một shell khác tên tcsh. Nó dễ hơn ở chỗ: chỉ có một tệp để nhớ. <b>Nhớ nhé: tcsh chỉ tìm .tcshrc, không thấy thì tìm .cshrc.</b></p>
+      <p class="en-only" lang="en">Ward introduces <code>tcsh</code> as the standard <code>csh</code> on virtually all Linux systems — an enhanced C shell that popularised features such as command-line editing and multi-mode filename and command completion. Even if you don't use tcsh as the default shell for new users (bash should be the default), you should still provide tcsh startup files in case your users happen to come across it.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trên các máy Unix lâu đời hoặc trong các phòng thí nghiệm học thuật, nơi <code>csh</code> vẫn là shell mặc định của nhiều tài khoản.</span>
+        <span class="easy-only">Trên những máy cũ mà người ta vẫn dùng shell kiểu cũ.</span>
+        <span class="en-only" lang="en">On long-lived Unix boxes or academic lab machines, where <code>csh</code> is still the default shell on many accounts.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Thứ tự của tcsh</h4>
+          <p>Với tcsh, Ward viết, bạn không phải bận tâm về khác biệt giữa shell đăng nhập và không đăng nhập: khi khởi động, tcsh tìm một tệp <code>.tcshrc</code>; nếu không có, nó tìm tệp khởi động <code>.cshrc</code> của csh. Lý do của thứ tự này là để bạn có thể dùng <code>.tcshrc</code> cho những mở rộng của tcsh vốn không chạy trên csh.<span class="cite"><a href="#ref-1">1</a></span> Trang hướng dẫn tcsh mô tả chuỗi đầy đủ: một shell đăng nhập bắt đầu bằng <code>/etc/csh.cshrc</code> và <code>/etc/csh.login</code>, rồi trong thư mục nhà là <code>~/.tcshrc</code> — hoặc, nếu không tìm thấy, <code>~/.cshrc</code> — rồi <code>~/.history</code>, rồi <code>~/.login</code>, và cuối cùng <code>~/.cshdirs</code>; shell không đăng nhập chỉ đọc <code>/etc/csh.cshrc</code> và <code>~/.tcshrc</code> hoặc <code>~/.cshrc</code>.<span class="cite"><a href="#ref-13">13</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Lời khuyên: hãy dùng .cshrc</h4>
+          <p>Ward nghiêng về tệp truyền thống: bạn có lẽ nên dùng <code>.cshrc</code> thay vì <code>.tcshrc</code>, vì rất khó có chuyện ai đó dùng tệp khởi động của bạn với csh — và nếu một người dùng thật sự gặp csh trên hệ thống khác, <code>.cshrc</code> của bạn vẫn chạy được.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tệp .cshrc mẫu</h4>
+          <p>Tệp mẫu của ông song song với bản bash, chỉ khác cú pháp: <code>setenv PATH $HOME/bin:/usr/local/bin:/usr/bin:/bin</code>, <code>setenv EDITOR vi</code>, <code>setenv VISUAL vi</code>, <code>setenv PAGER less</code>, <code>setenv LESS meiX</code>, <code>umask 022</code>, và dấu nhắc <code>set prompt="%m%% "</code>; chú thích trong tệp liệt kê các phép thay thế: <code>%n</code> tên người dùng, <code>%m</code> tên máy, <code>%/</code> thư mục hiện tại, <code>%h</code> số hiệu lịch sử, <code>%l</code> terminal hiện tại, <code>%%</code> cho ra dấu <code>%</code>.<span class="cite"><a href="#ref-1">1</a></span> Trang hướng dẫn tcsh xác nhận từng ký hiệu: <code>%/</code> là thư mục làm việc hiện tại, <code>%m</code> là tên máy tới dấu chấm đầu tiên, <code>%n</code> là tên người dùng, <code>%h</code> là số hiệu sự kiện lịch sử hiện tại, <code>%l</code> là tty của shell, và <code>%%</code> là một dấu phần trăm đơn.<span class="cite"><a href="#ref-13">13</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Cả hai shell đều quy về một mẫu: có một tệp <i>thật</i>, và mọi con đường khác đều dẫn về nó. Với bash đó là <code>.bashrc</code> cộng một liên kết; với tcsh đó là <code>.cshrc</code>. Phần cuối chuyển từ “tệp của bạn” sang “tệp bạn phát cho người khác”.</p>
+    <p class="easy-only">Cả hai shell đều theo một công thức: một tệp thật, các tên khác chỉ trỏ về đó. Giờ ta nói về việc làm tệp cho người khác dùng. <b>Nhớ nhé: một nguồn sự thật, nhiều lối vào.</b></p>
+    <p class="en-only" lang="en">Both shells reduce to one pattern: there is a single <i>real</i> file, and every other path leads back to it. For bash that's <code>.bashrc</code> plus a link; for tcsh it's <code>.cshrc</code>. The last section moves from "your files" to "the files you hand to other people."</p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="mac-dinh" aria-labelledby="mac-dinh-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="mac-dinh-title">
+      <span class="standard-copy">Mặc định cho người dùng mới, các cạm bẫy, và ranh giới của chương</span>
+      <span class="easy-only">Làm tệp cho người khác dùng</span>
+      <span class="en-only" lang="en">Defaults for new users, the pitfalls, and the chapter's boundary</span>
+    </h2>
+    <p class="standard-copy">Ward đưa ra một quy trình rất cụ thể thay cho lý thuyết: cách tốt nhất để viết tệp khởi động và chọn mặc định cho người dùng mới là <b>thử nghiệm với một người dùng thử</b> trên hệ thống. Tạo người dùng thử với thư mục nhà trống, và kiềm chế việc chép tệp khởi động của chính bạn vào đó — hãy viết tệp mới từ đầu.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Muốn biết tệp của mình có tốt không, đừng đoán: tạo một tài khoản thử, để trống hoàn toàn, rồi viết tệp mới từ đầu và đăng nhập thử. <b>Nhớ nhé: thử trên tài khoản mới, đừng thử trên tài khoản của bạn.</b></p>
+    <p class="en-only" lang="en">Instead of theory, Ward gives a concrete procedure: the best way to write startup files and choose defaults for new users is to <b>experiment with a test user</b> on the system. Create the test user with an empty home directory, and refrain from copying your own startup files there — write the new files from scratch.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Quy trình.</b> Khi bạn nghĩ mình đã có một thiết lập chạy được, hãy đăng nhập với tư cách người dùng thử mới theo <i>mọi</i> cách có thể — trên console, từ xa, v.v. — và kiểm thử càng nhiều thứ càng tốt, gồm cả hoạt động của hệ thống cửa sổ và các trang hướng dẫn. Khi hài lòng, hãy tạo người dùng thử <i>thứ hai</i>, chép tệp khởi động từ người thứ nhất sang; nếu mọi thứ vẫn chạy, bạn đã có một bộ tệp khởi động mới để phân phát.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Cách làm.</b> Tạo tài khoản thử, viết tệp mới, đăng nhập thử đủ kiểu. Rồi tạo tài khoản thử thứ hai và chép tệp sang. Nếu vẫn chạy tốt thì mới đem phát. <b>Nhớ nhé: thử hai lần rồi mới phát.</b></p>
+      <p class="en-only" lang="en"><b>The procedure.</b> When you think you have a working setup, log in as the new test user in <i>all</i> possible ways — on the console, remotely and so on — and test as many things as possible, including windowing-system operation and manual pages. When you're happy, create a <i>second</i> test user, copying the startup files from the first; if everything still works, you now have a new set of startup files you can distribute.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy"># sáu điều đừng làm<br>không lệnh đồ hoạ<br>không đặt DISPLAY<br>không đặt kiểu terminal<br>không tiếc lời chú thích<br>không in ra stdout<br>không đặt LD_LIBRARY_PATH</p>
+      <p class="easy-only">Đừng mở cửa sổ đồ hoạ<br>Đừng in chữ ra màn hình<br>Đừng tiếc ghi chú</p>
+      <p class="en-only" lang="en"># six things not to do<br>no graphical commands<br>no DISPLAY<br>no terminal type<br>no skimping on comments<br>nothing printing to stdout<br>never LD_LIBRARY_PATH</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">shell defaults</span>
+      <h3>
+        <span class="standard-copy">Shell mặc định — bốn lý do chọn bash</span>
+        <span class="easy-only">Chọn shell nào cho người mới</span>
+        <span class="en-only" lang="en">Shell defaults — four reasons to choose bash</span>
+      </h3>
+      <p class="standard-copy">Ward khẳng định shell mặc định cho mọi người dùng mới trên hệ thống Linux <i>nên</i> là bash, và đưa bốn lý do: người dùng tương tác với cùng một shell mà họ dùng để viết script (ông nói thêm, với nhiều lý do không triển khai ở đây, <code>csh</code> là công cụ viết script dở tệ khét tiếng); bash là mặc định trên các bản phân phối Linux; bash dùng thư viện GNU <span lang="en">readline</span> để nhận đầu vào, nên giao diện của nó giống hệt nhiều công cụ khác; và bash cho bạn quyền kiểm soát tinh tế, dễ hiểu đối với chuyển hướng vào/ra cùng các <span lang="en">file handle</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Cho người mới thì chọn bash. Lý do đơn giản: nó là mặc định ở gần như mọi nơi, và bạn viết script bằng chính nó. <b>Nhớ nhé: không biết chọn gì thì chọn bash.</b></p>
+      <p class="en-only" lang="en">Ward states the default shell for any new user on a Linux system <i>should</i> be bash, and gives four reasons: users interact with the same shell they use to write shell scripts (he adds that, for many reasons he won't expand on, <code>csh</code> is a notoriously bad scripting tool); bash is the default on Linux distributions; bash uses the GNU <span lang="en">readline</span> library to accept input, so its interface is identical to that of many other tools; and bash gives you fine, easy-to-understand control over I/O redirection and file handles.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bạn nhận ra tổ hợp phím sửa dòng lệnh trong <code>psql</code> hay <code>python</code> giống hệt trong shell — đó là readline đang làm việc.</span>
+        <span class="easy-only">Khi các phím mũi tên và phím sửa dòng hoạt động giống nhau ở nhiều chương trình.</span>
+        <span class="en-only" lang="en">When you notice the line-editing keys in <code>psql</code> or <code>python</code> behave exactly as in the shell — that's readline at work.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>readline là một thư viện dùng chung</h4>
+          <p>Lý do thứ ba của Ward có cơ sở kỹ thuật rõ ràng: GNU Readline là một thư viện độc lập cung cấp khả năng soạn thảo dòng lệnh và lịch sử cho các chương trình tương tác, được nhiều dự án nhúng vào chứ không riêng bash.<span class="cite"><a href="#ref-14">14</a></span> Trang <code>bash(1)</code> cũng cho phép tắt nó qua tuỳ chọn <code>--noediting</code>, tức là “không dùng thư viện GNU readline để đọc dòng lệnh khi shell là tương tác”.<span class="cite"><a href="#ref-9">9</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tự do chọn, nhưng có mặc định</h4>
+          <p>Ward không giáo điều: nhiều phù thuỷ Unix lão luyện dùng <code>csh</code> hay <code>tcsh</code> chỉ vì đó là thứ họ quen và không chịu nổi việc đổi; dĩ nhiên bạn có thể chọn shell nào bạn thích, nhưng hãy chọn bash nếu bạn không có sở thích riêng, và dùng bash làm shell mặc định cho mọi người dùng mới — người dùng có thể tự đổi shell bằng lệnh <code>chsh</code>.<span class="cite"><a href="#ref-1">1</a></span> Trang <code>chsh(1)</code> xác nhận công dụng: nó dùng để đổi shell đăng nhập của bạn, và nếu không đưa shell trên dòng lệnh thì nó sẽ hỏi.<span class="cite"><a href="#ref-15">15</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Những shell khác</h4>
+          <p>Ward ghi chú rằng còn nhiều shell khác ngoài kia — <code>rc</code>, <code>ksh</code>, <code>zsh</code>, <code>es</code> và nhiều nữa; một số không phù hợp làm shell cho người mới bắt đầu, nhưng <code>zsh</code> và <code>fish</code> đôi khi được người mới ưa chuộng khi họ đi tìm một lựa chọn thay thế.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">editor and pager</span>
+      <h3>
+        <span class="standard-copy">Trình soạn thảo và trình phân trang mặc định</span>
+        <span class="easy-only">Chọn chương trình sửa và xem văn bản</span>
+        <span class="en-only" lang="en">The default editor and pager</span>
+      </h3>
+      <p class="standard-copy">Trên các hệ thống truyền thống, trình soạn thảo mặc định là <code>vi</code> hoặc <code>emacs</code> — đây là những trình duy nhất gần như chắc chắn tồn tại (hoặc ít nhất là có sẵn để cài) trên hầu hết mọi hệ Unix, nghĩa là về lâu dài chúng gây ít rắc rối nhất cho người dùng mới. Tuy nhiên, các bản phân phối Linux thường cấu hình <code>nano</code> làm mặc định, vì nó dễ dùng hơn cho người mới bắt đầu.<span class="cite"><a href="#ref-1">1</a></span> Về trình phân trang, ông gọn ghẽ: đó là chương trình hiển thị văn bản từng trang một, như <code>less</code>, và đặt biến môi trường <code>PAGER</code> mặc định thành <code>less</code> là hoàn toàn hợp lý.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Chương trình sửa văn bản mặc định thường là <code>vi</code>, nhưng nhiều bản Linux chọn <code>nano</code> vì dễ hơn cho người mới. Chương trình xem văn bản thì cứ chọn <code>less</code>. <b>Nhớ nhé: mới học thì nano dễ hơn, xem văn bản thì dùng less.</b></p>
+      <p class="en-only" lang="en">On traditional systems the default editor is <code>vi</code> or <code>emacs</code> — the only editors virtually guaranteed to exist (or at least be available) on nearly any Unix system, which means they cause the least trouble in the long run for a new user. Linux distributions, however, often configure <code>nano</code> as the default, because it's easier for beginners.<span class="cite"><a href="#ref-1">1</a></span> On the pager he is brisk: it's a program such as <code>less</code> that shows text one page at a time, and it's perfectly reasonable to set the default <code>PAGER</code> environment variable to <code>less</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi <code>git commit</code> hoặc <code>crontab -e</code> bất ngờ mở một trình soạn thảo bạn không biết cách thoát ra.</span>
+        <span class="easy-only">Khi máy tự mở một chương trình lạ và bạn không biết thoát ra kiểu gì.</span>
+        <span class="en-only" lang="en">When <code>git commit</code> or <code>crontab -e</code> suddenly opens an editor you don't know how to quit.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cùng một kỷ luật, áp cho trình soạn thảo</h4>
+          <p>Ward mở rộng nguyên tắc “giữ nhỏ” sang tệp cấu hình của trình soạn thảo: cũng như với tệp khởi động shell, hãy tránh các tệp khởi động trình soạn thảo cỡ lớn. Một dòng <code>set showmatch</code> nho nhỏ trong tệp <code>.exrc</code> — để <code>vi</code> hiển thị dấu ngoặc khớp — thì chưa hại ai bao giờ, nhưng hãy tránh xa bất cứ thứ gì thay đổi đáng kể hành vi hay diện mạo của trình soạn thảo, chẳng hạn tính năng <code>showmode</code>, tự thụt lề, và lề ngắt dòng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao lời khuyên này không phải chuyện khẩu vị</h4>
+          <p>Nó là hệ quả trực tiếp của bài toán phân phát: một người dùng mới học <code>vi</code> theo sách vở, rồi ngồi vào một tài khoản có tự thụt lề bật sẵn, sẽ thấy trình soạn thảo cư xử khác mọi tài liệu họ đọc được. Mặc định “lạ” đắt hơn mặc định “thô”, vì nó phá vỡ khả năng tự học.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">startup file pitfalls</span>
+      <h3>
+        <span class="standard-copy">Sáu cạm bẫy — danh sách những điều đừng làm</span>
+        <span class="easy-only">Sáu điều đừng làm</span>
+        <span class="en-only" lang="en">Six pitfalls — the list of things not to do</span>
+      </h3>
+      <p class="standard-copy">Ward liệt kê sáu điều cần tránh trong tệp khởi động: đừng đặt bất kỳ dạng lệnh đồ hoạ nào vào tệp khởi động shell, vì không phải shell nào cũng chạy trong môi trường đồ hoạ; đừng đặt biến môi trường <code>DISPLAY</code>, vì điều đó có thể khiến phiên đồ hoạ của bạn cư xử sai; đừng đặt kiểu terminal; đừng keo kiệt với chú thích mô tả trong tệp khởi động mặc định; đừng chạy các lệnh in ra đầu ra chuẩn; và <b>không bao giờ</b> đặt <code>LD_LIBRARY_PATH</code> trong tệp khởi động shell.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Sáu điều cấm: đừng mở chương trình đồ hoạ, đừng đặt <code>DISPLAY</code>, đừng đặt kiểu terminal, đừng tiếc ghi chú, đừng in chữ ra màn hình, và tuyệt đối đừng đặt <code>LD_LIBRARY_PATH</code>. <b>Nhớ nhé: tệp khởi động phải im lặng làm việc.</b></p>
+      <p class="en-only" lang="en">Ward lists six things to avoid in startup files: don't put any kind of graphical command in a shell startup file, since not all shells run in graphical environments; don't set the <code>DISPLAY</code> environment variable, as this can make your graphical session misbehave; don't set the terminal type; don't skimp on descriptive comments in default startup files; don't run commands that print to standard output; and <b>never</b> set <code>LD_LIBRARY_PATH</code> in a shell startup file.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi <code>scp</code> hay <code>rsync</code> tới một máy bỗng hỏng không rõ lý do — rất hay là vì tệp khởi động ở đầu kia in ra một dòng chữ chào mừng.</span>
+        <span class="easy-only">Khi chép tệp qua mạng bị lỗi vì máy bên kia in ra một dòng chữ thừa.</span>
+        <span class="en-only" lang="en">When <code>scp</code> or <code>rsync</code> to a host breaks for no clear reason — very often because the startup file at the far end prints a greeting line.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao “đừng in ra stdout” lại nghiêm trọng</h4>
+          <p>Đây là cạm bẫy dễ xem nhẹ nhất trong sáu cái. Các giao thức chạy qua shell từ xa mong đợi một luồng dữ liệu sạch; một dòng chào mừng vô hại trong tệp khởi động sẽ trộn vào luồng đó. Ward đặt nó ngang hàng với các lỗi khác trong cùng một danh sách, không kèm ngoại lệ nào.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>LD_LIBRARY_PATH: lý do đầy đủ</h4>
+          <p>Ward chỉ tới Mục 15.1.3 cho chi tiết,<span class="cite"><a href="#ref-1">1</a></span> và ở đó ông gọi biến này là “nguyên nhân số một của mọi vấn đề thư viện chia sẻ”: đặt nó thành một tập tên thư mục ngăn cách bằng dấu hai chấm khiến <code>ld.so</code> tìm các thư mục đó trước mọi thứ khác khi tìm thư viện chia sẻ — gây tổn hại hiệu năng lớn, và quan trọng hơn, gây xung đột cùng thư viện không khớp vì trình liên kết lúc chạy sẽ nhìn vào các thư mục ấy cho <i>mọi</i> chương trình. Giải pháp ông đưa ra là wrapper script.<span class="cite"><a href="#ref-4">4</a></span> Trang <code>ld.so(8)</code> mô tả đúng cơ chế: đó là một danh sách thư mục để tìm thư viện ELF lúc thực thi.<span class="cite"><a href="#ref-16">16</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ranh giới của chương</h4>
+          <p>Ward khép chương bằng việc vạch rõ cái ông <i>không</i> bàn: vì quyển sách chỉ nói về hệ thống Linux nền tảng, nó không bao quát tệp khởi động của môi trường cửa sổ — một vấn đề lớn thật sự, vì trình quản lý hiển thị đưa bạn vào hệ thống Linux hiện đại có bộ tệp khởi động riêng, như <code>.xsession</code>, <code>.xinitrc</code>, cùng vô vàn tổ hợp các mục liên quan tới GNOME và KDE.<span class="cite"><a href="#ref-1">1</a></span> Ông cũng nói rằng các lựa chọn cửa sổ có thể trông rối rắm, và không có một cách chung nào để khởi động môi trường cửa sổ trong Linux — chương kế tiếp mô tả một số khả năng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Cùng một kỷ luật cho GUI</h4>
+          <p>Lời dặn cuối cùng của ông đóng vòng tròn với mục tiêu Simplicity ở đầu chương: khi đã biết hệ thống của mình làm gì, bạn có thể hơi quá đà với các tệp liên quan tới môi trường đồ hoạ — điều đó không sao, nhưng đừng mang nó sang cho người dùng mới; cùng một nguyên lý giữ mọi thứ đơn giản trong tệp khởi động shell cũng có tác dụng tuyệt vời với tệp khởi động GUI. Thật ra, ông kết luận, bạn có lẽ chẳng cần đổi tệp khởi động GUI của mình chút nào.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đọc hết chương, ta thấy nó không dạy một công nghệ mới nào cả — nó dạy một thái độ: mỗi dòng trong tệp khởi động là một cam kết dài hạn với chính bạn và với người sẽ chép tệp của bạn. Phần còn lại của trang này đối chiếu các ngộ nhận thường gặp, rồi mời bạn tự kiểm tra.</p>
+    <p class="easy-only">Chương này không dạy công nghệ mới, mà dạy cách cư xử: viết ít, viết rõ, và nghĩ tới người dùng sau bạn. <b>Nhớ nhé: tệp khởi động là lời hứa với chính mình sau này.</b></p>
+    <p class="en-only" lang="en">Read whole, the chapter teaches no new technology — it teaches an attitude: every line in a startup file is a long-term commitment to yourself and to whoever copies your files. The rest of this page sets the common misconceptions against the text, then invites you to test yourself.</p>
+  </aside>
+</section>
+
+<!-- ===================== MISCONCEPTIONS ===================== -->
+<section class="section" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Đính chính</span>
+      <span class="en-only" lang="en">Corrections</span>
+    </p>
+    <h2 id="ngo-nhan-title">
+      <span class="standard-copy">Ba ngộ nhận mà người đọc lần đầu hay mắc</span>
+      <span class="easy-only">Ba chỗ hay hiểu nhầm</span>
+      <span class="en-only" lang="en">Three misconceptions first readers hit</span>
+    </h2>
+    <p class="standard-copy">Phần này thuộc mức đọc <b>Đầy đủ</b>: nó đối chiếu điều người đọc thường nghĩ với điều bản văn thật sự nói.</p>
+    <p class="easy-only">Phần này hơi khó, bạn có thể bỏ qua và quay lại sau. <b>Nhớ nhé: hiểu chậm mà chắc vẫn hơn.</b></p>
+    <p class="en-only" lang="en">This block belongs to the <b>Đầy đủ</b> (full) reading level: it sets what readers usually assume against what the text actually says.</p>
+  </div>
+
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Shell đọc tất cả các tệp khởi động của tôi”</span>
+          <span class="en-only" lang="en">"The shell reads all of my startup files"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> đặt cùng một dòng vào cả <code>.bash_profile</code> lẫn <code>.profile</code> cho chắc ăn, vì shell sẽ đọc cả hai.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> khi bash chạy như shell đăng nhập, sau <code>/etc/profile</code> nó tìm <code>.bash_profile</code>, <code>.bash_login</code> và <code>.profile</code>, rồi <i>chỉ chạy tệp đầu tiên nó thấy</i>.<span class="cite"><a href="#ref-1">1</a></span> Tài liệu bash thượng nguồn nói chính xác: tệp đầu tiên <i>tồn tại và đọc được</i>.<span class="cite"><a href="#ref-2">2</a></span> Một tệp <code>.bash_profile</code> vô tình tồn tại sẽ âm thầm che khuất toàn bộ <code>.profile</code> của bạn.</p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> put the same line in both <code>.bash_profile</code> and <code>.profile</code> to be safe, since the shell reads both.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> when bash runs as a login shell, after <code>/etc/profile</code> it looks for <code>.bash_profile</code>, <code>.bash_login</code> and <code>.profile</code>, and runs <i>only the first one it sees</i>.<span class="cite"><a href="#ref-1">1</a></span> The upstream bash documentation is precise: the first one that <i>exists and is readable</i>.<span class="cite"><a href="#ref-2">2</a></span> A <code>.bash_profile</code> that exists by accident will silently shadow your entire <code>.profile</code>.</p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Alias là cách gọn nhất để thêm một tuỳ chọn mặc định”</span>
+          <span class="en-only" lang="en">"An alias is the tidiest way to add a default option"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> đặt <code>ls</code> thành <code>ls -F</code> là một cải tiến vô hại cho mọi người.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> Ward gọi đây là “một sai lầm kinh điển”. Tốt nhất thì nó khiến khó gỡ tham số <code>-F</code> khi bạn không muốn; tệ nhất thì nó gây hậu quả nghiêm trọng cho người dùng không hiểu rằng họ không đang dùng tham số mặc định.<span class="cite"><a href="#ref-1">1</a></span> Và vì alias không được truyền xuống shell con,<span class="cite"><a href="#ref-1">1</a></span> cùng lệnh ấy sẽ cư xử khác trong script. Trang <code>bash(1)</code> chốt lại: với hầu hết mọi mục đích, hàm shell được ưa chuộng hơn alias.<span class="cite"><a href="#ref-9">9</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> aliasing <code>ls</code> to <code>ls -F</code> is a harmless improvement for everyone.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> Ward calls this "one classic mistake." At best it makes the <code>-F</code> argument hard to remove when you don't want it; at worst it has severe consequences for a user who doesn't understand they're not using the default arguments.<span class="cite"><a href="#ref-1">1</a></span> And because aliases aren't passed on to child shells,<span class="cite"><a href="#ref-1">1</a></span> the same command behaves differently inside a script. <code>bash(1)</code> settles it: for almost every purpose, shell functions are preferable to aliases.<span class="cite"><a href="#ref-9">9</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Thêm dấu chấm vào PATH cho tiện, đặt ở cuối là an toàn”</span>
+          <span class="en-only" lang="en">"Adding a dot to PATH is handy, and safe if it's last"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> chỉ cần không để <code>.</code> ở đầu <code>PATH</code> thì rủi ro biến mất.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> Ward nêu rõ rằng ngay cả khi dấu chấm nằm ở <i>cuối</i> đường dẫn, bạn vẫn dễ tổn thương trước kẻ tấn công đoán trước các lỗi gõ nhầm như <code>sl</code> hay <code>ks</code> — bên cạnh ví dụ về con ngựa thành Troy tên <code>ls</code> trong một kho lưu trữ phát tán trên internet. Lý do thứ hai độc lập với an ninh: một dấu chấm trong đường dẫn khiến hành vi của một lệnh thay đổi theo thư mục hiện tại.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> as long as <code>.</code> isn't at the front of <code>PATH</code>, the risk disappears.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> Ward is explicit that even with the dot at the <i>end</i> of the path, you'd still be vulnerable to an attacker anticipating typos such as <code>sl</code> or <code>ks</code> — alongside his example of a Trojan horse named <code>ls</code> in an archive distributed on the internet. The second reason is independent of security: a dot in a path means a command's behaviour changes according to the current directory.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="tu-kiem-tra" aria-labelledby="tu-kiem-tra-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm tra</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="tu-kiem-tra-title">
+      <span class="standard-copy">Bạn đã nắm môi trường người dùng chưa?</span>
+      <span class="easy-only">Thử trả lời xem nào</span>
+      <span class="en-only" lang="en">Do you have the user environment yet?</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Trả lời bằng lời của bạn, không tra sách. Nếu một câu khiến bạn ngập ngừng, đó chính là phần bạn nên đọc lại.</p>
+      <p class="easy-only">Thử trả lời miệng thôi, không cần giở lại. Câu nào bí thì quay lại đọc phần đó nhé. <b>Nhớ nhé: chỗ bí chính là chỗ cần học.</b></p>
+      <p class="en-only" lang="en">Answer in your own words, without looking back. Whichever question makes you hesitate points at the section you should reread.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Hai mục tiêu thiết yếu khi tạo tệp khởi động cho người khác là gì, và vì sao mục tiêu thứ nhất lại là một ràng buộc kỹ thuật chứ không phải khẩu vị?</p>
+        <p class="deep-only">Gợi ý sâu hơn: câu “mỗi mục trong một tệp khởi động chỉ là thêm một thứ nữa có thể hỏng” nói gì về chi phí bảo trì?</p>
+      </li>
+      <li>
+        <p>Ba thư mục tối thiểu trong đường dẫn lệnh là gì, theo đúng thứ tự — và thứ tự ấy bảo đảm điều gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: cây thư mục nào được dành cho phần mềm cài cục bộ, và vì sao nó phải an toàn trước cập nhật hệ thống?</p>
+      </li>
+      <li>
+        <p>Vì sao Ward bảo bạn <i>không</i> nên đặt <code>MANPATH</code>?</p>
+        <p class="deep-only">Gợi ý sâu hơn: nếu biến ấy đã được đặt, tệp cấu hình của hệ thống có ghi đè lên nó không?</p>
+      </li>
+      <li>
+        <p>Kể ba nhược điểm của alias mà tác giả nêu, và nói ông đề xuất dùng gì thay thế.</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao bạn không thể đổi một biến môi trường bằng một shell script?</p>
+      </li>
+      <li>
+        <p>Khi bash chạy như một shell đăng nhập, nó đọc những tệp nào và theo thứ tự nào? Còn khi là shell không đăng nhập?</p>
+        <p class="deep-only">Gợi ý sâu hơn: trong nhóm <code>.bash_profile</code> / <code>.bash_login</code> / <code>.profile</code>, có bao nhiêu tệp được thực thi?</p>
+      </li>
+      <li>
+        <p>Làm sao để biết shell bạn đang ngồi là shell đăng nhập hay không?</p>
+        <p class="deep-only">Gợi ý sâu hơn: phép thử ấy đang đọc cái gì của tiến trình shell?</p>
+      </li>
+      <li>
+        <p>Hai giá trị umask mà tác giả cho là hợp lý là gì, và mỗi giá trị phù hợp với tình huống nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao mặt nạ chặt hơn lại có thể gây rắc rối với các daemon chạy dưới dạng người dùng giả?</p>
+      </li>
+      <li>
+        <p>Vì sao một dòng <code>echo</code> vô hại trong tệp khởi động lại có thể làm hỏng việc sao chép tệp qua mạng?</p>
+        <p class="deep-only">Gợi ý sâu hơn: cạm bẫy này đứng ở vị trí nào trong danh sách sáu điều cần tránh?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Tệp có dấu chấm ở đầu tên gọi là gì, và vì sao bạn không thấy chúng?</p></li>
+      <li><p>Kể ba chỗ máy đi tìm lệnh, theo đúng thứ tự.</p></li>
+      <li><p>Alias là gì? Nêu một lý do nên hạn chế dùng nó.</p></li>
+      <li><p>Cửa sổ dòng lệnh “đầu tiên” và cửa sổ “mở thêm” đọc tệp khác nhau thế nào?</p></li>
+      <li><p><code>umask 022</code> và <code>umask 077</code> khác nhau ở điểm gì?</p></li>
+      <li><p>Kể hai điều không nên làm trong tệp khởi động.</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>
+        <p>What are the two essential goals when creating startup files for other users, and why is the first a technical constraint rather than a matter of taste?</p>
+      </li>
+      <li>
+        <p>What are the three minimum command-path directories, in order — and what does that order guarantee?</p>
+      </li>
+      <li>
+        <p>Why does Ward tell you <i>not</i> to set <code>MANPATH</code>?</p>
+      </li>
+      <li>
+        <p>Name three drawbacks of aliases that the author lists, and say what he proposes instead.</p>
+      </li>
+      <li>
+        <p>Which files does bash read, and in what order, as a login shell? And as a non-login shell?</p>
+      </li>
+      <li>
+        <p>How can you tell whether the shell you're sitting in is a login shell?</p>
+      </li>
+      <li>
+        <p>What are the two umask values the author considers reasonable, and which situation suits each?</p>
+      </li>
+      <li>
+        <p>Why can one harmless <code>echo</code> in a startup file break a file copy over the network?</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Hệ thống và người dùng <span class="closing-accent">rốt cuộc vẫn phải gặp nhau ở đâu đó</span>, và chỗ gặp ấy là vài tệp nhỏ trong thư mục nhà của bạn. Hãy giữ chúng ít, ngắn và có chú thích đầy đủ — bởi <span class="closing-accent">mỗi mục trong một tệp khởi động chỉ là thêm một thứ nữa có thể hỏng</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Máy và bạn gặp nhau ở <span class="closing-accent">mấy tệp nhỏ trong thư mục nhà</span>. Giữ chúng ngắn và ghi chú rõ, vì <span class="closing-accent">thêm một dòng là thêm một chỗ có thể hỏng</span>. <b>Nhớ nhé: viết ít, ghi chú nhiều.</b></p>
+    <p class="en-only" lang="en">The system and the user <span class="closing-accent">have to meet somewhere in the end</span>, and that somewhere is a few small files in your home directory. Keep them few, short and fully commented — because <span class="closing-accent">each item in a startup file is just one more thing that can break</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START -->
+<!-- Region owned by book-cover-curator; body authored by book-chapter-author.
+     Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-12-file-transfer-sharing.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 12 · Truyền và chia sẻ tập tin qua mạng</span>
+    <span class="nav-title en-only" lang="en">Chapter 12 · Network File Transfer and Sharing</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-14-desktop-printing.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 14 · Desktop và in ấn</span>
+    <span class="nav-title en-only" lang="en">Chapter 14 · A Brief Survey of the Linux Desktop and Printing</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, tái bản lần thứ 3, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chương 13, “User Environments”, trang 335–345.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd edition, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chapter 13, "User Environments", pp. 335–345.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd ed., No Starch Press, 2021, ch. 13 “User Environments”, pp. 335–345. — <a href="https://openlibrary.org/books/OL29462444M" target="_blank" rel="noopener noreferrer">openlibrary.org/books/OL29462444M</a></li>
+      <li id="ref-2">“Bash Startup Files”, <i>Bash Reference Manual</i> (GNU Bash documentation, Chet Ramey). <a href="https://tiswww.case.edu/php/chet/bash/bashref.html#Bash-Startup-Files" target="_blank" rel="noopener noreferrer">tiswww.case.edu/php/chet/bash/bashref.html#Bash-Startup-Files</a></li>
+      <li id="ref-3"><code>ls(1)</code> — Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/ls.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/ls.1.html</a></li>
+      <li id="ref-4">Brian Ward, <i>How Linux Works</i>, 3rd ed., ch. 15 “Development Tools”, §15.1.3 (<code>LD_LIBRARY_PATH</code> and wrapper scripts), pp. 370–371. — <a href="https://openlibrary.org/books/OL29462444M" target="_blank" rel="noopener noreferrer">openlibrary.org/books/OL29462444M</a></li>
+      <li id="ref-5"><code>environ(7)</code> — <code>PATH</code>, <code>PAGER</code>, <code>EDITOR</code>/<code>VISUAL</code>, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man7/environ.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/environ.7.html</a></li>
+      <li id="ref-6">“<code>/usr/local</code> : Local hierarchy”, <i>Filesystem Hierarchy Standard</i> 3.0, Linux Foundation. <a href="https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch04s09.html" target="_blank" rel="noopener noreferrer">refspecs.linuxfoundation.org/FHS_3.0/fhs/ch04s09.html</a></li>
+      <li id="ref-7">“Linux File System Hierarchy” (UAPI Group specification; <code>~/.local/bin</code> as the user binary location). <a href="https://uapi-group.org/specifications/specs/linux_file_system_hierarchy/" target="_blank" rel="noopener noreferrer">uapi-group.org/specifications/specs/linux_file_system_hierarchy</a></li>
+      <li id="ref-8"><code>manpath(5)</code> — format of the man-db configuration file and its search path, man7.org. <a href="https://man7.org/linux/man-pages/man5/manpath.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/manpath.5.html</a></li>
+      <li id="ref-9"><code>bash(1)</code> — GNU Bourne-Again SHell manual page (INVOCATION, PROMPTING, ALIASES), man7.org. <a href="https://man7.org/linux/man-pages/man1/bash.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/bash.1.html</a></li>
+      <li id="ref-10"><code>umask(2)</code> — set file mode creation mask, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man2/umask.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/umask.2.html</a></li>
+      <li id="ref-11"><code>bash(1)</code>, Debian bookworm manual page (documents <code>/etc/bash.bashrc</code> for non-login interactive shells). <a href="https://manpages.debian.org/bookworm/bash/bash.1.en.html" target="_blank" rel="noopener noreferrer">manpages.debian.org/bookworm/bash/bash.1.en.html</a></li>
+      <li id="ref-12"><code>less(1)</code> — Linux manual page (options <code>-m</code>, <code>-e</code>, <code>-i</code>, <code>-F</code>, <code>-R</code>, <code>-X</code>), man7.org. <a href="https://man7.org/linux/man-pages/man1/less.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/less.1.html</a></li>
+      <li id="ref-13"><code>tcsh(1)</code> — Debian bookworm manual page (Startup and shutdown; prompt formatting sequences). <a href="https://manpages.debian.org/bookworm/tcsh/tcsh.1.en.html" target="_blank" rel="noopener noreferrer">manpages.debian.org/bookworm/tcsh/tcsh.1.en.html</a></li>
+      <li id="ref-14">“The GNU Readline Library”, Chet Ramey. <a href="https://tiswww.case.edu/php/chet/readline/rltop.html" target="_blank" rel="noopener noreferrer">tiswww.case.edu/php/chet/readline/rltop.html</a></li>
+      <li id="ref-15"><code>chsh(1)</code> — change your login shell, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/chsh.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/chsh.1.html</a></li>
+      <li id="ref-16"><code>ld.so(8)</code> — dynamic linker, <code>LD_LIBRARY_PATH</code>, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man8/ld.so.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/ld.so.8.html</a></li>
+    </ol>
+
+    <!-- NAV:START -->
+    <!-- Footer neighbour row — owned by book-cover-curator, body authored by
+         book-chapter-author. Absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-12-file-transfer-sharing.html">chapter 12</a>
+      <a href="chapter-14-desktop-printing.html">chapter 14</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('hlw-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('hlw-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('hlw-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

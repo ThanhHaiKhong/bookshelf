@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="vi" data-mode="standard" data-lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 8 · Công thức cấu hình nhân — Linux Kernel in a Nutshell</title>
+<meta name="description" content="Người đồng hành song ngữ Việt/Anh cho Chương 8 &quot;Kernel Configuration Recipes&quot; của Linux Kernel in a Nutshell (Greg Kroah-Hartman, O&#39;Reilly, 2006): bảy nhóm công thức bật đúng tùy chọn CONFIG cho ổ đĩa, thiết bị, CPU, mạng, hệ tệp, bảo mật và gỡ lỗi nhân.">
+<script>
+/* pre-hydration: đọc lựa chọn đã lưu trước khi vẽ, tránh nháy màn hình */
+(function () {
+  try {
+    var m = localStorage.getItem("lkn-reading-mode");
+    var l = localStorage.getItem("lkn-lang");
+    if (m === "standard" || m === "easy" || m === "deep") document.documentElement.setAttribute("data-mode", m);
+    if (l === "vi" || l === "en") document.documentElement.setAttribute("data-lang", l);
+    if (localStorage.getItem("lkn-theme") === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  } catch (e) {}
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --teal: #0f766e;
+  --blue: #1d4ed8;
+  --amber: #b45309;
+  --leaf: #4d7c0f;
+  --ink: #16202a;
+  --ink-soft: #4a5a68;
+  --ink-faint: #7c8b98;
+  --surface: #fbfaf7;
+  --surface-2: #ffffff;
+  --surface-3: #f2efe8;
+  --line: #ded8cd;
+  --line-soft: #ebe6dc;
+  --shadow: 0 1px 2px rgba(22, 32, 42, .05), 0 8px 24px rgba(22, 32, 42, .06);
+  --serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --measure: 34rem;
+}
+:root[data-theme="dark"] {
+  --teal: #5eead4;
+  --blue: #93b4ff;
+  --amber: #fbbf24;
+  --leaf: #a3e635;
+  --ink: #e8eef4;
+  --ink-soft: #a6b6c4;
+  --ink-faint: #74869a;
+  --surface: #11171d;
+  --surface-2: #171f27;
+  --surface-3: #1e2831;
+  --line: #2d3945;
+  --line-soft: #232e38;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --teal: #5eead4; --blue: #93b4ff; --amber: #fbbf24; --leaf: #a3e635;
+    --ink: #e8eef4; --ink-soft: #a6b6c4; --ink-faint: #74869a;
+    --surface: #11171d; --surface-2: #171f27; --surface-3: #1e2831;
+    --line: #2d3945; --line-soft: #232e38;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.72;
+  -webkit-font-smoothing: antialiased;
+}
+main { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem 4rem; }
+p { margin: 0 0 1.05rem; max-width: var(--measure); }
+a { color: var(--blue); }
+h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; line-height: 1.22; color: var(--ink); }
+code, kbd, samp { font-family: var(--mono); font-size: .88em; background: var(--surface-3); padding: .12em .38em; border-radius: 4px; }
+
+/* ---------- reading mode + bilingual visibility ---------- */
+.easy-only, .deep-only, .en-only { display: none; }
+:root[data-mode="standard"] .standard-copy,
+:root[data-mode="deep"] .standard-copy { display: revert; }
+:root[data-mode="deep"] .deep-only { display: revert; }
+:root[data-mode="easy"] .standard-copy { display: none; }
+:root[data-mode="easy"] .easy-only { display: revert; }
+:root[data-lang="vi"] .vi-only { display: revert; }
+:root[data-lang="en"] .vi-only,
+:root[data-lang="en"] .standard-copy,
+:root[data-lang="en"] .easy-only,
+:root[data-lang="en"] .deep-only { display: none; }
+:root[data-lang="en"] .en-only { display: revert; }
+:root[data-lang="en"] .mode-switch { opacity: .35; pointer-events: none; }
+
+/* ---------- topbar ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: .7rem 1.5rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.book-label { font-size: .78rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-right: auto; }
+.switch-group { display: flex; gap: .3rem; align-items: center; }
+.switch-group + .switch-group { margin-left: .35rem; }
+.switch-label { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin-right: .25rem; }
+button.chip {
+  font: inherit; font-size: .78rem; font-weight: 600;
+  padding: .3rem .72rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft);
+  transition: background .15s, color .15s, border-color .15s;
+}
+button.chip:hover { border-color: var(--teal); color: var(--teal); }
+button.chip[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: var(--surface); }
+:root[data-theme="dark"] button.chip[aria-pressed="true"] { color: #0b1116; }
+
+/* ---------- hero ---------- */
+.hero {
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  gap: 2.75rem; align-items: center;
+  padding: 3.75rem 0 3rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.hero::after {
+  content: "LKN / 08";
+  position: absolute; top: 1.15rem; right: 0;
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .22em;
+  color: var(--ink-faint);
+}
+.eyebrow { font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--teal); font-weight: 700; margin: 0 0 .85rem; }
+.hero h1 { font-size: clamp(2.05rem, 4.6vw, 3.1rem); margin: 0 0 1.15rem; letter-spacing: -.015em; }
+.hero p { font-size: 1.06rem; color: var(--ink-soft); }
+.thesis {
+  margin-top: 1.5rem; padding: 1.05rem 1.25rem 1.05rem 2.6rem;
+  position: relative; max-width: var(--measure);
+  background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--amber);
+  border-radius: 0 10px 10px 0; box-shadow: var(--shadow);
+}
+.thesis::before { content: "∴"; position: absolute; left: .95rem; top: .95rem; font-size: 1.15rem; color: var(--amber); }
+.thesis p { margin: 0; font-size: .97rem; color: var(--ink); }
+
+/* ---------- CSS diagrams ---------- */
+.system-map {
+  position: relative; display: grid; gap: .75rem;
+  padding: 1.5rem; border-radius: 16px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.system-map .core {
+  justify-self: center; text-align: center;
+  padding: .85rem 1.25rem; border-radius: 999px;
+  background: var(--teal); color: var(--surface); font-weight: 700; font-size: .9rem;
+  max-width: 100%;
+}
+:root[data-theme="dark"] .system-map .core { color: #0b1116; }
+.system-map .spokes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
+.system-map .node {
+  padding: .8rem .85rem; border-radius: 12px; text-align: center;
+  background: var(--surface-3); border: 1px solid var(--line-soft);
+}
+.system-map .node b { display: block; font-size: .82rem; color: var(--ink); margin-bottom: .3rem; }
+.system-map .node small { display: block; font-size: .73rem; line-height: 1.5; color: var(--ink-soft); }
+.loop-diagram { display: grid; gap: .55rem; padding: 1.25rem; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.loop-diagram .step { padding: .6rem .8rem; border-radius: 10px; background: var(--surface-3); border-left: 3px solid var(--blue); font-size: .82rem; }
+
+/* ---------- chapter path ---------- */
+.chapter-path {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem;
+  margin: 2.5rem 0 3rem;
+}
+.chapter-path a {
+  display: block; padding: .9rem 1rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+  transition: border-color .15s, transform .15s;
+}
+.chapter-path a:hover { border-color: var(--teal); transform: translateY(-2px); }
+.chapter-path span { display: block; font-size: .67rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.chapter-path b { display: block; font-family: var(--serif); font-size: .96rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- sections ---------- */
+.section { padding: 2.75rem 0; border-top: 1px solid var(--line-soft); }
+.section-heading h2 { font-size: clamp(1.5rem, 3vw, 2.05rem); margin: 0 0 .9rem; }
+.section-heading p { color: var(--ink-soft); }
+.surprise-lead {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem;
+  margin: 1.75rem 0 2rem;
+}
+.definition, .equation { padding: 1rem 1.15rem; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); font-size: .92rem; }
+.definition { border-left: 3px solid var(--blue); }
+.equation { border-left: 3px solid var(--leaf); font-family: var(--mono); font-size: .82rem; line-height: 1.7; }
+.definition p, .equation p { margin: 0; max-width: none; }
+
+.surprise-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.1rem; }
+.trap-grid { grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
+.surprise-grid > li {
+  padding: 1.25rem 1.35rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.english-term { display: inline-block; font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--amber); margin-bottom: .45rem; }
+.surprise-grid h3 { font-size: 1.05rem; margin: 0 0 .7rem; }
+.surprise-grid p { font-size: .93rem; max-width: none; }
+.opportunity {
+  margin-top: .9rem; padding: .75rem .9rem; border-radius: 10px;
+  background: var(--surface-3); border-left: 3px solid var(--leaf); font-size: .87rem;
+}
+.opportunity p { margin: 0; font-size: .87rem; }
+.mechanics { margin-top: .9rem; display: grid; gap: .7rem; }
+.info-block { padding: .75rem .9rem; border-radius: 10px; border: 1px dashed var(--line); background: var(--surface); }
+.info-block h4 { font-size: .85rem; margin: 0 0 .35rem; color: var(--teal); }
+.info-block p { margin: 0; font-size: .86rem; }
+.result { margin-top: .7rem; font-size: .86rem; color: var(--ink-soft); }
+
+.signal {
+  margin: 2rem 0 0; padding: 1.1rem 1.3rem; border-radius: 12px;
+  background: var(--surface-3); border: 1px solid var(--line-soft); border-top: 3px solid var(--blue);
+}
+.signal p { margin: 0 0 .6rem; font-size: .93rem; }
+.signal p:last-child { margin-bottom: 0; }
+
+/* ---------- misconceptions ---------- */
+.trap-comparison { margin: 2.5rem 0; }
+.comparison-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; margin-top: 1.25rem; }
+.comparison-card {
+  padding: 1.1rem 1.25rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); border-top: 3px solid var(--amber);
+}
+.comparison-card h3 { font-size: .98rem; margin: 0 0 .6rem; }
+.comparison-card p { font-size: .9rem; max-width: none; }
+.comparison-card .myth { color: var(--amber); font-weight: 600; }
+.comparison-card .fact { color: var(--teal); font-weight: 600; }
+
+/* ---------- diagnostic ---------- */
+.diagnostic { padding: 1.75rem; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.diagnostic-intro p { font-size: .97rem; }
+.question-list { counter-reset: q; list-style: none; margin: 1.25rem 0 0; padding: 0; display: grid; gap: .9rem; }
+.question-list > li { counter-increment: q; position: relative; padding-left: 2.4rem; font-size: .93rem; }
+.question-list > li::before {
+  content: counter(q, decimal-leading-zero);
+  position: absolute; left: 0; top: .05rem;
+  font-family: var(--mono); font-size: .78rem; font-weight: 600; color: var(--teal);
+  border: 1px solid var(--line); border-radius: 6px; padding: .05rem .38rem;
+}
+.question-list .deep-only { margin-top: .4rem; font-size: .87rem; color: var(--ink-soft); }
+
+/* ---------- closing ---------- */
+.closing { padding: 3rem 0 1rem; border-top: 1px solid var(--line-soft); }
+.closing blockquote {
+  margin: 0; padding: 1.5rem 0 0; max-width: 46rem;
+  font-family: var(--serif); font-size: clamp(1.15rem, 2.4vw, 1.55rem); line-height: 1.5; color: var(--ink);
+}
+.closing blockquote p { max-width: none; font-size: inherit; line-height: inherit; }
+.closing-accent { color: var(--teal); font-style: italic; }
+
+/* ---------- chapter nav ---------- */
+.chapter-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 3rem 0 0; }
+.nav-cell {
+  display: block; padding: 1rem 1.15rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); transition: border-color .15s, transform .15s;
+}
+a.nav-cell:hover { border-color: var(--teal); transform: translateY(-2px); }
+.nav-cell.disabled { opacity: .5; background: var(--surface-3); cursor: default; }
+.nav-next { text-align: right; }
+.nav-label { display: block; font-size: .68rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.nav-title { display: block; font-family: var(--serif); font-size: .95rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- footer + references ---------- */
+footer {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.5rem; align-items: start;
+  margin-top: 3rem; padding: 2rem 0 3rem; border-top: 1px solid var(--line);
+  font-size: .85rem; color: var(--ink-soft);
+}
+.footer-main p { max-width: 48rem; font-size: .85rem; }
+.footer-label { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; margin: 1.5rem 0 .6rem; }
+.ref-list { margin: 0; padding-left: 1.4rem; display: grid; gap: .5rem; }
+.ref-list li { font-size: .82rem; line-height: 1.6; }
+.edition { font-family: var(--mono); font-size: .7rem; letter-spacing: .12em; color: var(--ink-faint); white-space: nowrap; }
+.cite { font-size: .7em; vertical-align: super; line-height: 0; margin-left: .1em; }
+.cite a { text-decoration: none; padding: 0 .12em; }
+
+/* SECTION-RAIL:START */
+.section-rail {
+  position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+  z-index: 30; padding: .6rem .5rem; display: none;
+}
+.section-rail__list { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+.section-rail__list a {
+  display: flex; align-items: center; gap: .55rem;
+  text-decoration: none; color: var(--ink-faint); font-size: .74rem; line-height: 1.25;
+}
+.section-rail__list a::before {
+  content: ""; flex: 0 0 auto; width: 1.15rem; height: 2px; border-radius: 2px;
+  background: var(--line); transition: width .2s, background .2s;
+}
+.section-rail__label {
+  max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0;
+  transition: max-width .24s ease, opacity .18s ease;
+}
+.section-rail:hover .section-rail__label,
+.section-rail:focus-within .section-rail__label { max-width: 13rem; opacity: 1; }
+.section-rail:hover, .section-rail:focus-within {
+  background: color-mix(in srgb, var(--surface-2) 94%, transparent);
+  border: 1px solid var(--line-soft); border-left: 0; border-radius: 0 12px 12px 0; box-shadow: var(--shadow);
+}
+.section-rail__list a:hover,
+.section-rail__list a[aria-current="true"] { color: var(--teal); }
+.section-rail__list a[aria-current="true"]::before { width: 1.9rem; background: var(--teal); }
+@media (min-width: 1180px) { .section-rail { display: block; } }
+/* SECTION-RAIL:END */
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 2rem; padding-top: 2.5rem; }
+  .hero::after { position: static; display: block; margin-bottom: .75rem; }
+  .system-map .spokes { grid-template-columns: minmax(0, 1fr); }
+  footer { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 620px) {
+  body { font-size: 16px; }
+  main { padding: 0 1.1rem 3rem; }
+  .topbar { padding: .6rem 1.1rem; gap: .5rem; }
+  .book-label { width: 100%; margin-right: 0; }
+  .chapter-nav { grid-template-columns: minmax(0, 1fr); }
+  .nav-next { text-align: left; }
+  .diagnostic { padding: 1.25rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">Linux Kernel in a Nutshell · <span class="vi-only">Chương 8 · Công thức cấu hình nhân</span><span class="en-only" lang="en">Chapter 8 · Kernel Configuration Recipes</span></div>
+  <div class="switch-group mode-switch">
+    <span class="switch-label vi-only">Mức đọc</span><span class="switch-label en-only" lang="en">Level</span>
+    <button class="chip" type="button" data-set-mode="easy" aria-pressed="false"><span class="vi-only">Dễ hiểu</span><span class="en-only" lang="en">Easy</span></button>
+    <button class="chip" type="button" data-set-mode="standard" aria-pressed="true"><span class="vi-only">Tiêu chuẩn</span><span class="en-only" lang="en">Standard</span></button>
+    <button class="chip" type="button" data-set-mode="deep" aria-pressed="false"><span class="vi-only">Đầy đủ</span><span class="en-only" lang="en">Deep</span></button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-set-lang="vi" aria-pressed="true">VI</button>
+    <button class="chip" type="button" data-set-lang="en" aria-pressed="false">EN</button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-toggle-theme aria-pressed="false"><span class="vi-only">Tối</span><span class="en-only" lang="en">Dark</span></button>
+  </div>
+</header>
+
+<nav class="section-rail" aria-label="Mục lục trong trang"><ul class="section-rail__list"></ul></nav>
+
+<main>
+
+<section class="hero" id="cong-thuc" aria-labelledby="cong-thuc-title">
+  <div>
+    <p class="eyebrow"><span class="vi-only">Phần II · Tùy biến nhân · Chương 8</span><span class="en-only" lang="en">Part II · Customizing a Kernel · Chapter 8</span></p>
+    <h1 id="cong-thuc-title">
+      <span class="standard-copy">Sổ công thức: bật đúng tùy chọn cho đúng phần cứng</span>
+      <span class="easy-only">Sổ tay “bật cái gì cho cái gì”</span>
+      <span class="en-only" lang="en">The recipe book: switching on the right option for the right hardware</span>
+    </h1>
+    <p class="standard-copy">Kroah-Hartman mở chương bằng một câu đóng vai trò lời hứa trả công: các chương trước đã dạy <em>cơ chế</em> cấu hình lại nhân, còn phần thưởng nằm ở chương này — nơi tập hợp tất cả những kiểu thay đổi phổ biến nhất mà người ta cần làm với nhân của mình, kèm hướng dẫn cụ thể <span class="cite"><a href="#ref-1">1</a></span>. Đây là chương duy nhất của cuốn sách có hình dạng một quyển sổ công thức: bảy nhóm — ổ đĩa, thiết bị, CPU, mạng, hệ tệp, bảo mật, gỡ lỗi — mỗi nhóm là một chuỗi đường dẫn menu phải đi qua.</p>
+    <p class="easy-only">Mấy chương trước dạy bạn <em>cách</em> chỉnh nhân. Chương này cho bạn <em>công thức</em>: muốn dùng USB thì bật cái gì, muốn dùng Wi-Fi thì bật cái gì, muốn máy chạy mát hơn thì bật cái gì <span class="cite"><a href="#ref-1">1</a></span>. Giống sách nấu ăn: mỗi món một danh sách nguyên liệu. Nhớ nhé: chương này để tra, không phải để học thuộc.</p>
+    <p class="en-only" lang="en">Kroah-Hartman opens the chapter with a sentence that reads like a payback promise: previous chapters taught the <em>mechanics</em> of reconfiguring the kernel, and the payoff comes here, where you find all the most common kinds of changes people need to make to their kernels, with specific instructions on how to do so <span class="cite"><a href="#ref-1">1</a></span>. This is the one chapter shaped like a cookbook: seven groups — disks, devices, CPU, networking, filesystems, security, debugging — each a chain of menu paths to walk.</p>
+    <p class="deep-only">Cấu trúc lặp lại của mọi công thức đáng để nhận ra sớm, vì nó là bài học thật sự của chương: <b>(1) dò phần cứng bằng một lệnh</b> — thường là <code>lspci</code>, <code>lsusb</code> hoặc <code>cat /proc/cpuinfo</code>; <b>(2) bật lớp hạ tầng</b> mà thiết bị cưỡi lên — PCI, SCSI, USB, mạng; <b>(3) bật driver cụ thể</b> của chính con chip bạn có <span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span>. Ba nhịp đó không đổi qua cả bảy nhóm, và chúng vẫn đúng với nhân hôm nay dù tên tùy chọn đã thay đổi nhiều.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận điểm chương 8.</b> Cấu hình nhân không phải là đoán, mà là một chuỗi ánh xạ có thể tra cứu: <em>phần cứng bạn dò được</em> → <em>lớp hạ tầng nó phụ thuộc vào</em> → <em>driver cụ thể của nó</em>. Ông dựng cả chương theo đúng thứ tự đó, từ <code>lspci</code> đến đường dẫn menu <span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only"><b>Ý chính.</b> Đừng đoán xem phải bật gì. Hãy hỏi máy xem nó có thiết bị gì, rồi bật lớp chung trước, cuối cùng mới bật driver riêng <span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: dò trước, bật sau.</p>
+      <p class="en-only" lang="en"><b>Chapter 8 thesis.</b> Kernel configuration is not guesswork but a lookup chain: <em>the hardware you detect</em> → <em>the infrastructure layer it rides on</em> → <em>its specific driver</em>. He builds the whole chapter in exactly that order, from <code>lspci</code> to the menu path <span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span>.</p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: ba nhịp của mọi công thức cấu hình — dò phần cứng, bật lớp hạ tầng, bật driver cụ thể. Diagram: the three beats of every configuration recipe — detect the hardware, enable the infrastructure layer, enable the specific driver.">
+    <div class="core"><span class="vi-only">Một công thức cấu hình</span><span class="en-only" lang="en">One configuration recipe</span></div>
+    <div class="spokes">
+      <div class="node">
+        <b><span class="vi-only">Dò</span><span class="en-only" lang="en">Detect</span></b>
+        <small class="standard-copy"><code>lspci</code>, <code>lsusb</code>, <code>/proc/cpuinfo</code> — hỏi chính máy xem nó có gì.</small>
+        <small class="easy-only">Hỏi máy: “trong người anh có những gì?”</small>
+        <small class="en-only" lang="en"><code>lspci</code>, <code>lsusb</code>, <code>/proc/cpuinfo</code> — ask the machine what it holds.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Lớp hạ tầng</span><span class="en-only" lang="en">Infrastructure</span></b>
+        <small class="standard-copy">PCI, SCSI, USB, Networking — thứ mà driver cưỡi lên. Thiếu nó thì driver không hiện ra.</small>
+        <small class="easy-only">Bật cái nền trước: PCI, SCSI, USB, mạng.</small>
+        <small class="en-only" lang="en">PCI, SCSI, USB, Networking — what the driver rides on. Without it, the driver never appears.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Driver riêng</span><span class="en-only" lang="en">Specific driver</span></b>
+        <small class="standard-copy">Đúng con chip trong máy bạn — tên lấy thẳng từ dòng <code>lspci</code> vừa đọc.</small>
+        <small class="easy-only">Cuối cùng mới chọn đúng tên con chip.</small>
+        <small class="en-only" lang="en">The exact chip in your machine — its name taken straight from the <code>lspci</code> line you just read.</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<nav class="chapter-path" aria-label="Lối đi trong chương">
+  <a href="#o-dia">
+    <span>01</span>
+    <b><span class="standard-copy">Ổ đĩa: USB, IDE, SATA</span><span class="easy-only">Ổ cứng và USB</span><span class="en-only" lang="en">Disks: USB, IDE, SATA</span></b>
+  </a>
+  <a href="#thiet-bi">
+    <span>02</span>
+    <b><span class="standard-copy">Thiết bị: bus và âm thanh</span><span class="easy-only">Thiết bị cắm vào máy</span><span class="en-only" lang="en">Devices: buses and sound</span></b>
+  </a>
+  <a href="#cpu-nguon">
+    <span>03</span>
+    <b><span class="standard-copy">CPU, nguồn và bộ nhớ</span><span class="easy-only">Bộ xử lý và pin</span><span class="en-only" lang="en">CPU, power and memory</span></b>
+  </a>
+  <a href="#mang-tep">
+    <span>04</span>
+    <b><span class="standard-copy">Mạng, hệ tệp và bảo mật</span><span class="easy-only">Mạng, ổ đĩa ảo, khóa cửa</span><span class="en-only" lang="en">Networking, filesystems, security</span></b>
+  </a>
+  <a href="#go-loi">
+    <span>05</span>
+    <b><span class="standard-copy">Gỡ lỗi nhân</span><span class="easy-only">Khi muốn nhìn vào trong nhân</span><span class="en-only" lang="en">Kernel debugging</span></b>
+  </a>
+  <a href="#tu-kiem">
+    <span>06</span>
+    <b><span class="standard-copy">Tự kiểm trước khi sang Phần III</span><span class="easy-only">Tự hỏi mình vài câu</span><span class="en-only" lang="en">Self-check before Part III</span></b>
+  </a>
+</nav>
+
+<section class="section" id="o-dia" aria-labelledby="o-dia-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 01 · trang 63–66</span><span class="en-only" lang="en">Concept cluster 01 · pages 63–66</span></p>
+    <h2 id="o-dia-title">
+      <span class="standard-copy">Ổ đĩa: ba con đường tới cùng một khối dữ liệu</span>
+      <span class="easy-only">Ổ cứng và USB: ba đường vào</span>
+      <span class="en-only" lang="en">Disks: three roads to the same block of data</span>
+    </h2>
+    <p class="standard-copy">Ông mở nhóm đầu tiên bằng một ghi nhận đơn giản: nhân Linux hỗ trợ rất nhiều loại ổ đĩa khác nhau, và phần này chỉ ra cách cấu hình để nhận được hầu hết các loại bộ điều khiển đĩa phổ biến <span class="cite"><a href="#ref-1">1</a></span>. Điều đáng chú ý là cả ba con đường — USB, IDE, SATA — đều hội tụ về cùng một chỗ trong nhân: <em>tầng SCSI</em>. Hiểu được điều đó thì ba công thức bỗng trở thành một.</p>
+    <p class="easy-only">Máy bạn có thể gắn ổ cứng theo nhiều kiểu: cắm USB, cắm cáp IDE cũ, hay cắm cáp SATA mới. Nhân Linux hỗ trợ hết <span class="cite"><a href="#ref-1">1</a></span>. Điều hay là: cuối cùng cả ba kiểu đều đi chung một con đường trong nhân, gọi là tầng SCSI. Nhớ nhé: khác cổng cắm, chung đường đi.</p>
+    <p class="en-only" lang="en">He opens the first group with a plain observation: the Linux kernel supports a wide range of different disk types, and this section shows how to configure the kernel so that it supports most of the more common types of disk controllers <span class="cite"><a href="#ref-1">1</a></span>. What is worth noticing is that all three roads — USB, IDE, SATA — converge on the same place inside the kernel: the <em>SCSI layer</em>. Once you see that, three recipes collapse into one.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Tầng SCSI như một giao thức chung.</b> Ông giải thích thẳng: một thiết bị lưu trữ USB <em>thực chất là một thiết bị SCSI nói chuyện qua kết nối USB</em>, nên hệ con SCSI bắt buộc phải bật <span class="cite"><a href="#ref-1">1</a></span>. Với SATA cũng vậy — thư viện <code>libata</code> lo phần đặc thù SATA, nhưng dùng tầng SCSI để nói chuyện với tầng khối <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="easy-only"><b>SCSI là ngôn ngữ chung.</b> Cái USB của bạn, bên trong nhân, được coi như một ổ SCSI nói qua dây USB <span class="cite"><a href="#ref-1">1</a></span>. Ổ SATA cũng mượn đúng ngôn ngữ đó <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: quên bật SCSI là hỏng cả hai.</p>
+      <p class="en-only" lang="en"><b>The SCSI layer as a shared protocol.</b> He says it outright: a USB storage device is in reality a USB SCSI device talking over a USB connection, so the SCSI subsystem must be enabled <span class="cite"><a href="#ref-1">1</a></span>. The same holds for SATA — the <code>libata</code> library handles the SATA-specific work but uses the SCSI layer to talk to the block layer <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">USB flash → SCSI Device Support<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ SCSI disk support<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ USB Mass Storage<br>SATA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → SCSI + libata + PIIX/ICH</p>
+      <p class="easy-only">USB → bật SCSI → bật “SCSI disk”<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ bật “USB Mass Storage”<br>SATA → bật SCSI → bật SATA → chọn chip</p>
+      <p class="en-only" lang="en">USB flash → SCSI Device Support<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ SCSI disk support<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ USB Mass Storage<br>SATA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ SCSI + libata + PIIX/ICH</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">usb storage</span>
+      <h3>
+        <span class="standard-copy">USB Storage — ba nấc, không phải một</span>
+        <span class="easy-only">USB — phải bật ba thứ</span>
+        <span class="en-only" lang="en">USB Storage — three rungs, not one</span>
+      </h3>
+      <p class="standard-copy">Công thức có ba bước, và bước nào thiếu cũng làm hỏng cả: bật <code>SCSI Device Support</code>, rồi <code>SCSI disk support</code> để thiết bị mount được đúng cách, rồi <code>USB Mass Storage support</code> ở dạng module <span class="cite"><a href="#ref-1">1</a></span>. Trước đó, hỗ trợ USB nói chung phải chạy được đã — ông trỏ người đọc sang công thức “USB” ở nhóm sau <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="easy-only">Muốn cắm USB lưu trữ thì phải bật ba thứ: hỗ trợ SCSI, hỗ trợ “đĩa SCSI”, và “USB Mass Storage” <span class="cite"><a href="#ref-1">1</a></span>. Thiếu một là không thấy ổ đâu. Nhớ nhé: đủ ba nấc mới lên tới đích.</p>
+      <p class="en-only" lang="en">The recipe has three steps and missing any one breaks the whole: enable <code>SCSI Device Support</code>, then <code>SCSI disk support</code> so the device can be mounted properly, then <code>USB Mass Storage support</code> as a module <span class="cite"><a href="#ref-1">1</a></span>. Before all that, general USB support must already be working — he points the reader to the “USB” recipe in the next group <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Cách dò của ông là chạy <code>/usr/sbin/lsusb -v | grep Storage</code>; nếu ra dòng <code>bInterfaceClass 8 Mass Storage</code> thì máy đang có một thiết bị lưu trữ USB <span class="cite"><a href="#ref-1">1</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Gõ <code>lsusb -v | grep Storage</code>; thấy chữ <code>Mass Storage</code> là máy có USB lưu trữ <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: máy tự khai ra hết.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> His detection step is to run <code>/usr/sbin/lsusb -v | grep Storage</code>; if it prints <code>bInterfaceClass 8 Mass Storage</code>, a USB storage device is present on the system <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Thiết bị lệch chuẩn</h4>
+          <p>Ông ghi chú một chi tiết dễ bỏ qua: một số thiết bị lưu trữ USB được liệt kê thành mục cấu hình <em>riêng</em>, vì chúng không tuân theo đặc tả USB chuẩn và cần mã đặc biệt; nếu bạn có một trong số đó, phải bật đúng mục của nó <span class="cite"><a href="#ref-1">1</a></span>. Đây là lý do một cái USB “y hệt” cái khác vẫn có thể không chạy.</p>
+        </div>
+        <div class="info-block">
+          <h4>Ký hiệu <code>[*]</code> và <code>[M]</code></h4>
+          <p>Trong mọi công thức của chương, <code>[*]</code> nghĩa là dựng thẳng vào nhân và <code>[M]</code> nghĩa là dựng thành module. Ông chọn <code>[M]</code> cho <code>USB Mass Storage support</code> nhưng <code>[*]</code> cho <code>SCSI Device Support</code> <span class="cite"><a href="#ref-1">1</a></span> — hạ tầng thì dựng cứng, driver rời thì để nạp khi cần.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">IDE disks</span>
+      <h3>
+        <span class="standard-copy">IDE — công thức của sách, và số phận của nó</span>
+        <span class="easy-only">IDE — kiểu ổ cứng đời cũ</span>
+        <span class="en-only" lang="en">IDE — the book's recipe, and its fate</span>
+      </h3>
+      <p class="standard-copy">Năm 2006 ông viết rằng đĩa IDE là loại đĩa PC phổ biến nhất <span class="cite"><a href="#ref-1">1</a></span>. Công thức: bật <code>PCI Support</code>, rồi <code>ATA/ATAPI/MFM/RLL support</code> cùng <code>Enhanced IDE/MFM/RLL disk/cdrom/tape/floppy support</code>, rồi — để có đường lui nếu chọn sai chip — bật thêm <code>generic/default IDE chipset support</code>, và cuối cùng <code>PCI IDE chipset support</code> để mở ra danh sách dài các loại bộ điều khiển <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="easy-only">Hồi 2006, ổ IDE là loại thông dụng nhất trên máy bàn <span class="cite"><a href="#ref-1">1</a></span>. Công thức: bật PCI, bật khối ATA/IDE, bật thêm bản “chung chung” để phòng chọn sai, rồi mới chọn đúng loại chip <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: chọn thêm bản dự phòng thì đỡ hỏng.</p>
+      <p class="en-only" lang="en">In 2006 he wrote that IDE disks are the most common type of PC disks <span class="cite"><a href="#ref-1">1</a></span>. The recipe: enable <code>PCI Support</code>, then <code>ATA/ATAPI/MFM/RLL support</code> with <code>Enhanced IDE/MFM/RLL disk/cdrom/tape/floppy support</code>, then — as a good backup in case you pick the wrong type — <code>generic/default IDE chipset support</code>, and finally <code>PCI IDE chipset support</code>, which opens a lengthy submenu of controller types <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Đã đổi kể từ đó.</b> Đây là công thức lỗi thời rõ nhất của chương. Cơ sở dữ liệu LKDDB ghi nhận tùy chọn <code>CONFIG_IDE</code> mang nhãn “<span lang="en">DEPRECATED</span>” từ 2.6.33 và có mặt lần cuối ở nhân 5.13 <span class="cite"><a href="#ref-10">10</a></span>; bản 5.14 gỡ hẳn driver IDE cũ vì đã bị <code>libata</code> thay thế <span class="cite"><a href="#ref-8">8</a></span>. Phần cứng PATA vẫn chạy — chỉ là qua <code>libata</code> <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        <p class="easy-only"><b>Giờ khác rồi.</b> Tùy chọn IDE cũ đã bị bỏ khỏi nhân từ bản 5.14 <span class="cite"><a href="#ref-8">8</a></span><span class="cite"><a href="#ref-10">10</a></span>; ổ đời cũ nay chạy bằng <code>libata</code> <span class="cite"><a href="#ref-9">9</a></span>. Nhớ nhé: đọc công thức này như đọc sử.</p>
+        <p class="en-only" lang="en"><b>Changed since.</b> This is the chapter's most clearly time-bound recipe. LKDDB records <code>CONFIG_IDE</code> carrying a “DEPRECATED” prompt from 2.6.33 and appearing for the last time in kernel 5.13 <span class="cite"><a href="#ref-10">10</a></span>; 5.14 removed the legacy IDE driver outright as obsoleted by libata <span class="cite"><a href="#ref-8">8</a></span>. PATA hardware still works — it just goes through <code>libata</code> now <span class="cite"><a href="#ref-9">9</a></span>.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">serial ATA</span>
+      <h3>
+        <span class="standard-copy">SATA — bốn nấc, và đây là nhánh còn sống</span>
+        <span class="easy-only">SATA — kiểu ổ cứng đời mới</span>
+        <span class="en-only" lang="en">SATA — four rungs, and this is the branch that survived</span>
+      </h3>
+      <p class="standard-copy">Ông gọi SATA là kẻ kế vị của bộ điều khiển IDE <span class="cite"><a href="#ref-1">1</a></span>, và công thức của nó có bốn nấc: <code>PCI Support</code> → <code>SCSI Device Support</code> → <code>SCSI disk support</code> → <code>Serial ATA (SATA) support</code> nằm trong mục <code>SCSI low-level drivers</code>, rồi chọn đúng chip; ví dụ ông đưa ra là phần lớn bo mạch Intel cần driver <code>Intel PIIX/ICH SATA support</code> <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="easy-only">SATA là đời sau của IDE <span class="cite"><a href="#ref-1">1</a></span>. Bật theo bốn nấc: PCI → SCSI → “đĩa SCSI” → SATA, rồi chọn chip; máy Intel thường là <code>PIIX/ICH</code> <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: chọn đúng tên chip trong danh sách <code>lspci</code>.</p>
+      <p class="en-only" lang="en">He calls SATA the successor to the IDE disk controller <span class="cite"><a href="#ref-1">1</a></span>, and its recipe has four rungs: <code>PCI Support</code> → <code>SCSI Device Support</code> → <code>SCSI disk support</code> → <code>Serial ATA (SATA) support</code> under <code>SCSI low-level drivers</code>, then the specific controller; his example is that most Intel motherboards need the <code>Intel PIIX/ICH SATA</code> driver <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Cái tên <code>libata</code> mà ông nhắc tới năm 2006 chính là thứ về sau nuốt luôn cả nhánh IDE: hôm nay tài liệu nhân mô tả <code>libata</code> là thư viện dùng chung cho cả Serial ATA lẫn Parallel ATA <span class="cite"><a href="#ref-9">9</a></span>, và LKDDB ghi mục chọn <code>CONFIG_ATA</code> với nhãn “Serial ATA and Parallel ATA drivers (libata)” <span class="cite"><a href="#ref-10">10</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Cái thư viện <code>libata</code> trong sách nay lo cả ổ cũ lẫn ổ mới <span class="cite"><a href="#ref-9">9</a></span><span class="cite"><a href="#ref-10">10</a></span>. Nhớ nhé: nhánh SATA là nhánh sống sót.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The <code>libata</code> name he mentions in 2006 is exactly what later absorbed the IDE branch: today the kernel documents <code>libata</code> as the shared library for both Serial ATA and Parallel ATA <span class="cite"><a href="#ref-9">9</a></span>, and LKDDB lists <code>CONFIG_ATA</code> with the prompt “Serial ATA and Parallel ATA drivers (libata)” <span class="cite"><a href="#ref-10">10</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ghi CD: hai nhánh, một quy tắc</h4>
+          <p>Ông kết nhóm ổ đĩa bằng câu ngắn gọn nhất chương: nếu nhân đọc được CD-ROM thì nó cũng ghi được CD-ROM <span class="cite"><a href="#ref-1">1</a></span>. Hai nhánh: ổ CD-ROM IDE chỉ cần thêm <code>Include IDE/ATAPI CDROM support</code>, còn ổ SATA/SCSI cần <code>SCSI CDROM support</code> <span class="cite"><a href="#ref-1">1</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Đường dẫn <code>lspci</code></h4>
+          <p>Trong một chú thích chân trang, ông thừa nhận gần như mọi bản phân phối đặt <code>lspci</code> ở <code>/usr/sbin/</code> nhưng một số nơi khác — và bảo người đọc chạy <code>which lspci</code> để tìm <span class="cite"><a href="#ref-1">1</a></span>. Một chi tiết nhỏ nhưng nói lên giọng của cả chương: không giả định gì về máy của bạn.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Ổ đĩa là loại thiết bị mà bạn <em>bắt buộc</em> phải có. Nhóm kế tiếp nói về loại thiết bị bạn <em>chọn</em> cắm thêm — và ở đó ông mở đầu bằng một lời khoe không giấu giếm.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Ổ cứng thì máy nào cũng cần. Phần sau nói về những thứ bạn cắm thêm vào. Nhớ nhé: cùng một cách làm, chỉ khác món.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> Disks are the devices you <em>must</em> have. The next group covers the devices you <em>choose</em> to plug in — and there he opens with an undisguised boast.</p>
+  </aside>
+</section>
+
+<section class="section" id="thiet-bi" aria-labelledby="thiet-bi-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 02 · trang 66–70</span><span class="en-only" lang="en">Concept cluster 02 · pages 66–70</span></p>
+    <h2 id="thiet-bi-title">
+      <span class="standard-copy">Thiết bị: bus trước, driver sau</span>
+      <span class="easy-only">Thiết bị cắm thêm: bật cổng trước</span>
+      <span class="en-only" lang="en">Devices: the bus first, the driver second</span>
+    </h2>
+    <p class="standard-copy">Câu mở đầu nhóm này là câu tự hào nhất của cả chương: Linux hỗ trợ một dải thiết bị rộng lớn — <em>nhiều hơn bất kỳ hệ điều hành nào từng có</em> <span class="cite"><a href="#ref-2">2</a></span>. Nhưng ngay sau đó là một quy tắc kỷ luật: muốn dùng thiết bị USB, trước hết phải bật hỗ trợ cho <em>bộ điều khiển</em> USB — thứ điều khiển đường kết nối USB trên máy <span class="cite"><a href="#ref-2">2</a></span>. Bus trước, driver sau, không có ngoại lệ.</p>
+    <p class="easy-only">Linux nhận được nhiều loại thiết bị hơn mọi hệ điều hành khác <span class="cite"><a href="#ref-2">2</a></span>. Nhưng có luật: muốn dùng thiết bị USB thì phải bật “cái cổng USB” trong nhân trước đã <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: có cổng rồi mới có đồ cắm vào cổng.</p>
+    <p class="en-only" lang="en">This group's opening line is the proudest in the chapter: Linux supports a vast range of different types of devices — more than any other operating system ever has <span class="cite"><a href="#ref-2">2</a></span>. What follows immediately is a rule of discipline: to use a USB device you must first enable support for a USB controller, the thing that drives the USB connection on the machine <span class="cite"><a href="#ref-2">2</a></span>. Bus first, driver second, no exceptions.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Bộ điều khiển chủ (<span lang="en">host controller</span>).</b> Con chip trên bo mạch nói chuyện với dây cáp. Với USB, ông liệt kê ba loại — <code>EHCI HCD (USB 2.0)</code>, <code>OHCI HCD</code>, <code>UHCI HCD (most Intel and VIA)</code> — và nói rõ: bật cả ba là an toàn nếu bạn không biết mình có loại nào <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only"><b>Bộ điều khiển là gì.</b> Là con chip giữ cái cổng cắm. USB có ba loại; ông bảo cứ bật cả ba cho chắc nếu không biết máy mình loại nào <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: không chắc thì bật hết, không sao cả.</p>
+      <p class="en-only" lang="en"><b>Host controller.</b> The chip on the board that speaks to the cable. For USB he lists three — <code>EHCI HCD (USB 2.0)</code>, <code>OHCI HCD</code>, <code>UHCI HCD (most Intel and VIA)</code> — and says plainly that it is safe to enable them all if you do not know which you have <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">PCI Support<br>&nbsp;&nbsp;└ Support for Host-side USB&nbsp;&nbsp;[M]<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├ EHCI / OHCI / UHCI&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[M]<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└ driver của thiết bị&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[M]</p>
+      <p class="easy-only">Bật PCI<br>&nbsp;&nbsp;→ bật USB<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ bật cả ba loại chip USB<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ bật driver của món đồ</p>
+      <p class="en-only" lang="en">PCI Support<br>&nbsp;&nbsp;└ Support for Host-side USB&nbsp;&nbsp;[M]<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├ EHCI / OHCI / UHCI&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[M]<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└ the device's own driver&nbsp;&nbsp;[M]</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">usb</span>
+      <h3>
+        <span class="standard-copy">USB — và cái bẫy “driver nằm ở menu khác”</span>
+        <span class="easy-only">USB — có driver nằm ở chỗ khác</span>
+        <span class="en-only" lang="en">USB — and the “driver lives in another menu” trap</span>
+      </h3>
+      <p class="standard-copy">Sau ba nấc PCI → USB → host controller, ông cảnh báo một điều dễ làm người đọc bế tắc: phần lớn driver thiết bị USB nằm dưới mục USB chính, <em>nhưng</em> một số loại — video USB, DVB, âm thanh — lại được liệt kê trong mục quản lý riêng loại thiết bị đó. Ví dụ driver âm thanh USB nằm dưới menu <code>Sound</code>, ở mục <code>USB Devices</code> → <code>USB Audio/MIDI driver</code> <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Đa số driver USB nằm trong mục USB. Nhưng loa/tai nghe USB thì lại nằm trong mục Âm thanh, chứ không nằm trong mục USB <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: tìm theo <em>loại thiết bị</em>, đừng chỉ tìm theo <em>cổng cắm</em>.</p>
+      <p class="en-only" lang="en">After the three rungs PCI → USB → host controller, he warns about something that leaves readers stuck: most USB device drivers sit under the main USB section, <em>but</em> some kinds — USB video, DVB and sound — are listed in the section controlling that class of device. The USB sound driver, for instance, lives under the <code>Sound</code> menu at <code>USB Devices</code> → <code>USB Audio/MIDI driver</code> <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Lệnh dò của ông là <code>/usr/sbin/lspci | grep USB</code>; ví dụ trong sách trả về năm bộ điều khiển Intel ICH5 — bốn UHCI và một EHCI <span class="cite"><a href="#ref-2">2</a></span>, đúng kiểu bo mạch năm 2006: nhiều cổng USB 1.1 cộng một cổng USB 2.0 chung.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Gõ <code>lspci | grep USB</code> để xem máy có mấy bộ điều khiển USB. Máy ví dụ trong sách có tận năm cái <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: một máy có thể có nhiều cổng khác loại.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> His detection command is <code>/usr/sbin/lspci | grep USB</code>; the book's example returns five Intel ICH5 controllers — four UHCI and one EHCI <span class="cite"><a href="#ref-2">2</a></span>, exactly the 2006 board shape: several USB 1.1 ports plus one shared USB 2.0 controller.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">IEEE 1394 / FireWire</span>
+      <h3>
+        <span class="standard-copy">FireWire — bus nhanh của một thời</span>
+        <span class="easy-only">FireWire — cổng nhanh đời cũ</span>
+        <span class="en-only" lang="en">FireWire — the fast bus of an era</span>
+      </h3>
+      <p class="standard-copy">Ông giới thiệu IEEE 1394 bằng đúng cái tên mà người ta quen gọi — FireWire, tên do Apple phổ biến — và mô tả nó là một bus tốc độ cao nối thiết bị ngoài, giống như USB <span class="cite"><a href="#ref-2">2</a></span>. Công thức: PCI → <code>IEEE 1394 (FireWire) support</code> → chọn bộ điều khiển (<code>OHCI-1394</code> hoặc <code>Texas Instruments PCILynx</code>) → chọn driver giao thức: <code>SBP-2</code> cho ổ cứng, <code>Ethernet over 1394</code>, <code>OHCI-1394 Video</code>, <code>Raw IEEE1394 I/O</code> <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">FireWire là cổng nhanh kiểu cũ, Apple đặt tên, dùng để nối đồ bên ngoài giống USB <span class="cite"><a href="#ref-2">2</a></span>. Bật theo bốn nấc: PCI → FireWire → chip điều khiển → giao thức (ổ cứng, mạng, video) <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: cùng một khuôn ba nhịp như USB.</p>
+      <p class="en-only" lang="en">He introduces IEEE 1394 by the name people actually use — FireWire, the name Apple publicised — and describes it as a high-speed bus connecting external devices, much as USB does <span class="cite"><a href="#ref-2">2</a></span>. The recipe: PCI → <code>IEEE 1394 (FireWire) support</code> → pick the host controller (<code>OHCI-1394</code> or <code>Texas Instruments PCILynx</code>) → pick the protocol drivers: <code>SBP-2</code> for hard disks, <code>Ethernet over 1394</code>, <code>OHCI-1394 Video</code>, <code>Raw IEEE1394 I/O</code> <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Đã đổi kể từ đó.</b> Ngăn xếp <code>ieee1394</code> mà sách hướng dẫn về sau bị thay bằng ngăn xếp “<span lang="en">juju</span>”: LKDDB ghi <code>CONFIG_IEEE1394</code> mang nhãn “Legacy alternative FireWire driver stack” ở 2.6.31–2.6.36 rồi biến mất, trong khi <code>CONFIG_FIREWIRE</code> chạy liên tục từ 2.6.26 đến nay <span class="cite"><a href="#ref-26">26</a></span>.</p>
+        <p class="easy-only"><b>Giờ khác rồi.</b> Bộ mã FireWire trong sách đã bị thay bằng bộ mới; tên tùy chọn giờ là <code>CONFIG_FIREWIRE</code> <span class="cite"><a href="#ref-26">26</a></span>. Nhớ nhé: ý tưởng còn, tên đổi.</p>
+        <p class="en-only" lang="en"><b>Changed since.</b> The <code>ieee1394</code> stack the book walks through was later replaced by the “juju” stack: LKDDB records <code>CONFIG_IEEE1394</code> prompted as “Legacy alternative FireWire driver stack” across 2.6.31–2.6.36 and then gone, while <code>CONFIG_FIREWIRE</code> has run continuously since 2.6.26 <span class="cite"><a href="#ref-26">26</a></span>.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">hotplug buses</span>
+      <h3>
+        <span class="standard-copy">PCI Hotplug và PCMCIA — cắm nóng, hai thế hệ</span>
+        <span class="easy-only">Khe cắm thẻ ở laptop</span>
+        <span class="en-only" lang="en">PCI Hotplug and PCMCIA — hot-plugging, two generations</span>
+      </h3>
+      <p class="standard-copy">Với hai bus này, ông bỏ hẳn bước <code>lspci</code> và thay bằng một lời khuyên thực dụng đáng nhớ: hãy <em>nhìn vào phần cứng</em> xem có cắm được thẻ ExpressCard (hoặc thẻ PCMCIA) vào đó không <span class="cite"><a href="#ref-2">2</a></span>. Công thức ExpressCard: PCI → <code>Support for PCI Hotplug (EXPERIMENTAL)</code> → <code>ACPI PCI Hotplug driver</code> cho phần lớn laptop, cộng <code>PCI Express Hotplug driver</code> <span class="cite"><a href="#ref-2">2</a></span>. Còn PCMCIA thì bật cả hai chế độ <code>16-bit PCMCIA</code> và <code>32-bit CardBus</code> để phủ dải thiết bị rộng nhất, với cầu nối phổ biến nhất là loại “<span lang="en">yenta-like</span>” <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Với khe cắm thẻ, ông bảo cứ nhìn thẳng vào máy xem có cái khe đó không <span class="cite"><a href="#ref-2">2</a></span>. Rồi bật hỗ trợ cắm nóng, và với thẻ PCMCIA thì bật cả hai loại 16-bit và 32-bit cho chắc <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: đôi khi cách dò tốt nhất là dùng mắt.</p>
+      <p class="en-only" lang="en">For these two buses he drops the <code>lspci</code> step entirely and substitutes a memorable piece of practicality: <em>look at the hardware</em> to see whether an ExpressCard (or a PCMCIA card) can be plugged into it <span class="cite"><a href="#ref-2">2</a></span>. The ExpressCard recipe: PCI → <code>Support for PCI Hotplug (EXPERIMENTAL)</code> → <code>ACPI PCI Hotplug driver</code> for most laptops, plus <code>PCI Express Hotplug driver</code> <span class="cite"><a href="#ref-2">2</a></span>. For PCMCIA, enable both <code>16-bit PCMCIA support</code> and <code>32-bit CardBus support</code> to cover the widest range of devices, with the most common bridge being the “yenta-like” controller <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Nhãn <code>EXPERIMENTAL</code> năm 2006</h4>
+          <p>Nhiều tùy chọn trong chương mang nhãn <code>(EXPERIMENTAL)</code> — PCI Hotplug, các <span lang="en">target</span> Snapshot/Mirror/Multipath của Device Mapper, RAID-10 <span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-5">5</a></span>. Nhãn ấy là ảnh chụp năm 2006, không phải phán quyết vĩnh viễn: LKDDB cho thấy <code>CONFIG_HOTPLUG_PCI</code> vẫn còn trong nhân hiện hành <span class="cite"><a href="#ref-10">10</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Hai thế hệ cùng tồn tại</h4>
+          <p>Ông nói rõ mối quan hệ: laptop mới đang chuyển sang định dạng ExpressCard, nên phần PCMCIA và phần PCI Hotplug trỏ sang nhau <span class="cite"><a href="#ref-2">2</a></span>. Đây là kiểu chú thích khiến chương trở thành một lát cắt lịch sử phần cứng chứ không chỉ là danh sách tùy chọn.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">ALSA</span>
+      <h3>
+        <span class="standard-copy">Âm thanh — ALSA lên ngôi, OSS lui về dĩ vãng</span>
+        <span class="easy-only">Âm thanh: bật loa cho máy</span>
+        <span class="en-only" lang="en">Sound — ALSA takes over, OSS recedes</span>
+      </h3>
+      <p class="standard-copy">Ông viết rằng ALSA (<span lang="en">Advanced Linux Sound Architecture</span>) là hệ thống âm thanh hiện tại của nhân Linux, còn hệ cũ OSS đã bị khai tử và gần như toàn bộ driver cũ đã bị gỡ khỏi cây mã nguồn <span class="cite"><a href="#ref-2">2</a></span>. Công thức: <code>Sound Card Support</code> → <code>Advanced Linux Sound Architecture</code> → nếu còn ứng dụng đời cũ thì bật thêm các API tương thích <code>OSS Mixer API</code> và <code>OSS PCM (digital audio) API</code> → chọn card của bạn trong mục <code>PCI Devices</code> <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">ALSA là hệ âm thanh hiện dùng của Linux; hệ cũ OSS gần như đã bị bỏ <span class="cite"><a href="#ref-2">2</a></span>. Bật: hỗ trợ card âm thanh → ALSA → (nếu có phần mềm cũ thì bật thêm lớp tương thích OSS) → chọn card của bạn <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: giữ lớp cũ chỉ khi thật sự cần.</p>
+      <p class="en-only" lang="en">He writes that ALSA (Advanced Linux Sound Architecture) is the current sound system for the Linux kernel, and that the earlier OSS system has been deprecated with almost all of the older drivers removed from the source tree <span class="cite"><a href="#ref-2">2</a></span>. The recipe: <code>Sound Card Support</code> → <code>Advanced Linux Sound Architecture</code> → if you have older applications, also enable the compatibility <code>OSS Mixer API</code> and <code>OSS PCM (digital audio) API</code> → pick your card under <code>PCI Devices</code> <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Dò bằng <code>/usr/sbin/lspci | grep -i audio</code>; máy ví dụ của ông trả về một Intel ICH5 AC'97 và một Creative SB Audigy <span class="cite"><a href="#ref-2">2</a></span>. Dự đoán của ông đúng: <code>CONFIG_SND</code> vẫn là mục chọn ALSA trong nhân hiện hành <span class="cite"><a href="#ref-10">10</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Gõ <code>lspci | grep -i audio</code> để xem card âm thanh của bạn là gì <span class="cite"><a href="#ref-2">2</a></span>. ALSA đến giờ vẫn là hệ âm thanh của nhân <span class="cite"><a href="#ref-10">10</a></span>. Nhớ nhé: đây là công thức già mà chưa cũ.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Detect with <code>/usr/sbin/lspci | grep -i audio</code>; his example machine returns an Intel ICH5 AC'97 and a Creative SB Audigy <span class="cite"><a href="#ref-2">2</a></span>. His call held: <code>CONFIG_SND</code> is still the ALSA entry point in current kernels <span class="cite"><a href="#ref-10">10</a></span>.</p>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Hai nhóm đầu đều trả lời câu hỏi “làm sao nhân <em>nhìn thấy</em> món đồ này”. Nhóm thứ ba đổi loại câu hỏi hoàn toàn: không phải thấy hay không thấy, mà là <em>chạy nhanh đến đâu, tốn điện đến đâu</em>.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Hai phần trên là “làm sao máy nhận ra đồ”. Phần sau là “làm sao máy chạy nhanh và ít tốn pin”. Nhớ nhé: đổi câu hỏi thì đổi cả cách chỉnh.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> The first two groups both answer “how does the kernel <em>see</em> this thing”. The third changes the question entirely: not seen or unseen, but <em>how fast it runs and how much power it burns</em>.</p>
+  </aside>
+</section>
+
+<section class="section" id="cpu-nguon" aria-labelledby="cpu-nguon-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 03 · trang 71–75</span><span class="en-only" lang="en">Concept cluster 03 · pages 71–75</span></p>
+    <h2 id="cpu-nguon-title">
+      <span class="standard-copy">CPU, nguồn và bộ nhớ: chỗ bạn đổi <em>hành vi</em>, không phải <em>khả năng</em></span>
+      <span class="easy-only">Bộ xử lý và pin: chỉnh tính nết của máy</span>
+      <span class="en-only" lang="en">CPU, power and memory: where you change <em>behaviour</em>, not <em>capability</em></span>
+    </h2>
+    <p class="standard-copy">Ông đặt mục tiêu của nhóm này rất rõ: nếu bạn muốn nhân Linux chạy nhanh nhất có thể cho đúng bộ xử lý và loại phần cứng của mình, có vài tùy chọn cho phép vắt nốt chút hiệu năng cuối cùng ra khỏi phần cứng <span class="cite"><a href="#ref-3">3</a></span>. Khác biệt căn bản so với hai nhóm trước: ở đây bật sai không làm thiết bị biến mất, mà làm máy <em>chậm đi</em>, <em>nóng hơn</em>, hoặc <em>hết pin sớm hơn</em>.</p>
+    <p class="easy-only">Phần này để chỉnh cho máy chạy nhanh hơn, hợp với đúng bộ xử lý của bạn <span class="cite"><a href="#ref-3">3</a></span>. Chỉnh sai thì máy không hỏng, chỉ chạy chậm hoặc tốn pin thôi. Nhớ nhé: đây là chỗ chỉnh “tính nết”, không phải “bộ phận”.</p>
+    <p class="en-only" lang="en">He states the goal of this group plainly: if you wish to have the Linux kernel run as fast as possible for your specific processor and hardware type, a few options let you get the last bit of performance out of the hardware <span class="cite"><a href="#ref-3">3</a></span>. The difference from the first two groups is fundamental: here a wrong setting does not make a device vanish, it makes the machine <em>slower</em>, <em>hotter</em>, or <em>shorter on battery</em>.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Trưng dụng (<span lang="en">preemption</span>).</b> Định nghĩa của ông ngắn và chính xác: khả năng nhân tự ngắt chính mình giữa lúc đang làm việc khác, để lo một việc có độ ưu tiên cao hơn — chẳng hạn cập nhật một chương trình âm thanh hay video <span class="cite"><a href="#ref-3">3</a></span>. Máy chủ và máy bàn có yêu cầu tải khác hẳn nhau, nên nhân cho phép chọn chế độ <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only"><b>Trưng dụng là gì.</b> Là chuyện nhân đang làm việc A thì dừng lại để làm việc B gấp hơn, ví dụ phát nhạc cho khỏi giật <span class="cite"><a href="#ref-3">3</a></span>. Máy chủ và máy nhà cần kiểu khác nhau <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: máy chủ cần đều tay, máy nhà cần nhanh tay.</p>
+      <p class="en-only" lang="en"><b>Preemption.</b> His definition is short and exact: the ability of the kernel to interrupt itself while it is doing something else, in order to work on something of higher priority, such as updating a sound or video program <span class="cite"><a href="#ref-3">3</a></span>. Servers and desktops have very different workload requirements, so the kernel offers a choice of modes <span class="cite"><a href="#ref-3">3</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">Preemption Model<br>(X) No Forced Preemption (Server)<br>( ) Voluntary Kernel Preemption (Desktop)<br>( ) Preemptible Kernel (Low-Latency Desktop)</p>
+      <p class="easy-only">Chọn một kiểu:<br>· Máy chủ — không ngắt ép<br>· Máy bàn — ngắt vừa phải<br>· Máy bàn nhạy — ngắt nhiều nhất</p>
+      <p class="en-only" lang="en">Preemption Model<br>(X) No Forced Preemption (Server)<br>( ) Voluntary Kernel Preemption (Desktop)<br>( ) Preemptible Kernel (Low-Latency Desktop)</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">processor family</span>
+      <h3>
+        <span class="standard-copy">Chọn đúng họ CPU — và cái giá của việc chọn “chung chung”</span>
+        <span class="easy-only">Khai đúng tên bộ xử lý</span>
+        <span class="en-only" lang="en">Picking the right CPU family — and the price of “generic”</span>
+      </h3>
+      <p class="standard-copy">Dò bằng <code>cat /proc/cpuinfo | grep "model name"</code> <span class="cite"><a href="#ref-3">3</a></span>, rồi chọn hai thứ: <code>Subarchitecture Type</code> — mặc định là <code>PC-compatible</code>, và chỉ chọn khác nếu máy bạn thuộc các loại đặc biệt như NUMAQ hay Unisys ES7000 <span class="cite"><a href="#ref-3">3</a></span> — và <code>Processor family</code>, danh sách dài từ <code>386</code> tới <code>Opteron/Athlon64/Hammer/K8</code> <span class="cite"><a href="#ref-3">3</a></span>. Ông cũng chỉ ra lối thoát: nếu muốn <em>một</em> nhân chạy được trên mọi loại máy trong danh sách, hãy chọn <code>Generic architecture</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Gõ <code>cat /proc/cpuinfo | grep "model name"</code> để biết CPU của bạn tên gì <span class="cite"><a href="#ref-3">3</a></span>. Rồi chọn đúng dòng trong danh sách. Nếu muốn một nhân chạy được cho nhiều máy khác nhau thì chọn loại “chung” <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: chọn riêng thì nhanh, chọn chung thì tiện.</p>
+      <p class="en-only" lang="en">Detect with <code>cat /proc/cpuinfo | grep "model name"</code> <span class="cite"><a href="#ref-3">3</a></span>, then pick two things: the <code>Subarchitecture Type</code> — which defaults to <code>PC-compatible</code>, and should be changed only if your machine is one of the special kinds such as NUMAQ or Unisys ES7000 <span class="cite"><a href="#ref-3">3</a></span> — and the <code>Processor family</code>, a long list running from <code>386</code> to <code>Opteron/Athlon64/Hammer/K8</code> <span class="cite"><a href="#ref-3">3</a></span>. He also points to the escape hatch: if you want <em>one</em> kernel that runs on all the listed machine types, select <code>Generic architecture</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Ông không giải thích hết ở đây mà trỏ thẳng sang Chương 11, mục <code>M386</code>, để có mô tả đầy đủ về cách chọn bộ xử lý tùy theo dải máy bạn muốn nhân chạy trên đó <span class="cite"><a href="#ref-3">3</a></span> — một ví dụ của cách cuốn sách tự nối chương này sang chương kia.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Muốn hiểu kỹ hơn thì sách bảo lật sang Chương 11, mục <code>M386</code> <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: công thức ngắn, tra cứu dài — hai phần bổ cho nhau.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> He does not explain it all here but points straight at Chapter 11's <code>M386</code> entry for the full description of how to pick the proper processor type given the range of machines you want the kernel to run on <span class="cite"><a href="#ref-3">3</a></span> — an example of how the book stitches recipe to reference.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>SMP: đừng bỏ phí lõi</h4>
+          <p>Lời khuyên của ông cho máy nhiều CPU, siêu phân luồng hoặc lõi kép rất dứt khoát: bật <code>Symmetric multi-processing support</code>, vì nếu không bạn sẽ lãng phí các bộ xử lý còn lại do hoàn toàn không dùng tới chúng <span class="cite"><a href="#ref-3">3</a></span>. Một số mục trong danh sách <code>Subarchitecture</code> cũng chỉ hiện ra khi SMP đã được chọn <span class="cite"><a href="#ref-3">3</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Phụ thuộc chéo giữa các tùy chọn</h4>
+          <p>Tùy chọn <code>Preempt The Big Kernel Lock</code> chỉ chọn được nếu trước đó đã chọn <code>Preemptible Kernel</code> hoặc <code>Symmetric multi-processing support</code> <span class="cite"><a href="#ref-3">3</a></span>. Đây là <span lang="en">Kconfig dependency</span> hiện ra dưới dạng “mục biến mất khỏi menu” — nguyên nhân phổ biến nhất khiến người mới tưởng mình tìm nhầm chỗ.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">preemption model</span>
+      <h3>
+        <span class="standard-copy">Ba chế độ trưng dụng — và cái khóa lớn đã chết</span>
+        <span class="easy-only">Ba kiểu “ngắt việc” của nhân</span>
+        <span class="en-only" lang="en">Three preemption models — and the big lock that died</span>
+      </h3>
+      <p class="standard-copy">Ba lựa chọn của sách trải từ máy chủ sang máy bàn độ trễ thấp <span class="cite"><a href="#ref-3">3</a></span>. Muốn nhân nhạy hơn nữa, ông chỉ thêm một nấc: cho phép ngắt cả một trong những khóa nội bộ chính của nhân, qua tùy chọn <code>Preempt The Big Kernel Lock</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Có ba kiểu: hợp cho máy chủ, hợp cho máy bàn, và hợp cho máy cần phản ứng thật nhanh <span class="cite"><a href="#ref-3">3</a></span>. Muốn nhanh hơn nữa thì bật thêm một tùy chọn về “khóa lớn” trong nhân <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: nhanh phản ứng thường đổi bằng một chút hiệu năng tổng.</p>
+      <p class="en-only" lang="en">The book's three choices run from server to low-latency desktop <span class="cite"><a href="#ref-3">3</a></span>. To make the kernel even more responsive to higher-priority tasks, he offers one more rung: allowing interruptions to one of the kernel's main internal locks, via <code>Preempt The Big Kernel Lock</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Đã đổi kể từ đó.</b> Tùy chọn đó không còn tồn tại. LKDDB ghi <code>CONFIG_PREEMPT_BKL</code> xuất hiện lần cuối ở nhân 2.6.25 <span class="cite"><a href="#ref-13">13</a></span>, và chính <span lang="en">Big Kernel Lock</span> bị gỡ hẳn khỏi cây mã nguồn ở 2.6.39 <span class="cite"><a href="#ref-13">13</a></span>. Ở đầu kia của dải, chế độ <span lang="en">real-time</span> đã đi ngược lên: <code>PREEMPT_RT</code> được hợp nhất vào nhân chính ở bản 6.12, sau khoảng hai mươi năm phát triển ngoài luồng <span class="cite"><a href="#ref-22">22</a></span>.</p>
+        <p class="easy-only"><b>Giờ khác rồi.</b> Tùy chọn “khóa lớn” đã bị bỏ từ lâu <span class="cite"><a href="#ref-13">13</a></span>, còn chế độ thời gian thực thì mới được đưa hẳn vào nhân ở bản 6.12 <span class="cite"><a href="#ref-22">22</a></span>. Nhớ nhé: ý tưởng “ngắt để kịp” vẫn sống, chỉ là bằng cơ chế khác.</p>
+        <p class="en-only" lang="en"><b>Changed since.</b> That option no longer exists. LKDDB records <code>CONFIG_PREEMPT_BKL</code> appearing for the last time in 2.6.25 <span class="cite"><a href="#ref-13">13</a></span>, and the Big Kernel Lock itself was removed from the tree in 2.6.39 <span class="cite"><a href="#ref-13">13</a></span>. At the other end of the range the real-time mode moved the opposite way: <code>PREEMPT_RT</code> was merged into the mainline kernel in 6.12, after roughly twenty years out of tree <span class="cite"><a href="#ref-22">22</a></span>.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">suspend / cpufreq</span>
+      <h3>
+        <span class="standard-copy">Ngủ đông và điều tốc — hai công thức của laptop</span>
+        <span class="easy-only">Ngủ đông và tiết kiệm pin</span>
+        <span class="en-only" lang="en">Suspend and frequency scaling — the two laptop recipes</span>
+      </h3>
+      <p class="standard-copy">Ngủ đông: bật <code>Software Suspend</code>, rồi khai báo phân vùng để lưu ảnh nhân qua mục <code>Default resume partition</code> — thường là phân vùng <span lang="en">swap</span>, tìm bằng <code>/sbin/swapon -s</code> <span class="cite"><a href="#ref-3">3</a></span>. Ông cảnh báo rõ: phải chọn đúng phân vùng và <em>không</em> dùng phân vùng đang chứa dữ liệu của hệ thống <span class="cite"><a href="#ref-3">3</a></span>; khi khởi động lại thì truyền <code>resume=/dev/swappartition</code> trên dòng lệnh nhân, hoặc <code>noresume</code> nếu không muốn khôi phục ảnh đã lưu <span class="cite"><a href="#ref-3">3</a></span>. Điều tốc: bật <code>CPU Frequency scaling</code>, chọn các <span lang="en">governor</span> (<code>performance</code>, <code>powersave</code>, <code>userspace</code>, <code>ondemand</code>, <code>conservative</code>), chọn governor mặc định lúc khởi động, rồi chọn driver đúng CPU — ví dụ <code>Intel Enhanced SpeedStep</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Muốn máy “ngủ đông” rồi bật lại y nguyên: bật <code>Software Suspend</code> và khai đúng phân vùng swap để cất trạng thái <span class="cite"><a href="#ref-3">3</a></span>. Cẩn thận: đừng khai nhầm phân vùng đang chứa dữ liệu <span class="cite"><a href="#ref-3">3</a></span>. Muốn tiết kiệm pin: bật phần chỉnh tốc độ CPU rồi chọn kiểu chỉnh <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: khai sai phân vùng là mất dữ liệu thật.</p>
+      <p class="en-only" lang="en">Suspend: enable <code>Software Suspend</code>, then name the partition the kernel image is written to via <code>Default resume partition</code> — usually the swap partition, found with <code>/sbin/swapon -s</code> <span class="cite"><a href="#ref-3">3</a></span>. He warns explicitly: make sure you specify the proper partition and do <em>not</em> use one the system holds data on <span class="cite"><a href="#ref-3">3</a></span>; on the way back up, pass <code>resume=/dev/swappartition</code> on the kernel command line, or <code>noresume</code> if you do not want the saved image restored <span class="cite"><a href="#ref-3">3</a></span>. Frequency scaling: enable <code>CPU Frequency scaling</code>, select the governors (<code>performance</code>, <code>powersave</code>, <code>userspace</code>, <code>ondemand</code>, <code>conservative</code>), choose the default one at boot, then the driver matching your CPU — for example <code>Intel Enhanced SpeedStep</code> <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Hai công thức này già đi rất chậm. Tài liệu nhân hiện hành vẫn mô tả đúng bộ governor ấy — <code>performance</code>, <code>powersave</code>, <code>userspace</code>, <code>ondemand</code>, <code>conservative</code> — trong <span lang="en">CPU Performance Scaling</span> <span class="cite"><a href="#ref-14">14</a></span>; còn tham số khởi động <code>resume=</code> và <code>noresume</code> vẫn nằm trong danh mục tham số dòng lệnh nhân <span class="cite"><a href="#ref-15">15</a></span>. Tên tùy chọn thì đã đổi: LKDDB ghi <code>CONFIG_SOFTWARE_SUSPEND</code> chỉ tồn tại tới 2.6.22, rồi <code>CONFIG_HIBERNATION</code> tiếp quản từ 2.6.23 <span class="cite"><a href="#ref-15">15</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Các kiểu chỉnh tốc độ CPU trong sách đến nay vẫn dùng <span class="cite"><a href="#ref-14">14</a></span>, và tham số <code>resume=</code> vẫn còn <span class="cite"><a href="#ref-15">15</a></span>. Chỉ cái tên tùy chọn ngủ đông là đổi thành <code>HIBERNATION</code> <span class="cite"><a href="#ref-15">15</a></span>. Nhớ nhé: ý giữ nguyên, tên đổi.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> These two recipes age slowly. Current kernel documentation still describes that same governor set — <code>performance</code>, <code>powersave</code>, <code>userspace</code>, <code>ondemand</code>, <code>conservative</code> — under CPU Performance Scaling <span class="cite"><a href="#ref-14">14</a></span>, and the <code>resume=</code> and <code>noresume</code> boot parameters are still in the kernel command-line list <span class="cite"><a href="#ref-15">15</a></span>. The option name did change: LKDDB records <code>CONFIG_SOFTWARE_SUSPEND</code> surviving only to 2.6.22, with <code>CONFIG_HIBERNATION</code> taking over from 2.6.23 <span class="cite"><a href="#ref-15">15</a></span>.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">high memory / ACPI</span>
+      <h3>
+        <span class="standard-copy">Bộ nhớ và ACPI — hai tùy chọn của thời 32-bit</span>
+        <span class="easy-only">Bộ nhớ nhiều và quản lý nguồn</span>
+        <span class="en-only" lang="en">Memory and ACPI — two options from the 32-bit era</span>
+      </h3>
+      <p class="standard-copy">Ông giải thích gọn một nghịch lý phần cứng: Linux trên phần cứng Intel 32-bit truy cập được tới 64&nbsp;GB bộ nhớ, nhưng không gian địa chỉ của bộ xử lý 32-bit chỉ có 4&nbsp;GB — nên nhân phải ánh xạ phần dư sang vùng khác rồi chuyển sang khi cần <span class="cite"><a href="#ref-3">3</a></span>. Vì thế có ba mô hình bộ nhớ theo dung lượng thật: dưới 1&nbsp;GB, từ 1 đến 4&nbsp;GB, và trên 4&nbsp;GB, chọn trong mục <code>High Memory Support</code> với ba giá trị <code>off</code> / <code>4GB</code> / <code>64GB</code> <span class="cite"><a href="#ref-3">3</a></span>. ACPI thì ông mô tả là chuẩn cho phép BIOS phối hợp với hệ điều hành để truy cập phần cứng một cách gián tiếp, và khuyến nghị bật nếu bạn dùng laptop <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Máy 32-bit chỉ “nhìn” được 4&nbsp;GB một lúc, nên nhân phải xoay xở để dùng được nhiều hơn <span class="cite"><a href="#ref-3">3</a></span>. Bạn khai máy mình có bao nhiêu RAM để nhân khỏi làm việc thừa <span class="cite"><a href="#ref-3">3</a></span>. Còn ACPI lo chuyện pin, quạt, nút nguồn — laptop thì nên bật <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: khai đúng RAM, bật ACPI nếu xài laptop.</p>
+      <p class="en-only" lang="en">He explains a hardware paradox compactly: Linux on 32-bit Intel hardware can access up to 64&nbsp;GB of memory, but the address space of a 32-bit processor is only 4&nbsp;GB — so the kernel maps the extra memory into another area and switches to it when tasks need it <span class="cite"><a href="#ref-3">3</a></span>. Hence three memory models by actual size: under 1&nbsp;GB, between 1 and 4&nbsp;GB, and above 4&nbsp;GB, chosen in <code>High Memory Support</code> with its three values <code>off</code> / <code>4GB</code> / <code>64GB</code> <span class="cite"><a href="#ref-3">3</a></span>. ACPI he describes as a standard letting the BIOS work with the operating system to reach hardware indirectly, and recommends enabling it if you have a laptop <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Đây là công thức gắn chặt nhất với kiến trúc 32-bit. LKDDB ghi mục chọn <code>CONFIG_HIGHMEM64G</code> (“64GB”) tồn tại từ 2.6.24 và xuất hiện lần cuối ở nhân 6.14 <span class="cite"><a href="#ref-10">10</a></span> — nghĩa là nếu bạn chạy x86-64 thì toàn bộ mục này không hiện ra, và điều đó là bình thường.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Mục “bộ nhớ cao” chỉ có trên máy 32-bit đời cũ <span class="cite"><a href="#ref-10">10</a></span>. Máy 64-bit ngày nay không thấy mục này, và như vậy là đúng. Nhớ nhé: không thấy mục nào đó, có khi vì máy bạn không cần.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> This is the recipe most tied to the 32-bit architecture. LKDDB records the <code>CONFIG_HIGHMEM64G</code> (“64GB”) choice running from 2.6.24 and appearing for the last time in kernel 6.14 <span class="cite"><a href="#ref-10">10</a></span> — meaning that on x86-64 the whole menu simply does not appear, and that is correct.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Danh sách driver ACPI</h4>
+          <p>Ông liệt kê từng “driver” ACPI nên bật theo phần cứng thật: <code>AC Adapter</code>, <code>Battery</code>, <code>Button</code>, <code>Video</code>, <code>Fan</code>, <code>Processor</code>, <code>Thermal Zone</code>, cộng các mục riêng cho laptop ASUS/Medion, IBM ThinkPad và Toshiba <span class="cite"><a href="#ref-3">3</a></span>. Danh sách này là một lát cắt thị trường laptop 2006 được đóng băng trong một menu cấu hình.</p>
+        </div>
+        <div class="info-block">
+          <h4>Trỏ sang Chương 11</h4>
+          <p>Hai lần trong nhóm này ông từ chối giải thích tại chỗ và trỏ sang chương tham chiếu: mục <code>HIGHMEM</code> cho mô hình bộ nhớ, mục <code>CPU_FREQ</code> cho chuyện các governor làm gì <span class="cite"><a href="#ref-3">3</a></span>. Cách chia việc này giữ cho chương công thức luôn ngắn và có thể tra nhanh.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Cho tới đây, mọi công thức đều nói về <em>máy của bạn</em>. Ba nhóm còn lại mở ra ngoài: máy bạn nói chuyện với máy khác, xếp dữ liệu thành hệ tệp, và tự bảo vệ mình.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Từ đây trở đi là chuyện máy bạn nối ra ngoài: mạng, ổ đĩa ảo, và khóa cửa. Nhớ nhé: vẫn ba nhịp cũ, chỉ khác món.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> Every recipe so far has been about <em>your machine</em>. The remaining groups open outward: your machine talking to others, arranging data into filesystems, and defending itself.</p>
+  </aside>
+</section>
+
+<section class="section" id="mang-tep" aria-labelledby="mang-tep-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 04 · trang 75–83</span><span class="en-only" lang="en">Concept cluster 04 · pages 75–83</span></p>
+    <h2 id="mang-tep-title">
+      <span class="standard-copy">Mạng, hệ tệp và bảo mật: ba nhóm, một cái công tắc gốc</span>
+      <span class="easy-only">Mạng, ổ đĩa ảo và khóa cửa</span>
+      <span class="en-only" lang="en">Networking, filesystems and security: three groups, one root switch</span>
+    </h2>
+    <p class="standard-copy">Ba nhóm cuối chia sẻ một đặc điểm cấu trúc: mỗi nhóm có một công tắc gốc mà thiếu nó thì mọi thứ bên dưới vô nghĩa. Với mạng, ông nói thẳng: với <em>mọi</em> tùy chọn mạng, kể cả các driver, tùy chọn cấu hình mạng chính phải được bật <span class="cite"><a href="#ref-4">4</a></span> — tức <code>Networking support</code>, rồi <code>TCP/IP networking</code> để máy nói chuyện được với các máy khác trên Internet <span class="cite"><a href="#ref-4">4</a></span>. Với bảo mật, công tắc gốc là <code>Enable different security models</code> <span class="cite"><a href="#ref-6">6</a></span>.</p>
+    <p class="easy-only">Ba nhóm cuối đều có một “cầu dao tổng”. Muốn dùng mạng thì phải bật hỗ trợ mạng và TCP/IP trước, rồi mới tới mọi thứ khác <span class="cite"><a href="#ref-4">4</a></span>. Muốn dùng mô hình bảo mật thì phải bật cái công tắc bảo mật chung <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: cầu dao tổng trước, đèn sau.</p>
+    <p class="en-only" lang="en">The last three groups share a structural feature: each has a root switch without which everything under it is meaningless. For networking he says it outright: for <em>all</em> networking options, including the drivers, the main network configuration option must be enabled <span class="cite"><a href="#ref-4">4</a></span> — that is, <code>Networking support</code>, followed by <code>TCP/IP networking</code> so the machine can talk to other machines on the Internet <span class="cite"><a href="#ref-4">4</a></span>. For security, the root switch is <code>Enable different security models</code> <span class="cite"><a href="#ref-6">6</a></span>.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Netfilter.</b> Định nghĩa của ông: phần Netfilter của nhân Linux là một khung để lọc và thao tác mọi gói tin mạng đi qua máy, thường dùng khi bạn muốn bật tường lửa bảo vệ máy khỏi các hệ thống khác trên Internet, hoặc dùng máy làm proxy cho các máy khác trong mạng <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only"><b>Netfilter là gì.</b> Là bộ lọc gói tin của nhân — thứ làm nên tường lửa. Bật nó nếu bạn muốn chặn bớt kết nối, hoặc cho các máy khác đi nhờ ra Internet qua máy bạn <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: tường lửa nằm trong nhân, không phải trong ứng dụng.</p>
+      <p class="en-only" lang="en"><b>Netfilter.</b> His definition: the Netfilter portion of the Linux kernel is a framework for filtering and manipulating all network packets that pass through the machine, commonly used to run a firewall protecting it from other systems on the Internet, or to use the machine as a proxy for others on the network <span class="cite"><a href="#ref-4">4</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">Networking support&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← gốc<br>&nbsp;├ TCP/IP networking<br>&nbsp;├ Network packet filtering&nbsp;&nbsp;← netfilter<br>&nbsp;├ Bluetooth subsystem support<br>&nbsp;└ Generic IEEE 802.11 Stack&nbsp;← wifi</p>
+      <p class="easy-only">Bật hỗ trợ mạng&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← gốc<br>&nbsp;├ TCP/IP<br>&nbsp;├ tường lửa<br>&nbsp;├ Bluetooth<br>&nbsp;└ Wi-Fi</p>
+      <p class="en-only" lang="en">Networking support&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← root<br>&nbsp;├ TCP/IP networking<br>&nbsp;├ Network packet filtering&nbsp;&nbsp;← netfilter<br>&nbsp;├ Bluetooth subsystem support<br>&nbsp;└ Generic IEEE 802.11 Stack&nbsp;← wifi</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">netfilter</span>
+      <h3>
+        <span class="standard-copy">Netfilter — lọc gói là chọn <em>giao thức nào</em></span>
+        <span class="easy-only">Tường lửa — chọn lọc cái gì</span>
+        <span class="en-only" lang="en">Netfilter — filtering means choosing <em>which protocols</em></span>
+      </h3>
+      <p class="standard-copy">Ba bước: bật <code>Network packet filtering (replaces ipchains)</code>; bật <code>Netfilter netlink interface</code> cùng <code>Netfilter Xtables support</code> — ông ghi rõ mục sau là bắt buộc cho <code>ip_tables</code> <span class="cite"><a href="#ref-4">4</a></span>; rồi chọn từng giao thức muốn theo dõi, mà quan trọng nhất là <code>Connection tracking (required for masq/NAT)</code>, kèm các mô-đun trợ giúp giao thức như <code>FTP protocol support</code> và <code>TFTP protocol support</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only">Bật lọc gói, bật phần <code>Xtables</code> (bắt buộc cho <code>ip_tables</code>), rồi chọn các giao thức cần theo dõi — nhất là phần “theo dõi kết nối” dùng cho chia sẻ mạng <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: tường lửa chỉ lọc được thứ bạn bảo nó theo dõi.</p>
+      <p class="en-only" lang="en">Three steps: enable <code>Network packet filtering (replaces ipchains)</code>; enable <code>Netfilter netlink interface</code> together with <code>Netfilter Xtables support</code> — which he notes is required for <code>ip_tables</code> <span class="cite"><a href="#ref-4">4</a></span>; then pick the protocols you want tracked, chiefly <code>Connection tracking (required for masq/NAT)</code> along with protocol helpers such as <code>FTP protocol support</code> and <code>TFTP protocol support</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Chữ “<span lang="en">replaces ipchains</span>” trong nhãn tùy chọn là một hóa thạch quý: nó đánh dấu lúc Netfilter/<code>iptables</code> thay thế thế hệ trước. LKDDB ghi <code>CONFIG_NETFILTER</code> mang nhãn “Network packet filtering framework (Netfilter)” liên tục từ 2.6.20 tới nhân hiện hành <span class="cite"><a href="#ref-10">10</a></span>; trong không gian người dùng, <code>nftables</code> đã trở thành lớp mặt trước được khuyến nghị <span class="cite"><a href="#ref-19">19</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Khung Netfilter vẫn còn nguyên trong nhân đến nay <span class="cite"><a href="#ref-10">10</a></span>; chỉ có công cụ dùng ở ngoài là đã chuyển sang <code>nftables</code> <span class="cite"><a href="#ref-19">19</a></span>. Nhớ nhé: phần trong nhân bền hơn phần công cụ.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The phrase “replaces ipchains” in the option label is a useful fossil: it marks the moment Netfilter/<code>iptables</code> displaced the previous generation. LKDDB records <code>CONFIG_NETFILTER</code> prompted as “Network packet filtering framework (Netfilter)” continuously from 2.6.20 to current kernels <span class="cite"><a href="#ref-10">10</a></span>; in userspace, <code>nftables</code> has become the recommended front end <span class="cite"><a href="#ref-19">19</a></span>.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">wireless / bluetooth / IrDA</span>
+      <h3>
+        <span class="standard-copy">Không dây — ba giao thức, ba số phận khác nhau</span>
+        <span class="easy-only">Không dây: hồng ngoại, Bluetooth, Wi-Fi</span>
+        <span class="en-only" lang="en">Wireless — three protocols, three different fates</span>
+      </h3>
+      <p class="standard-copy">Ông đặt ba giao thức không dây cạnh nhau và nói rõ quan hệ lịch sử giữa chúng: IrDA là giao thức hồng ngoại của nhiều laptop và PDA để liên lạc ở khoảng cách rất ngắn, phổ biến trên phần cứng đời cũ, còn phần cứng mới thì dùng Bluetooth thay thế <span class="cite"><a href="#ref-4">4</a></span>; Bluetooth thì ông mô tả là công nghệ không dây được tạo ra để thay IrDA, hoạt động trong bán kính 10 mét và thông dụng trên điện thoại di động <span class="cite"><a href="#ref-4">4</a></span>. Wi-Fi cần bật <code>Generic IEEE 802.11 Networking Stack</code> cùng <code>Software MAC add-on</code> và các tùy chọn mã hóa <code>WEP</code>, <code>802.11i CCMP</code>, <code>TKIP</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only">Ba kiểu không dây: hồng ngoại (cũ), Bluetooth (thay hồng ngoại, tầm 10 mét, hay dùng trên điện thoại), và Wi-Fi <span class="cite"><a href="#ref-4">4</a></span>. Mỗi kiểu một công thức, nhưng đều nằm dưới mục Mạng <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: không dây vẫn là “mạng”, nên cầu dao tổng vẫn phải bật.</p>
+      <p class="en-only" lang="en">He places the three wireless protocols side by side and names their historical relation: IrDA is an infrared protocol used by a number of laptops and PDAs over very short distances, prevalent on older hardware, with newer hardware using Bluetooth instead <span class="cite"><a href="#ref-4">4</a></span>; Bluetooth he describes as the wireless technology created to replace IrDA, operating within a 10-metre radius and common in mobile phones <span class="cite"><a href="#ref-4">4</a></span>. Wi-Fi needs <code>Generic IEEE 802.11 Networking Stack</code> plus the <code>Software MAC add-on</code> and the <code>WEP</code>, <code>802.11i CCMP</code> and <code>TKIP</code> encryption options <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Đã đổi kể từ đó.</b> Ba số phận rẽ hẳn ra. IrDA bị chuyển vào <code>staging</code> ở 4.14 rồi gỡ hẳn ở 4.17 cùng toàn bộ driver của nó <span class="cite"><a href="#ref-11">11</a></span>. Ngăn xếp <code>CONFIG_IEEE80211</code> mà sách dùng bị đánh dấu “<span lang="en">DEPRECATED</span>” và biến mất sau 2.6.28, được thay bằng <code>CONFIG_MAC80211</code> — có mặt từ 2.6.22 và còn tới nay <span class="cite"><a href="#ref-21">21</a></span>. Bluetooth thì đứng yên: <code>CONFIG_BT</code> chạy liên tục từ dòng 2.5 tới nhân hiện hành <span class="cite"><a href="#ref-10">10</a></span>.</p>
+        <p class="easy-only"><b>Giờ khác rồi.</b> Hồng ngoại đã bị gỡ khỏi nhân từ bản 4.17 <span class="cite"><a href="#ref-11">11</a></span>. Phần Wi-Fi trong sách đã được thay bằng bộ mới tên <code>mac80211</code> <span class="cite"><a href="#ref-21">21</a></span>. Bluetooth thì vẫn nguyên <span class="cite"><a href="#ref-10">10</a></span>. Nhớ nhé: ba anh em, ba ngả đường.</p>
+        <p class="en-only" lang="en"><b>Changed since.</b> The three fates diverged completely. IrDA was moved to <code>staging</code> in 4.14 and removed outright in 4.17 along with its whole driver set <span class="cite"><a href="#ref-11">11</a></span>. The <code>CONFIG_IEEE80211</code> stack the book uses was marked “DEPRECATED” and disappeared after 2.6.28, replaced by <code>CONFIG_MAC80211</code>, present since 2.6.22 and still current <span class="cite"><a href="#ref-21">21</a></span>. Bluetooth simply stayed: <code>CONFIG_BT</code> runs continuously from the 2.5 series to today's kernels <span class="cite"><a href="#ref-10">10</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Driver mạng: hai ngăn theo tốc độ</h4>
+          <p>Với card Ethernet, ông mô tả “nhiệm vụ vui vẻ” là tìm đúng driver, và chỉ chỗ: phần cứng hiện đại thường nằm trong mục <code>Ethernet (1000 Mbit)</code>, còn thiết bị cũ hơn nằm ở <code>Ethernet (10 or 100Mbit)</code> <span class="cite"><a href="#ref-4">4</a></span>. Cách chia menu theo tốc độ này là một quy ước của thời ấy.</p>
+        </div>
+        <div class="info-block">
+          <h4>Wi-Fi USB nằm ở menu khác</h4>
+          <p>Lại đúng cái bẫy “driver ở menu khác”: driver Wi-Fi PCI nằm ở <code>Wireless LAN (non-hamradio)</code> dưới <span lang="en">Network device support</span>, còn driver Wi-Fi USB lại nằm ở <code>USB Support</code> → <code>USB Network Adapters</code> <span class="cite"><a href="#ref-4">4</a></span>. Nhân phân loại driver theo <em>bus</em>, không theo <em>chức năng</em>.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">RAID / LVM</span>
+      <h3>
+        <span class="standard-copy">RAID và Device Mapper — gộp nhiều đĩa thành một</span>
+        <span class="easy-only">Ghép nhiều ổ thành một ổ</span>
+        <span class="en-only" lang="en">RAID and Device Mapper — many disks as one</span>
+      </h3>
+      <p class="standard-copy">Ông định nghĩa RAID là cách gộp nhiều đĩa để chúng trông như một đĩa lô-gic, phục vụ dự phòng hoặc tốc độ bằng cách trải dữ liệu qua nhiều mặt đĩa; và phân biệt rõ RAID phần cứng — do bộ điều khiển đĩa lo, nhân không cần giúp gì — với RAID phần mềm do nhân điều khiển <span class="cite"><a href="#ref-5">5</a></span>. LVM thì làm việc tương tự nhưng không ở mức thiết bị như RAID, mà qua một cơ chế ánh xạ khối và <span lang="en">sector</span>, dùng thành phần gọi là Device Mapper <span class="cite"><a href="#ref-5">5</a></span>. Công thức: bật <code>Multiple devices driver support (RAID and LVM)</code>, rồi <code>RAID support</code> với ít nhất một mức RAID, hoặc <code>Device mapper support</code> cùng các <span lang="en">target</span> <code>Crypt</code>, <code>Snapshot</code>, <code>Mirror</code>, <code>Zero</code>, <code>Multipath</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      <p class="easy-only">RAID là ghép nhiều ổ cứng lại cho giống một ổ — để an toàn hơn hoặc nhanh hơn <span class="cite"><a href="#ref-5">5</a></span>. LVM cũng ghép, nhưng theo kiểu chia nhỏ rồi xếp lại, nhờ bộ phận tên Device Mapper <span class="cite"><a href="#ref-5">5</a></span>. Bật mục “Multi-device support” rồi chọn kiểu bạn cần <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: phải chọn ít nhất một mức RAID, không thì bật cũng như không.</p>
+      <p class="en-only" lang="en">He defines RAID as combining numerous disks so they look like one logical disk, providing redundancy or speed by spreading data across different platters; and separates hardware RAID — handled by the disk controller with no help needed from the kernel — from software RAID, which the kernel controls <span class="cite"><a href="#ref-5">5</a></span>. LVM does something similar but not at the device level like RAID: it works through a block and sector mapping mechanism, using a component called Device Mapper <span class="cite"><a href="#ref-5">5</a></span>. The recipe: enable <code>Multiple devices driver support (RAID and LVM)</code>, then <code>RAID support</code> with at least one RAID level, or <code>Device mapper support</code> with the <code>Crypt</code>, <code>Snapshot</code>, <code>Mirror</code>, <code>Zero</code> and <code>Multipath</code> targets <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Đây là nhóm công thức bền nhất chương. Tài liệu nhân hiện hành vẫn mô tả hệ con <code>md</code> cho RAID phần mềm <span class="cite"><a href="#ref-16">16</a></span> và Device Mapper với chính những <span lang="en">target</span> ấy <span class="cite"><a href="#ref-17">17</a></span>; LKDDB ghi <code>CONFIG_DM_CRYPT</code> và <code>CONFIG_MD_RAID456</code> chạy liên tục từ dòng 2.6 tới nay <span class="cite"><a href="#ref-10">10</a></span>. Nhãn <code>EXPERIMENTAL</code> năm 2006 trên Snapshot và Mirror đã rụng từ lâu.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> RAID và Device Mapper trong sách đến nay vẫn còn nguyên và vẫn dùng hằng ngày <span class="cite"><a href="#ref-16">16</a></span><span class="cite"><a href="#ref-17">17</a></span><span class="cite"><a href="#ref-10">10</a></span>. Nhớ nhé: đây là phần cũ mà vẫn đúng.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> This is the chapter's most durable group. Current kernel documentation still describes the <code>md</code> subsystem for software RAID <span class="cite"><a href="#ref-16">16</a></span> and Device Mapper with those same targets <span class="cite"><a href="#ref-17">17</a></span>; LKDDB records <code>CONFIG_DM_CRYPT</code> and <code>CONFIG_MD_RAID456</code> running unbroken from the 2.6 series to now <span class="cite"><a href="#ref-10">10</a></span>. The 2006 <code>EXPERIMENTAL</code> tags on Snapshot and Mirror fell off long ago.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">SMB / CIFS / OCFS2 / SELinux</span>
+      <h3>
+        <span class="standard-copy">Chia sẻ với Windows, cụm Oracle, và mô hình bảo mật</span>
+        <span class="easy-only">Nối với máy Windows, và khóa cửa cho nhân</span>
+        <span class="en-only" lang="en">Sharing with Windows, Oracle clusters, and the security model</span>
+      </h3>
+      <p class="standard-copy">Hệ tệp: ông đưa hai lựa chọn nối với Windows — <code>SMB file system support</code> để nối tới máy Windows for Workgroups, Windows 95 hoặc 98, và <code>CIFS support</code> được khuyến nghị cho máy Windows mới hơn <span class="cite"><a href="#ref-5">5</a></span>. Còn <code>OCFS2</code> là hệ tệp cụm của Oracle, hoạt động cho cả cài đặt mạng lớn lẫn hệ thống cục bộ nhỏ, và được khuyến nghị khi dùng cơ sở dữ liệu lớn như Oracle hay DB2 <span class="cite"><a href="#ref-5">5</a></span>. Bảo mật: mô hình chuẩn là “<span lang="en">capability</span>” và ông bảo luôn luôn chọn nó trừ khi bạn thật sự muốn chạy một nhân không an toàn <span class="cite"><a href="#ref-6">6</a></span>; SELinux thì đòi ba thứ đi kèm — mạng phải bật, <code>Auditing support</code> phải bật, và <code>Socket and Networking Security Hooks</code> phải bật — trước khi chọn được <code>NSA SELinux Support</code> <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      <p class="easy-only">Muốn mở ổ chia sẻ của máy Windows: máy Windows cũ thì bật SMB, máy mới thì bật CIFS <span class="cite"><a href="#ref-5">5</a></span>. <code>OCFS2</code> là hệ tệp cho cụm máy, hợp với cơ sở dữ liệu lớn <span class="cite"><a href="#ref-5">5</a></span>. Về bảo mật: luôn bật mô hình chuẩn; muốn dùng SELinux thì phải bật thêm mạng và phần ghi nhật ký trước <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: bảo mật cũng có “cầu dao tổng”.</p>
+      <p class="en-only" lang="en">Filesystems: he gives two ways to reach Windows — <code>SMB file system support</code> for connecting to Windows for Workgroups, Windows 95 or 98 machines, and <code>CIFS support</code>, recommended instead for newer Windows machines <span class="cite"><a href="#ref-5">5</a></span>. <code>OCFS2</code> is Oracle's cluster filesystem, working for large network installations and small local systems alike, recommended when using large databases such as Oracle or DB2 <span class="cite"><a href="#ref-5">5</a></span>. Security: the standard model is the “capability” model, and he says you should always select it unless you really want to run an insecure kernel <span class="cite"><a href="#ref-6">6</a></span>; SELinux requires three companions — networking enabled, <code>Auditing support</code> enabled, and <code>Socket and Networking Security Hooks</code> enabled — before <code>NSA SELinux Support</code> can be chosen <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Đã đổi kể từ đó.</b> Hai nhánh, hai kết cục. <code>CONFIG_SMB_FS</code> bị hạ xuống <code>drivers/staging/smbfs</code> và LKDDB ghi nó xuất hiện lần cuối ở nhân 2.6.38 <span class="cite"><a href="#ref-12">12</a></span>; tài liệu hiện hành mô tả mô-đun <code>cifs</code> là <span lang="en">client</span> cho SMB3 cũng như các phương ngữ cũ hơn, và khuyến nghị mạnh dùng SMB3 thay vì CIFS vì lý do bảo mật <span class="cite"><a href="#ref-12">12</a></span>. Còn SELinux thì sống khỏe, chỉ đổi nhãn: LKDDB ghi <code>CONFIG_SECURITY_SELINUX</code> mang nhãn “NSA SELinux Support” tới nhân 6.5 rồi đổi thành “SELinux Support” từ 6.6 <span class="cite"><a href="#ref-18">18</a></span>. Mục <code>CONFIG_SECURITY_CAPABILITIES</code> riêng biệt trong sách cũng đã biến mất sau 2.6.26 <span class="cite"><a href="#ref-24">24</a></span>.</p>
+        <p class="easy-only"><b>Giờ khác rồi.</b> Tùy chọn <code>SMB_FS</code> cũ đã bị bỏ; giờ dùng <code>cifs</code>, và nên chọn phương ngữ SMB3 cho an toàn <span class="cite"><a href="#ref-12">12</a></span>. SELinux vẫn còn, chỉ bỏ chữ “NSA” trong tên từ bản 6.6 <span class="cite"><a href="#ref-18">18</a></span>. Nhớ nhé: tên đổi không có nghĩa là công thức sai.</p>
+        <p class="en-only" lang="en"><b>Changed since.</b> Two branches, two outcomes. <code>CONFIG_SMB_FS</code> was demoted into <code>drivers/staging/smbfs</code> and LKDDB records it appearing for the last time in kernel 2.6.38 <span class="cite"><a href="#ref-12">12</a></span>; current documentation describes the <code>cifs</code> module as the client for the SMB3 protocol as well as older dialects, and strongly prefers SMB3 over CIFS for security reasons <span class="cite"><a href="#ref-12">12</a></span>. SELinux, by contrast, thrived and only changed its label: LKDDB records <code>CONFIG_SECURITY_SELINUX</code> prompted as “NSA SELinux Support” through kernel 6.5, renamed “SELinux Support” from 6.6 <span class="cite"><a href="#ref-18">18</a></span>. The separate <code>CONFIG_SECURITY_CAPABILITIES</code> option in the book also disappeared after 2.6.26 <span class="cite"><a href="#ref-24">24</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hệ tệp truyền thống chỉ là một dòng menu</h4>
+          <p>Trước khi vào các hệ tệp “phi truyền thống”, ông cho thấy các hệ tệp thường — <code>ext2</code>, <code>ext3</code>, <code>Reiserfs</code>, <code>JFS</code>, <code>XFS</code> — chỉ là năm ô chọn trong menu <code>File systems</code> <span class="cite"><a href="#ref-5">5</a></span>. Sự bình thản đó là chủ ý: phần khó không nằm ở hệ tệp, mà ở lớp thiết bị bên dưới nó.</p>
+        </div>
+        <div class="info-block">
+          <h4>OCFS2 còn sống</h4>
+          <p>Trong số các lựa chọn hệ tệp “lạ” của chương, OCFS2 là cái trụ được lâu nhất: tài liệu nhân hiện hành vẫn có trang riêng cho nó <span class="cite"><a href="#ref-25">25</a></span>, và LKDDB ghi <code>CONFIG_OCFS2_FS</code> chạy liên tục từ 2.6.19 tới nhân hiện hành <span class="cite"><a href="#ref-10">10</a></span>.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Bốn nhóm trên đều nhằm làm máy <em>chạy được</em>. Nhóm cuối nhằm điều ngược lại: làm cho cái đang chạy <em>trở nên nhìn thấy được</em> — kể cả khi nó vừa sập.</p>
+    <p class="easy-only"><b>Nối sang phần cuối.</b> Mấy phần trên là để máy chạy. Phần cuối là để bạn nhìn vào bên trong khi máy chạy — hoặc khi máy vừa treo. Nhớ nhé: nhìn được thì sửa được.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> The four groups above all aim to make the machine <em>work</em>. The last group aims at the opposite: making what is running <em>visible</em> — including right after it has crashed.</p>
+  </aside>
+</section>
+
+<section class="section" id="go-loi" aria-labelledby="go-loi-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 05 · trang 83–84</span><span class="en-only" lang="en">Concept cluster 05 · pages 83–84</span></p>
+    <h2 id="go-loi-title">
+      <span class="standard-copy">Gỡ lỗi nhân: mở mắt cho mình, đổi bằng một chút tốc độ</span>
+      <span class="easy-only">Nhìn vào trong nhân: được nhìn thì mất chút nhanh</span>
+      <span class="en-only" lang="en">Kernel debugging: buying sight with a little speed</span>
+    </h2>
+    <p class="standard-copy">Nhóm cuối cùng của chương — và của cả Phần II — là một danh sách các tùy chọn giúp gỡ lỗi những gì đang diễn ra bên trong nhân: hữu ích để khám phá cách nhân vận hành, hoặc để tìm ra vấn đề tiềm tàng trong mã nguồn hiện tại <span class="cite"><a href="#ref-7">7</a></span>. Ông kèm một cảnh báo sòng phẳng mà ít sách viết ra: bật gần như bất kỳ tùy chọn nào trong số này cũng làm nhân chậm đi một chút, nên nếu thấy hiệu năng giảm thì hãy tắt bớt <span class="cite"><a href="#ref-7">7</a></span>.</p>
+    <p class="easy-only">Phần cuối là các tùy chọn giúp bạn nhìn vào bên trong nhân — để học, hoặc để tìm lỗi <span class="cite"><a href="#ref-7">7</a></span>. Nhưng bật chúng thì máy chậm đi một chút, nên thấy ì thì tắt bớt <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: nhìn rõ hơn thì đi chậm hơn một chút.</p>
+    <p class="en-only" lang="en">The chapter's last group — and Part II's last — is a list of options that help debug what is going on inside the kernel: useful for discovering new things about how the kernel works, or for finding potential problems in the current source <span class="cite"><a href="#ref-7">7</a></span>. He adds a fair warning few books write down: enabling almost any of these slows the kernel down a small amount, so if you notice a drop in performance you may wish to disable them <span class="cite"><a href="#ref-7">7</a></span>.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b><code>debugfs</code>.</b> Ông mô tả gọn: một hệ tệp nằm trên RAM, dùng để xuất ra rất nhiều loại thông tin gỡ lỗi <span class="cite"><a href="#ref-7">7</a></span>. Sau khi bật và khởi động nhân mới, nhân tạo thư mục <code>/sys/kernel/debug</code> làm chỗ để mount; các tệp trong đó đều là ảo và được nhân sinh ra động, giống như tệp trong <code>procfs</code> hay <code>sysfs</code> <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      <p class="easy-only"><b><code>debugfs</code> là gì.</b> Là một “thư mục ảo” trong bộ nhớ, nơi nhân bày ra thông tin bên trong của nó <span class="cite"><a href="#ref-7">7</a></span>. Các tệp ở đó không nằm trên ổ cứng — nhân tự tạo ra khi bạn đọc <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: nó giống cửa sổ nhìn vào trong, không phải kho chứa.</p>
+      <p class="en-only" lang="en"><b><code>debugfs</code>.</b> His description is compact: a RAM-based filesystem used to output a lot of different debugging information <span class="cite"><a href="#ref-7">7</a></span>. After enabling it and booting the rebuilt kernel, the kernel creates <code>/sys/kernel/debug</code> as the place to mount it; the files there are all virtual and dynamically generated by the kernel, like those in <code>procfs</code> or <code>sysfs</code> <span class="cite"><a href="#ref-7">7</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">$ mount -t debugfs none /sys/kernel/debug<br><br># hoặc trong /etc/fstab:<br>debugfs /sys/kernel/debug debugfs 0 0</p>
+      <p class="easy-only">Gắn thủ công:<br>mount -t debugfs none /sys/kernel/debug<br><br>Gắn tự động khi khởi động:<br>thêm một dòng vào /etc/fstab</p>
+      <p class="en-only" lang="en">$ mount -t debugfs none /sys/kernel/debug<br><br># or in /etc/fstab:<br>debugfs /sys/kernel/debug debugfs 0 0</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">printk timestamps</span>
+      <h3>
+        <span class="standard-copy">Dấu thời gian trên thông điệp nhân</span>
+        <span class="easy-only">Đóng dấu giờ cho thông báo của nhân</span>
+        <span class="en-only" lang="en">Timestamps on kernel messages</span>
+      </h3>
+      <p class="standard-copy">Vấn đề ông nêu rất cụ thể: <code>dmesg</code> không gắn dấu thời gian lên các sự kiện nó hiển thị, còn độ phân giải thời gian của <code>/var/log/messages</code> chỉ tới giây <span class="cite"><a href="#ref-7">7</a></span>. Giải pháp là bật <code>Show timing information on printks</code> trong menu <code>Kernel hacking</code>, để mỗi thông điệp mang dấu thời gian chính xác tới đơn vị thời gian nhỏ nhất mà nhân đo được — thường ở cỡ micro-giây <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      <p class="easy-only"><code>dmesg</code> in ra thông báo nhưng không ghi giờ; còn nhật ký hệ thống chỉ ghi tới giây <span class="cite"><a href="#ref-7">7</a></span>. Bật tùy chọn “hiện thời gian trên printk” thì mỗi dòng có dấu giờ rất mịn <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: có giờ thì mới xâu chuỗi được sự việc.</p>
+      <p class="en-only" lang="en">The problem he names is precise: <code>dmesg</code> puts no timestamps on the events it shows, and the time resolution of <code>/var/log/messages</code> is only to the nearest second <span class="cite"><a href="#ref-7">7</a></span>. The fix is <code>Show timing information on printks</code> under <code>Kernel hacking</code>, giving each message a timestamp accurate to the smallest measurable kernel time value — usually in the microsecond range <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Đây là một trong những tùy chọn ổn định nhất mà chương nhắc tới: LKDDB ghi <code>CONFIG_PRINTK_TIME</code> với đúng nhãn “Show timing information on printks” chạy liên tục từ 2.6.12 tới nhân hiện hành <span class="cite"><a href="#ref-10">10</a></span>. Hai mươi năm, cùng một dòng chữ trong menu.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Tùy chọn này còn nguyên trong nhân đến nay, đúng tên, đúng chữ <span class="cite"><a href="#ref-10">10</a></span>. Nhớ nhé: có những công thức không hề già.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> This is one of the steadiest options the chapter names: LKDDB records <code>CONFIG_PRINTK_TIME</code> with the exact prompt “Show timing information on printks” running from 2.6.12 to current kernels <span class="cite"><a href="#ref-10">10</a></span>. Twenty years, the same line of text in the menu.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">magic SysRq</span>
+      <h3>
+        <span class="standard-copy">Phím SysRq thần kỳ — cửa hậu hợp pháp vào nhân</span>
+        <span class="easy-only">Phím đặc biệt để ra lệnh cho nhân</span>
+        <span class="en-only" lang="en">Magic SysRq — the legitimate back door</span>
+      </h3>
+      <p class="standard-copy">Công thức ngắn nhất của cả chương: bật <code>Magic SysRq key</code> trong <code>Kernel hacking</code> <span class="cite"><a href="#ref-7">7</a></span>. Công dụng thì không nhỏ chút nào — phím SysRq trên bàn phím có thể dùng để điều khiển nhân theo nhiều cách <em>khi nhân đang chạy, hoặc sau khi nó đã sập</em> <span class="cite"><a href="#ref-7">7</a></span>. Ông không liệt kê các hành động mà trỏ sang tệp <code>Documentation/sysrq.txt</code> trong cây mã nguồn <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      <p class="easy-only">Chỉ cần bật một ô: “Magic SysRq key” <span class="cite"><a href="#ref-7">7</a></span>. Sau đó bạn có thể ra lệnh cho nhân bằng tổ hợp phím, kể cả khi máy đã treo <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: đây là lối thoát hiểm khi máy không còn nghe chuột.</p>
+      <p class="en-only" lang="en">The shortest recipe in the chapter: enable <code>Magic SysRq key</code> under <code>Kernel hacking</code> <span class="cite"><a href="#ref-7">7</a></span>. What it buys is not small — the SysRq key can be used to control the kernel in a number of different ways while it is running, <em>or after it has crashed</em> <span class="cite"><a href="#ref-7">7</a></span>. He does not list the actions but points to <code>Documentation/sysrq.txt</code> in the kernel source tree <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Tệp ông trỏ tới vẫn còn, chỉ đổi định dạng: nay là <code>Documentation/admin-guide/sysrq.rst</code>, đọc được trực tuyến tại docs.kernel.org, và nó mô tả cả cách bật/tắt lúc chạy qua <code>/proc/sys/kernel/sysrq</code> <span class="cite"><a href="#ref-20">20</a></span>. LKDDB ghi <code>CONFIG_MAGIC_SYSRQ</code> liên tục từ 2.6.9 tới nay <span class="cite"><a href="#ref-10">10</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Tài liệu về phím SysRq vẫn còn, nay nằm ở docs.kernel.org <span class="cite"><a href="#ref-20">20</a></span>, và tùy chọn vẫn tồn tại trong nhân <span class="cite"><a href="#ref-10">10</a></span>. Nhớ nhé: đường dẫn tệp đổi, nội dung thì còn.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The file he points to still exists, just reformatted: it is now <code>Documentation/admin-guide/sysrq.rst</code>, readable online at docs.kernel.org, and it also documents runtime enabling via <code>/proc/sys/kernel/sysrq</code> <span class="cite"><a href="#ref-20">20</a></span>. LKDDB records <code>CONFIG_MAGIC_SYSRQ</code> continuously from 2.6.9 to today <span class="cite"><a href="#ref-10">10</a></span>.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">general debugging</span>
+      <h3>
+        <span class="standard-copy">Danh sách gỡ lỗi chung — và cái giá của nó</span>
+        <span class="easy-only">Các ô gỡ lỗi khác, và cái giá phải trả</span>
+        <span class="en-only" lang="en">The general debugging list — and its price</span>
+      </h3>
+      <p class="standard-copy">Dưới <code>Kernel debugging</code>, ông đề xuất một tập cụ thể: <code>Detect Soft Lockups</code>, <code>Debug slab memory allocations</code>, <code>Memory leak debugging</code>, <code>Mutex debugging, deadlock detection</code>, <code>Spinlock debugging</code>, <code>Sleep-inside-spinlock checking</code> <span class="cite"><a href="#ref-7">7</a></span>, và để trống vài ô khác như <code>kobject debugging</code>, <code>Highmem debugging</code>, <code>Compile the kernel with debug info</code> <span class="cite"><a href="#ref-7">7</a></span>. Mục đích ông nói rõ: để giúp lập trình viên nhân gỡ lỗi, hoặc đơn giản là để học thêm về cách nhân vận hành bằng cách đọc những thông điệp các tùy chọn này in ra <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      <p class="easy-only">Ông gợi ý bật một nhóm ô gỡ lỗi: phát hiện treo mềm, kiểm tra cấp phát bộ nhớ, dò rò rỉ bộ nhớ, kiểm tra khóa <span class="cite"><a href="#ref-7">7</a></span>. Bật để học, hoặc để báo lỗi cho người viết nhân <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: bật nhiều thì máy chậm, nên bật có chọn lọc.</p>
+      <p class="en-only" lang="en">Under <code>Kernel debugging</code> he proposes a concrete set: <code>Detect Soft Lockups</code>, <code>Debug slab memory allocations</code>, <code>Memory leak debugging</code>, <code>Mutex debugging, deadlock detection</code>, <code>Spinlock debugging</code>, <code>Sleep-inside-spinlock checking</code> <span class="cite"><a href="#ref-7">7</a></span>, leaving others unticked such as <code>kobject debugging</code>, <code>Highmem debugging</code> and <code>Compile the kernel with debug info</code> <span class="cite"><a href="#ref-7">7</a></span>. His stated purpose: to help kernel developers debug problems, or simply to learn more about how the kernel works by reading the messages these options print <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Đã đổi một phần.</b> Danh sách này già không đều. <code>CONFIG_DEBUG_FS</code> vẫn còn và có trang tài liệu riêng <span class="cite"><a href="#ref-10">10</a></span>, còn <code>CONFIG_DEBUG_SLAB</code> thì LKDDB ghi xuất hiện lần cuối ở nhân 6.7 <span class="cite"><a href="#ref-23">23</a></span>. Công cụ dò rò rỉ bộ nhớ ngày nay có tên riêng và tài liệu riêng — <code>kmemleak</code>, nằm trong bộ công cụ phát triển của nhân <span class="cite"><a href="#ref-23">23</a></span>.</p>
+        <p class="easy-only"><b>Giờ khác một phần.</b> Vài ô trong danh sách vẫn còn, vài ô đã bị thay bằng công cụ mới như <code>kmemleak</code> <span class="cite"><a href="#ref-23">23</a></span><span class="cite"><a href="#ref-10">10</a></span>. Nhớ nhé: ý tưởng còn, tên đổi.</p>
+        <p class="en-only" lang="en"><b>Partly changed.</b> This list ages unevenly. <code>CONFIG_DEBUG_FS</code> is still present and has its own documentation page <span class="cite"><a href="#ref-10">10</a></span>, whereas LKDDB records <code>CONFIG_DEBUG_SLAB</code> appearing for the last time in kernel 6.7 <span class="cite"><a href="#ref-23">23</a></span>. Today's memory-leak detector has its own name and its own documentation — <code>kmemleak</code>, inside the kernel's dev-tools set <span class="cite"><a href="#ref-23">23</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Mặc cả rõ ràng</h4>
+          <p>Cách ông trình bày nhóm này đáng học: nêu lợi ích, nêu giá, rồi trả quyền quyết định cho người đọc — “nếu bạn nhận thấy hiệu năng giảm, có thể bạn muốn tắt các tùy chọn đó đi” <span class="cite"><a href="#ref-7">7</a></span>. Không có tùy chọn nào trong nhân là miễn phí, và chương kết thúc bằng đúng bài học đó.</p>
+        </div>
+        <div class="info-block">
+          <h4>Kết Phần II</h4>
+          <p>Nhóm gỡ lỗi khép lại Phần II của cuốn sách; ngay sau đó là Phần III, phần tham chiếu, gồm Chương 9 về tham số dòng lệnh khởi động, Chương 10 về lệnh dựng, và Chương 11 về từng tùy chọn cấu hình <span class="cite"><a href="#ref-7">7</a></span>. Chương 8 chính là bản lề: nó dùng hết những gì Phần II dạy và mở cửa sang phần tra cứu.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <div class="trap-comparison deep-only">
+    <p class="eyebrow"><span class="vi-only">Ba hiểu lầm thường gặp</span><span class="en-only" lang="en">Three common misconceptions</span></p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Công thức 2006 thì vô dụng hôm nay”</span><span class="en-only" lang="en">“A 2006 recipe is useless today”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> tên tùy chọn đã đổi nên cả chương thành rác. <span class="fact">Thực tế:</span> đổi thay phân bố rất lệch. Nhánh IDE đúng là đã bị gỡ ở 5.14 <span class="cite"><a href="#ref-8">8</a></span> và IrDA ở 4.17 <span class="cite"><a href="#ref-11">11</a></span>, nhưng <code>CONFIG_PRINTK_TIME</code>, <code>CONFIG_MAGIC_SYSRQ</code>, <code>CONFIG_NETFILTER</code>, <code>CONFIG_DM_CRYPT</code> và <code>CONFIG_SND</code> đều chạy liên tục từ dòng 2.6 tới nhân hiện hành <span class="cite"><a href="#ref-10">10</a></span>. Cái bền nhất lại chính là <em>khuôn ba nhịp</em>: dò → hạ tầng → driver.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> the option names changed, so the whole chapter is landfill. <span class="fact">Fact:</span> the change is very unevenly distributed. The IDE branch was indeed removed in 5.14 <span class="cite"><a href="#ref-8">8</a></span> and IrDA in 4.17 <span class="cite"><a href="#ref-11">11</a></span>, but <code>CONFIG_PRINTK_TIME</code>, <code>CONFIG_MAGIC_SYSRQ</code>, <code>CONFIG_NETFILTER</code>, <code>CONFIG_DM_CRYPT</code> and <code>CONFIG_SND</code> all run unbroken from the 2.6 series to current kernels <span class="cite"><a href="#ref-10">10</a></span>. What lasts best is the <em>three-beat shape</em>: detect → infrastructure → driver.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Bật driver là xong”</span><span class="en-only" lang="en">“Enabling the driver is enough”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> tìm đúng tên chip rồi tick vào là thiết bị chạy. <span class="fact">Thực tế:</span> gần như mọi công thức trong chương đều bắt đầu từ một lớp hạ tầng: USB storage cần SCSI <em>và</em> SCSI disk <span class="cite"><a href="#ref-1">1</a></span>; mọi thứ liên quan mạng cần <code>Networking support</code> bật trước <span class="cite"><a href="#ref-4">4</a></span>; SELinux cần mạng, <code>Auditing support</code> và hook mạng bật trước <span class="cite"><a href="#ref-6">6</a></span>. Thiếu lớp dưới thì mục bạn cần thậm chí không hiện ra trong menu.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> find the chip name, tick the box, done. <span class="fact">Fact:</span> nearly every recipe in the chapter starts from an infrastructure layer: USB storage needs SCSI <em>and</em> SCSI disk support <span class="cite"><a href="#ref-1">1</a></span>; anything networking needs <code>Networking support</code> on first <span class="cite"><a href="#ref-4">4</a></span>; SELinux needs networking, <code>Auditing support</code> and the networking hooks on first <span class="cite"><a href="#ref-6">6</a></span>. Without the layer below, the entry you want does not even appear in the menu.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Bật gỡ lỗi thì luôn có lợi”</span><span class="en-only" lang="en">“Debug options are always a win”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> cứ bật hết các ô gỡ lỗi cho chắc. <span class="fact">Thực tế:</span> ông nói thẳng rằng bật gần như bất kỳ tùy chọn nào trong nhóm đó cũng làm nhân chậm đi một chút, và khuyên tắt bớt nếu thấy hiệu năng giảm <span class="cite"><a href="#ref-7">7</a></span>. Đây là một trong vài chỗ hiếm hoi cả chương nêu rõ cái giá phải trả.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> tick every debug box to be safe. <span class="fact">Fact:</span> he says outright that enabling almost any of those options slows the kernel down a small amount, and advises disabling them if you notice a decrease in performance <span class="cite"><a href="#ref-7">7</a></span>. It is one of the few places in the chapter where the price is named explicitly.</p>
+      </div>
+    </div>
+  </div>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Chương 8 khép lại Phần II. Phần III không còn dạy quy trình nào nữa — nó là ba chương tra cứu: tham số khởi động, lệnh dựng, và từng tùy chọn cấu hình một.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Hết phần “làm”. Từ chương sau là phần “tra”: tham số khởi động, lệnh dựng, và danh mục tùy chọn. Nhớ nhé: học xong thì chuyển sang tra.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> Chapter 8 closes Part II. Part III teaches no further procedure — it is three reference chapters: boot parameters, build commands, and the configuration options one by one.</p>
+  </aside>
+</section>
+
+<section class="section" id="tu-kiem" aria-labelledby="tu-kiem-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Tự kiểm</span><span class="en-only" lang="en">Self-check</span></p>
+    <h2 id="tu-kiem-title">
+      <span class="standard-copy">Tự kiểm trước khi sang Phần III</span>
+      <span class="easy-only">Tự hỏi mình vài câu</span>
+      <span class="en-only" lang="en">Self-check before Part III</span>
+    </h2>
+  </div>
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Chương này là sổ công thức, nên bài tự kiểm cũng nên làm trên chính máy bạn đang ngồi. Mỗi câu dưới đây ứng với một nhịp trong khuôn ba bước — nếu câu nào còn mơ hồ, quay lên đọc lại nhóm tương ứng.</p>
+      <p class="easy-only">Chương này là sổ công thức, nên hãy thử ngay trên máy bạn. Mỗi câu dưới đây tương ứng một bước. Nhớ nhé: câu nào chưa rõ thì quay lên đọc lại.</p>
+      <p class="en-only" lang="en">This chapter is a recipe book, so the self-check belongs on the machine in front of you. Each question below matches one beat of the three-step shape — if any is still hazy, reread the matching group above.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>Bạn chạy được ba lệnh dò của chương — <code>lspci</code>, <code>lsusb</code>, <code>cat /proc/cpuinfo</code> — và đọc ra bộ điều khiển đĩa, bộ điều khiển USB và tên bộ xử lý của chính máy mình?
+        <p class="deep-only">Nếu <code>lspci</code> không có ở <code>/usr/sbin/</code>, sách bảo dùng <code>which lspci</code> để tìm đúng đường dẫn <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </li>
+      <li>Bạn giải thích được vì sao một ổ USB và một ổ SATA lại cùng cần <code>SCSI Device Support</code>?
+        <p class="deep-only">Mấu chốt: USB storage <em>là</em> thiết bị SCSI nói qua dây USB, còn <code>libata</code> dùng tầng SCSI để nói chuyện với tầng khối <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </li>
+      <li>Bạn nói được vì sao driver âm thanh USB lại không nằm trong menu USB?
+        <p class="deep-only">Vì nhân xếp một số loại — video, DVB, âm thanh — theo <em>loại thiết bị</em> chứ không theo <em>bus</em>; driver âm thanh USB nằm dưới menu <code>Sound</code> <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </li>
+      <li>Bạn phân biệt được ba chế độ trưng dụng, và nói được máy của bạn nên chọn chế độ nào?</li>
+      <li>Trước khi làm theo một công thức trong chương, bạn kiểm tra được tùy chọn đó còn tồn tại trong nhân bạn đang dựng hay không?
+        <p class="deep-only">Cách nhanh nhất: gõ <code>/</code> trong <code>make menuconfig</code> để tìm theo tên, hoặc tra tên <code>CONFIG_*</code> trong tài liệu nhân hiện hành <span class="cite"><a href="#ref-20">20</a></span>. Vài tùy chọn của sách đã bị gỡ hẳn — <code>CONFIG_IDE</code> <span class="cite"><a href="#ref-8">8</a></span>, <code>CONFIG_IRDA</code> <span class="cite"><a href="#ref-11">11</a></span>, <code>CONFIG_SMB_FS</code> <span class="cite"><a href="#ref-12">12</a></span>.</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li>Bạn gõ được <code>lspci</code> và <code>lsusb</code> để xem máy mình có gì chưa?</li>
+      <li>Vì sao ổ USB và ổ SATA đều cần bật SCSI?</li>
+      <li>Vì sao driver loa USB lại nằm ở mục Âm thanh chứ không ở mục USB?</li>
+      <li>Máy của bạn là máy chủ hay máy bàn — nên chọn kiểu “ngắt việc” nào?</li>
+      <li>Nhớ nhé: trước khi làm theo công thức, kiểm tra xem tùy chọn đó còn trong nhân của bạn không.</li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>Can you run the chapter's three detection commands — <code>lspci</code>, <code>lsusb</code>, <code>cat /proc/cpuinfo</code> — and read off your own disk controller, USB controller and processor name?</li>
+      <li>Can you explain why a USB disk and a SATA disk both need <code>SCSI Device Support</code>?
+        <p class="deep-only" lang="en">The key: USB storage <em>is</em> a SCSI device speaking over USB, and <code>libata</code> uses the SCSI layer to reach the block layer <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </li>
+      <li>Can you say why the USB sound driver is not in the USB menu?</li>
+      <li>Can you tell the three preemption models apart, and say which one your machine should use?</li>
+      <li>Before following a recipe here, can you check whether that option still exists in the kernel you are building?
+        <p class="deep-only" lang="en">Some of the book's options are gone outright — <code>CONFIG_IDE</code> <span class="cite"><a href="#ref-8">8</a></span>, <code>CONFIG_IRDA</code> <span class="cite"><a href="#ref-11">11</a></span>, <code>CONFIG_SMB_FS</code> <span class="cite"><a href="#ref-12">12</a></span>.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section class="closing" id="dong-lai" aria-labelledby="dong-lai-title">
+  <p class="eyebrow" id="dong-lai-title"><span class="vi-only">Đọng lại</span><span class="en-only" lang="en">What remains</span></p>
+  <blockquote>
+    <p class="standard-copy">Một nửa số tùy chọn trong chương này đã bị đổi tên, gộp lại hoặc gỡ hẳn khỏi nhân. Nhưng <span class="closing-accent">thứ chương này thực sự dạy không phải là các tên gọi</span> — mà là một khuôn ba nhịp: <span class="closing-accent">hỏi máy xem nó có gì, bật lớp nền, rồi mới bật driver</span>. Khuôn đó vẫn nguyên vẹn sau hai mươi năm.</p>
+    <p class="easy-only">Nhiều tùy chọn trong chương nay đã đổi tên hoặc bị bỏ. Nhưng <span class="closing-accent">cách làm thì không đổi</span>: <span class="closing-accent">hỏi máy có gì, bật cái nền, rồi bật driver</span>. Nhớ nhé: học cách làm, đừng học thuộc tên.</p>
+    <p class="en-only" lang="en">Half the options in this chapter have since been renamed, merged or removed from the kernel. But <span class="closing-accent">what the chapter really teaches is not the names</span> — it is a three-beat shape: <span class="closing-accent">ask the machine what it holds, enable the layer beneath, then enable the driver</span>. That shape is intact twenty years on.</p>
+  </blockquote>
+</section>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-7-customizing.html">
+    <span class="nav-label">◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span></span>
+    <span class="nav-title"><span class="vi-only">Chương 7 · Tùy biến nhân</span><span class="en-only" lang="en">Chapter 7 · Customizing a Kernel</span></span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-9-boot-parameters.html">
+    <span class="nav-label"><span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶</span>
+    <span class="nav-title"><span class="vi-only">Chương 9 · Tham chiếu tham số khởi động</span><span class="en-only" lang="en">Chapter 9 · Kernel Boot Command-Line Parameter Reference</span></span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chương 8, “Kernel Configuration Recipes”, trang 63–84 (bảy mục: Disks, Devices, CPU, Networking, Filesystems, Security, Kernel Debugging). Trang này là <b>người đồng hành diễn giải</b>, không phải bản dịch: nó tóm lược, sắp xếp lại và chú giải nội dung chương, không thay thế việc đọc sách gốc. Các ví dụ và phép so sánh ở mức đọc <i>Dễ hiểu</i> là minh họa do trang này thêm vào, không có trong sách. Sách xuất bản năm 2006 và viết cho dòng nhân 2.6; mọi tên tùy chọn <code>CONFIG_*</code> và đường dẫn menu được trích đúng như sách in, và mọi ghi chú về tình trạng hiện nay của chúng đều được dẫn nguồn riêng.</p>
+    <p class="en-only" lang="en"><b>Primary source.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chapter 8, “Kernel Configuration Recipes”, pages 63–84 (seven sections: Disks, Devices, CPU, Networking, Filesystems, Security, Kernel Debugging). This page is an <b>interpretive study companion</b>, not a translation: it summarises, rearranges and annotates the chapter, and does not replace reading the book itself. Examples and analogies at the <i>Easy</i> reading level are illustrations added here, not the author's. The book was published in 2006 and targets the 2.6 kernel series; every <code>CONFIG_*</code> name and menu path is quoted as the book prints it, and every note about its present-day status carries its own citation.</p>
+
+    <p class="footer-label vi-only">Tham chiếu</p>
+    <p class="footer-label en-only" lang="en">References</p>
+    <ol class="ref-list">
+      <li id="ref-1">Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006, Chapter 8 “Kernel Configuration Recipes”, mở đầu và mục “Disks”, pp. 63–66 (USB Storage, IDE Disks, Serial ATA, Burning a CD-ROM). Bản trực tuyến miễn phí: <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-2">Sđd., Chapter 8, mục “Devices”, pp. 66–70 (USB, IEEE 1394/FireWire, PCI Hotplug, PCMCIA/CardBus, Sound (ALSA)). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-3">Sđd., Chapter 8, mục “CPU”, pp. 71–75 (Processor Types, SMP, Preemption, Suspend, CPU Frequency Scaling, Different Memory Models, ACPI). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-4">Sđd., Chapter 8, mục “Networking”, pp. 75–80 (Netfilter, Network Drivers, IrDA, Bluetooth, Wireless). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-5">Sđd., Chapter 8, mục “Filesystems”, pp. 80–82 (RAID, Logical Volume Manager and Device Mapper, File Sharing with Windows, OCFS2). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-6">Sđd., Chapter 8, mục “Security”, pp. 82–83 (Default Linux Capabilities, SELinux). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-7">Sđd., Chapter 8, mục “Kernel Debugging”, pp. 83–84 (Kernel Log Timestamps, Magic SysRq Keys, Debug Filesystem, General Kernel Debugging); và trang Part III mở đầu phần tham chiếu, p. 85. <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-8">KernelNewbies, <a href="https://kernelnewbies.org/Linux_5.14" target="_blank" rel="noopener noreferrer">“Linux 5.14 — Storage”</a> — “Remove legacy IDE driver (obsoleted by libata drivers)”; xem thêm The Register, <a href="https://www.theregister.com/2021/07/12/linux_5_14_rc1/" target="_blank" rel="noopener noreferrer">“Linux kernel sheds legacy IDE support”</a>, 12-07-2021 (truy cập 22-09-2026).</li>
+      <li id="ref-9">The Linux Kernel documentation, <a href="https://www.kernel.org/doc/html/latest/driver-api/libata.html" target="_blank" rel="noopener noreferrer">“libata Developer's Guide”</a>, kernel.org (truy cập 22-09-2026).</li>
+      <li id="ref-10">Linux Kernel Driver DataBase (LKDDB), tra cứu theo ký hiệu: <a href="https://cateee.net/lkddb/web-lkddb/IDE.html" target="_blank" rel="noopener noreferrer">CONFIG_IDE</a> (nhãn “DEPRECATED” từ 2.6.33, có mặt lần cuối ở 5.13), <a href="https://cateee.net/lkddb/web-lkddb/ATA.html" target="_blank" rel="noopener noreferrer">CONFIG_ATA</a>, <a href="https://cateee.net/lkddb/web-lkddb/PRINTK_TIME.html" target="_blank" rel="noopener noreferrer">CONFIG_PRINTK_TIME</a>, <a href="https://cateee.net/lkddb/web-lkddb/MAGIC_SYSRQ.html" target="_blank" rel="noopener noreferrer">CONFIG_MAGIC_SYSRQ</a>, <a href="https://cateee.net/lkddb/web-lkddb/NETFILTER.html" target="_blank" rel="noopener noreferrer">CONFIG_NETFILTER</a>, <a href="https://cateee.net/lkddb/web-lkddb/DM_CRYPT.html" target="_blank" rel="noopener noreferrer">CONFIG_DM_CRYPT</a>, <a href="https://cateee.net/lkddb/web-lkddb/MD_RAID456.html" target="_blank" rel="noopener noreferrer">CONFIG_MD_RAID456</a>, <a href="https://cateee.net/lkddb/web-lkddb/SND.html" target="_blank" rel="noopener noreferrer">CONFIG_SND</a>, <a href="https://cateee.net/lkddb/web-lkddb/BT.html" target="_blank" rel="noopener noreferrer">CONFIG_BT</a>, <a href="https://cateee.net/lkddb/web-lkddb/HOTPLUG_PCI.html" target="_blank" rel="noopener noreferrer">CONFIG_HOTPLUG_PCI</a>, <a href="https://cateee.net/lkddb/web-lkddb/HIGHMEM64G.html" target="_blank" rel="noopener noreferrer">CONFIG_HIGHMEM64G</a> (2.6.24 → 6.14), <a href="https://cateee.net/lkddb/web-lkddb/OCFS2_FS.html" target="_blank" rel="noopener noreferrer">CONFIG_OCFS2_FS</a>, <a href="https://cateee.net/lkddb/web-lkddb/DEBUG_FS.html" target="_blank" rel="noopener noreferrer">CONFIG_DEBUG_FS</a> (truy cập 22-09-2026; dải phiên bản do LKDDB tổng hợp từ cây mã nguồn).</li>
+      <li id="ref-11">KernelNewbies, <a href="https://kernelnewbies.org/Linux_4.17" target="_blank" rel="noopener noreferrer">“Linux 4.17 — Staging”</a> — “irda: remove the irda network stack and drivers”; và LKDDB <a href="https://cateee.net/lkddb/web-lkddb/IRDA.html" target="_blank" rel="noopener noreferrer">CONFIG_IRDA</a> (có mặt lần cuối ở 4.14–4.16, trong <code>drivers/staging</code>).</li>
+      <li id="ref-12">LKDDB, <a href="https://cateee.net/lkddb/web-lkddb/SMB_FS.html" target="_blank" rel="noopener noreferrer">CONFIG_SMB_FS</a> — nhãn “SMB file system support (OBSOLETE, please use CIFS)”, định nghĩa cuối nằm trong <code>drivers/staging/smbfs/Kconfig</code>, có mặt lần cuối ở nhân 2.6.38; và The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/cifs/introduction.html" target="_blank" rel="noopener noreferrer">“CIFS — Introduction”</a> (mô-đun <code>cifs</code> là client cho SMB3 và các phương ngữ cũ; khuyến nghị SMB3 vì lý do bảo mật).</li>
+      <li id="ref-13">LKDDB, <a href="https://cateee.net/lkddb/web-lkddb/PREEMPT_BKL.html" target="_blank" rel="noopener noreferrer">CONFIG_PREEMPT_BKL</a> — nhãn “Preempt The Big Kernel Lock”, có mặt lần cuối ở nhân 2.6.25; và KernelNewbies, <a href="https://kernelnewbies.org/Linux_2_6_39" target="_blank" rel="noopener noreferrer">“Linux 2.6.39”</a> — Big Kernel Lock được gỡ hoàn toàn khỏi cây mã nguồn.</li>
+      <li id="ref-14">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/pm/cpufreq.html" target="_blank" rel="noopener noreferrer">“CPU Performance Scaling”</a>, docs.kernel.org — mô tả các governor <code>performance</code>, <code>powersave</code>, <code>userspace</code>, <code>ondemand</code>, <code>conservative</code> (truy cập 22-09-2026).</li>
+      <li id="ref-15">The Linux Kernel documentation, <a href="https://docs.kernel.org/power/swsusp.html" target="_blank" rel="noopener noreferrer">“Swap suspend”</a> và <a href="https://docs.kernel.org/admin-guide/kernel-parameters.html" target="_blank" rel="noopener noreferrer">“The kernel's command-line parameters”</a> (<code>resume=</code>, <code>noresume</code>); tên tùy chọn theo LKDDB: <a href="https://cateee.net/lkddb/web-lkddb/SOFTWARE_SUSPEND.html" target="_blank" rel="noopener noreferrer">CONFIG_SOFTWARE_SUSPEND</a> (tới 2.6.22) → <a href="https://cateee.net/lkddb/web-lkddb/HIBERNATION.html" target="_blank" rel="noopener noreferrer">CONFIG_HIBERNATION</a> (từ 2.6.23).</li>
+      <li id="ref-16">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/md.html" target="_blank" rel="noopener noreferrer">“RAID arrays”</a>, docs.kernel.org (truy cập 22-09-2026).</li>
+      <li id="ref-17">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/device-mapper/index.html" target="_blank" rel="noopener noreferrer">“Device Mapper”</a>, docs.kernel.org — gồm các target <code>dm-crypt</code>, <code>snapshot</code>, <code>dm-raid</code>, <code>dm-zero</code>, <code>dm-queue-length</code>/multipath (truy cập 22-09-2026).</li>
+      <li id="ref-18">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/LSM/SELinux.html" target="_blank" rel="noopener noreferrer">“SELinux”</a>, docs.kernel.org; và LKDDB <a href="https://cateee.net/lkddb/web-lkddb/SECURITY_SELINUX.html" target="_blank" rel="noopener noreferrer">CONFIG_SECURITY_SELINUX</a> — nhãn “NSA SELinux Support” tới nhân 6.5, đổi thành “SELinux Support” từ 6.6.</li>
+      <li id="ref-19">Netfilter Project, <a href="https://www.netfilter.org/" target="_blank" rel="noopener noreferrer">netfilter.org</a> — trang chính thức của dự án (<code>iptables</code>, <code>nftables</code>, <code>conntrack</code>); và The Linux Kernel documentation, <a href="https://docs.kernel.org/networking/netfilter-sysctl.html" target="_blank" rel="noopener noreferrer">“Netfilter Sysfs variables”</a> (truy cập 22-09-2026).</li>
+      <li id="ref-20">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/sysrq.html" target="_blank" rel="noopener noreferrer">“Linux Magic System Request Key Hacks”</a>, docs.kernel.org — bản kế thừa của tệp <code>Documentation/sysrq.txt</code> mà sách trỏ tới (truy cập 22-09-2026).</li>
+      <li id="ref-21">LKDDB, <a href="https://cateee.net/lkddb/web-lkddb/IEEE80211.html" target="_blank" rel="noopener noreferrer">CONFIG_IEEE80211</a> — nhãn “Generic IEEE 802.11 Networking Stack (DEPRECATED)”, có mặt lần cuối ở 2.6.28; và <a href="https://cateee.net/lkddb/web-lkddb/MAC80211.html" target="_blank" rel="noopener noreferrer">CONFIG_MAC80211</a> — “Generic IEEE 802.11 Networking Stack (mac80211)”, từ 2.6.22 tới nhân hiện hành.</li>
+      <li id="ref-22">KernelNewbies, <a href="https://kernelnewbies.org/Linux_6.12" target="_blank" rel="noopener noreferrer">“Linux 6.12”</a> — <code>PREEMPT_RT</code> được hợp nhất vào nhân chính sau khoảng hai mươi năm phát triển ngoài luồng (truy cập 22-09-2026).</li>
+      <li id="ref-23">LKDDB, <a href="https://cateee.net/lkddb/web-lkddb/DEBUG_SLAB.html" target="_blank" rel="noopener noreferrer">CONFIG_DEBUG_SLAB</a> — nhãn “Debug slab memory allocations”, có mặt lần cuối ở nhân 6.7; và The Linux Kernel documentation, <a href="https://docs.kernel.org/dev-tools/kmemleak.html" target="_blank" rel="noopener noreferrer">“Kernel Memory Leak Detector (kmemleak)”</a>.</li>
+      <li id="ref-24">LKDDB, <a href="https://cateee.net/lkddb/web-lkddb/SECURITY_CAPABILITIES.html" target="_blank" rel="noopener noreferrer">CONFIG_SECURITY_CAPABILITIES</a> — nhãn “Default Linux Capabilities”, có mặt lần cuối ở nhân 2.6.26; và The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/LSM/index.html" target="_blank" rel="noopener noreferrer">“Linux Security Module Usage”</a>.</li>
+      <li id="ref-25">The Linux Kernel documentation, <a href="https://docs.kernel.org/filesystems/ocfs2.html" target="_blank" rel="noopener noreferrer">“OCFS2”</a>, docs.kernel.org (truy cập 22-09-2026).</li>
+      <li id="ref-26">LKDDB, <a href="https://cateee.net/lkddb/web-lkddb/IEEE1394.html" target="_blank" rel="noopener noreferrer">CONFIG_IEEE1394</a> — nhãn “Legacy alternative FireWire driver stack” ở 2.6.31–2.6.36; và <a href="https://cateee.net/lkddb/web-lkddb/FIREWIRE.html" target="_blank" rel="noopener noreferrer">CONFIG_FIREWIRE</a> — “FireWire driver stack”, từ 2.6.26 tới nhân hiện hành; tài liệu: <a href="https://docs.kernel.org/driver-api/firewire.html" target="_blank" rel="noopener noreferrer">docs.kernel.org — FireWire</a>.</li>
+    </ol>
+
+    <p class="footer-label vi-only">Trong loạt bài</p>
+    <p class="footer-label en-only" lang="en">In this series</p>
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <p class="vi-only"><a href="index.html">Trang bìa</a> · <a href="chapter-7-customizing.html">Chương 7 · Tùy biến nhân</a> · <span>Chương 8 · Công thức cấu hình nhân (trang này)</span> · <a href="chapter-9-boot-parameters.html">Chương 9 · Tham chiếu tham số khởi động</a></p>
+    <p class="en-only" lang="en"><a href="index.html">Cover</a> · <a href="chapter-7-customizing.html">Chapter 7 · Customizing a Kernel</a> · <span>Chapter 8 · Kernel Configuration Recipes (this page)</span> · <a href="chapter-9-boot-parameters.html">Chapter 9 · Kernel Boot Command-Line Parameter Reference</a></p>
+    <!-- NAV:END -->
+  </div>
+  <div class="edition">LKN · CH 08 · VI/EN</div>
+</footer>
+</main>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  function sync() {
+    var mode = root.getAttribute("data-mode") || "standard";
+    var lang = root.getAttribute("data-lang") || "vi";
+    var dark = root.getAttribute("data-theme") === "dark";
+    document.querySelectorAll("[data-set-mode]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-mode") === mode));
+    });
+    document.querySelectorAll("[data-set-lang]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-lang") === lang));
+    });
+    document.querySelectorAll("[data-toggle-theme]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(dark));
+    });
+    root.setAttribute("lang", lang === "en" ? "en" : "vi");
+  }
+
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button.chip");
+    if (!b) return;
+    if (b.hasAttribute("data-set-mode")) {
+      root.setAttribute("data-mode", b.getAttribute("data-set-mode"));
+      store("lkn-reading-mode", b.getAttribute("data-set-mode"));
+    } else if (b.hasAttribute("data-set-lang")) {
+      root.setAttribute("data-lang", b.getAttribute("data-set-lang"));
+      store("lkn-lang", b.getAttribute("data-set-lang"));
+    } else if (b.hasAttribute("data-toggle-theme")) {
+      var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      store("lkn-theme", next);
+    }
+    sync();
+  });
+
+  sync();
+})();
+
+/* section-index rail: built at runtime from this page's own id'd sections */
+(function () {
+  var list = document.querySelector(".section-rail__list");
+  if (!list) return;
+  var sections = Array.prototype.slice.call(document.querySelectorAll("main section[id][aria-labelledby]"));
+  if (!sections.length) { var rail = document.querySelector(".section-rail"); if (rail) rail.remove(); return; }
+
+  /* headings carry all three reading levels + both languages as sibling spans,
+     so read only the ones actually visible under the current toggles */
+  function labelFor(sec) {
+    var head = document.getElementById(sec.getAttribute("aria-labelledby"));
+    if (!head) return sec.id;
+    var parts = [];
+    Array.prototype.forEach.call(head.children, function (el) {
+      if (el.offsetParent !== null || el.getClientRects().length) parts.push(el.textContent);
+    });
+    var label = (parts.length ? parts.join(" ") : head.textContent || "").replace(/\s+/g, " ").trim();
+    return label.length > 46 ? label.slice(0, 44) + "…" : label;
+  }
+
+  var links = sections.map(function (sec) {
+    var label = labelFor(sec);
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.href = "#" + sec.id;
+    var span = document.createElement("span");
+    span.className = "section-rail__label";
+    span.textContent = label;
+    a.appendChild(span);
+    li.appendChild(a);
+    list.appendChild(li);
+    return a;
+  });
+
+  function mark(id) {
+    links.forEach(function (a) {
+      if (a.getAttribute("href") === "#" + id) a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    });
+  }
+
+  if ("IntersectionObserver" in window) {
+    var seen = new Map();
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { seen.set(e.target.id, e.intersectionRatio); });
+      var best = null, bestR = 0;
+      seen.forEach(function (r, id) { if (r > bestR) { bestR = r; best = id; } });
+      if (best) mark(best);
+    }, { rootMargin: "-20% 0px -60% 0px", threshold: [0, .25, .5, 1] });
+    sections.forEach(function (s) { obs.observe(s); });
+  }
+
+  /* the rail labels change with the language toggle, so relabel on click */
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest("button.chip")) return;
+    sections.forEach(function (sec, i) {
+      links[i].firstChild.textContent = labelFor(sec);
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

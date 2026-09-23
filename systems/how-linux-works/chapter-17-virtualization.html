@@ -1,0 +1,1681 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 17 · Ảo hoá — How Linux Works</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 17 “Virtualization” trong How Linux Works (Brian Ward, No Starch Press, 3rd ed., 2021): máy ảo và hypervisor, phần cứng ảo và paravirtualization, container dựng từ namespace–cgroup–overlayfs, Docker và Podman, LXC, Kubernetes, và ảo hoá theo môi trường chạy.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('hlw-reading-mode'),
+l=localStorage.getItem('hlw-lang'),
+t=localStorage.getItem('hlw-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"HOW LINUX WORKS / 17";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    How Linux Works
+    <span>Chương 17 · Virtualization</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 17 · Ảo hoá</span>
+      <span class="en-only" lang="en">Chapter 17 · Virtualization</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">“Ảo” không có nghĩa là giả — nó có nghĩa là có một người trung gian</span>
+      <span class="easy-only">“Ảo” nghĩa là có người đứng giữa dịch giúp</span>
+      <span class="en-only" lang="en">"Virtual" does not mean fake — it means there is an intermediary</span>
+    </h1>
+
+    <p class="standard-copy">Brian Ward mở chương cuối bằng một lời thú nhận: từ <i lang="en">virtual</i> trong hệ thống máy tính có thể rất mơ hồ. Ông đưa ra một định nghĩa làm việc: nó chủ yếu chỉ <b>một trung gian chuyển một tầng bên dưới vốn phức tạp hoặc phân mảnh thành một giao diện đơn giản hoá mà nhiều bên tiêu thụ có thể dùng chung</b>.<span class="cite"><a href="#ref-1">1</a></span> Ví dụ bạn đã gặp chính là bộ nhớ ảo: nhiều tiến trình cùng truy cập một kho bộ nhớ lớn như thể mỗi tiến trình có kho riêng cách ly của nó.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Chữ “ảo” nghe rất huyền bí, nhưng nghĩa của nó rất đời thường: có một người đứng giữa. Người đó nhìn vào một đống đồ lộn xộn ở phía dưới, rồi đưa cho mỗi người dùng một cái cửa sổ gọn gàng, khiến ai cũng tưởng mình có cả kho riêng. <b>Nhớ nhé: “ảo” không phải là giả, “ảo” là có người đứng giữa dọn dẹp giúp bạn.</b></p>
+    <p class="en-only" lang="en">Brian Ward opens the final chapter with an admission: the word <i>virtual</i> can be vague in computing systems. He offers a working definition: it primarily indicates <b>an intermediary that translates a complex or fragmented underlying layer into a simplified interface that can be used by multiple consumers</b>.<span class="cite"><a href="#ref-1">1</a></span> The example you have already seen is virtual memory: multiple processes access one large bank of memory as if each had its own insulated bank.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Ward tự nhận định nghĩa đó “vẫn còn hơi đáng ngại”, nên ông chuyển sang mô tả <i>mục đích điển hình</i> của ảo hoá thay vì bản chất của nó: <b>tạo ra các môi trường cách ly, để nhiều hệ thống chạy được mà không giẫm chân nhau</b>.<span class="cite"><a href="#ref-1">1</a></span> Đây là một nước đi phương pháp luận đáng chú ý ở chương cuối: sau mười sáu chương mô tả cơ chế, ông kết thúc bằng một khái niệm mà cách hiểu tốt nhất là qua <i>công dụng</i>. Ông cũng nói rõ giới hạn của chương: phần máy ảo sẽ ở mức cao, chỉ nhằm giải thích những thuật ngữ bạn sẽ gặp mà không lao vào “biển mênh mông các chi tiết hiện thực”, còn phần container sẽ đi sâu hơn về kỹ thuật vì nó được dựng từ chính những thứ bạn đã thấy trong sách.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> ảo hoá có hai hình thái chính — <b>máy ảo</b> dựng lại toàn bộ phần cứng và chạy một nhân riêng bên trong, và <b>container</b> giữ nguyên một nhân Linux duy nhất rồi dùng các tính năng của nhân để nhốt tiến trình vào một môi trường chạy bị giới hạn. Chọn cái nào là chọn <i>mức cách ly bạn cần</i> và <i>cái giá bạn trả cho nó</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> có hai cách làm “máy trong máy”. Cách thứ nhất dựng hẳn một cái máy mới bên trong — nặng nhưng kín. Cách thứ hai chỉ quây một cái hàng rào quanh vài chương trình — nhẹ nhưng vẫn chung một cái nhân. <b>Nhớ nhé: máy ảo là xây nhà mới, container là dựng hàng rào.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> virtualization comes in two main shapes — <b>virtual machines</b>, which rebuild the whole of the hardware and run their own kernel inside, and <b>containers</b>, which keep a single underlying Linux kernel and use its features to confine processes to a restricted runtime environment. Choosing between them means choosing <i>how much isolation you need</i> and <i>what you are willing to pay for it</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: ảo hoá là một trung gian; phía dưới là máy ảo với nhân riêng, container dùng chung một nhân, và môi trường chạy chỉ cách ly một ứng dụng. Diagram: virtualization as an intermediary; below it sit virtual machines with their own kernel, containers sharing one kernel, and runtime environments isolating a single application.">
+    <div class="core">
+      <b>Virtualization</b>
+      <small class="standard-copy">Trung gian tạo môi trường cách ly</small>
+      <small class="easy-only">Người đứng giữa, chia ra từng ô riêng</small>
+      <small class="en-only" lang="en">An intermediary creating isolated environments</small>
+    </div>
+
+    <div class="node">
+      <b>System virtual machine</b>
+      <small class="standard-copy">Toàn bộ phần cứng được dựng lại; guest chạy nhân riêng dưới quyền hypervisor</small>
+      <small class="easy-only">Một cái máy mới hẳn, có nhân riêng</small>
+      <small class="en-only" lang="en">The whole machine rebuilt; the guest runs its own kernel under a hypervisor</small>
+    </div>
+
+    <div class="node">
+      <b>Container</b>
+      <small class="standard-copy">Một nhân Linux duy nhất; <span lang="en">namespace</span>, <span lang="en">cgroup</span>, <span lang="en">overlayfs</span> dựng nên hàng rào</small>
+      <small class="easy-only">Chung một nhân, chỉ quây hàng rào</small>
+      <small class="en-only" lang="en">One single Linux kernel; namespaces, cgroups and overlayfs build the fence</small>
+    </div>
+
+    <div class="node">
+      <b>Runtime environment</b>
+      <small class="standard-copy">Chỉ tách riêng thư viện của một ứng dụng, ví dụ <span lang="en">Python venv</span></small>
+      <small class="easy-only">Chỉ tách riêng đồ nghề của một chương trình</small>
+      <small class="en-only" lang="en">Separates only one application's libraries, e.g. a Python venv</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#may-ao">
+    <span>01</span>
+    <b class="standard-copy">Máy ảo và hypervisor</b>
+    <b class="easy-only">Máy ảo là gì</b>
+    <b class="en-only" lang="en">Virtual machines and hypervisors</b>
+  </a>
+  <a href="#phan-cung-ao">
+    <span>02</span>
+    <b class="standard-copy">Phần cứng ảo và cái giá của nó</b>
+    <b class="easy-only">Phần cứng giả hoạt động sao</b>
+    <b class="en-only" lang="en">Virtual hardware and what it costs</b>
+  </a>
+  <a href="#container">
+    <span>03</span>
+    <b class="standard-copy">Container: hàng rào dựng từ tính năng nhân</b>
+    <b class="easy-only">Container — hàng rào quanh chương trình</b>
+    <b class="en-only" lang="en">Containers: a fence built from kernel features</b>
+  </a>
+  <a href="#dieu-phoi">
+    <span>04</span>
+    <b class="standard-copy">LXC, Kubernetes, cạm bẫy và môi trường chạy</b>
+    <b class="easy-only">Quản nhiều container và cạm bẫy</b>
+    <b class="en-only" lang="en">LXC, Kubernetes, pitfalls and runtimes</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>05</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 · VIRTUAL MACHINES ===================== -->
+<section class="section" id="may-ao" aria-labelledby="may-ao-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="may-ao-title">
+      <span class="standard-copy">Máy ảo: bộ nhớ ảo, nhưng áp dụng cho cả cỗ máy</span>
+      <span class="easy-only">Máy ảo: một cái máy nằm trong máy</span>
+      <span class="en-only" lang="en">Virtual machines: virtual memory, but for the whole machine</span>
+    </h2>
+    <p class="standard-copy">Ward định nghĩa máy ảo bằng cách bắc cầu từ một khái niệm bạn đã biết: máy ảo dựa trên cùng ý tưởng với bộ nhớ ảo, chỉ khác là áp dụng cho <i>toàn bộ</i> phần cứng của máy chứ không riêng bộ nhớ. Bạn tạo hẳn một cỗ máy mới — bộ xử lý, bộ nhớ, các giao diện vào/ra — bằng phần mềm, rồi chạy nguyên một hệ điều hành trong đó, <b>kể cả một nhân</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Bạn đã biết bộ nhớ ảo: mỗi chương trình tưởng mình có cả kho bộ nhớ riêng. Máy ảo cũng y như vậy, nhưng làm với cả cái máy: bộ xử lý giả, bộ nhớ giả, đĩa giả. Bên trong cái máy giả đó, một hệ điều hành thật chạy và tin rằng mình đang ngồi trên phần cứng thật. <b>Nhớ nhé: máy ảo là cả một cái máy được dựng bằng phần mềm.</b></p>
+    <p class="en-only" lang="en">Ward defines virtual machines by bridging from something you already know: they rest on the same concept as virtual memory, except applied to <i>all</i> of the machine's hardware rather than memory alone. You create an entirely new machine — processor, memory, I/O interfaces and so on — with the help of software, and run a whole operating system inside it, <b>including a kernel</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only"><b>Tên gọi chính xác và tuổi đời.</b> Loại máy ảo này, Ward nói, có tên cụ thể hơn là <b>system virtual machine</b> (máy ảo hệ thống), và nó đã tồn tại hàng chục năm: các máy tính lớn (<span lang="en">mainframe</span>) của IBM theo truyền thống dùng máy ảo hệ thống để tạo môi trường nhiều người dùng, mỗi người nhận một máy ảo chạy CMS — một hệ điều hành đơn giản, một người dùng.<span class="cite"><a href="#ref-1">1</a></span> Tên gọi này để phân biệt với <b>process virtual machine</b> (máy ảo tiến trình), chẳng hạn máy ảo Java (JVM), mà Ward nói rõ là ông không bàn ở đây.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Hai cách dựng.</b> Bạn có thể dựng một máy ảo <b>hoàn toàn bằng phần mềm</b> — thứ này thường được gọi là <span lang="en">emulator</span> (trình giả lập) — hoặc <b>tận dụng phần cứng bên dưới nhiều nhất có thể</b>, đúng như cách bộ nhớ ảo vẫn làm. Với mục đích Linux của quyển sách, Ward chọn xem xét loại thứ hai vì hiệu năng vượt trội; nhưng ông lưu ý rằng nhiều trình giả lập phổ biến vẫn phục vụ các máy tính và hệ máy chơi game cũ, chẳng hạn Commodore 64 và Atari 2600.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Hai kiểu.</b> Kiểu một: phần mềm giả lập mọi thứ, chậm nhưng chạy được cả máy cũ đời xưa. Kiểu hai: mượn luôn phần cứng thật bên dưới, nhanh hơn nhiều. Sách chọn kiểu hai. <b>Nhớ nhé: giả hoàn toàn thì chậm, mượn đồ thật thì nhanh.</b></p>
+      <p class="en-only" lang="en"><b>Two ways to build one.</b> You can construct a virtual machine <b>entirely in software</b> — usually called an <span lang="en">emulator</span> — or by <b>utilizing the underlying hardware as much as possible</b>, as virtual memory does. For the book's Linux purposes Ward looks at the latter, for its superior performance; but he notes that a number of popular emulators support old computers and gaming systems, such as the Commodore 64 and the Atari 2600.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">guest = máy ảo + hệ điều hành của nó<br>host&nbsp; = thứ chạy hypervisor<br><br>type 2 → host là hệ thống của bạn<br>type 1 → host là chính hypervisor</p>
+      <p class="easy-only">khách = cái máy giả bên trong<br>chủ&nbsp;&nbsp; = cái máy thật bên ngoài<br><br>loại 2 → chạy trên máy bạn<br>loại 1 → tự nó là hệ điều hành</p>
+      <p class="en-only" lang="en">guest = the VM + its operating system<br>host&nbsp; = whatever runs the hypervisor<br><br>type 2 → host is your native system<br>type 1 → host is the hypervisor itself</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">hypervisor</span>
+      <h3>
+        <span class="standard-copy">Hypervisor — hệ điều hành của những cỗ máy</span>
+        <span class="easy-only">Hypervisor — người quản các máy giả</span>
+        <span class="en-only" lang="en">Hypervisor — an operating system for machines</span>
+      </h3>
+      <p class="standard-copy">Phần mềm trông coi một hoặc nhiều máy ảo trên một máy tính được gọi là <b>hypervisor</b>, hay <b>virtual machine monitor (VMM)</b>. Ward mô tả nó bằng một phép so sánh rất gọn: nó làm việc <i>tương tự như cách một hệ điều hành quản lý các tiến trình</i>.<span class="cite"><a href="#ref-1">1</a></span> Đây là một trong những phép loại suy hữu ích nhất của chương: nếu bạn đã hiểu Chương 1 và Chương 8, bạn đã có sẵn mô hình tư duy cho hypervisor.</p>
+      <p class="easy-only">Trong một cái máy có nhiều máy giả, phải có ai đó trông coi chúng: chia lượt, chia bộ nhớ, dọn dẹp. Người trông coi đó tên là hypervisor. Nó làm với các máy giả đúng việc mà hệ điều hành làm với các chương trình. <b>Nhớ nhé: hypervisor là “hệ điều hành” dành cho các máy ảo.</b></p>
+      <p class="en-only" lang="en">The software overseeing one or more virtual machines on a computer is called a <b>hypervisor</b>, or <b>virtual machine monitor (VMM)</b>. Ward describes it with a compact comparison: it works <i>similarly to how an operating system manages processes</i>.<span class="cite"><a href="#ref-1">1</a></span> This is one of the chapter's most useful analogies: if you understood Chapters 1 and 8, you already own the mental model for a hypervisor.</p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi lần bạn bấm nút tạo một <span lang="en">instance</span> trên một dịch vụ đám mây, bạn đang yêu cầu một hypervisor cấp cho mình một cỗ máy.</span>
+        <span class="easy-only">Mỗi lần ai đó “thuê một máy chủ trên mây” chỉ bằng vài cú bấm.</span>
+        <span class="en-only" lang="en">Every time you click to create an instance on a cloud service, you are asking a hypervisor to hand you a machine.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Guest và host</h4>
+          <p>Nói chung, một máy ảo cùng hệ điều hành của nó được gọi là <b>guest</b> (khách). <b>Host</b> (chủ) là bất kỳ thứ gì chạy hypervisor. Với hypervisor loại 2, host đơn giản là hệ thống gốc của bạn; với loại 1, host chính là hypervisor, có thể kết hợp thêm một hệ thống đồng hành chuyên biệt.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao phép so sánh này hiệu quả</h4>
+          <p>Hệ điều hành phải lập lịch, phân bổ bộ nhớ, và trung gian hoá vào/ra cho các tiến trình. Hypervisor phải làm đúng ba việc đó cho các guest. Sự khác biệt chỉ nằm ở đơn vị được quản: tiến trình so với cả cỗ máy có nhân riêng.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">type 2 hypervisor</span>
+      <h3>
+        <span class="standard-copy">Hypervisor loại 2 — chạy trên một hệ điều hành bình thường</span>
+        <span class="easy-only">Loại 2 — cài như một phần mềm thường</span>
+        <span class="en-only" lang="en">Type 2 hypervisor — running on an ordinary OS</span>
+      </h3>
+      <p class="standard-copy">Với đa số người dùng, hypervisor <b>loại 2</b> là loại quen thuộc nhất, vì nó chạy trên một hệ điều hành bình thường như Linux. Ward lấy VirtualBox làm ví dụ: đó là một hypervisor loại 2, và bạn có thể chạy nó trên hệ thống của mình mà không cần sửa đổi gì nhiều — rất có thể bạn đã dùng nó trong lúc đọc quyển sách này để thử nghiệm các kiểu hệ thống Linux khác nhau.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Loại 2 giống một ứng dụng bình thường: cài vào máy bạn, mở lên, bấm tạo máy mới. Máy thật của bạn vẫn là chủ nhà, cái máy giả chỉ là khách trọ. <b>Nhớ nhé: loại 2 sống nhờ hệ điều hành của bạn.</b></p>
+      <p class="en-only" lang="en">For most users the <b>type 2</b> hypervisor is the familiar one, because it runs on a normal operating system such as Linux. Ward's example is VirtualBox: a type 2 hypervisor you can run on your system without extensive modifications — you may well have used it while reading this book to test and explore different kinds of Linux systems.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Cửa sổ máy ảo trên máy bàn của bạn, nơi bạn thử một bản phân phối mới mà không cần đụng vào đĩa thật.</span>
+        <span class="easy-only">Cái cửa sổ hiện ra một máy Linux khác ngay trên màn hình của bạn.</span>
+        <span class="en-only" lang="en">The VM window on your desktop, where you try a new distribution without touching your real disk.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Dùng thì dễ hơn mô tả</h4>
+          <p>Ward chèn một ghi chú đáng nhớ: dùng máy ảo <i>đơn giản hơn nhiều</i> so với mô tả chúng. Trong VirtualBox, bạn có thể dùng giao diện đồ hoạ để tạo và chạy một máy ảo, hoặc dùng công cụ dòng lệnh <code>VBoxManage</code> nếu cần tự động hoá quy trình đó trong một kịch bản; giao diện web của các dịch vụ đám mây cũng làm việc quản trị dễ đi. Chính vì thế ông tập trung vào việc làm sáng tỏ công nghệ và thuật ngữ hơn là chi tiết vận hành.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ngoài bản văn</h4>
+          <p>Sách viết ở thời điểm 2021. Trên Linux hiện nay, con đường phổ biến nhất không phải VirtualBox mà là KVM — mô-đun ảo hoá nằm sẵn trong nhân, cung cấp giao diện <code>/dev/kvm</code> cho không gian người dùng, thường ghép với QEMU làm phần mô phỏng thiết bị.<span class="cite"><a href="#ref-6">6</a></span><span class="cite"><a href="#ref-7">7</a></span> Đây là ghi chú của trang này, không phải lời Ward; nhưng nó khớp với lập luận của ông rằng loại dùng lại phần cứng bên dưới thắng về hiệu năng.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">type 1 hypervisor</span>
+      <h3>
+        <span class="standard-copy">Hypervisor loại 1 — bản thân nó là một hệ điều hành</span>
+        <span class="easy-only">Loại 1 — chính nó là hệ điều hành</span>
+        <span class="en-only" lang="en">Type 1 hypervisor — it is its own operating system</span>
+      </h3>
+      <p class="standard-copy">Ngược lại, hypervisor <b>loại 1</b> giống một hệ điều hành của riêng nó hơn — đặc biệt là giống một nhân — được xây dựng chuyên biệt để chạy máy ảo nhanh và hiệu quả. Loại này thỉnh thoảng dùng một hệ thống đồng hành thông thường như Linux để hỗ trợ các tác vụ quản lý.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Loại 1 không cần ai chứa chấp cả: nó tự nằm thẳng trên phần cứng và chỉ làm mỗi một việc — chạy các máy giả thật nhanh. <b>Nhớ nhé: loại 1 nằm ngay trên phần cứng, không có hệ điều hành nào bên dưới.</b></p>
+      <p class="en-only" lang="en">A <b>type 1</b> hypervisor, by contrast, is more like its own operating system — especially like a kernel — built specifically to run virtual machines quickly and efficiently. It might occasionally employ a conventional companion system such as Linux to help with management tasks.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi trang web bạn mở: Ward viết rằng khi bạn truy cập một website, gần như chắc chắn bạn đang chạm vào phần mềm chạy trên một máy ảo như thế.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mỗi lần bạn mở một trang web bất kỳ.</span>
+        <span class="en-only" lang="en">Every website you open: Ward writes that when you access a website, you are almost certainly hitting software running on such a virtual machine.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bạn dùng nó mà không biết</h4>
+          <p>Ward nhấn mạnh một nghịch lý: dù có thể bạn chẳng bao giờ chạy một hypervisor loại 1 trên phần cứng của riêng mình, bạn <i>tương tác với chúng suốt ngày</i>. Toàn bộ dịch vụ điện toán đám mây đều chạy như máy ảo dưới các hypervisor loại 1 như Xen; tạo một <span lang="en">instance</span> hệ điều hành trên một dịch vụ đám mây như AWS chính là tạo một máy ảo trên một hypervisor loại 1.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ranh giới loại 1 / loại 2 không sắc như sơ đồ</h4>
+          <p>Cách chia đôi này là cách chia của bản văn và rất hữu ích để định hướng; trong thực tế nó mờ ở rìa. Tài liệu nhân mô tả KVM như một API do <i>chính nhân</i> cung cấp: một lần <code>open("/dev/kvm")</code> lấy được tay nắm vào phân hệ kvm, rồi không gian người dùng dùng các <span lang="en">ioctl</span> để tạo máy ảo và CPU ảo.<span class="cite"><a href="#ref-6">6</a></span><span class="cite"><a href="#ref-4">4</a></span> Vì hypervisor ở đây <i>là</i> nhân của một hệ điều hành đa dụng, cách xếp nó vào loại 1 hay loại 2 tuỳ thuộc bạn nhấn vào vế nào — đây là nhận xét của trang này, không phải của Ward. Trong phần chính, trang này giữ nguyên cách phân đôi của ông thay vì lặng lẽ chọn một cách xếp loại.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">common uses</span>
+      <h3>
+        <span class="standard-copy">Ba nhóm công dụng — thử nghiệm, tương thích, máy chủ</span>
+        <span class="easy-only">Dùng máy ảo để làm gì</span>
+        <span class="en-only" lang="en">Three common uses — testing, compatibility, servers</span>
+      </h3>
+      <p class="standard-copy">Trong thế giới Linux, Ward xếp việc dùng máy ảo vào vài nhóm: <b>thử nghiệm và dùng thử</b> — khi bạn cần thử một thứ gì đó ngoài môi trường vận hành bình thường, chẳng hạn kiểm thử phần mềm trên một máy tách biệt với máy của lập trình viên, hay nghịch một bản phân phối mới trong một môi trường an toàn và “vứt đi được”, mà không phải mua phần cứng mới; <b>tương thích ứng dụng</b> — khi bạn cần chạy thứ gì đó dưới một hệ điều hành khác hệ điều hành thường dùng; và <b>máy chủ cùng dịch vụ đám mây</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Người ta dùng máy ảo để: thử đồ mới mà không sợ hỏng máy thật; chạy chương trình chỉ chạy được trên hệ điều hành khác; và dựng máy chủ trên mây. <b>Nhớ nhé: máy ảo là cái sân chơi mà bạn làm hỏng cũng không sao.</b></p>
+      <p class="en-only" lang="en">In the Linux world Ward sorts virtual machine use into a few categories: <b>testing and trials</b> — trying something outside a normal or production environment, such as testing software on a machine separate from the developer's, or experimenting with a new distribution in a safe, "disposable" environment without buying new hardware; <b>application compatibility</b> — running something under an operating system that differs from your usual one; and <b>servers and cloud services</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Nếu cần chạy một máy chủ internet, chẳng hạn một máy chủ web, Ward nói cách nhanh nhất là trả tiền cho một nhà cung cấp đám mây để lấy một <span lang="en">instance</span> máy ảo.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi ai đó cần một máy chủ ngay trong hôm nay.</span>
+        <span class="en-only" lang="en">If you need to run an internet server such as a web server, Ward says the quickest way is to pay a cloud provider for a virtual machine instance.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Máy chủ chuyên biệt cũng chỉ là máy ảo</h4>
+          <p>Ward bồi thêm một nhận xét dễ bị bỏ qua: các nhà cung cấp đám mây còn chào bán những máy chủ chuyên biệt, chẳng hạn cơ sở dữ liệu — nhưng đó <i>chỉ là những bộ phần mềm được cấu hình sẵn chạy trên máy ảo</i>.<span class="cite"><a href="#ref-1">1</a></span> Nói cách khác, phần lớn cái bạn mua trên mây là cấu hình, không phải công nghệ mới.</p>
+        </div>
+        <div class="info-block">
+          <h4>Đọc thêm mà tác giả tự giới thiệu</h4>
+          <p>Nếu muốn tìm hiểu sâu hơn về máy ảo, Ward khuyên bắt đầu với Jim Smith và Ravi Nair, <i>Virtual Machines: Versatile Platforms for Systems and Processes</i> (Elsevier, 2005) — sách này cũng bàn cả máy ảo tiến trình như JVM.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Nếu hypervisor quản máy ảo như hệ điều hành quản tiến trình, thì câu hỏi kế tiếp gần như tự bật ra: <b>phần cứng bên trong cái máy giả đó thật sự là cái gì?</b> Trên lý thuyết, Ward viết, việc hypervisor cung cấp giao diện phần cứng cho guest lẽ ra phải rất thẳng thớm — nhưng đúng chỗ đó là nơi lý thuyết và hiệu năng cãi nhau.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Máy giả cũng phải có đĩa giả, mạng giả, bộ xử lý giả. Nhưng “giả” hoàn toàn thì chậm lắm. Vậy người ta gian lận thế nào? <b>Nhớ nhé: phần cứng ảo càng “thật” thì càng chậm.</b></p>
+    <p class="en-only" lang="en">If a hypervisor manages virtual machines the way an operating system manages processes, the next question asks itself: <b>what exactly is the hardware inside that fake machine?</b> In theory, Ward writes, it should be straightforward for the hypervisor to provide hardware interfaces for a guest — and that is precisely where theory and performance start to argue.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 · VIRTUAL HARDWARE ===================== -->
+<section class="section" id="phan-cung-ao" aria-labelledby="phan-cung-ao-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="phan-cung-ao-title">
+      <span class="standard-copy">Phần cứng ảo: gian lận có nguyên tắc để đổi lấy tốc độ</span>
+      <span class="easy-only">Phần cứng giả: gian lận một chút cho nhanh</span>
+      <span class="en-only" lang="en">Virtual hardware: principled cheating in exchange for speed</span>
+    </h2>
+    <p class="standard-copy">Ward dựng một phản đề rất rõ. Muốn cấp cho guest một thiết bị đĩa ảo, bạn <i>có thể</i> tạo một tệp lớn ở đâu đó trên host rồi cấp quyền truy cập nó như một đĩa, bằng cách mô phỏng vào/ra thiết bị theo chuẩn. Cách làm này là một <b>máy ảo phần cứng nghiêm ngặt</b> — và nó <b>không hiệu quả</b>. Muốn máy ảo thực dụng cho nhiều nhu cầu khác nhau thì phải thay đổi vài thứ.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Muốn có một cái đĩa giả thì dễ: lấy một tệp to trên máy thật rồi bảo máy giả “đây là đĩa của mày”. Nhưng nếu bắt chước từng chi tiết một thì chậm kinh khủng. Thế nên người ta cho phép máy giả nói chuyện thẳng với máy thật ở vài chỗ. <b>Nhớ nhé: bắt chước kỹ quá thì chậm, nên phải cho đi tắt vài đoạn.</b></p>
+    <p class="en-only" lang="en">Ward sets up a sharp antithesis. To give a guest a virtual disk device, you <i>could</i> create a big file somewhere on the host and provide access as a disk with standard device I/O emulation. That approach is a <b>strict hardware virtual machine</b> — and it is <b>inefficient</b>. Making virtual machines practical for a variety of needs requires some changes.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only"><b>Mục tiêu bất biến.</b> Dù cơ chế là gì, Ward chốt lại, mục tiêu của ảo hoá luôn là <i>giảm bài toán xuống vừa đủ</i> để hệ điều hành guest có thể đối xử với phần cứng ảo như với bất kỳ thiết bị nào khác. Điều đó bảo đảm mọi tầng nằm trên thiết bị đều hoạt động đúng: trên một guest Linux, bạn muốn nhân truy cập được các đĩa ảo như thiết bị khối, để bạn phân vùng và tạo hệ thống tệp trên chúng bằng đúng những công cụ quen thuộc.<span class="cite"><a href="#ref-1">1</a></span> Đây chính là Chương 4 đang quay lại làm tiêu chí nghiệm thu cho Chương 17.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <b>Paravirtualization</b> (bán ảo hoá) là việc <i>đi vòng qua</i> phần cứng ảo giữa host và guest, cho phép guest truy cập tài nguyên của host một cách trực tiếp hơn. Phần lớn khác biệt bạn gặp giữa phần cứng thật và phần cứng ảo đều là hệ quả của một cây cầu nối kiểu này; giao diện mạng và thiết bị khối là những thứ dễ được đối xử như thế nhất.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Thay vì diễn kịch “tôi là một cái đĩa thật” rất mệt, máy giả và máy thật thoả thuận với nhau: “thôi khỏi diễn, nói thẳng đi cho nhanh”. Cái thoả thuận đó tên là paravirtualization. <b>Nhớ nhé: bớt diễn kịch thì chạy nhanh hơn.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <b>Paravirtualization</b> means bypassing virtual hardware between the host and guest so that guests can access host resources more directly. Most of the differences you encounter between real and virtual hardware result from such a bridge; network interfaces and block devices are among the most likely to receive this treatment.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">strict HW VM → mô phỏng đủ mọi chi tiết → chậm<br>paravirt&nbsp;&nbsp;&nbsp;&nbsp;→ guest biết mình là guest → nhanh<br><br>/dev/xvd&nbsp;&nbsp;&nbsp;&nbsp;→ đĩa ảo Xen<br>kernel mode / user mode → vẫn là trục chính</p>
+      <p class="easy-only">giả kỹ&nbsp;&nbsp;→ chậm<br>nói thẳng → nhanh<br><br>/dev/xvd → đĩa của máy trên mây</p>
+      <p class="en-only" lang="en">strict HW VM → emulate every detail → slow<br>paravirt&nbsp;&nbsp;&nbsp;&nbsp;→ the guest knows it is a guest → fast<br><br>/dev/xvd&nbsp;&nbsp;&nbsp;&nbsp;→ a Xen virtual disk<br>kernel mode / user mode → still the main axis</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">paravirtualization</span>
+      <h3>
+        <span class="standard-copy">Paravirtualization — cây cầu nối tắt giữa guest và host</span>
+        <span class="easy-only">Nói thẳng thay vì diễn kịch</span>
+        <span class="en-only" lang="en">Paravirtualization — a shortcut bridge from guest to host</span>
+      </h3>
+      <p class="standard-copy">Ward đưa một ví dụ cụ thể mà bạn sẽ gặp ngay nếu thuê một máy trên mây: một thiết bị <code>/dev/xvd</code> trên một <span lang="en">instance</span> điện toán đám mây là một đĩa ảo Xen, dùng một trình điều khiển của nhân Linux để nói chuyện trực tiếp với hypervisor.<span class="cite"><a href="#ref-1">1</a></span> Nhân guest ở đây <i>không giả vờ</i> rằng nó đang nói với một bộ điều khiển đĩa thật — nó biết mình là guest và dùng một con đường riêng.</p>
+      <p class="easy-only">Trên một máy thuê ngoài mây, cái đĩa có thể tên là <code>/dev/xvd…</code> chứ không phải tên quen thuộc. Đó là dấu hiệu cho thấy máy này biết rõ nó là máy giả và đang nói thẳng với người quản. <b>Nhớ nhé: tên thiết bị lạ thường là dấu hiệu của phần cứng ảo.</b></p>
+      <p class="en-only" lang="en">Ward gives a concrete example you will hit the moment you rent a cloud machine: a <code>/dev/xvd</code> device on a cloud computing instance is a Xen virtual disk, using a Linux kernel driver to talk directly to the hypervisor.<span class="cite"><a href="#ref-1">1</a></span> The guest kernel here does <i>not</i> pretend it is speaking to a real disk controller — it knows it is a guest and takes a private route.</p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lần đầu bạn chạy <code>lsblk</code> trên một máy chủ đám mây và không thấy tên thiết bị nào giống máy bàn của mình.</span>
+        <span class="easy-only">Khi tên ổ đĩa trên máy thuê trông lạ hoắc.</span>
+        <span class="en-only" lang="en">The first time you run <code>lsblk</code> on a cloud server and recognise none of the device names.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đôi khi chỉ vì tiện</h4>
+          <p>Không phải lúc nào paravirtualization cũng vì hiệu năng. Ward ghi rằng đôi khi nó được dùng cho tiện lợi: trên một hệ thống có khả năng làm máy bàn như VirtualBox, có sẵn các trình điều khiển để phối hợp chuyển động con trỏ chuột giữa cửa sổ máy ảo và môi trường host.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ngoài bản văn</h4>
+          <p>Dự án Xen — hypervisor mà Ward nêu tên — mô tả paravirtualization (PV) như một kỹ thuật ảo hoá nhẹ, không cần phần mở rộng ảo hoá của bộ xử lý, với các trình điều khiển PV riêng cho vào/ra trong nhân guest.<span class="cite"><a href="#ref-9">9</a></span> Đây là nguồn ngoài dùng để đối chiếu, không phải lời của Ward.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">CPU modes</span>
+      <h3>
+        <span class="standard-copy">Chế độ CPU — vì sao x86 từng là một bài toán khó</span>
+        <span class="easy-only">Vấn đề khó: ai được quyền cao nhất?</span>
+        <span class="en-only" lang="en">CPU modes — why x86 was once a hard problem</span>
+      </h3>
+      <p class="standard-copy">Ward nói rõ rằng hầu hết chi tiết về cách máy ảo hoạt động nằm ngoài phạm vi quyển sách, nhưng CPU xứng đáng được nhắc tới vì sách đã bàn về khác biệt giữa chế độ nhân và chế độ người dùng. Tên gọi cụ thể của các chế độ này thay đổi theo bộ xử lý — ví dụ bộ xử lý x86 dùng một hệ thống gọi là <b>privilege rings</b> (vòng đặc quyền) — nhưng ý tưởng thì luôn như nhau: ở chế độ nhân, bộ xử lý làm được gần như mọi thứ; ở chế độ người dùng, một số chỉ thị bị cấm và truy cập bộ nhớ bị giới hạn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bộ xử lý có hai mức quyền: mức cao làm được mọi thứ, mức thấp bị cấm nhiều thứ. Nhân chạy ở mức cao, chương trình thường chạy ở mức thấp. <b>Nhớ nhé: quyền cao là quyền của nhân, không phải quyền của bạn.</b></p>
+      <p class="en-only" lang="en">Ward says most of the details of how virtual machines work lie beyond the book's scope, but the CPU deserves a mention because the book has already discussed the difference between kernel mode and user mode. The specific names vary by processor — x86 processors use a system called <b>privilege rings</b> — but the idea is always the same: in kernel mode the processor can do almost anything; in user mode some instructions are not allowed and memory access is limited.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một hypervisor báo lỗi rằng ảo hoá phần cứng chưa được bật trong BIOS — đó chính là ranh giới chế độ CPU đang lên tiếng.</span>
+        <span class="easy-only">Khi máy báo “phải bật ảo hoá trong BIOS” mới chạy được máy ảo.</span>
+        <span class="en-only" lang="en">When a hypervisor reports that hardware virtualization is disabled in the BIOS — that is the CPU-mode boundary speaking.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bài toán gốc: guest muốn quyền của nhân</h4>
+          <p>Những máy ảo đầu tiên cho kiến trúc x86 chạy ở chế độ người dùng. Điều đó gây ra một vấn đề, vì nhân chạy <i>bên trong</i> máy ảo lại muốn ở chế độ nhân. Để đối phó, hypervisor có thể phát hiện và phản ứng lại — “bẫy” (<span lang="en">trap</span>) — bất kỳ chỉ thị bị hạn chế nào đến từ một máy ảo. Với một chút công sức, hypervisor mô phỏng các chỉ thị bị hạn chế đó, giúp máy ảo chạy được ở chế độ nhân trên một kiến trúc vốn không được thiết kế cho điều đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao cái giá lại nhỏ</h4>
+          <p>Ward giải thích luôn lý do thủ thuật bẫy-và-mô-phỏng không giết chết hiệu năng: vì <i>phần lớn</i> chỉ thị mà một nhân thực thi đều không bị hạn chế, nên chúng chạy bình thường, và tác động lên hiệu năng khá nhỏ.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">VT-x / AMD-V</span>
+      <h3>
+        <span class="standard-copy">VT-x và AMD-V — khi thị trường sửa chính kiến trúc</span>
+        <span class="easy-only">Bộ xử lý được chế lại để đỡ phải giả vờ</span>
+        <span class="en-only" lang="en">VT-x and AMD-V — when the market fixed the architecture</span>
+      </h3>
+      <p class="standard-copy">Ngay sau khi loại hypervisor bẫy-và-mô-phỏng xuất hiện, các nhà sản xuất bộ xử lý nhận ra có một thị trường cho những bộ xử lý có thể <i>hỗ trợ</i> hypervisor bằng cách loại bỏ hẳn nhu cầu bẫy và mô phỏng chỉ thị. Intel và AMD phát hành các tập tính năng này với tên <b>VT-x</b> và <b>AMD-V</b>, và hầu hết hypervisor ngày nay đều hỗ trợ chúng — trong một số trường hợp, chúng là bắt buộc.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Lúc đầu, phần mềm phải khéo léo lừa bộ xử lý. Sau đó các hãng làm chip nghĩ: sao không chế chip biết sẵn chuyện máy ảo? Thế là có VT-x của Intel và AMD-V của AMD. <b>Nhớ nhé: khi một mẹo phần mềm trở nên quá quan trọng, nó thường được đưa thẳng vào phần cứng.</b></p>
+      <p class="en-only" lang="en">Soon after this kind of hypervisor appeared, processor manufacturers realised there was a market for processors that could <i>assist</i> the hypervisor by eliminating the need for instruction trapping and emulation. Intel and AMD released these feature sets as <b>VT-x</b> and <b>AMD-V</b> respectively, and most hypervisors now support them — in some cases they are required.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mục “Virtualization Technology” trong BIOS, và cờ <code>vmx</code> hoặc <code>svm</code> trong <code>/proc/cpuinfo</code> trên máy Linux của bạn.</span>
+        <span class="easy-only">Cái mục “Virtualization” trong màn hình BIOS mà nhiều người phải bật lên.</span>
+        <span class="en-only" lang="en">The "Virtualization Technology" entry in your BIOS, and the <code>vmx</code> or <code>svm</code> flag in <code>/proc/cpuinfo</code> on your Linux machine.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đối chiếu với nguồn của nhà sản xuất</h4>
+          <p>Intel mô tả công nghệ này bằng chính ngôn ngữ trừu tượng hoá của Chương 1: “Intel® Virtualization Technology trừu tượng hoá phần cứng, cho phép nhiều khối công việc dùng chung một tập tài nguyên”; hãng cũng ghi rằng việc bật hay tắt nó diễn ra trong BIOS, với điều kiện cả chip lẫn BIOS đều hỗ trợ.<span class="cite"><a href="#ref-3">3</a></span> Đây là nguồn đối chiếu bên ngoài cho cái tên mà Ward nêu.</p>
+        </div>
+        <div class="info-block">
+          <h4>Hệ quả trên Linux hôm nay</h4>
+          <p>Chính các tập tính năng này là thứ KVM dựa vào: tài liệu nhân mô tả KVM như một giao diện ảo hoá do nhân cung cấp qua <code>/dev/kvm</code>, để không gian người dùng tạo và chạy máy ảo.<span class="cite"><a href="#ref-6">6</a></span> Nói cách khác, mẩu lịch sử phần cứng này giải thích vì sao ảo hoá trên Linux hiện nay là một tính năng của nhân chứ không còn là một mẹo của ứng dụng.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">drawbacks</span>
+      <h3>
+        <span class="standard-copy">Năm nhược điểm — lý do container ra đời</span>
+        <span class="easy-only">Máy ảo có gì phiền</span>
+        <span class="en-only" lang="en">Five drawbacks — why containers exist</span>
+      </h3>
+      <p class="standard-copy">Ward liệt kê năm điểm còn phiền phức trong vận hành hằng ngày: <b>một</b>, cài đặt và cấu hình hệ thống lẫn ứng dụng có thể lỉnh kỉnh và tốn thời gian — công cụ như Ansible tự động hoá được, nhưng dựng một hệ thống từ đầu vẫn mất nhiều thời gian; <b>hai</b>, ngay cả khi cấu hình đúng, máy ảo khởi động và khởi động lại tương đối chậm, vì bạn vẫn đang <i>boot cả một hệ thống Linux</i>; <b>ba</b>, bạn phải bảo trì nguyên một hệ thống Linux trên <i>mỗi</i> máy ảo, gồm cả <span lang="en">systemd</span> và <span lang="en">sshd</span>; <b>bốn</b>, ứng dụng của bạn có thể xung đột với bộ phần mềm chuẩn trên máy ảo, và phụ thuộc như thư viện có thể đổi khi nâng cấp, làm hỏng thứ từng chạy tốt; <b>năm</b>, cách ly dịch vụ trên các máy ảo riêng biệt có thể lãng phí và tốn kém, vì dịch vụ đám mây tính tiền theo từng <span lang="en">instance</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Máy ảo tiện, nhưng phiền ở chỗ: cài lâu, khởi động chậm, phải chăm sóc từng cái một như chăm một cái máy thật, dễ xung đột phần mềm, và càng nhiều máy thì càng tốn tiền. <b>Nhớ nhé: mỗi máy ảo là một cái máy nữa mà bạn phải nuôi.</b></p>
+      <p class="en-only" lang="en">Ward lists five things that remain troublesome day to day: <b>one</b>, installing and configuring the system and application can be cumbersome and time-consuming — tools such as Ansible automate it, but bringing a system up from scratch still takes significant time; <b>two</b>, even when configured properly, virtual machines start and reboot relatively slowly, because you are still booting a full Linux system; <b>three</b>, you must maintain a full Linux system on <i>each</i> virtual machine, including systemd and sshd; <b>four</b>, your application may conflict with the standard software set, and dependencies such as libraries can change on upgrade, breaking things that once worked; <b>five</b>, isolating services on separate virtual machines can be wasteful and costly, since cloud services charge per virtual machine instance.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi hoá đơn đám mây tăng vì bạn tuân thủ đúng thực hành “mỗi máy một dịch vụ” — một mâu thuẫn mà Ward nêu thẳng.</span>
+        <span class="easy-only">Khi tiền thuê máy tăng lên chỉ vì bạn muốn mọi thứ tách riêng cho an toàn.</span>
+        <span class="en-only" lang="en">When the cloud bill climbs because you followed the "one service per system" practice — a tension Ward names outright.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Mâu thuẫn được nêu tên</h4>
+          <p>Ward chỉ ra rằng thực hành chuẩn của ngành là chạy không quá một dịch vụ ứng dụng trên mỗi hệ thống — cách làm này bền vững và dễ bảo trì hơn; nếu bạn chạy nhiều website, tốt hơn là để chúng trên các máy chủ khác nhau. Nhưng điều đó xung đột với việc giữ chi phí thấp.<span class="cite"><a href="#ref-1">1</a></span> Đây không phải một lỗi kỹ thuật mà là một đánh đổi kinh tế, và ông nói thẳng như vậy.</p>
+        </div>
+        <div class="info-block">
+          <h4>Kết luận có điều kiện</h4>
+          <p>Ông rào lại rất cẩn thận: những vấn đề này thực ra không khác gì những vấn đề bạn gặp khi chạy dịch vụ trên phần cứng thật, và chúng không nhất thiết là trở ngại trong các hệ thống nhỏ. Nhưng một khi bạn bắt đầu chạy nhiều dịch vụ hơn, chúng trở nên rõ rệt, tốn cả thời gian lẫn tiền bạc — <i>đó</i> là lúc bạn có thể cân nhắc container.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Máy ảo tuyệt vời khi bạn cần cách ly cả một hệ điều hành cùng bộ ứng dụng của nó, nhưng đôi khi bạn cần một lựa chọn nhẹ hơn — và Ward viết rằng công nghệ container hiện là cách phổ biến để đáp ứng nhu cầu đó.<span class="cite"><a href="#ref-1">1</a></span> Trước khi vào chi tiết, ông lùi một bước để nhìn sự tiến hoá của nó, và đó là lúc cả quyển sách bắt đầu tự gấp lại thành một hình khối duy nhất.</p>
+    <p class="easy-only">Nếu chỉ cần chạy một chương trình cho an toàn mà phải dựng cả một cái máy thì phí quá. Vậy có cách nhẹ hơn không? Có, tên nó là container. <b>Nhớ nhé: không phải lúc nào cũng cần xây nhà mới — nhiều khi một hàng rào là đủ.</b></p>
+    <p class="en-only" lang="en">Virtual machines are great for insulating an entire operating system and its set of running applications, but sometimes you need a lighter-weight alternative — and Ward writes that container technology is now a popular way to fulfil that need.<span class="cite"><a href="#ref-1">1</a></span> Before the details he steps back to look at its evolution, and that is where the whole book begins folding itself into a single shape.</p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 · CONTAINERS ===================== -->
+<section class="section" id="container" aria-labelledby="container-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="container-title">
+      <span class="standard-copy">Container: không có tính năng nào tên là “container”</span>
+      <span class="easy-only">Container: một hàng rào ghép từ nhiều mảnh</span>
+      <span class="en-only" lang="en">Containers: there is no kernel feature called "container"</span>
+    </h2>
+    <p class="standard-copy">Đây là luận điểm quan trọng nhất của chương, và Ward xây dựng nó từ lịch sử. Cách vận hành mạng máy tính truyền thống là chạy nhiều dịch vụ trên cùng một máy vật lý — một máy chủ tên miền có thể kiêm luôn máy chủ thư điện tử. Nhưng bạn <i>không nên</i> tin bất kỳ phần mềm nào, kể cả máy chủ, là an toàn hay ổn định. Nên người ta dựng rào quanh các <span lang="en">daemon</span> máy chủ, nhất là khi không tin tưởng lắm một trong số chúng.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Ngày xưa, một cái máy chạy đủ mọi dịch vụ cùng lúc. Nhưng phần mềm nào cũng có thể hỏng hoặc bị hack, nên người ta bắt đầu quây rào quanh từng dịch vụ. Container chính là cái hàng rào đó, làm bằng nhiều mảnh ghép lại. <b>Nhớ nhé: container không phải một thứ, nó là nhiều thứ ghép lại.</b></p>
+    <p class="en-only" lang="en">This is the chapter's most important claim, and Ward builds it from history. The traditional way of operating computer networks was to run multiple services on the same physical machine — a name server could also act as an email server. But you shouldn't really trust any software, including servers, to be secure or stable. So people put up barriers around server daemons, especially ones they don't trust much.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only"><b>Hai tổ tiên được nêu tên.</b> Ward chỉ ra hai kỹ thuật cách ly có trước container. Thứ nhất là lời gọi hệ thống <code>chroot()</code>, đổi thư mục gốc sang một thứ khác thư mục gốc thật của hệ thống: một chương trình có thể đổi gốc của nó sang thứ gì đó như <i>/var/spool/my_service</i> và không còn truy cập được gì bên ngoài thư mục đó; có cả một chương trình <code>chroot</code> cho phép bạn chạy một chương trình với thư mục gốc mới. Kiểu cách ly này đôi khi được gọi là <b>chroot jail</b> (nhà tù chroot) vì các tiến trình (thường là) không thoát ra được.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span> Thứ hai là tính năng <b>giới hạn tài nguyên</b> (<code>rlimit</code>) của nhân, hạn chế một tiến trình được tiêu thụ bao nhiêu thời gian CPU hoặc tệp của nó lớn đến đâu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span> Ward chốt: <i>đó chính là những ý tưởng mà container được dựng lên trên</i> — bạn đang thay đổi môi trường và giới hạn tài nguyên mà tiến trình chạy với.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Ward định nghĩa rất thận trọng: <i>tuy không có một đặc trưng định nghĩa duy nhất nào</i>, một container có thể được định nghĩa lỏng lẻo là <b>một môi trường chạy bị hạn chế dành cho một tập tiến trình</b>, với hàm ý rằng các tiến trình đó không chạm được vào bất cứ thứ gì trên hệ thống nằm ngoài môi trường ấy. Nói chung, điều này được gọi là <b>ảo hoá ở mức hệ điều hành</b> (<span lang="en">operating system–level virtualization</span>).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Container là một cái sân có hàng rào, trong đó vài chương trình chơi với nhau và không với tay ra ngoài được. Không có một cái nút nào tên là “container” cả — cái sân đó được rào bằng nhiều loại rào khác nhau. <b>Nhớ nhé: container là một cái sân rào, không phải một cái hộp phép thuật.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Ward defines it carefully: <i>although there's no single defining feature</i>, a container can be loosely defined as <b>a restricted runtime environment for a set of processes</b>, the implication being that those processes can't touch anything on the system outside that environment. In general this is called <b>operating system–level virtualization</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">container ≈ cgroups riêng<br>&nbsp;&nbsp;&nbsp;&nbsp;+ thiết bị &amp; hệ thống tệp riêng<br>&nbsp;&nbsp;&nbsp;&nbsp;+ không thấy tiến trình khác<br>&nbsp;&nbsp;&nbsp;&nbsp;+ giao diện mạng riêng<br><br>nhưng vẫn: MỘT nhân Linux duy nhất</p>
+      <p class="easy-only">hàng rào = chia phần tài nguyên<br>&nbsp;&nbsp;+ thư mục riêng<br>&nbsp;&nbsp;+ không nhìn thấy ai khác<br>&nbsp;&nbsp;+ mạng riêng<br><br>nhưng nhân thì vẫn chung một cái</p>
+      <p class="en-only" lang="en">container ≈ its own cgroups<br>&nbsp;&nbsp;&nbsp;&nbsp;+ its own devices &amp; filesystem<br>&nbsp;&nbsp;&nbsp;&nbsp;+ cannot see other processes<br>&nbsp;&nbsp;&nbsp;&nbsp;+ its own network interfaces<br><br>but still: ONE single Linux kernel</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">one kernel</span>
+      <h3>
+        <span class="standard-copy">Một nhân duy nhất — điều quan trọng nhất cần nhớ</span>
+        <span class="easy-only">Vẫn chỉ có một cái nhân thôi</span>
+        <span class="en-only" lang="en">One single kernel — the thing to keep in mind</span>
+      </h3>
+      <p class="standard-copy">Ward đặt câu này ở vị trí trang trọng: <i>điều quan trọng cần ghi nhớ là một máy đang chạy một hoặc nhiều container thì vẫn chỉ có một nhân Linux nằm bên dưới</i>. Tuy vậy, các tiến trình bên trong một container <b>có thể</b> dùng môi trường không gian người dùng từ một bản phân phối Linux khác với hệ thống bên dưới.<span class="cite"><a href="#ref-1">1</a></span> Đây chính là chỗ ranh giới nhân / không gian người dùng của Chương 1 trở thành công cụ phân tích sắc bén nhất.</p>
+      <p class="easy-only">Dù bạn mở bao nhiêu container, cái nhân vẫn chỉ có một. Bên trong container có thể là một bản Linux khác hẳn — nhưng cái nhân thì dùng chung. <b>Nhớ nhé: nhiều sân chơi, một ông trọng tài.</b></p>
+      <p class="en-only" lang="en">Ward gives this sentence a place of honour: <i>it's important to keep in mind that a machine running one or more containers still has only one underlying Linux kernel</i>. However, the processes inside a container <b>can</b> use the user-space environment from a Linux distribution different from the underlying system.<span class="cite"><a href="#ref-1">1</a></span> This is where Chapter 1's kernel/user-space boundary becomes the sharpest analytical tool in the book.</p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bạn chạy một container Alpine trên một host Ubuntu và <code>uname -r</code> trong container trả về đúng phiên bản nhân của host.</span>
+        <span class="easy-only">Khi bên trong container là Alpine mà máy thật lại là Ubuntu.</span>
+        <span class="en-only" lang="en">When you run an Alpine container on an Ubuntu host and <code>uname -r</code> inside it returns the host's kernel version.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bốn khía cạnh của một tiến trình trong container</h4>
+          <p>Ward liệt kê bốn đặc điểm quan trọng: chúng có <b>cgroup riêng</b>; có <b>thiết bị và hệ thống tệp riêng</b>; <b>không thể thấy hay tương tác với bất kỳ tiến trình nào khác</b> trên hệ thống; và có <b>giao diện mạng riêng</b>.<span class="cite"><a href="#ref-1">1</a></span> Bốn dòng này chính là mục lục ngược của các chương trước: Chương 8 cho cgroup, Chương 4 cho hệ thống tệp, Chương 1 và 8 cho tiến trình, Chương 9 cho mạng.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao cần công cụ</h4>
+          <p>Ông nói thẳng rằng gom tất cả những thứ đó lại là một việc phức tạp: có thể thay đổi mọi thứ thủ công, nhưng rất khó — chỉ riêng việc nắm được cgroup cho một tiến trình đã rắc rối rồi. Vì thế mới có nhiều công cụ thực hiện các tác vụ con; hai trong số phổ biến nhất là <b>Docker</b> và <b>LXC</b>, và chương này tập trung vào Docker.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">Docker / Podman</span>
+      <h3>
+        <span class="standard-copy">Docker và Podman — khác nhau ở chỗ có máy chủ hay không</span>
+        <span class="easy-only">Hai công cụ, một kiểu dùng</span>
+        <span class="en-only" lang="en">Docker and Podman — server or no server</span>
+      </h3>
+      <p class="standard-copy">Ward nêu khác biệt chính rất gọn: <b>Docker cần một máy chủ đang chạy khi bạn dùng container, còn Podman thì không</b>. Điều này ảnh hưởng tới cách hai hệ thống dựng container. Hầu hết cấu hình Docker cần đặc quyền siêu người dùng để truy cập các tính năng nhân mà container của nó dùng, và <span lang="en">daemon</span> <code>dockerd</code> làm phần việc liên quan. Ngược lại, bạn có thể chạy Podman như một người dùng thường — gọi là <b>rootless operation</b> (vận hành không cần root) — và khi chạy theo cách đó, nó dùng các kỹ thuật khác để đạt được sự cách ly.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span></p>
+      <p class="easy-only">Có hai công cụ hay dùng. Docker cần một “ông quản lý” chạy ngầm và thường phải có quyền cao. Podman không cần ông quản lý đó, và người dùng thường cũng chạy được. Câu lệnh thì gần như y hệt nhau. <b>Nhớ nhé: gõ <code>docker</code> hay <code>podman</code> cũng gần như nhau.</b></p>
+      <p class="en-only" lang="en">Ward states the primary difference compactly: <b>Docker requires a server to be running when using containers, while Podman does not</b>. This affects how the two set containers up. Most Docker configurations require superuser privileges to access the kernel features its containers use, and the <code>dockerd</code> daemon does the relevant work. By contrast, you can run Podman as a normal user — called <b>rootless operation</b> — and when run this way it uses different techniques to achieve isolation.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi tài liệu bảo bạn thêm chính mình vào nhóm <code>docker</code> để chạy lệnh Docker như người dùng thường — một ghi chú Ward cũng đưa vào.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi lệnh <code>docker</code> báo lỗi quyền và ai đó bảo bạn “thêm vào nhóm docker đi”.</span>
+        <span class="en-only" lang="en">When the docs tell you to add yourself to the <code>docker</code> group to run Docker commands as a regular user — a note Ward also includes.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đối xứng hai chiều</h4>
+          <p>Ward ghi rõ rằng ranh giới này không cứng: bạn <i>cũng</i> có thể chạy Podman như siêu người dùng, khiến nó chuyển sang một số kỹ thuật cách ly mà Docker dùng; ngược lại, các phiên bản <code>dockerd</code> mới hơn có hỗ trợ chế độ rootless.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span> May mắn là Podman tương thích dòng lệnh với Docker, nên bạn thay <code>podman</code> cho <code>docker</code> trong các ví dụ và chúng vẫn chạy — dù có khác biệt về hiện thực, nhất là ở chế độ rootless.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Cơ chế đằng sau rootless</h4>
+          <p>Bản văn không đi sâu vào cách rootless hoạt động. Tài liệu nhân và man page hiện nay mô tả nền tảng của nó: <b>user namespace</b> ánh xạ định danh người dùng và nhóm, sao cho một tiến trình có thể có UID 0 và đầy đủ <span lang="en">capability</span> <i>bên trong</i> namespace mà không có đặc quyền nào ở bên ngoài.<span class="cite"><a href="#ref-15">15</a></span><span class="cite"><a href="#ref-16">16</a></span> Đây là ghi chú bổ sung của trang này, không phải lời Ward.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">image vs container</span>
+      <h3>
+        <span class="standard-copy">Ảnh và container — cặp khái niệm dễ lẫn nhất</span>
+        <span class="easy-only">Ảnh là khuôn, container là bánh</span>
+        <span class="en-only" lang="en">Image vs container — the easiest pair to confuse</span>
+      </h3>
+      <p class="standard-copy">Ward cảnh báo thẳng rằng rất dễ nhầm ảnh (<span lang="en">image</span>) với container. Cách nghĩ ông đề xuất: coi <b>ảnh là hệ thống tệp của container</b> — tiến trình không chạy trong một ảnh, chúng chạy trong container. Ông tự thú rằng điều này không hoàn toàn chính xác (đặc biệt, khi bạn thay đổi tệp trong một container Docker, bạn <i>không</i> đang thay đổi cái ảnh), nhưng đủ gần để bắt đầu.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ảnh giống cái khuôn bánh: nó chứa sẵn mọi nguyên liệu nhưng không tự làm gì. Container là cái bánh đã đổ ra khuôn và đang nóng. Bạn cắt cái bánh thì cái khuôn không đổi. <b>Nhớ nhé: khuôn không đổi khi bánh bị cắt.</b></p>
+      <p class="en-only" lang="en">Ward warns plainly that images and containers are easy to confuse. His suggested framing: think of <b>an image as the container's filesystem</b> — processes don't run in an image, they run in containers. He admits this is not quite accurate (in particular, when you change files in a Docker container you are not making changes to the image), but it is close enough to start.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi <code>docker images</code> và <code>docker ps</code> cho bạn hai danh sách trông giống nhau với hai loại định danh rất giống nhau.</span>
+        <span class="easy-only">Khi hai danh sách trên màn hình trông y hệt mà thật ra là hai thứ khác nhau.</span>
+        <span class="en-only" lang="en">When <code>docker images</code> and <code>docker ps</code> give you two similar-looking lists with two very similar kinds of identifier.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Dockerfile ba dòng của Ward</h4>
+          <p>Ví dụ của ông tạo một tệp <i>Dockerfile</i> gồm đúng ba dòng: <code>FROM alpine:latest</code>, <code>RUN apk add bash</code>, và <code>CMD ["/bin/bash"]</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span> Cấu hình này dùng bản phân phối nhẹ Alpine; thay đổi duy nhất là thêm shell <span lang="en">bash</span>, làm vậy không chỉ để dùng tương tác tiện hơn mà còn để tạo ra một ảnh <i>độc nhất</i> và xem quy trình đó diễn ra thế nào. Ward ghi rõ rằng dùng ảnh công khai mà không sửa gì là chuyện hoàn toàn bình thường và phổ biến — trong trường hợp đó bạn không cần Dockerfile.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>RUN xảy ra lúc dựng, CMD lúc chạy</h4>
+          <p>Một ghi chú của Ward đáng chép ra: bất cứ thứ gì làm bằng lệnh <code>RUN</code> trong Dockerfile đều xảy ra <i>trong lúc dựng ảnh</i>, chứ không phải về sau khi bạn khởi động một container từ ảnh đó. Lệnh <code>CMD</code> thì dành cho lúc chạy container — đó là lý do nó nằm ở cuối.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">intermediate image</span>
+      <h3>
+        <span class="standard-copy">Ảnh trung gian — đọc kỹ kết quả của <code>docker build</code></span>
+        <span class="easy-only">Mỗi bước dựng sinh ra một mảnh</span>
+        <span class="en-only" lang="en">Intermediate images — read that build output</span>
+      </h3>
+      <p class="standard-copy">Ward dựng ảnh bằng <code>docker build -t hlw_test .</code>, lệnh này đọc Dockerfile trong thư mục hiện tại và gán định danh <code>hlw_test</code> cho ảnh. Ông dặn: hãy <i>chuẩn bị tinh thần cho rất nhiều dòng kết quả, và đừng bỏ qua chúng</i> — đọc hết chúng lần đầu tiên sẽ giúp bạn hiểu Docker hoạt động ra sao.<span class="cite"><a href="#ref-1">1</a></span> Ở bước 1, Docker kéo bản Alpine mới nhất từ <span lang="en">Docker registry</span> và tạo một ảnh mới; một ảnh không nhằm là sản phẩm cuối cùng được gọi là <b>ảnh trung gian</b> (<span lang="en">intermediate image</span>).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Khi bạn bảo máy “dựng ảnh giúp tôi”, màn hình sẽ trôi rất nhiều chữ. Đừng lướt qua — mỗi đoạn là một bước. Mỗi bước tạo ra một mảnh nhỏ, và chỉ mảnh cuối cùng là cái bạn dùng. <b>Nhớ nhé: đọc màn hình là cách học nhanh nhất.</b></p>
+      <p class="en-only" lang="en">Ward builds with <code>docker build -t hlw_test .</code>, which reads the Dockerfile in the current directory and applies the identifier <code>hlw_test</code>. His instruction: <i>be prepared for a lot of output, and don't ignore it</i> — reading through it this first time will help you understand how Docker works.<span class="cite"><a href="#ref-1">1</a></span> At step 1, Docker pulls the latest Alpine from the Docker registry and creates a new image; an image not intended to be a final product is called an <b>intermediate image</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Ở các dòng <code>Step 1/3</code>, <code>Step 2/3</code>, <code>Step 3/3</code> — chúng ứng đúng với ba dòng của Dockerfile.</span>
+        <span class="easy-only">Ở những dòng ghi “Step 1/3”, “Step 2/3”, “Step 3/3”.</span>
+        <span class="en-only" lang="en">In the <code>Step 1/3</code>, <code>Step 2/3</code>, <code>Step 3/3</code> lines — they map exactly onto the three Dockerfile lines.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bí mật của bước 2</h4>
+          <p>Ward đặt một câu hỏi rất hay: bạn đâu có chạy Alpine trên máy mình — vậy sao chạy được lệnh <code>apk</code> vốn thuộc về Alpine? Chìa khoá nằm ở dòng ghi <code>Running in …</code>: bạn chưa yêu cầu một container nào, nhưng Docker đã dựng một container mới từ ảnh Alpine trung gian ở bước trước. Container cũng có định danh, và đáng tiếc là chúng trông không khác gì định danh ảnh. Docker gọi container tạm này là <b>container trung gian</b> — khác với ảnh trung gian: <i>ảnh trung gian ở lại sau khi dựng xong, còn container trung gian thì không</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Trình tự đầy đủ của bước 2</h4>
+          <p>Sau khi dựng container tạm, Docker chạy lệnh <code>apk</code> bên trong container đó để cài <span lang="en">bash</span>, rồi lưu các thay đổi trên hệ thống tệp thành một ảnh trung gian mới — và <i>xoá container đi sau khi hoàn tất</i>.<span class="cite"><a href="#ref-1">1</a></span> Ward cũng ghi rằng kết quả in ra khác khi bạn dùng Podman, nhưng các bước thì như nhau.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">PID namespace</span>
+      <h3>
+        <span class="standard-copy">Namespace tiến trình — vì sao shell của bạn là PID 1</span>
+        <span class="easy-only">Trong container, chương trình đầu tiên mang số 1</span>
+        <span class="en-only" lang="en">PID namespaces — why your shell is PID 1</span>
+      </h3>
+      <p class="standard-copy">Ward khởi động container bằng <code>docker run -it hlw_test</code> và bạn nhận được một dấu nhắc <span lang="en">bash</span>, chạy với tư cách người dùng root. Nếu bạn liệt kê tiến trình đầy đủ bên trong, bạn chỉ nhận đúng hai mục: shell mang PID 1, và chính lệnh liệt kê. Ông nhấn mạnh sự lạ lùng đó — <i>trên một hệ thống bình thường, PID 1 là init</i>.<span class="cite"><a href="#ref-1">1</a></span> Nhưng các tiến trình này chỉ đơn giản là những tiến trình bạn có thể thấy trên hệ thống host bình thường; mở một cửa sổ shell khác trên host, bạn sẽ tìm thấy tiến trình container trong danh sách, dù phải tìm một chút.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Vào trong container, bạn thấy chỉ có hai chương trình đang chạy, và chương trình của bạn mang số 1. Nhưng nhìn từ bên ngoài, nó vẫn nằm đó trong danh sách của máy thật, chỉ mang số khác. <b>Nhớ nhé: cùng một tiến trình, hai cái tên số khác nhau — tuỳ bạn đứng ở đâu mà nhìn.</b></p>
+      <p class="en-only" lang="en">Ward starts the container with <code>docker run -it hlw_test</code> and you get a bash prompt, running as the root user. A full process listing inside gives just two entries: the shell as PID 1, and the listing itself. He stresses the oddity — <i>on a normal system, PID 1 is init</i>.<span class="cite"><a href="#ref-1">1</a></span> But these are simply processes you can also see on your normal host system; open another shell window on the host and you will find the container process in a listing, though it will require a little searching.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Ngay lần đầu bạn gõ <code>ps aux</code> bên trong một container và tự hỏi phần còn lại của hệ thống đã đi đâu.</span>
+        <span class="easy-only">Lần đầu bạn nhìn danh sách tiến trình trong container và thấy nó ngắn kỳ lạ.</span>
+        <span class="en-only" lang="en">The first time you type <code>ps aux</code> inside a container and wonder where the rest of the system went.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Tên của tính năng</h4>
+          <p>Ward gọi đây là cuộc gặp đầu tiên với một trong các tính năng nhân dùng cho container: <b>Linux kernel namespaces</b>, cụ thể ở đây là cho định danh tiến trình. Một tiến trình có thể tạo ra cả một tập định danh tiến trình mới cho chính nó và các con của nó, bắt đầu từ PID 1, và rồi chúng chỉ thấy được những định danh đó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span><span class="cite"><a href="#ref-21">21</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ghi chú về <code>-it</code></h4>
+          <p>Ward cảnh báo: nếu bạn quên các tuỳ chọn <code>-it</code> (tương tác, gắn một terminal), bạn sẽ không có dấu nhắc và container sẽ kết thúc gần như ngay lập tức. Ông nói thêm rằng các tuỳ chọn này hơi bất thường trong dùng hằng ngày, đặc biệt là <code>-t</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-22">22</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">overlay filesystem</span>
+      <h3>
+        <span class="standard-copy">Hệ thống tệp overlay — các tầng chồng từ phải sang trái</span>
+        <span class="easy-only">Nhiều lớp giấy bóng chồng lên nhau</span>
+        <span class="en-only" lang="en">Overlay filesystems — layers stacking right to left</span>
+      </h3>
+      <p class="standard-copy">Khi bạn xem cách hệ thống tệp gốc trong container được gắn kết, nó rất khác một mount dựa trên thiết bị thông thường: bạn thấy một <b>overlay filesystem</b>, một tính năng của nhân cho phép tạo một hệ thống tệp bằng cách kết hợp các thư mục có sẵn thành các <b>tầng</b>, với các thay đổi được lưu ở một chỗ duy nhất.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span></p>
+      <p class="easy-only">Hãy hình dung nhiều tờ giấy bóng kính chồng lên nhau: tờ dưới là bản gốc, các tờ trên vẽ thêm. Bạn nhìn xuyên qua và thấy một bức tranh duy nhất. Muốn sửa thì chỉ vẽ lên tờ trên cùng. <b>Nhớ nhé: sửa ở tờ trên cùng, các tờ dưới vẫn nguyên.</b></p>
+      <p class="en-only" lang="en">When you look at how the container's root filesystem is mounted, it is very different from a normal device-based mount: you see an <b>overlay filesystem</b>, a kernel feature that lets you create a filesystem by combining existing directories as <b>layers</b>, with changes stored in a single spot.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong kết quả của <code>mount</code> bên trong container: dòng bắt đầu bằng <code>overlay on / type overlay</code> với các tham số <code>lowerdir</code>, <code>upperdir</code>, <code>workdir</code>.</span>
+        <span class="easy-only">Khi câu lệnh <code>mount</code> in ra một dòng dài loằng ngoằng chứa chữ “overlay”.</span>
+        <span class="en-only" lang="en">In the <code>mount</code> output inside the container: a line beginning <code>overlay on / type overlay</code> with <code>lowerdir</code>, <code>upperdir</code> and <code>workdir</code> parameters.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ba thư mục, một quy tắc đọc</h4>
+          <p>Ward giải thích: thư mục <b>lower</b> thực ra là một chuỗi thư mục phân tách bằng dấu hai chấm, và nếu tra chúng trên host bạn sẽ thấy cái <i>cuối cùng</i> là bản phân phối Alpine nền, được lập ở bước đầu tiên của quá trình dựng ảnh; hai thư mục đứng trước tương ứng với hai bước dựng còn lại. Do đó các thư mục này “xếp chồng” lên nhau <b>theo thứ tự từ phải sang trái</b>.<span class="cite"><a href="#ref-1">1</a></span> Thư mục <b>upper</b> nằm trên cùng, và cũng là nơi mọi thay đổi với hệ thống tệp đã gắn kết xuất hiện. Thư mục <b>work</b> là chỗ cho trình điều khiển hệ thống tệp làm việc trước khi ghi thay đổi vào thư mục upper, và nó <i>phải rỗng khi mount</i>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hệ quả: nhiều bước dựng thì nhiều tầng</h4>
+          <p>Ward chỉ ra hệ quả: ảnh container có nhiều bước dựng sẽ có khá nhiều tầng. Đôi khi đó là một vấn đề, và có nhiều chiến lược để giảm số tầng, chẳng hạn gộp các lệnh <code>RUN</code> lại và dùng <span lang="en">multistage build</span>; ông không đi vào chi tiết.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span> Ông cũng ghi rằng ở chế độ rootless, Podman dùng phiên bản FUSE của overlay filesystem, nên bạn sẽ không thấy thông tin chi tiết này từ danh sách mount, nhưng có thể lấy thông tin tương tự bằng cách xem các tiến trình <code>fuse-overlayfs</code> trên host.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">network namespace</span>
+      <h3>
+        <span class="standard-copy">Mạng cầu nối — một cặp giao diện ảo và một lớp NAT</span>
+        <span class="easy-only">Mạng riêng cho container</span>
+        <span class="en-only" lang="en">Bridge networking — a virtual interface pair plus NAT</span>
+      </h3>
+      <p class="standard-copy">Bạn <i>có thể</i> cho container chạy chung mạng với máy host, nhưng bình thường bạn muốn một mức cách ly nào đó trong ngăn xếp mạng cho an toàn. Docker có vài cách, và mặc định — cũng là phổ biến nhất — gọi là <b>bridge network</b>, dùng một loại namespace khác: <b>network namespace (netns)</b>. Trước khi chạy gì, Docker tạo một giao diện mạng mới trên host, thường là <code>docker0</code>, tiêu biểu được gán vào một mạng riêng như <code>172.17.0.0/16</code>, nên giao diện trong trường hợp đó sẽ nhận <code>172.17.0.1</code>. Mạng này dùng cho liên lạc giữa máy host và các container của nó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-24">24</a></span></p>
+      <p class="easy-only">Container có mạng riêng của nó, giống như một phòng có đường dây nội bộ. Máy thật dựng một cái ổ cắm chung, rồi cắm mỗi container vào một đầu dây. Muốn ra internet thì phải đi qua một trạm dịch địa chỉ. <b>Nhớ nhé: container có mạng riêng, muốn ra ngoài phải qua trạm trung chuyển.</b></p>
+      <p class="en-only" lang="en">You <i>can</i> have a container run on the same network as the host, but you normally want some isolation in the network stack for safety. Docker has several ways to do this, and the default — and most common — is called a <b>bridge network</b>, using another kind of namespace: the <b>network namespace (netns)</b>. Before running anything, Docker creates a new network interface on the host, usually <code>docker0</code>, typically assigned to a private network such as <code>172.17.0.0/16</code>, so the interface would get <code>172.17.0.1</code>. This network is for communication between the host machine and its containers.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-24">24</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi <code>ip addr</code> trên host bỗng hiện ra một giao diện <code>docker0</code> và một loạt <code>veth…</code> mà bạn không tự tạo.</span>
+        <span class="easy-only">Khi máy bạn bỗng có thêm mấy cái “card mạng” lạ sau khi cài Docker.</span>
+        <span class="en-only" lang="en">When <code>ip addr</code> on the host suddenly shows a <code>docker0</code> interface and a row of <code>veth…</code> devices you never created.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cặp giao diện ảo</h4>
+          <p>Khi tạo container, Docker tạo một network namespace mới gần như hoàn toàn trống: ban đầu nó chỉ chứa một giao diện <span lang="en">loopback</span> (<code>lo</code>) mới, riêng tư. Để chuẩn bị cho dùng thật, Docker tạo một <b>giao diện ảo trên host mô phỏng một liên kết giữa hai giao diện mạng thật</b>, mỗi cái có thiết bị riêng, rồi đặt một trong hai thiết bị đó vào namespace mới. Với một cấu hình mạng dùng địa chỉ trên mạng Docker trên thiết bị nằm trong namespace mới, tiến trình có thể gửi gói trên mạng đó và được nhận ở phía host.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-25">25</a></span> Ward cảnh báo rằng điều này dễ gây rối, vì các giao diện khác nhau trong các namespace khác nhau có thể trùng tên — giao diện của container có thể tên là <code>eth0</code>, và máy host cũng vậy.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>NAT và Podman rootless</h4>
+          <p>Vì đây là một mạng riêng, nếu để nguyên thế thì các tiến trình container dùng namespace đó không ra được thế giới bên ngoài; để với tới các máy ngoài, mạng Docker trên host cấu hình <b>NAT</b>.<span class="cite"><a href="#ref-1">1</a></span> Hình 17-1 của sách vẽ đúng cảnh đó: <code>lo</code> và <code>eth0</code> bên host, <code>docker0</code> với các <code>veth</code>, và NAT nối mạng con Docker ra ngoài.<span class="cite"><a href="#ref-1">1</a></span> Ward ghi rằng mạng ở chế độ rootless của Podman thì khác, vì lập giao diện ảo cần quyền siêu người dùng: Podman vẫn dùng một network namespace mới, nhưng cần một giao diện lập được trong không gian người dùng — một giao diện <b>TAP</b>, thường ở <code>tap0</code> — kết hợp với một <span lang="en">daemon</span> chuyển tiếp tên <code>slirp4netns</code>. Cách này kém khả năng hơn; ví dụ, các container không kết nối được với nhau.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-26">26</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ngoài bản văn</h4>
+          <p>Hệ sinh thái đã đi tiếp kể từ 2021: tài liệu mạng của Podman hiện mô tả <code>pasta</code> là cấu hình mạng mặc định cho người dùng rootless, với <code>slirp4netns</code> vẫn là một lựa chọn, và <code>netavark</code> là chế độ mặc định cho container chạy với quyền root.<span class="cite"><a href="#ref-27">27</a></span> Đây là trạng thái hiện tại theo tài liệu chính thức, không phải điều Ward viết.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">docker ps / rm</span>
+      <h3>
+        <span class="standard-copy">Vòng đời container — thứ đã thoát vẫn còn nằm đó</span>
+        <span class="easy-only">Container tắt rồi vẫn chưa biến mất</span>
+        <span class="en-only" lang="en">Container lifecycle — exited does not mean gone</span>
+      </h3>
+      <p class="standard-copy">Ward định nghĩa theo đúng cách Docker định nghĩa: một container được coi là “đang chạy” chừng nào nó còn một tiến trình đang chạy; bạn xem các container đang chạy bằng <code>docker ps</code>. Ngay khi mọi tiến trình của nó kết thúc, Docker đặt chúng vào trạng thái <span lang="en">exit</span>, nhưng <b>vẫn giữ lại các container</b> — trừ khi bạn khởi động với tuỳ chọn <code>--rm</code> — bao gồm cả các thay đổi đã làm với hệ thống tệp; bạn có thể truy cập hệ thống tệp đó dễ dàng bằng <code>docker export</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-22">22</a></span></p>
+      <p class="easy-only">Container tắt rồi vẫn còn nằm trên đĩa, giữ nguyên mọi thứ nó đã ghi. Nếu không dọn, một ngày nào đó đĩa của bạn đầy mà bạn không hiểu vì sao. <b>Nhớ nhé: tắt không phải là xoá — nhớ dọn dẹp.</b></p>
+      <p class="en-only" lang="en">Ward follows Docker's own definition: a container counts as "running" as long as it has a process running, and you list running containers with <code>docker ps</code>. As soon as all its processes terminate Docker puts them into an exit state but <b>still keeps the containers</b> — unless you start with <code>--rm</code> — including the changes made to the filesystem, which you can reach easily with <code>docker export</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-22">22</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi đĩa đầy trên một máy chủ chạy Docker và <code>docker ps</code> thản nhiên báo rằng chẳng có container nào cả.</span>
+        <span class="easy-only">Khi máy báo hết chỗ mà nhìn quanh chẳng thấy gì đang chạy.</span>
+        <span class="en-only" lang="en">When a Docker host fills its disk and <code>docker ps</code> calmly reports no containers at all.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao bạn phải biết điều này</h4>
+          <p>Ward nói rõ hậu quả: <code>docker ps</code> mặc định <i>không</i> hiện các container đã thoát; bạn phải dùng tuỳ chọn <code>-a</code> để thấy mọi thứ. Rất dễ tích luỹ một đống lớn container đã thoát, và nếu ứng dụng chạy trong container tạo ra nhiều dữ liệu, bạn có thể hết sạch dung lượng đĩa mà không hiểu vì sao. Dùng <code>docker rm</code> để gỡ một container đã kết thúc.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-28">28</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Điều tương tự xảy ra với ảnh</h4>
+          <p>Phát triển một ảnh thường là quá trình lặp đi lặp lại, và khi bạn gán cùng một thẻ cho một ảnh mới, Docker <i>không</i> xoá ảnh gốc — ảnh cũ chỉ đơn giản mất cái thẻ đó, và hiện ra trong <code>docker images</code> với <code>&lt;none&gt;</code>. Dùng <code>docker rmi</code> để gỡ một ảnh; lệnh này cũng gỡ các ảnh trung gian không còn cần thiết mà ảnh đó dựng lên trên.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-29">29</a></span> Ward tổng kết: nhìn chung Docker làm rất nhiều việc đánh phiên bản và điểm kiểm tra tỉ mỉ, và tầng quản lý này phản ánh một triết lý riêng so với các công cụ như LXC.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">process models</span>
+      <h3>
+        <span class="standard-copy">Mô hình tiến trình — “một container một tiến trình” là hiểu sai</span>
+        <span class="easy-only">Container chạy được nhiều chương trình</span>
+        <span class="en-only" lang="en">Process models — "one process per container" is a misreading</span>
+      </h3>
+      <p class="standard-copy">Ward đính chính một niềm tin rất phổ biến. Trước khi một tiến trình có thể kết thúc hoàn toàn, cha của nó phải thu (“<span lang="en">reap</span>”) mã thoát bằng lời gọi hệ thống <code>wait()</code>. Trong container, có những tình huống các tiến trình đã chết vẫn nằm lại vì cha của chúng không biết phản ứng ra sao. Điều đó, cộng với cách nhiều ảnh được cấu hình, <i>có thể khiến bạn kết luận rằng không nên chạy nhiều tiến trình hay dịch vụ trong một container Docker</i>. Ward nói thẳng: <b>điều đó không đúng</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-30">30</a></span></p>
+      <p class="easy-only">Nhiều người tưởng mỗi container chỉ được chạy đúng một chương trình. Không phải vậy. Chỉ cần chương trình cha biết dọn dẹp khi con của nó chết là được. <b>Nhớ nhé: được chạy nhiều chương trình, miễn là có người dọn.</b></p>
+      <p class="en-only" lang="en">Ward corrects a very common belief. Before a process can terminate completely, its parent is supposed to collect ("reap") its exit code with the <code>wait()</code> system call. In a container there are situations where dead processes remain because their parents don't know how to react. That, together with the way many images are configured, <i>might lead you to conclude that you're not supposed to run multiple processes or services inside a Docker container</i>. Ward is blunt: <b>this is not correct</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-30">30</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một container “đáng lẽ đã kết thúc” cứ nấn ná với vài tiến trình còn sót — dấu hiệu của tiến trình mồ côi không được thu.</span>
+        <span class="easy-only">Khi container mãi không chịu tắt hẳn.</span>
+        <span class="en-only" lang="en">When a container that "should have terminated" lingers with leftover processes — the signature of unreaped orphans.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Điều kiện thật sự</h4>
+          <p>Bạn <i>có thể</i> có nhiều tiến trình trong một container: chính shell trong ví dụ đã khởi động một tiến trình con mới mỗi lần bạn chạy một lệnh. Điều duy nhất thật sự quan trọng là khi bạn có tiến trình con, tiến trình cha phải dọn dẹp lúc chúng thoát. Hầu hết tiến trình cha đều làm việc này, nhưng trong một số hoàn cảnh thì không — nhất là khi nó không biết rằng mình <i>có</i> con. Chuyện này xảy ra khi có nhiều tầng sinh tiến trình và PID 1 trong container rốt cuộc trở thành cha của một tiến trình con mà nó không hay biết.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hai cách chữa mà Ward nêu</h4>
+          <p>Với một dịch vụ đơn giản, chỉ sinh ra vài tiến trình và có vẻ để sót tiến trình lảng vảng, bạn có thể thêm tuỳ chọn <code>--init</code> vào <code>docker run</code>: nó tạo một tiến trình init rất đơn giản chạy làm PID 1 trong container và đóng vai một tiến trình cha biết phải làm gì khi con kết thúc.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-22">22</a></span> Còn nếu bạn chạy nhiều dịch vụ hoặc tác vụ trong một container — chẳng hạn nhiều <span lang="en">worker</span> cho một máy chủ công việc — thay vì khởi động chúng bằng một kịch bản, hãy cân nhắc một <span lang="en">daemon</span> quản lý tiến trình như <b>Supervisor</b> (<code>supervisord</code>) để khởi động và theo dõi chúng; nó không chỉ cung cấp chức năng hệ thống cần thiết mà còn cho bạn nhiều quyền kiểm soát hơn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-31">31</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đến đây bạn đã thấy container không đến từ một tính năng cụ thể nào, mà từ một <i>tập hợp</i> các tính năng — Ward viết đúng như vậy, và bồi thêm một hệ quả: chính vì thế Docker phải theo dõi mọi thứ nó làm khi tạo một container, và phải dọn dẹp được chúng.<span class="cite"><a href="#ref-1">1</a></span> Câu hỏi tiếp theo là ai sẽ theo dõi chính những công cụ theo dõi ấy, khi bạn có hàng trăm container trên nhiều máy.</p>
+    <p class="easy-only">Container là nhiều mảnh ghép lại, nên công cụ phải nhớ hết các mảnh để còn dọn. Mà nếu bạn có hàng trăm container trên nhiều máy thì ai nhớ hộ bạn? <b>Nhớ nhé: càng nhiều hàng rào thì càng cần người trông coi.</b></p>
+    <p class="en-only" lang="en">By now you have seen that containers come not from one particular feature but from a <i>collection</i> of them — Ward says exactly this, and adds the consequence: Docker must therefore keep track of everything it does when creating a container, and must be able to clean it all up.<span class="cite"><a href="#ref-1">1</a></span> The next question is who keeps track of the trackers, once you have hundreds of containers across many machines.</p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 · LXC, K8S, PITFALLS, RUNTIMES ===================== -->
+<section class="section" id="dieu-phoi" aria-labelledby="dieu-phoi-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="dieu-phoi-title">
+      <span class="standard-copy">LXC, Kubernetes, cạm bẫy — và một loại ảo hoá thứ ba</span>
+      <span class="easy-only">Công cụ khác, người quản lý, và chỗ dễ vấp</span>
+      <span class="en-only" lang="en">LXC, Kubernetes, pitfalls — and a third kind of virtualization</span>
+    </h2>
+    <p class="standard-copy">Ward giải thích vì sao ông chọn Docker làm trục: không chỉ vì đó là hệ thống phổ biến nhất để dựng ảnh container, mà còn vì nó rất dễ bắt đầu và dễ nhảy thẳng vào các tầng cách ly mà container thường cung cấp. Nhưng có những gói khác, với cách tiếp cận khác — và trong số đó, <b>LXC</b> là một trong những cái lâu đời nhất; thực tế, các phiên bản Docker đầu tiên được dựng trên LXC.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+    <p class="easy-only">Docker không phải công cụ duy nhất, chỉ là công cụ dễ bắt đầu nhất. Có một công cụ già hơn tên LXC, và hồi xưa Docker còn được dựng trên nó. <b>Nhớ nhé: cái dễ dùng nhất không phải lúc nào cũng là cái có trước.</b></p>
+    <p class="en-only" lang="en">Ward explains why he chose Docker as the spine: not only because it is the most popular system for building container images, but because it makes it very easy to get started and jump into the layers of isolation containers normally provide. But other packages exist, taking different approaches — and among them <b>LXC</b> is one of the oldest; in fact, the first versions of Docker were built on LXC.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+    <p class="deep-only"><b>Một lưu ý về thuật ngữ.</b> Ward ghi rằng thuật ngữ <i>LXC</i> đôi khi được dùng để chỉ <b>tập các tính năng nhân</b> làm cho container khả thi, nhưng hầu hết mọi người dùng nó để chỉ cụ thể <b>một thư viện và một gói</b> chứa một số tiện ích để tạo và thao tác container Linux.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span> Sự nhập nhằng này đáng nhớ, vì nó lặp lại chính luận điểm trung tâm của mục container: không có một thứ duy nhất tên là “container”, nên tên của công cụ dễ bị nhầm với tên của cơ chế.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Khác biệt thực hành.</b> Không như Docker, LXC đòi khá nhiều thiết lập thủ công: ví dụ, bạn phải tự tạo giao diện mạng cho container của mình, và bạn cần cung cấp các ánh xạ định danh người dùng. Ban đầu LXC được nhắm tới việc đặt <i>càng nhiều một hệ thống Linux trọn vẹn càng tốt</i> vào bên trong container — kể cả init.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Docker giống bộ đồ chơi lắp sẵn: tải về là chạy. LXC giống bộ đồ nghề: bạn phải tự lắp từng thứ, nhưng lắp kiểu gì cũng được. <b>Nhớ nhé: lắp sẵn thì nhanh, tự lắp thì linh hoạt.</b></p>
+      <p class="en-only" lang="en"><b>The practical difference.</b> Unlike Docker, LXC involves a fair amount of manual setup: you have to create your own container network interface, and you need to provide user ID mappings. Originally LXC was intended to be <i>as much of an entire Linux system as possible</i> inside the container — init and all.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">Docker → tải tệp về là chạy<br>LXC&nbsp;&nbsp;&nbsp;&nbsp;→ tự dựng, API C, linh hoạt hơn<br>LXD&nbsp;&nbsp;&nbsp;&nbsp;→ gói quản lý + REST API<br>K8s&nbsp;&nbsp;&nbsp;&nbsp;→ điều phối container qua nhiều máy</p>
+      <p class="easy-only">Docker → lắp sẵn<br>LXC → tự lắp<br>LXD → người phụ việc cho LXC<br>K8s → quản nhiều máy cùng lúc</p>
+      <p class="en-only" lang="en">Docker → download files and go<br>LXC&nbsp;&nbsp;&nbsp;&nbsp;→ build it yourself, C API, more flexible<br>LXD&nbsp;&nbsp;&nbsp;&nbsp;→ management package + REST API<br>K8s&nbsp;&nbsp;&nbsp;&nbsp;→ orchestrates containers across machines</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">LXC / LXD</span>
+      <h3>
+        <span class="standard-copy">LXC — linh hoạt vì thủ công, và có API để lập trình</span>
+        <span class="easy-only">LXC — tự lắp nên muốn gì cũng được</span>
+        <span class="en-only" lang="en">LXC — flexible because manual, with an API to program against</span>
+      </h3>
+      <p class="standard-copy">Ward kết luận rằng bạn <i>có thể</i> thấy LXC linh hoạt hơn khi thích nghi với những nhu cầu khác nhau: ví dụ, mặc định LXC không dùng overlay filesystem như bạn đã thấy với Docker, dù bạn có thể thêm vào. Và vì LXC được dựng trên một <b>API C</b>, bạn có thể dùng mức chi tiết này trong ứng dụng phần mềm của chính mình nếu cần.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+      <p class="easy-only">Vì LXC để bạn tự lắp từng mảnh, bạn có thể lắp theo kiểu riêng. Và vì nó có một bộ lệnh dành cho lập trình viên, chương trình của bạn cũng gọi được vào. <b>Nhớ nhé: tự lắp thì mệt hơn nhưng vừa ý hơn.</b></p>
+      <p class="en-only" lang="en">Ward concludes you may find LXC more flexible in adapting to different needs: by default, for example, LXC does not use the overlay filesystem you saw with Docker, although you can add one. And because LXC is built on a <b>C API</b>, you can use this granularity in your own software application if necessary.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong các hệ thống muốn container hành xử như một máy chủ đầy đủ có init riêng, thay vì như một tiến trình được đóng gói.</span>
+        <span class="easy-only">Khi người ta muốn container giống một cái máy hoàn chỉnh hơn.</span>
+        <span class="en-only" lang="en">In systems that want a container to behave like a full server with its own init, rather than like a packaged process.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>LXD — gói quản lý đi kèm</h4>
+          <p>Ward giới thiệu <b>LXD</b>, một gói quản lý đồng hành giúp bạn xử lý một số điểm thủ công tinh tế của LXC — như tạo mạng và quản lý ảnh — và cung cấp một <b>REST API</b> mà bạn có thể dùng để truy cập LXC thay cho API C.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-32">32</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao Ward không đưa ví dụ LXC</h4>
+          <p>Ông nói thẳng lý do: nếu bạn đã hiểu phần thảo luận về cách Docker làm việc, bạn sẽ không gặp khó khăn với các khái niệm kỹ thuật của LXC, nên ông không đi qua ví dụ nào mà chỉ khám phá vài khác biệt thực hành.<span class="cite"><a href="#ref-1">1</a></span> Đây là một minh hoạ rõ cho phương pháp của cả quyển sách: hiểu cơ chế một lần, rồi đổi công cụ là việc nhỏ.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">Kubernetes</span>
+      <h3>
+        <span class="standard-copy">Kubernetes — năm việc mà không ai muốn làm tay</span>
+        <span class="easy-only">Người quản nhiều container trên nhiều máy</span>
+        <span class="en-only" lang="en">Kubernetes — five jobs nobody wants to do by hand</span>
+      </h3>
+      <p class="standard-copy">Container trở nên phổ biến cho nhiều loại máy chủ web, vì bạn có thể khởi động một loạt container từ một ảnh duy nhất trên nhiều máy, tạo ra độ dự phòng tuyệt vời. Đáng tiếc, điều này khó quản lý. Ward liệt kê các việc phải làm: <b>theo dõi</b> máy nào chạy được container; <b>khởi động, giám sát và khởi động lại</b> container trên các máy đó; <b>cấu hình khởi động</b> container; <b>cấu hình mạng</b> container theo yêu cầu; và <b>nạp phiên bản ảnh mới</b> rồi cập nhật mọi container đang chạy một cách mượt mà. Ông nói rõ đó chưa phải danh sách đầy đủ, và cũng không truyền tải đúng độ phức tạp của từng việc.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-33">33</a></span></p>
+      <p class="easy-only">Nếu bạn có một trăm container nằm trên mười cái máy, ai nhớ nổi cái nào đang chạy ở đâu? Phải có một người quản lý. Google làm ra một người quản lý như vậy, tên là Kubernetes. <b>Nhớ nhé: nhiều container quá thì phải có người điều phối.</b></p>
+      <p class="en-only" lang="en">Containers became popular for many kinds of web servers, because you can start a bunch of containers from a single image across multiple machines, providing excellent redundancy. Unfortunately this is hard to manage. Ward lists the jobs: <b>track</b> which machines can run containers; <b>start, monitor and restart</b> containers on them; <b>configure container startup</b>; <b>configure container networking</b> as required; and <b>load new image versions</b> and update all running containers gracefully. He says outright that this is neither a complete list nor a fair account of each task's complexity.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-33">33</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Ở mọi nơi có một cụm máy chủ web hiện đại — và ở khối lượng tệp cấu hình mà một đội phải duy trì cho nó.</span>
+        <span class="easy-only">Ở những hệ thống web lớn có hàng chục máy chủ.</span>
+        <span class="en-only" lang="en">Anywhere there is a modern web server cluster — and in the volume of configuration files a team must maintain for it.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hai phía, và phía nào tốn công hơn</h4>
+          <p>Ward viết rằng Kubernetes của Google đã trở nên thống trị trong số các giải pháp xuất hiện, và có lẽ một trong những yếu tố đóng góp lớn nhất là khả năng chạy ảnh container Docker. Nó có hai phía cơ bản, giống bất kỳ ứng dụng khách–chủ nào: phía máy chủ gồm các máy sẵn sàng chạy container, còn phía khách chủ yếu là một tập tiện ích dòng lệnh để khởi chạy và thao tác các tập container. Các tệp cấu hình có thể rất đồ sộ, và bạn sẽ nhanh chóng thấy rằng <i>phần lớn công việc ở phía khách là tạo ra cấu hình phù hợp</i>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-33">33</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Cách thử mà không dựng cụm</h4>
+          <p>Nếu bạn không muốn tự lập các máy chủ, Ward gợi ý dùng công cụ <b>Minikube</b> để cài một máy ảo chạy một cụm Kubernetes ngay trên máy của bạn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-34">34</a></span> Lưu ý ngoài bản văn: từ phiên bản 1.24 (2022), Kubernetes đã gỡ bỏ <span lang="en">dockershim</span> và không còn dùng Docker Engine trực tiếp làm <span lang="en">container runtime</span>; nó chạy các runtime tuân thủ CRI như containerd hay CRI-O — nhưng ảnh dựng bằng Docker vẫn chạy được, vì chúng theo chuẩn ảnh OCI.<span class="cite"><a href="#ref-35">35</a></span><span class="cite"><a href="#ref-36">36</a></span> Đây là trạng thái hiện tại theo tài liệu chính thức, không phải điều Ward viết năm 2021.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">pitfalls</span>
+      <h3>
+        <span class="standard-copy">Sáu cạm bẫy — container không xoá được vật lý</span>
+        <span class="easy-only">Sáu chỗ dễ vấp khi dùng container</span>
+        <span class="en-only" lang="en">Six pitfalls — containers do not repeal physics</span>
+      </h3>
+      <p class="standard-copy">Ward nhắc trước một chi phí nền: tối thiểu, bạn vẫn cần một hoặc nhiều máy để chạy container, và đó phải là một <i>máy Linux đầy đủ</i>, dù trên phần cứng thật hay trên máy ảo; vẫn có chi phí bảo trì ở đây, dù hạ tầng lõi này có thể dễ bảo trì hơn một cấu hình đòi hỏi nhiều cài đặt phần mềm tuỳ biến. Chi phí đó có thể ở nhiều dạng: tự quản hạ tầng là một khoản đầu tư thời gian đáng kể cộng chi phí phần cứng, lưu trữ và bảo trì; dùng một dịch vụ container như một cụm Kubernetes thì bạn trả bằng tiền để người khác làm việc đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Container nhẹ hơn máy ảo, nhưng không miễn phí. Bạn vẫn cần một cái máy thật để chứa chúng, và vẫn phải chăm sóc cái máy đó. <b>Nhớ nhé: hàng rào nhẹ hơn nhà, nhưng vẫn cần một mảnh đất.</b></p>
+      <p class="en-only" lang="en">Ward flags a baseline cost: at minimum you still need one or more machines to run your containers, and this has to be a <i>full-fledged Linux machine</i>, whether on real hardware or a virtual machine; there is still a maintenance cost, although maintaining this core infrastructure may be simpler than a configuration requiring many custom software installations. That cost takes several forms: administering your own infrastructure is a significant investment of time plus hardware, hosting and maintenance costs; using a container service such as a Kubernetes cluster means paying the monetary cost of having someone else do the work.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lần đầu một đội chuyển sang container để “đơn giản hoá vận hành” và phát hiện mình vừa nhận thêm một hệ thống nữa để vận hành.</span>
+        <span class="easy-only">Khi chuyển sang container để cho gọn, mà hoá ra lại thêm việc.</span>
+        <span class="en-only" lang="en">The first time a team moves to containers to "simplify operations" and discovers it has acquired one more system to operate.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Sáu điểm về chính các container</h4>
+          <p>Ward liệt kê: <b>một</b>, container có thể lãng phí về lưu trữ, vì để một ứng dụng chạy được, container phải chứa mọi hỗ trợ cần thiết của một hệ điều hành Linux như các thư viện chia sẻ — tình hình được giảm nhẹ phần nào khi dùng overlay filesystem với nhiều bản sao cùng một container, vì chúng chia sẻ cùng các tệp nền, nhưng nếu ứng dụng tạo nhiều dữ liệu lúc chạy thì các tầng trên của mọi overlay đó có thể phình to; <b>hai</b>, bạn vẫn phải nghĩ về các tài nguyên hệ thống khác như thời gian CPU — bạn có thể cấu hình giới hạn, nhưng vẫn bị ràng buộc bởi năng lực của hệ thống bên dưới, vì vẫn còn một cái nhân và các thiết bị khối; <b>ba</b>, bạn có thể phải nghĩ khác đi về nơi lưu dữ liệu.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ba điểm còn lại</h4>
+          <p><b>Bốn</b>, hầu hết công cụ và mô hình vận hành container đều hướng tới máy chủ web; Kubernetes nói riêng có nhiều tính năng an toàn để ngăn mã máy chủ chạy loạn — một lợi thế, vì nó bù cho việc (nói thẳng ra) phần lớn ứng dụng web được viết khá tệ; nhưng khi bạn cố chạy một loại dịch vụ khác, đôi khi cảm giác như đang đóng cọc vuông vào lỗ tròn. <b>Năm</b>, dựng container cẩu thả dẫn tới phình to, lỗi cấu hình và trục trặc: việc bạn tạo ra một môi trường cách ly không che chắn bạn khỏi những sai lầm <i>trong</i> môi trường đó — bạn cần hiểu những thay đổi mình thực hiện. <b>Sáu</b>, việc đánh phiên bản có thể rắc rối: sách dùng thẻ <code>latest</code> cho các ví dụ, và khi bạn dựng một container dựa trên bản phát hành mới nhất của một bản phân phối hay gói, thứ gì đó bên dưới có thể đổi và làm hỏng ứng dụng của bạn — một thực hành chuẩn là dùng thẻ phiên bản cụ thể của container nền.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vấn đề tin cậy, và một kết luận cân bằng</h4>
+          <p>Ward thêm vấn đề <b>tin cậy</b>, áp dụng đặc biệt cho ảnh dựng bằng Docker: khi bạn dựa container của mình trên các ảnh trong kho ảnh Docker, bạn đang đặt niềm tin vào một tầng quản lý phụ rằng chúng không bị sửa đổi để đưa vào thêm vấn đề bảo mật, và rằng chúng sẽ còn ở đó khi bạn cần — tương phản với LXC, nơi bạn được khuyến khích tự dựng lấy ở một mức độ nhất định.<span class="cite"><a href="#ref-1">1</a></span> Rồi ông cân bằng lại: khi cân nhắc những vấn đề này, bạn có thể nghĩ container có nhiều bất lợi so với các cách quản lý môi trường hệ thống khác — nhưng không phải vậy; dù bạn chọn cách nào, những vấn đề này đều hiện diện ở mức độ và hình thức nào đó, và một số dễ quản lý hơn trong container. Chỉ cần nhớ rằng container không giải quyết được mọi vấn đề: ví dụ, nếu ứng dụng của bạn mất nhiều thời gian để khởi động trên một hệ thống bình thường, nó cũng sẽ khởi động chậm trong container.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">runtime-based virtualization</span>
+      <h3>
+        <span class="standard-copy">Ảo hoá theo môi trường chạy — chỉ tách riêng một ứng dụng</span>
+        <span class="easy-only">Hộp đồ nghề riêng cho một chương trình</span>
+        <span class="en-only" lang="en">Runtime-based virtualization — isolating one application only</span>
+      </h3>
+      <p class="standard-copy">Loại ảo hoá cuối cùng Ward nhắc tới dựa trên kiểu môi trường dùng để phát triển một ứng dụng. Nó khác các máy ảo hệ thống và container ở chỗ <i>không</i> dùng ý tưởng đặt ứng dụng lên những cỗ máy khác nhau; thay vào đó, đây là một sự tách biệt chỉ áp dụng cho một ứng dụng cụ thể. Lý do tồn tại của những môi trường này: nhiều ứng dụng trên cùng một hệ thống có thể dùng cùng một ngôn ngữ lập trình, gây xung đột tiềm tàng. Ví dụ, Python được dùng ở nhiều nơi trên một bản phân phối tiêu biểu và có thể gồm nhiều gói bổ sung; nếu bạn muốn dùng phiên bản Python của hệ thống trong gói của mình, bạn có thể gặp rắc rối khi muốn một phiên bản khác của một trong các gói bổ sung đó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-37">37</a></span></p>
+      <p class="easy-only">Đôi khi bạn không cần cả một cái máy hay một hàng rào — bạn chỉ cần một hộp đồ nghề riêng cho một chương trình, để nó không mượn nhầm đồ của người khác. Python có sẵn kiểu hộp như vậy. <b>Nhớ nhé: đôi khi chỉ cần một hộp đồ riêng là đủ.</b></p>
+      <p class="en-only" lang="en">The final kind of virtualization Ward mentions is based on the type of environment used to develop an application. It differs from system virtual machines and containers because it does <i>not</i> use the idea of placing applications onto different machines; instead it is a separation that applies only to a particular application. The reason for such environments: multiple applications on the same system can use the same programming language, causing potential conflicts. Python, for example, is used in several places on a typical distribution and can include many add-on packages; if you want to use the system's Python in your own package, you can run into trouble if you want a different version of one of the add-ons.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-37">37</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi lần một hướng dẫn Python bảo bạn tạo một môi trường ảo trước khi cài bất cứ thứ gì — chính là cơ chế này.</span>
+        <span class="easy-only">Mỗi lần một hướng dẫn bảo “tạo môi trường ảo trước đã”.</span>
+        <span class="en-only" lang="en">Every time a Python tutorial tells you to create a virtual environment before installing anything — this is the mechanism.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ví dụ cụ thể của Ward</h4>
+          <p>Ông tạo môi trường bằng <code>python3 -m venv test-venv</code>, rồi ghi chú rằng đến lúc bạn đọc điều này, có thể bạn chỉ cần gõ <code>python</code> thay vì <code>python3</code>. Nhìn vào thư mục mới, bạn sẽ thấy một số thư mục giống hệ thống như <i>bin</i>, <i>include</i> và <i>lib</i>. Để kích hoạt môi trường ảo, bạn cần <b>source</b> (không phải thực thi) kịch bản <i>bin/activate</i>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-37">37</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao phải source chứ không chạy</h4>
+          <p>Ward giải thích lý do: kích hoạt về bản chất là <i>đặt một biến môi trường</i>, thứ bạn không thể làm bằng cách chạy một tệp thực thi. Sau đó, khi bạn chạy Python, bạn nhận được phiên bản trong thư mục <i>test-venv/bin</i> — bản thân nó chỉ là một liên kết tượng trưng — và biến môi trường <code>VIRTUAL_ENV</code> được đặt thành thư mục gốc của môi trường; bạn chạy <code>deactivate</code> để thoát ra.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-37">37</a></span> Với biến môi trường đó được đặt, bạn có một thư viện gói mới, rỗng trong <i>test-venv/lib</i>, và mọi thứ mới bạn cài khi đang ở trong môi trường sẽ đi vào đó thay vì vào thư viện của hệ thống chính.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao chương kết thúc ở đây</h4>
+          <p>Ward khép lại bằng một lý do rất thẳng thắn: không phải ngôn ngữ lập trình nào cũng cho phép môi trường ảo theo cách Python làm, nhưng vẫn đáng biết tới nó — <i>nếu không vì lý do nào khác thì cũng để làm sáng tỏ đôi chút sự nhập nhằng quanh từ “virtual”</i>.<span class="cite"><a href="#ref-1">1</a></span> Chương mở ra bằng lời than rằng từ này mơ hồ, và đóng lại bằng việc gỡ nốt một nghĩa cuối cùng của nó. Đó cũng là câu cuối của phần thân quyển sách.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Ba mức ảo hoá giờ đã đứng thành một thang: máy ảo dựng lại cả cỗ máy và chạy nhân riêng; container giữ một nhân duy nhất và dựng rào bằng namespace, cgroup, overlayfs; môi trường chạy chỉ tách riêng thư viện của một ứng dụng. Mỗi bậc thấp hơn thì nhẹ hơn và cách ly ít hơn — và chính sự đánh đổi đó, chứ không phải công nghệ nào “tốt hơn”, mới là điều chương này dạy.</p>
+    <p class="easy-only">Ba mức: xây nhà mới, dựng hàng rào, và chỉ sắm một hộp đồ nghề riêng. Càng nhẹ thì càng ít kín. <b>Nhớ nhé: chọn mức vừa đủ, đừng chọn mức to nhất.</b></p>
+    <p class="en-only" lang="en">The three levels of virtualization now stand as a ladder: virtual machines rebuild the whole machine and run their own kernel; containers keep one kernel and build a fence from namespaces, cgroups and overlayfs; runtime environments isolate only one application's libraries. Each lower rung is lighter and isolates less — and it is that trade-off, not any technology being "better", that this chapter teaches.</p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 5 · MISCONCEPTIONS ===================== -->
+<section class="section" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Đính chính</span>
+      <span class="en-only" lang="en">Corrections</span>
+    </p>
+    <h2 id="ngo-nhan-title">
+      <span class="standard-copy">Ba ngộ nhận mà người đọc lần đầu hay mắc</span>
+      <span class="easy-only">Ba chỗ hay hiểu nhầm</span>
+      <span class="en-only" lang="en">Three misconceptions first readers hit</span>
+    </h2>
+    <p class="standard-copy">Phần này thuộc mức đọc <b>Đầy đủ</b>: nó đối chiếu điều người đọc thường nghĩ với điều bản văn thật sự nói.</p>
+    <p class="easy-only">Phần này hơi khó, bạn có thể bỏ qua và quay lại sau. <b>Nhớ nhé: hiểu chậm mà chắc vẫn hơn.</b></p>
+    <p class="en-only" lang="en">This block belongs to the <b>Đầy đủ</b> (full) reading level: it sets what readers usually assume against what the text actually says.</p>
+  </div>
+
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Container là một cái máy ảo siêu nhẹ”</span>
+          <span class="en-only" lang="en">"A container is just a very lightweight virtual machine"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> container và máy ảo là cùng một thứ, chỉ khác nhau ở kích thước.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> khác biệt là khác biệt <i>về loại</i>, không phải về mức độ. Máy ảo chạy nguyên một hệ điều hành trong đó, <b>kể cả một nhân</b>; còn một máy đang chạy một hay nhiều container thì <b>vẫn chỉ có một nhân Linux duy nhất nằm bên dưới</b>.<span class="cite"><a href="#ref-1">1</a></span> Hệ quả trực tiếp: bên trong container bạn có thể dùng không gian người dùng của một bản phân phối khác, nhưng bạn <i>không</i> thể dùng một nhân khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> containers and virtual machines are the same thing at different sizes.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> the difference is one <i>of kind</i>, not of degree. A virtual machine runs a whole operating system inside it, <b>including a kernel</b>; a machine running one or more containers <b>still has only one underlying Linux kernel</b>.<span class="cite"><a href="#ref-1">1</a></span> The direct consequence: inside a container you can use another distribution's user space, but you <i>cannot</i> use another kernel.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Mỗi container chỉ được chạy đúng một tiến trình”</span>
+          <span class="en-only" lang="en">"A container may only ever run one process"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> vì trong container <code>ps</code> chỉ hiện một tiến trình, nên nhiều tiến trình là sai nguyên tắc.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> Ward nêu đúng ngộ nhận này rồi bác bỏ bằng đúng bốn chữ — <i>“điều này không đúng”</i>. Bạn <b>có thể</b> có nhiều tiến trình trong một container; điều duy nhất thật sự quan trọng là tiến trình cha phải dọn dẹp khi con của nó thoát.<span class="cite"><a href="#ref-1">1</a></span> Khi cha không làm được việc đó, <code>--init</code> hoặc một <span lang="en">daemon</span> quản lý tiến trình như <code>supervisord</code> là cách chữa mà ông nêu tên.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-31">31</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> because <code>ps</code> inside a container shows one process, more than one must be against the rules.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> Ward raises exactly this belief and dismisses it in four words — <i>"this is not correct."</i> You <b>can</b> have many processes in a container; the only thing that really matters is that parents clean up when their children exit.<span class="cite"><a href="#ref-1">1</a></span> When a parent cannot, <code>--init</code> or a process-management daemon such as <code>supervisord</code> are the remedies he names.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-31">31</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Container giải quyết được vấn đề hiệu năng và chi phí”</span>
+          <span class="en-only" lang="en">"Containers solve the performance and cost problem"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> chuyển sang container thì ứng dụng nhanh hơn và hệ thống rẻ hơn.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> Ward đóng mục cạm bẫy bằng một câu rất cụ thể: <i>nếu ứng dụng của bạn mất nhiều thời gian để khởi động trên một hệ thống bình thường, nó cũng sẽ khởi động chậm trong container</i>.<span class="cite"><a href="#ref-1">1</a></span> Và bạn vẫn cần một máy Linux đầy đủ để chạy chúng, dù trên phần cứng thật hay máy ảo; vẫn còn một cái nhân và các thiết bị khối, nên nếu bạn nạp quá tải thì container, hệ thống bên dưới, hoặc cả hai đều chịu trận.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> moving to containers makes the application faster and the system cheaper.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> Ward closes the pitfalls section with a very concrete sentence: <i>if your application takes a long time to start on a normal system, it will also start slowly in a container</i>.<span class="cite"><a href="#ref-1">1</a></span> And you still need a full-fledged Linux machine to run them, on real hardware or a virtual machine; there is still a kernel and block devices, so if you overload things then your containers, the system underneath, or both will suffer.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="tu-kiem-tra" aria-labelledby="tu-kiem-tra-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm tra</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="tu-kiem-tra-title">
+      <span class="standard-copy">Bạn đã phân biệt được ba mức ảo hoá chưa?</span>
+      <span class="easy-only">Thử trả lời xem nào</span>
+      <span class="en-only" lang="en">Can you tell the three levels of virtualization apart?</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Trả lời bằng lời của bạn, không tra sách. Nếu một câu khiến bạn ngập ngừng, đó chính là mục bạn nên đọc lại.</p>
+      <p class="easy-only">Thử trả lời miệng thôi, không cần giở lại. Câu nào bí thì quay lại đọc phần đó nhé. <b>Nhớ nhé: chỗ bí chính là chỗ cần học.</b></p>
+      <p class="en-only" lang="en">Answer in your own words, without looking back. Whichever question makes you hesitate points at the section you should reread.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Ward định nghĩa từ <i lang="en">virtual</i> như thế nào, và ví dụ nào trong sách ông dùng để neo định nghĩa đó?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao ông chuyển ngay sang mô tả <i>mục đích</i> của ảo hoá thay vì bám vào định nghĩa?</p>
+      </li>
+      <li>
+        <p>Hypervisor loại 1 và loại 2 khác nhau ở chỗ nào, và trong mỗi trường hợp thì “host” là cái gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: bạn tương tác với loại nào thường xuyên nhất mà không hề hay biết?</p>
+      </li>
+      <li>
+        <p>Paravirtualization giải quyết vấn đề gì, và một thiết bị <code>/dev/xvd</code> nói cho bạn biết điều gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao “máy ảo phần cứng nghiêm ngặt” lại không hiệu quả?</p>
+      </li>
+      <li>
+        <p>Vì sao những máy ảo x86 đầu tiên gặp rắc rối, và hai tập tính năng nào của bộ xử lý đã gỡ rắc rối đó?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao thủ thuật bẫy-và-mô-phỏng lại không làm hiệu năng sụp đổ?</p>
+      </li>
+      <li>
+        <p>Bốn khía cạnh nào của một tiến trình trong container được Ward liệt kê, và mỗi khía cạnh ứng với tính năng nhân nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: câu nào trong mục đó là câu quan trọng nhất cần nhớ về nhân?</p>
+      </li>
+      <li>
+        <p>Trong một overlay filesystem, <code>lowerdir</code>, <code>upperdir</code> và <code>workdir</code> lần lượt làm gì — và chúng xếp chồng theo thứ tự nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: nhiều bước dựng ảnh dẫn tới hệ quả gì, và người ta giảm nó bằng cách nào?</p>
+      </li>
+      <li>
+        <p>Vì sao <code>docker ps</code> có thể báo “không có gì đang chạy” trong khi đĩa của bạn đã đầy?</p>
+        <p class="deep-only">Gợi ý sâu hơn: hai lệnh nào dọn dẹp, và tuỳ chọn nào tránh được vấn đề ngay từ đầu?</p>
+      </li>
+      <li>
+        <p>Ward bác bỏ niềm tin nào về số tiến trình trong một container, và điều kiện thật sự là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: lời gọi hệ thống nào nằm ở tâm của vấn đề này?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>“Ảo” nghĩa là gì? Có phải là “giả” không?</p></li>
+      <li><p>Máy ảo và container khác nhau chỗ nào? Cái nào nặng hơn?</p></li>
+      <li><p>Trong container, chương trình đầu tiên mang số mấy? Bình thường số đó là của ai?</p></li>
+      <li><p>Vì sao tắt container rồi mà đĩa vẫn đầy?</p></li>
+      <li><p>Một container có được chạy nhiều chương trình không?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>
+        <p>How does Ward define the word <i>virtual</i>, and which example from earlier in the book anchors that definition?</p>
+      </li>
+      <li>
+        <p>What separates a type 1 from a type 2 hypervisor, and what counts as the "host" in each case?</p>
+      </li>
+      <li>
+        <p>What problem does paravirtualization solve, and what does a <code>/dev/xvd</code> device tell you?</p>
+      </li>
+      <li>
+        <p>Why did the first x86 virtual machines run into trouble, and which two processor feature sets resolved it?</p>
+      </li>
+      <li>
+        <p>Which four aspects of a process in a container does Ward list, and which kernel feature backs each?</p>
+      </li>
+      <li>
+        <p>In an overlay filesystem, what do <code>lowerdir</code>, <code>upperdir</code> and <code>workdir</code> each do — and in what order do they stack?</p>
+      </li>
+      <li>
+        <p>Why can <code>docker ps</code> report nothing running while your disk is full?</p>
+      </li>
+      <li>
+        <p>Which belief about the number of processes in a container does Ward reject, and what is the real condition?</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương — và khép lại quyển sách</span>
+    <span class="en-only" lang="en">Closing the chapter — and the book</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Chương cuối không thêm một tầng mới nào vào hệ thống — nó <span class="closing-accent">lắp lại các tầng cũ theo một hình dạng khác</span>. Container không đến từ một tính năng riêng lẻ nào mà từ một tập hợp các tính năng,<span class="cite"><a href="#ref-1">1</a></span> và tập hợp ấy chính là quyển sách bạn vừa đọc: <span class="closing-accent">namespace cho tiến trình và mạng, cgroup cho tài nguyên, overlayfs cho hệ thống tệp</span>. Ward khép lại đúng chỗ ông mở ra — gỡ nốt một nghĩa cuối của từ <i lang="en">virtual</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Chương cuối không dạy thêm thứ mới — nó <span class="closing-accent">ghép lại những thứ bạn đã học</span> thành một hình khác. Container chỉ là nhiều mảnh cũ lắp vào nhau. <b>Nhớ nhé: học xong thì đừng cất đi — hãy lắp chúng lại theo cách của bạn.</b></p>
+    <p class="en-only" lang="en">The final chapter adds no new layer to the system — it <span class="closing-accent">reassembles the old layers into a different shape</span>. Containers come not from one particular feature but from a collection of them,<span class="cite"><a href="#ref-1">1</a></span> and that collection is the book you have just read: <span class="closing-accent">namespaces for processes and networking, cgroups for resources, overlayfs for filesystems</span>. Ward closes where he opened — undoing one last sense of the word <i>virtual</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Một cách đọc chương này là đọc nó như mục lục ngược. Ranh giới nhân / không gian người dùng của Chương 1 là thứ giải thích vì sao container dùng chung một nhân.<span class="cite"><a href="#ref-1">1</a></span> Thiết bị khối và hệ thống tệp của Chương 3 và 4 là thứ quyết định tiêu chí nghiệm thu cho một đĩa ảo.<span class="cite"><a href="#ref-1">1</a></span> <span lang="en">init</span> của Chương 6 là lý do PID 1 trong container trông lạ lùng.<span class="cite"><a href="#ref-1">1</a></span> cgroup của Chương 8 là cái quay lại nguyên vẹn trong danh sách bốn khía cạnh của một tiến trình container.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-38">38</a></span> Và NAT cùng mạng riêng của Chương 9 là thứ dựng nên mạng cầu nối của Docker.<span class="cite"><a href="#ref-1">1</a></span> Nếu một mục nào ở trên khiến bạn ngập ngừng, chương cần đọc lại không phải chương 17.</p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START -->
+<!-- Region owned by book-cover-curator; body authored by book-chapter-author.
+     Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. Chapter 17 is the
+     final chapter of the book, so .nav-next returns to the cover instead. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-16-compiling-c-source.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 16 · Biên dịch phần mềm từ mã nguồn C</span>
+    <span class="nav-title en-only" lang="en">Chapter 16 · Introduction to Compiling Software from C Source Code</span>
+  </a>
+  <a class="nav-cell nav-next" href="index.html">
+    <span class="nav-label">
+      <span class="vi-only">Mục lục · Hết loạt bài</span><span class="en-only" lang="en">Contents · End of series</span> ▶
+    </span>
+    <span class="nav-title vi-only">Trang bìa · How Linux Works</span>
+    <span class="nav-title en-only" lang="en">Cover · How Linux Works</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, tái bản lần thứ 3, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chương 17, “Virtualization”, trang 401–418.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd edition, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chapter 17, "Virtualization", pp. 401–418.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả. Hệ sinh thái container đã thay đổi đáng kể kể từ 2021; những chỗ trang này mô tả trạng thái hiện tại đều được ghi rõ là <b>ngoài bản văn</b> và dẫn nguồn tài liệu chính thức hiện hành, chứ không quy cho Ward.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words. The container ecosystem has moved substantially since 2021; wherever this page describes the current state it is marked as <b>beyond the book's text</b> and cited to current official documentation, not attributed to Ward.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd ed., No Starch Press, 2021, ch. 17 “Virtualization”, pp. 401–418. — <a href="https://openlibrary.org/books/OL29462444M" target="_blank" rel="noopener noreferrer">openlibrary.org/books/OL29462444M</a></li>
+      <li id="ref-2">Jim Smith and Ravi Nair, <i>Virtual Machines: Versatile Platforms for Systems and Processes</i>, Elsevier, 2005 — the further reading Ward recommends for virtual machines. <a href="https://openlibrary.org/works/OL26472336W" target="_blank" rel="noopener noreferrer">openlibrary.org/works/OL26472336W</a></li>
+      <li id="ref-3">“Intel® Virtualization Technology (Intel® VT)” — support article, Intel. <a href="https://www.intel.com/content/www/us/en/support/articles/000005486/processors.html" target="_blank" rel="noopener noreferrer">intel.com/…/000005486/processors.html</a></li>
+      <li id="ref-4">“Linux Virtualization Support” — The Linux Kernel documentation (index of the virtualization subsystems). <a href="https://docs.kernel.org/virt/index.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/virt/index.html</a></li>
+      <li id="ref-5">“VBoxManage” — Oracle VirtualBox user manual, ch. 8. <a href="https://www.virtualbox.org/manual/ch08.html" target="_blank" rel="noopener noreferrer">virtualbox.org/manual/ch08.html</a></li>
+      <li id="ref-6">“The Definitive KVM API Documentation” — The Linux Kernel documentation. <a href="https://docs.kernel.org/virt/kvm/api.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/virt/kvm/api.html</a></li>
+      <li id="ref-7">“Introduction” — QEMU system emulation documentation. <a href="https://www.qemu.org/docs/master/system/introduction.html" target="_blank" rel="noopener noreferrer">qemu.org/docs/master/system/introduction.html</a></li>
+      <li id="ref-8">Xen Project — the type 1 hypervisor Ward names for cloud services. <a href="https://xenproject.org/" target="_blank" rel="noopener noreferrer">xenproject.org</a></li>
+      <li id="ref-9">“Paravirtualization (PV)” — Xen Project wiki. <a href="https://wiki.xenproject.org/wiki/Paravirtualization_(PV)" target="_blank" rel="noopener noreferrer">wiki.xenproject.org/wiki/Paravirtualization_(PV)</a></li>
+      <li id="ref-10"><code>chroot(2)</code> — Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man2/chroot.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/chroot.2.html</a></li>
+      <li id="ref-11"><code>getrlimit(2)</code> — resource limits, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man2/getrlimit.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/getrlimit.2.html</a></li>
+      <li id="ref-12">LXC — “Introduction”, Linux Containers project. <a href="https://linuxcontainers.org/lxc/introduction/" target="_blank" rel="noopener noreferrer">linuxcontainers.org/lxc/introduction</a></li>
+      <li id="ref-13"><code>podman(1)</code> — Podman documentation. <a href="https://docs.podman.io/en/latest/markdown/podman.1.html" target="_blank" rel="noopener noreferrer">docs.podman.io/en/latest/markdown/podman.1.html</a></li>
+      <li id="ref-14">“Rootless mode” — Docker Engine documentation. <a href="https://docs.docker.com/engine/security/rootless/" target="_blank" rel="noopener noreferrer">docs.docker.com/engine/security/rootless/</a></li>
+      <li id="ref-15"><code>user_namespaces(7)</code> — Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man7/user_namespaces.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/user_namespaces.7.html</a></li>
+      <li id="ref-16"><code>capabilities(7)</code> — Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man7/capabilities.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/capabilities.7.html</a></li>
+      <li id="ref-17">“Dockerfile reference” — Docker documentation (<code>FROM</code>, <code>RUN</code>, <code>CMD</code>). <a href="https://docs.docker.com/reference/dockerfile/" target="_blank" rel="noopener noreferrer">docs.docker.com/reference/dockerfile/</a></li>
+      <li id="ref-18">Alpine Linux — “About”, the lightweight distribution used as the base image in Ward's example. <a href="https://www.alpinelinux.org/about/" target="_blank" rel="noopener noreferrer">alpinelinux.org/about</a></li>
+      <li id="ref-19"><code>podman-build(1)</code> — Podman documentation. <a href="https://docs.podman.io/en/latest/markdown/podman-build.1.html" target="_blank" rel="noopener noreferrer">docs.podman.io/en/latest/markdown/podman-build.1.html</a></li>
+      <li id="ref-20"><code>namespaces(7)</code> — Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man7/namespaces.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/namespaces.7.html</a></li>
+      <li id="ref-21"><code>pid_namespaces(7)</code> — Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man7/pid_namespaces.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/pid_namespaces.7.html</a></li>
+      <li id="ref-22"><code>docker container run</code> — Docker CLI reference (<code>-i</code>, <code>-t</code>, <code>--rm</code>, <code>--init</code>). <a href="https://docs.docker.com/reference/cli/docker/container/run/" target="_blank" rel="noopener noreferrer">docs.docker.com/reference/cli/docker/container/run/</a></li>
+      <li id="ref-23">“Overlay Filesystem” — The Linux Kernel documentation (<code>lowerdir</code>, <code>upperdir</code>, <code>workdir</code>). <a href="https://docs.kernel.org/filesystems/overlayfs.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/filesystems/overlayfs.html</a></li>
+      <li id="ref-24">“Bridge network driver” — Docker Engine networking documentation. <a href="https://docs.docker.com/engine/network/drivers/bridge/" target="_blank" rel="noopener noreferrer">docs.docker.com/engine/network/drivers/bridge/</a></li>
+      <li id="ref-25"><code>network_namespaces(7)</code> — Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man7/network_namespaces.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/network_namespaces.7.html</a></li>
+      <li id="ref-26">slirp4netns — user-mode networking for unprivileged network namespaces. <a href="https://github.com/rootless-containers/slirp4netns" target="_blank" rel="noopener noreferrer">github.com/rootless-containers/slirp4netns</a></li>
+      <li id="ref-27">“Basic Networking Guide for Podman” — Podman documentation (pasta, netavark, slirp4netns). <a href="https://github.com/containers/podman/blob/main/docs/tutorials/basic_networking.md" target="_blank" rel="noopener noreferrer">github.com/containers/podman/…/basic_networking.md</a></li>
+      <li id="ref-28"><code>docker container ls</code> — Docker CLI reference (the <code>-a</code> option). <a href="https://docs.docker.com/reference/cli/docker/container/ls/" target="_blank" rel="noopener noreferrer">docs.docker.com/reference/cli/docker/container/ls/</a></li>
+      <li id="ref-29"><code>docker image rm</code> — Docker CLI reference. <a href="https://docs.docker.com/reference/cli/docker/image/rm/" target="_blank" rel="noopener noreferrer">docs.docker.com/reference/cli/docker/image/rm/</a></li>
+      <li id="ref-30"><code>wait(2)</code> — Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man2/wait.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/wait.2.html</a></li>
+      <li id="ref-31">Supervisor (<code>supervisord</code>) — a process control system for UNIX. <a href="http://supervisord.org/" target="_blank" rel="noopener noreferrer">supervisord.org</a></li>
+      <li id="ref-32">LXD documentation — the management package and REST API accompanying LXC. <a href="https://documentation.ubuntu.com/lxd/latest/" target="_blank" rel="noopener noreferrer">documentation.ubuntu.com/lxd/latest</a></li>
+      <li id="ref-33">“Overview” — Kubernetes documentation. <a href="https://kubernetes.io/docs/concepts/overview/" target="_blank" rel="noopener noreferrer">kubernetes.io/docs/concepts/overview/</a></li>
+      <li id="ref-34">minikube — “Get Started!”, the tool Ward names for running a local Kubernetes cluster. <a href="https://minikube.sigs.k8s.io/docs/start/" target="_blank" rel="noopener noreferrer">minikube.sigs.k8s.io/docs/start</a></li>
+      <li id="ref-35">“Container Runtimes” — Kubernetes documentation (CRI-compliant runtimes). <a href="https://kubernetes.io/docs/setup/production-environment/container-runtimes/" target="_blank" rel="noopener noreferrer">kubernetes.io/docs/setup/production-environment/container-runtimes/</a></li>
+      <li id="ref-36">“Updated: Dockershim Removal FAQ” — Kubernetes blog, 17 February 2022. <a href="https://kubernetes.io/blog/2022/02/17/dockershim-faq/" target="_blank" rel="noopener noreferrer">kubernetes.io/blog/2022/02/17/dockershim-faq/</a></li>
+      <li id="ref-37"><code>venv</code> — “Creation of virtual environments”, Python standard library documentation. <a href="https://docs.python.org/3/library/venv.html" target="_blank" rel="noopener noreferrer">docs.python.org/3/library/venv.html</a></li>
+      <li id="ref-38">“Control Group v2” — The Linux Kernel documentation. <a href="https://docs.kernel.org/admin-guide/cgroup-v2.html" target="_blank" rel="noopener noreferrer">docs.kernel.org/admin-guide/cgroup-v2.html</a></li>
+    </ol>
+
+    <!-- NAV:START -->
+    <!-- Footer neighbour row — owned by book-cover-curator, body authored by
+         book-chapter-author. Absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-16-compiling-c-source.html">chapter 16</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('hlw-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('hlw-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('hlw-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

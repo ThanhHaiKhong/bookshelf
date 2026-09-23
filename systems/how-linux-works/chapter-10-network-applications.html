@@ -1,0 +1,1633 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 10 · Ứng dụng và dịch vụ mạng — How Linux Works</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 10 “Network Applications and Services” trong How Linux Works (Brian Ward, No Starch Press, 3rd ed., 2021): dịch vụ TCP, máy chủ mạng và mô hình fork, SSH và sshd, công cụ chẩn đoán lsof/tcpdump/netcat/nmap, RPC, an ninh mạng, socket và Unix domain socket.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('hlw-reading-mode'),
+l=localStorage.getItem('hlw-lang'),
+t=localStorage.getItem('hlw-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"HOW LINUX WORKS / 10";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    How Linux Works
+    <span>Chương 10 · Network Applications and Services</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 10 · Ứng dụng và dịch vụ mạng</span>
+      <span class="en-only" lang="en">Chapter 10 · Network Applications and Services</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Ở tầng ứng dụng, mạng chỉ còn là hai tiến trình nói chuyện qua một luồng byte</span>
+      <span class="easy-only">Trên mạng, hai chương trình nói chuyện qua một cái ống</span>
+      <span class="en-only" lang="en">At the application layer, the network is just two processes talking over a stream of bytes</span>
+    </h1>
+
+    <p class="standard-copy">Chương 10 là chương “dễ thở” nhất của phần mạng, và Brian Ward nói thẳng lý do: tầng ứng dụng nằm trên cùng của chồng giao thức, sát với người dùng cuối, nên bạn có thể thấy tài liệu ở đây dễ tiếp cận hơn so với Chương 9.<span class="cite"><a href="#ref-1">1</a></span> Thứ chương này mô tả là các <b>máy khách</b> và <b>máy chủ</b> chạy trong không gian người dùng — chính những chương trình bạn dùng mỗi ngày.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Chương này nói về những chương trình chạy trên mạng mà bạn quen mặt: trình duyệt web, chương trình đăng nhập từ xa, chương trình gửi tệp. Chúng nằm ở tầng trên cùng, gần bạn nhất, nên dễ hiểu hơn mấy tầng bên dưới. <b>Nhớ nhé: tầng càng gần bạn thì càng dễ hình dung.</b></p>
+    <p class="en-only" lang="en">Chapter 10 is the friendliest chapter of the networking run, and Brian Ward says why outright: this layer sits at the top of the stack, close to end users, so you may find the material more accessible than that of Chapter 9.<span class="cite"><a href="#ref-1">1</a></span> What the chapter describes are the <b>clients</b> and <b>servers</b> running in user space — exactly the programs you interact with every day.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Điểm đáng chú ý trong cách tổ chức của ông: chương bắt đầu từ chỗ cao nhất (gõ tay một yêu cầu HTTP qua <code>telnet</code>) rồi đi ngược xuống, kết thúc ở <span lang="en">socket</span> — thứ mà chính ông gọi là ranh giới giữa không gian người dùng và không gian nhân.<span class="cite"><a href="#ref-1">1</a></span> Hai mục cuối (10.9 và 10.10) được ông đánh dấu là “tài liệu nâng cao, đặc biệt dành cho lập trình viên”, và ông cho phép bạn bỏ qua để sang chương sau.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> một dịch vụ mạng không có gì huyền bí — nó là một tiến trình không gian người dùng lắng nghe trên một cổng, <span lang="en">fork()</span> ra tiến trình con cho mỗi kết nối, và đọc/ghi qua một <span lang="en">socket</span>; mọi công cụ chẩn đoán trong chương (<code>lsof</code>, <code>tcpdump</code>, <code>netcat</code>, <code>nmap</code>) chỉ là các cách khác nhau để nhìn đúng ba thứ đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> máy chủ mạng chỉ là một chương trình đang ngồi chờ ở một “cửa” (cổng). Ai gõ cửa thì nó đẻ ra một người phụ việc để tiếp. Các công cụ trong chương giúp bạn nhìn xem cửa nào đang mở và ai đang gõ. <b>Nhớ nhé: cổng là cửa, máy chủ là người ngồi chờ sau cửa.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> a network service is nothing mysterious — it is a user-space process listening on a port, calling <span lang="en">fork()</span> to spawn a child for each connection, and reading and writing through a <span lang="en">socket</span>; every diagnostic tool in the chapter (<code>lsof</code>, <code>tcpdump</code>, <code>netcat</code>, <code>nmap</code>) is just another way of looking at those same three things.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: tầng ứng dụng gồm máy khách và máy chủ trong không gian người dùng, nói chuyện qua socket xuống tầng vận chuyển TCP hoặc UDP của nhân. Diagram: the application layer holds user-space clients and servers talking through sockets down to the kernel's TCP or UDP transport layer.">
+    <div class="core">
+      <b>Application layer</b>
+      <small class="standard-copy">Máy khách và máy chủ trong không gian người dùng</small>
+      <small class="easy-only">Nơi các chương trình mạng chạy</small>
+      <small class="en-only" lang="en">User-space clients and servers</small>
+    </div>
+
+    <div class="node">
+      <b>Client &amp; Server</b>
+      <small class="standard-copy"><code>curl</code>, <code>ssh</code> ↔ <code>httpd</code>, <code>sshd</code> — nối với nhau qua một cổng</small>
+      <small class="easy-only">Bên gọi và bên nghe</small>
+      <small class="en-only" lang="en"><code>curl</code>, <code>ssh</code> ↔ <code>httpd</code>, <code>sshd</code> — joined at a port</small>
+    </div>
+
+    <div class="node">
+      <b>Socket</b>
+      <small class="standard-copy">Ranh giới giữa không gian người dùng và nhân; <code>SOCK_STREAM</code> hoặc <code>SOCK_DGRAM</code></small>
+      <small class="easy-only">Cái ống nối chương trình với mạng</small>
+      <small class="en-only" lang="en">The user space / kernel space boundary; <code>SOCK_STREAM</code> or <code>SOCK_DGRAM</code></small>
+    </div>
+
+    <div class="node">
+      <b>Transport (kernel)</b>
+      <small class="standard-copy">TCP — luồng hai chiều liên tục; UDP — từng gói rời rạc</small>
+      <small class="easy-only">TCP là cuộc gọi, UDP là bưu thiếp</small>
+      <small class="en-only" lang="en">TCP — an uninterrupted two-way stream; UDP — discrete datagrams</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#dich-vu-tcp">
+    <span>01</span>
+    <b class="standard-copy">Dịch vụ TCP và hình dạng một máy chủ</b>
+    <b class="easy-only">Dịch vụ mạng là gì</b>
+    <b class="en-only" lang="en">TCP services and the shape of a server</b>
+  </a>
+  <a href="#ssh">
+    <span>02</span>
+    <b class="standard-copy">SSH: máy chủ, khoá và siêu máy chủ cũ</b>
+    <b class="easy-only">SSH và chìa khoá</b>
+    <b class="en-only" lang="en">SSH: server, keys, and the old superservers</b>
+  </a>
+  <a href="#chan-doan">
+    <span>03</span>
+    <b class="standard-copy">Công cụ chẩn đoán và lời gọi thủ tục từ xa</b>
+    <b class="easy-only">Bốn công cụ soi mạng</b>
+    <b class="en-only" lang="en">Diagnostic tools and remote procedure calls</b>
+  </a>
+  <a href="#socket-an-ninh">
+    <span>04</span>
+    <b class="standard-copy">An ninh mạng, socket và Unix domain socket</b>
+    <b class="easy-only">Giữ an toàn và cái ống bên trong máy</b>
+    <b class="en-only" lang="en">Network security, sockets and Unix domain sockets</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>05</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="dich-vu-tcp" aria-labelledby="dich-vu-tcp-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="dich-vu-tcp-title">
+      <span class="standard-copy">Dịch vụ TCP, một yêu cầu gõ tay, và hình dạng chung của máy chủ mạng</span>
+      <span class="easy-only">Dịch vụ mạng thật ra là gì</span>
+      <span class="en-only" lang="en">TCP services, a hand-typed request, and the common shape of a network server</span>
+    </h2>
+    <p class="standard-copy">Ward bắt đầu bằng thứ đơn giản nhất: dịch vụ TCP, theo ông, nằm trong số những dịch vụ dễ hiểu nhất vì chúng được dựng trên các <b>luồng dữ liệu hai chiều đơn giản, không gián đoạn</b>.<span class="cite"><a href="#ref-1">1</a></span> Và cách tốt nhất để thấy chúng hoạt động là tự tay nói chuyện với một máy chủ web không mã hoá trên cổng TCP 80.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    <p class="easy-only">Muốn hiểu mạng, đừng đọc lý thuyết trước — hãy tự tay gõ thử một câu vào máy chủ và xem nó trả lời. Đó chính là điều tác giả bảo bạn làm ngay ở trang đầu chương. <b>Nhớ nhé: gõ thử một lần hơn đọc mười lần.</b></p>
+    <p class="en-only" lang="en">Ward starts with the simplest thing there is: TCP services, he says, are among the easiest to understand because they are built upon <b>simple, uninterrupted two-way data streams</b>.<span class="cite"><a href="#ref-1">1</a></span> And the best way to see how they work is to talk directly to an unencrypted web server on TCP port 80.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Một <i>dịch vụ mạng</i> ở tầng ứng dụng là một tiến trình không gian người dùng gắn với một cổng vận chuyển. Ward mô tả phần lớn máy chủ mạng “giống như các tiến trình nền khác trên hệ thống, chẳng hạn <code>cron</code>, chỉ khác là chúng tương tác với các cổng mạng”.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Dịch vụ mạng là một chương trình chạy ngầm, giống mấy chương trình hẹn giờ trong máy, chỉ khác là nó ngồi canh một cái cửa ra mạng. <b>Nhớ nhé: chương trình ngầm + một cái cửa = dịch vụ mạng.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A <i>network service</i> at the application layer is a user-space process attached to a transport port. Ward describes most network servers as “like other server daemons on your system such as <code>cron</code>, except that they interact with network ports”.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">client → connect(host, port)<br>&nbsp;&nbsp;server: listen() → accept()<br>&nbsp;&nbsp;&nbsp;&nbsp;→ fork() → worker<br>&nbsp;&nbsp;listener vẫn tiếp tục lắng nghe</p>
+      <p class="easy-only">bên gọi → gõ cửa<br>&nbsp;&nbsp;bên nghe → mở cửa<br>&nbsp;&nbsp;&nbsp;&nbsp;→ gọi người phụ việc<br>&nbsp;&nbsp;người gác cửa vẫn đứng đó</p>
+      <p class="en-only" lang="en">client → connect(host, port)<br>&nbsp;&nbsp;server: listen() → accept()<br>&nbsp;&nbsp;&nbsp;&nbsp;→ fork() → worker<br>&nbsp;&nbsp;listener keeps listening</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">talking to port 80</span>
+      <h3>
+        <span class="standard-copy">Bài tập đầu tiên — gõ tay một yêu cầu HTTP</span>
+        <span class="easy-only">Tự gõ một câu cho máy chủ web</span>
+        <span class="en-only" lang="en">The first exercise — hand-typing an HTTP request</span>
+      </h3>
+      <p class="standard-copy">Ward yêu cầu bạn chạy <code>telnet example.org 80</code>, rồi gõ hai dòng <code>GET / HTTP/1.1</code> và <code>Host: example.org</code>, nhấn <kbd>ENTER</kbd> hai lần sau dòng cuối. Máy chủ sẽ trả về một đống HTML.<span class="cite"><a href="#ref-1">1</a></span> Bài tập nhỏ này chứng minh đúng hai điều: máy ở xa có một tiến trình máy chủ web đang lắng nghe trên cổng TCP 80, và <code>telnet</code> chính là máy khách khởi tạo kết nối.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bạn mở một chương trình nối tới máy chủ web, rồi gõ đúng hai dòng chữ. Máy chủ hiểu và gửi lại cả trang web dưới dạng chữ. Thế là bạn vừa làm công việc của trình duyệt bằng tay. <b>Nhớ nhé: trình duyệt cũng chỉ gõ mấy dòng chữ như bạn thôi.</b></p>
+      <p class="en-only" lang="en">Ward has you run <code>telnet example.org 80</code>, then type the two lines <code>GET / HTTP/1.1</code> and <code>Host: example.org</code>, pressing <kbd>ENTER</kbd> twice after the last one. The server replies with a pile of HTML.<span class="cite"><a href="#ref-1">1</a></span> The exercise demonstrates exactly two things: the remote host has a web server process listening on TCP port 80, and <code>telnet</code> was the client that initiated the connection.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi lần bạn mở một trang web: trình duyệt làm đúng động tác này, chỉ nhanh hơn và có mã hoá.</span>
+        <span class="easy-only">Mỗi lần bạn mở một trang web.</span>
+        <span class="en-only" lang="en">Every time you open a web page: the browser performs exactly this exchange, only faster and encrypted.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao phải nhấn CTRL-D</h4>
+          <p>Ward giải thích: vì hầu hết trang web cần vài yêu cầu mới tải xong, nên giữ kết nối mở là hợp lý — kết nối không tự đóng. Nhưng hành vi này thay đổi tuỳ máy chủ; nhiều máy chủ ngắt rất nhanh nếu không nhận được yêu cầu ngay sau khi kết nối mở.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ghi chú về tuổi tác của giao thức</h4>
+          <p>Chính tác giả cảnh báo: HTTP 1.1, cũng như HTTP 1.0 trước nó, đã lộ tuổi; hiện đã có các giao thức mới hơn đang dùng như HTTP/2, QUIC và HTTP/3 đang nổi lên.<span class="cite"><a href="#ref-1">1</a></span> Cú pháp yêu cầu HTTP/1.1 mà bạn gõ tay được chuẩn hoá trong RFC 9112.<span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Về bản thân telnet</h4>
+          <p>Ward lưu ý <code>telnet</code> ban đầu được làm ra để đăng nhập vào máy ở xa; chương trình máy khách có thể không được cài sẵn trên bản phân phối của bạn nhưng dễ cài thêm. Máy chủ đăng nhập telnet thì <i>hoàn toàn không an toàn</i>, còn máy khách telnet vẫn hữu ích để gỡ lỗi dịch vụ từ xa. Nó không làm việc với UDP hay bất kỳ tầng vận chuyển nào khác ngoài TCP.<span class="cite"><a href="#ref-1">1</a></span> Giao thức Telnet gốc là RFC 854 và IANA gán nó cổng 23.<span class="cite"><a href="#ref-4">4</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">curl --trace-ascii</span>
+      <h3>
+        <span class="standard-copy">Nhìn kỹ hơn — “header” và “data” chỉ là hư cấu của không gian người dùng</span>
+        <span class="easy-only">Máy tính không biết đâu là “phần đầu thư”</span>
+        <span class="en-only" lang="en">A closer look — “header” and “data” are a user-space fiction</span>
+      </h3>
+      <p class="standard-copy">Bước kế tiếp của Ward là dùng <code>curl --trace-ascii trace_file http://www.example.org/</code> để ghi lại chi tiết cuộc trao đổi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Trong tệp vết, bạn thấy <code>curl</code> gửi <code>GET / HTTP/1.1</code> cùng vài dòng thông tin thêm rồi một dòng trống, và máy chủ đáp lại bằng <code>HTTP/1.1 200 OK</code>.<span class="cite"><a href="#ref-1">1</a></span> Điểm chốt nằm ở chỗ khác: dù <code>curl</code> in ra “Recv header” rồi “Recv data” như thể đó là hai loại thông điệp khác nhau, <b>không hề có khác biệt nào</b> trong cách <code>curl</code> nói với hệ điều hành để lấy hai thứ đó, trong cách hệ điều hành xử lý chúng, hay trong cách mạng xử lý các gói bên dưới.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Một lá thư có phần đầu (tên người nhận) và phần thân (nội dung). Nhưng với người bưu tá thì tất cả chỉ là giấy — người đọc thư mới là người phân biệt. Mạng cũng vậy: nhân máy tính chỉ thấy byte, chương trình mới thấy “đầu thư” và “nội dung”. <b>Nhớ nhé: mạng chỉ chở byte, ý nghĩa do chương trình tự đặt.</b></p>
+      <p class="en-only" lang="en">Ward's next step is <code>curl --trace-ascii trace_file http://www.example.org/</code> to record the details of the exchange.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> In the trace file you watch <code>curl</code> send <code>GET / HTTP/1.1</code> plus some extra information and an empty line, and the server answer with <code>HTTP/1.1 200 OK</code>.<span class="cite"><a href="#ref-1">1</a></span> The real point lies elsewhere: even though <code>curl</code> prints “Recv header” and then “Recv data” as if those were two different kinds of message, <b>there is no difference</b> in how <code>curl</code> talked to the operating system to retrieve them, in how the operating system handled them, or in how the network handled the packets underneath.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi bạn gỡ lỗi một API và tự hỏi “lỗi nằm ở tầng nào” — câu trả lời gần như luôn nằm trong chương trình, không nằm ở mạng.</span>
+        <span class="easy-only">Khi một trang web lỗi, thường là chương trình hiểu sai, không phải dây mạng đứt.</span>
+        <span class="en-only" lang="en">Whenever you debug an API and ask “which layer is this in” — the answer is nearly always inside the program, not on the network.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cái dòng trống làm nên tất cả</h4>
+          <p>Ward chỉ đúng vào thời điểm chuyển: <code>curl</code> biết rằng cho tới lúc đó nó vẫn đang nhận header, nhưng khi nhận được một <b>dòng trống</b> — thứ đánh dấu kết thúc phần header trong HTTP — nó biết phải diễn giải mọi thứ tiếp theo là tài liệu được yêu cầu.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đối xứng ở phía máy chủ</h4>
+          <p>Điều tương tự đúng với máy chủ khi gửi: hệ điều hành của máy chủ không phân biệt dữ liệu header với dữ liệu tài liệu; sự phân biệt xảy ra bên trong chương trình máy chủ ở không gian người dùng.<span class="cite"><a href="#ref-1">1</a></span> Đây là một minh hoạ rất sạch cho luận điểm xuyên suốt sách: ranh giới ngữ nghĩa nằm trong phần mềm, không nằm trong hạ tầng.</p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">fork() and worker processes</span>
+      <h3>
+        <span class="standard-copy">Một đặc điểm chung: máy chủ hoạt động như nhiều tiến trình</span>
+        <span class="easy-only">Người gác cửa và những người phụ việc</span>
+        <span class="en-only" lang="en">One common feature: servers operate as multiple processes</span>
+      </h3>
+      <p class="standard-copy">Ward nêu một đặc điểm chung cho hầu hết máy chủ mạng: chúng thường hoạt động dưới dạng <b>nhiều tiến trình</b>. Ít nhất một tiến trình lắng nghe trên cổng mạng; khi nhận kết nối mới, tiến trình lắng nghe dùng <code>fork()</code> để tạo một tiến trình con chịu trách nhiệm cho kết nối đó. Tiến trình con — thường gọi là <b>worker process</b> — kết thúc khi kết nối đóng, còn tiến trình lắng nghe ban đầu vẫn tiếp tục lắng nghe.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <p class="easy-only">Hãy tưởng tượng một quán ăn: có một người đứng ở cửa đón khách. Mỗi lần khách vào, người đó gọi một bạn phục vụ ra lo riêng bàn ấy, còn mình vẫn đứng ở cửa. Khách về thì bạn phục vụ nghỉ. <b>Nhớ nhé: một người gác cửa, nhiều người phục vụ.</b></p>
+      <p class="en-only" lang="en">Ward names a feature common to most network servers: they usually operate as <b>multiple processes</b>. At least one process listens on the network port; upon receiving a new incoming connection, the listening process uses <code>fork()</code> to create a child process responsible for that connection. The child — often called a <b>worker process</b> — terminates when the connection closes, while the original listening process keeps listening.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi lần <code>ps</code> cho bạn thấy một hàng dài <code>sshd</code> hay <code>nginx</code> trông y hệt nhau — đó là một listener và một bầy worker.</span>
+        <span class="easy-only">Khi bạn thấy nhiều dòng giống hệt nhau trong danh sách chương trình đang chạy.</span>
+        <span class="en-only" lang="en">Every time <code>ps</code> shows you a long row of identical-looking <code>sshd</code> or <code>nginx</code> lines — that is one listener and a herd of workers.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hai ngoại lệ của mô hình</h4>
+          <p>Ward nêu rõ hai ngoại lệ. Thứ nhất: gọi <code>fork()</code> tốn đáng kể tài nguyên hệ thống, nên các máy chủ TCP hiệu năng cao như máy chủ web Apache có thể tạo sẵn một số tiến trình worker ngay khi khởi động để sẵn sàng phục vụ. Thứ hai: máy chủ nhận gói UDP hoàn toàn không cần <code>fork()</code>, vì chúng không có kết nối nào để lắng nghe — chúng chỉ nhận dữ liệu và phản ứng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Danh mục máy chủ mà ông liệt kê</h4>
+          <p>Ông liệt kê các máy chủ bạn có thể gặp đang chạy: <code>httpd</code>, <code>apache</code>, <code>apache2</code>, <code>nginx</code> (máy chủ web); <code>sshd</code> (secure shell daemon); <code>postfix</code>, <code>qmail</code>, <code>sendmail</code> (máy chủ thư); <code>cupsd</code> (máy chủ in); <code>nfsd</code>, <code>mountd</code> (hệ thống tệp mạng); <code>smbd</code>, <code>nmbd</code> (chia sẻ tệp kiểu Windows); và <code>rpcbind</code> (dịch vụ portmap cho RPC).<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một ví dụ đã gặp ở Chương 7</h4>
+          <p>Ông nhắc lại rằng <code>syslogd</code> — đã bàn ở Chương 7 — chấp nhận gói UDP trên cổng 514 khi được khởi động với tuỳ chọn <code>-r</code>.<span class="cite"><a href="#ref-1">1</a></span> IANA gán <code>syslog</code> cổng UDP 514, với RFC 5426 là tài liệu tham chiếu ghi trong sổ đăng ký.<span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Ba mảnh ở trên ghép thành một hình duy nhất: <b>một cổng, một tiến trình lắng nghe, một luồng byte không có ý nghĩa sẵn</b>. Giữ hình đó trong đầu, mọi máy chủ cụ thể chỉ còn là chi tiết cấu hình — và đó chính là cách Ward chuyển sang phần tiếp theo, nơi ông mổ xẻ một máy chủ cụ thể đến từng dòng cấu hình: <code>sshd</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Tóm lại: một cái cửa, một người ngồi chờ, và những dòng chữ đi qua. Phần sau sẽ xem kỹ một người ngồi chờ cụ thể, tên là SSH. <b>Nhớ nhé: hiểu một máy chủ là hiểu được phần lớn các máy chủ.</b></p>
+    <p class="en-only" lang="en">The three pieces above assemble into a single picture: <b>a port, a listening process, and a stream of bytes with no inherent meaning</b>. Hold that picture and every specific server becomes a matter of configuration detail — which is exactly how Ward moves on, dissecting one concrete server line by configuration line: <code>sshd</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="ssh" aria-labelledby="ssh-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="ssh-title">
+      <span class="standard-copy">SSH — máy chủ mẫu mực, khoá công khai, và những siêu máy chủ đã lùi vào dĩ vãng</span>
+      <span class="easy-only">SSH: đăng nhập từ xa bằng chìa khoá</span>
+      <span class="en-only" lang="en">SSH — the exemplary server, public keys, and the superservers that faded away</span>
+    </h2>
+    <p class="standard-copy">Ward chọn SSH làm ca nghiên cứu vì nó là <b>chuẩn de facto</b> cho truy cập từ xa tới một máy Unix.<span class="cite"><a href="#ref-1">1</a></span> SSH được thiết kế để cho phép đăng nhập shell an toàn, thực thi chương trình từ xa, chia sẻ tệp đơn giản và hơn thế — thay thế các hệ thống truy cập từ xa cũ và không an toàn là <code>telnet</code> và <code>rlogin</code>, bằng mật mã khoá công khai để xác thực và các thuật toán mã hoá đơn giản hơn cho dữ liệu phiên.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+    <p class="easy-only">SSH là cách an toàn để ngồi ở máy này mà điều khiển máy kia. Ngày xưa người ta dùng cách khác, nhưng những cách đó gửi mật khẩu đi dưới dạng chữ thường, ai chặn được là đọc được. SSH khoá kín mọi thứ lại. <b>Nhớ nhé: muốn điều khiển máy ở xa thì dùng SSH, đừng dùng thứ gì cũ hơn.</b></p>
+    <p class="en-only" lang="en">Ward picks SSH as the case study because it is the <b>de facto standard</b> for remote access to a Unix machine.<span class="cite"><a href="#ref-1">1</a></span> SSH is designed to allow secure shell logins, remote program execution, simple file sharing and more — replacing the old, insecure <code>telnet</code> and <code>rlogin</code> remote-access systems with public-key cryptography for authentication and simpler ciphers for session data.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+    <p class="deep-only">Ông đặt SSH trong bối cảnh thực tế: hầu hết nhà cung cấp dịch vụ internet và nhà cung cấp đám mây <i>yêu cầu</i> SSH để truy cập shell tới dịch vụ của họ, và nhiều thiết bị mạng chạy Linux — chẳng hạn thiết bị lưu trữ gắn mạng (NAS) — cũng cung cấp truy cập qua SSH.<span class="cite"><a href="#ref-1">1</a></span> OpenSSH là hiện thực SSH miễn phí phổ biến cho Unix và gần như mọi bản phân phối Linux đều cài sẵn; chương trình máy khách là <code>ssh</code>, máy chủ là <code>sshd</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Mật mã khoá công khai</i>: cho tới thập niên 1970, các thuật toán mã hoá đều <b>đối xứng</b>, đòi người gửi và người nhận phải có cùng một khoá — càng nhiều người giữ khoá thì càng nhiều cơ hội để nó bị lộ. Với mật mã khoá công khai thì có <b>hai</b> khoá: công khai và riêng tư. Khoá công khai có thể mã hoá một thông điệp nhưng không giải mã được nó, nên ai có nó cũng không sao; chỉ khoá riêng tư mới giải mã được.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Hãy nghĩ tới một cái hòm thư có khe bỏ thư. Ai cũng bỏ thư vào được (khoá công khai), nhưng chỉ người có chìa mở hòm mới đọc được (khoá riêng tư). <b>Nhớ nhé: khoá công khai để khoá lại, khoá riêng tư để mở ra.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <i>Public-key cryptography</i>: until the 1970s, encryption algorithms were <b>symmetric</b>, requiring sender and recipient to hold the same key — the more people who had it, the more chances it had to be compromised. With public-key cryptography there are <b>two</b> keys, public and private. The public key can encrypt a message but not decrypt it, so it doesn't matter who has it; only the private key can decrypt.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">/etc/ssh/sshd_config  ← máy chủ<br>/etc/ssh/ssh_config   ← máy khách<br>ssh_host_*_key        ← khoá riêng tư<br>ssh_host_*_key.pub    ← khoá công khai<br>~/.ssh/known_hosts    ← khoá của máy khác</p>
+      <p class="easy-only">sshd_config → cho bên nghe<br>ssh_config → cho bên gọi<br>*_key → chìa riêng<br>*_key.pub → ổ khoá công khai<br>known_hosts → sổ ghi nhớ</p>
+      <p class="en-only" lang="en">/etc/ssh/sshd_config  ← the server<br>/etc/ssh/ssh_config   ← the client<br>ssh_host_*_key        ← private key<br>ssh_host_*_key.pub    ← public key<br>~/.ssh/known_hosts    ← other hosts' keys</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">sshd_config</span>
+      <h3>
+        <span class="standard-copy">sshd_config — sáu tham số đáng nhớ nhất</span>
+        <span class="easy-only">Tệp cài đặt của máy chủ SSH</span>
+        <span class="en-only" lang="en">sshd_config — the six parameters worth remembering</span>
+      </h3>
+      <p class="standard-copy">Chạy <code>sshd</code> cần một tệp cấu hình và các khoá máy chủ; hầu hết bản phân phối giữ cấu hình trong thư mục <code>/etc/ssh</code>.<span class="cite"><a href="#ref-1">1</a></span> Ward cảnh báo một chi tiết dễ vấp: tên tệp cấu hình máy chủ <code>sshd_config</code> rất dễ nhầm với tệp thiết lập máy khách <code>ssh_config</code>.<span class="cite"><a href="#ref-1">1</a></span> Tệp gồm các cặp khoá–giá trị; các dòng bắt đầu bằng <code>#</code> là chú thích, và nhiều chú thích trong <code>sshd_config</code> chính là để ghi lại giá trị mặc định.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+      <p class="easy-only">Máy chủ SSH đọc một tệp cài đặt để biết phải làm gì. Trong tệp đó, mỗi dòng là một câu lệnh ngắn kiểu “tên: giá trị”. Dòng nào có dấu thăng ở đầu thì máy bỏ qua — đó là ghi chú cho người đọc. <b>Nhớ nhé: dấu thăng ở đầu dòng nghĩa là “đọc cho biết thôi”.</b></p>
+      <p class="en-only" lang="en">Running <code>sshd</code> requires a configuration file and host keys; most distributions keep the configuration in the <code>/etc/ssh</code> directory.<span class="cite"><a href="#ref-1">1</a></span> Ward flags an easy trap: the server configuration filename <code>sshd_config</code> is easy to confuse with the client's <code>ssh_config</code> setup file.<span class="cite"><a href="#ref-1">1</a></span> The file consists of key-value pairs; lines beginning with <code>#</code> are comments, and many comments in <code>sshd_config</code> exist precisely to record default values.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lần đầu bạn dựng một máy chủ trên đám mây: <code>PermitRootLogin</code> và <code>X11Forwarding</code> là hai dòng bạn sẽ phải quyết định.</span>
+        <span class="easy-only">Khi bạn thuê một máy chủ và phải chọn “cho phép hay không cho phép”.</span>
+        <span class="en-only" lang="en">The first time you stand up a cloud server: <code>PermitRootLogin</code> and <code>X11Forwarding</code> are two lines you will have to decide on.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Sáu tham số Ward gọi là quan trọng nhất</h4>
+          <p><code>HostKey file</code> — dùng <i>file</i> làm khoá máy chủ. <code>PermitRootLogin value</code> — cho phép siêu người dùng đăng nhập bằng SSH nếu đặt <code>yes</code>; đặt <code>no</code> để ngăn. <code>LogLevel level</code> — ghi log ở mức syslog <i>level</i> (mặc định <code>INFO</code>). <code>SyslogFacility name</code> — ghi log với facility <i>name</i> (mặc định <code>AUTH</code>). <code>X11Forwarding value</code> — bật đường hầm cho máy khách X Window System nếu đặt <code>yes</code>. <code>XAuthLocation path</code> — chỉ vị trí tiện ích <code>xauth</code>; không có đường dẫn này thì đường hầm X sẽ không hoạt động.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Sách và bản OpenSSH hiện nay lệch nhau ở đâu</h4>
+          <p>Sách viết rằng <code>PermitRootLogin</code> cho phép root đăng nhập “nếu giá trị được đặt là <code>yes</code>”, và mô tả nó như một công tắc hai nấc.<span class="cite"><a href="#ref-1">1</a></span> Trang man <code>sshd_config(5)</code> hiện hành liệt kê bốn giá trị — <code>yes</code>, <code>prohibit-password</code>, <code>forced-commands-only</code>, <code>no</code> — với mặc định là <code>prohibit-password</code>; <code>LogLevel</code> mặc định <code>INFO</code> và <code>SyslogFacility</code> mặc định <code>AUTH</code> thì khớp với sách, còn <code>X11Forwarding</code> mặc định là <code>no</code>.<span class="cite"><a href="#ref-10">10</a></span> Trong bài này, phần thân theo cách diễn đạt của sách; ghi chú này nêu biến thể và nguồn của nó.</p>
+        </div>
+        <div class="info-block">
+          <h4>Đường hầm là gì</h4>
+          <p>Ward định nghĩa: <i>tunneling</i> là quá trình đóng gói và vận chuyển một kết nối mạng bên trong một kết nối mạng khác. Ưu điểm của việc dùng SSH để tạo đường hầm cho kết nối X Window System là SSH tự thiết lập môi trường hiển thị giúp bạn, và nó mã hoá dữ liệu X bên trong đường hầm.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">ssh-keygen</span>
+      <h3>
+        <span class="standard-copy">Khoá máy chủ — thứ bạn hiếm khi tạo, nhưng phải biết nằm ở đâu</span>
+        <span class="easy-only">Chìa khoá của máy chủ</span>
+        <span class="en-only" lang="en">Host keys — something you rarely create, but must know where to find</span>
+      </h3>
+      <p class="standard-copy">OpenSSH có vài <b>bộ</b> khoá máy chủ; mỗi bộ gồm một khoá công khai (đuôi <code>.pub</code>) và một khoá riêng tư (không có đuôi).<span class="cite"><a href="#ref-1">1</a></span> Ward kèm một cảnh báo rất dứt khoát: <b>đừng để ai nhìn thấy khoá riêng tư, kể cả trên máy của chính bạn</b>, vì nếu ai đó lấy được nó, bạn đang gặp rủi ro từ kẻ xâm nhập.<span class="cite"><a href="#ref-1">1</a></span> Thông thường bạn không cần tự tạo khoá vì trình cài đặt OpenSSH hoặc script cài đặt của bản phân phối sẽ làm hộ.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Máy chủ có một bộ chìa: một nửa đưa cho mọi người xem, một nửa giữ kín tuyệt đối. Nửa giữ kín mà lộ ra là hỏng hết. Thường thì máy tự làm ra bộ chìa này khi cài, bạn không phải làm gì. <b>Nhớ nhé: chìa riêng là chìa riêng — không khoe, không sao chép lung tung.</b></p>
+      <p class="en-only" lang="en">OpenSSH has several <b>sets</b> of host keys; each set has a public key (with a <code>.pub</code> extension) and a private key (with no extension).<span class="cite"><a href="#ref-1">1</a></span> Ward attaches a blunt warning: <b>do not let anyone see a private key, even on your own system</b>, because if someone obtains it you're at risk from intruders.<span class="cite"><a href="#ref-1">1</a></span> Normally you won't need to create keys because the OpenSSH installer or your distribution's installation script does it for you.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi thay máy: Ward gợi ý nhập khoá từ máy cũ sang máy mới để người dùng không bị cảnh báo lệch khoá khi kết nối.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn đổi máy mới mà không muốn ai bị báo động nhầm.</span>
+        <span class="en-only" lang="en">When replacing a machine: Ward suggests importing the key files from the old machine so users don't get key mismatches on the new one.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Lệnh tạo khoá, đúng như sách in</h4>
+          <p>Để tạo khoá giao thức SSH phiên bản 2, sách dùng <code>ssh-keygen</code> đi kèm OpenSSH: <code>ssh-keygen -t rsa -N '' -f /etc/ssh/ssh_host_rsa_key</code> và <code>ssh-keygen -t dsa -N '' -f /etc/ssh/ssh_host_dsa_key</code>.<span class="cite"><a href="#ref-1">1</a></span> Lý do duy nhất khiến bạn cần biết cách làm, theo ông, là nếu bạn định dùng các chương trình như <code>ssh-agent</code> — thứ cung cấp dịch vụ xác thực mà không cần mật khẩu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>RSA và DSA — sách nói gì, hiện trạng nói gì</h4>
+          <p>Bảng 10-1 của sách liệt kê bốn tên tệp khoá: <code>ssh_host_rsa_key</code> (RSA riêng tư), <code>ssh_host_rsa_key.pub</code> (RSA công khai), <code>ssh_host_dsa_key</code> (DSA riêng tư), <code>ssh_host_dsa_key.pub</code> (DSA công khai), và mô tả “SSH phiên bản 2 có khoá RSA và DSA”.<span class="cite"><a href="#ref-1">1</a></span> Từ sau khi sách ra (2021), OpenSSH đã đi tiếp: bản 10.0 (phát hành 2025-04-09) <b>gỡ bỏ hoàn toàn</b> hỗ trợ thuật toán chữ ký DSA, hoàn tất quá trình khai tử bắt đầu từ 2015 khi DSA bị tắt theo mặc định.<span class="cite"><a href="#ref-12">12</a></span> Trang man hiện hành liệt kê mặc định <code>HostKey</code> là <code>ssh_host_ecdsa_key</code>, <code>ssh_host_ed25519_key</code> và <code>ssh_host_rsa_key</code> — không còn DSA.<span class="cite"><a href="#ref-10">10</a></span> Phần thân bài giữ nguyên cách trình bày của sách; ghi chú này nêu biến thể và nguồn.</p>
+        </div>
+        <div class="info-block">
+          <h4>ssh_known_hosts</h4>
+          <p>Máy chủ và máy khách SSH còn dùng một tệp khoá tên <code>ssh_known_hosts</code> để lưu khoá công khai của các máy khác. Nếu bạn định dùng xác thực dựa trên danh tính của máy khách từ xa, tệp <code>ssh_known_hosts</code> của máy chủ phải chứa khoá máy công khai của tất cả máy khách được tin cậy.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">host key verification failed</span>
+      <h3>
+        <span class="standard-copy">Cảnh báo lệch khoá — lỗi thường gặp nhất của máy khách SSH</span>
+        <span class="easy-only">Khi máy hét lên “KHOÁ ĐÃ THAY ĐỔI!”</span>
+        <span class="en-only" lang="en">The key mismatch warning — the commonest SSH client problem</span>
+      </h3>
+      <p class="standard-copy">Theo Ward, vấn đề thường gặp nhất khi dùng máy khách SSH xảy ra khi một khoá công khai trong <code>ssh_known_hosts</code> hoặc <code>.ssh/known_hosts</code> của bạn <b>không khớp</b> với khoá trên máy ở xa.<span class="cite"><a href="#ref-1">1</a></span> Khi đó bạn nhận một khối cảnh báo đóng khung dấu <code>@</code>, mở đầu bằng “WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!” và nhắc tới khả năng bị tấn công người-đứng-giữa.<span class="cite"><a href="#ref-1">1</a></span> Điểm thực dụng: thông điệp đó chỉ cho bạn <b>đúng số dòng</b> chứa khoá sai trong tệp <code>known_hosts</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Máy tính của bạn có một cuốn sổ ghi “máy kia trông như thế này”. Nếu lần sau máy kia trông khác đi, máy bạn sẽ hét lên cảnh báo. Thường là vì người quản trị máy kia đổi máy, chứ không phải có kẻ xấu. <b>Nhớ nhé: máy hét lên là điều tốt — nó đang bảo vệ bạn.</b></p>
+      <p class="en-only" lang="en">According to Ward, the most frequent problem with SSH clients occurs when a public key in your <code>ssh_known_hosts</code> or <code>.ssh/known_hosts</code> file <b>does not match</b> the key on the remote host.<span class="cite"><a href="#ref-1">1</a></span> You then get a block of warning framed in <code>@</code> characters, opening with “WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!” and raising the possibility of a man-in-the-middle attack.<span class="cite"><a href="#ref-1">1</a></span> The practical point: the message tells you the <b>exact line number</b> of the offending key in the <code>known_hosts</code> file.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Sau mỗi lần nâng cấp phần cứng hoặc dựng lại máy chủ đám mây — Ward nói đây là nguyên nhân thường thấy.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Sau khi ai đó đổi máy chủ sang máy mới.</span>
+        <span class="en-only" lang="en">After every hardware upgrade or cloud server rebuild — Ward names this as the usual cause.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cách xử lý mà sách đề nghị</h4>
+          <p>Thường thì điều này chỉ có nghĩa là quản trị viên của máy ở xa đã đổi khoá, nhưng “không bao giờ thừa” khi hỏi lại quản trị viên nếu bạn không chắc. Nếu bạn không nghi ngờ điều mờ ám, chỉ cần xoá dòng bị nêu tên hoặc thay nó bằng khoá công khai đúng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao cơ chế này tồn tại</h4>
+          <p>Ward cũng thẳng thắn về nhược điểm của SSH: để thiết lập một kết nối SSH, bạn cần khoá công khai của máy ở xa, và bạn <i>không nhất thiết</i> nhận được nó theo một cách an toàn — dù bạn có thể kiểm tra thủ công để chắc mình không bị giả mạo.<span class="cite"><a href="#ref-1">1</a></span> Đó chính là lý do <code>known_hosts</code> phải tồn tại và phải kêu to khi có gì đổi.<span class="cite"><a href="#ref-8">8</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">scp, sftp, fail2ban</span>
+      <h3>
+        <span class="standard-copy">Quanh SSH: chuyển tệp, chặn dò mật khẩu, và máy khách ngoài Unix</span>
+        <span class="easy-only">Những thứ đi kèm SSH</span>
+        <span class="en-only" lang="en">Around SSH: file transfer, brute-force blocking, and non-Unix clients</span>
+      </h3>
+      <p class="standard-copy">OpenSSH kèm theo hai chương trình chuyển tệp là <code>scp</code> và <code>sftp</code>, được làm ra để thay thế các chương trình cũ và không an toàn là <code>rcp</code> và <code>ftp</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span> <code>scp</code> hoạt động giống lệnh <code>cp</code>: <code>scp user@host:file .</code> để lấy về, <code>scp file user@host:dir</code> để gửi đi, và thậm chí <code>scp user1@host1:file user2@host2:dir</code> để chép từ máy từ xa này sang máy từ xa khác.<span class="cite"><a href="#ref-1">1</a></span> Còn <code>sftp</code> hoạt động như máy khách <code>ftp</code> dòng lệnh đã lỗi thời, dùng lệnh <code>get</code> và <code>put</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ngoài việc đăng nhập, SSH còn giúp bạn chép tệp qua lại giữa hai máy — an toàn, không lo bị đọc trộm. Có hai lệnh: một lệnh giống lệnh chép tệp bình thường, một lệnh cho bạn đi lại trong thư mục máy kia rồi lấy hoặc đặt từng tệp. <b>Nhớ nhé: chép tệp qua mạng thì dùng SSH, đừng dùng cách cũ.</b></p>
+      <p class="en-only" lang="en">OpenSSH includes the file transfer programs <code>scp</code> and <code>sftp</code>, intended as replacements for the older, insecure <code>rcp</code> and <code>ftp</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span> <code>scp</code> works like the <code>cp</code> command: <code>scp user@host:file .</code> to pull, <code>scp file user@host:dir</code> to push, and even <code>scp user1@host1:file user2@host2:dir</code> from one remote host to a second.<span class="cite"><a href="#ref-1">1</a></span> <code>sftp</code> works like the obsolete command-line <code>ftp</code> client, using <code>get</code> and <code>put</code> commands.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Ward gợi ý: nếu bạn thường xuyên chuyển số lượng lớn tệp và cần nhiều tính năng hơn <code>scp</code>/<code>sftp</code>, hãy xem <code>rsync</code> ở Chương 12.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn cần chép rất nhiều tệp một lúc.</span>
+        <span class="en-only" lang="en">Ward suggests: if you frequently transfer large numbers of files and need more than <code>scp</code>/<code>sftp</code> offer, look at <code>rsync</code> in Chapter 12.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>fail2ban — phản ứng với “cơn mưa” thử mật khẩu</h4>
+          <p>Ward nói thẳng: nếu bạn dựng một máy chủ SSH và mở nó ra internet, bạn sẽ nhanh chóng phát hiện các nỗ lực xâm nhập liên tục. Những đợt dò mật khẩu kiểu vét cạn đó <i>sẽ không thành công</i> nếu hệ thống của bạn được cấu hình đúng và bạn không chọn mật khẩu ngớ ngẩn — nhưng chúng gây khó chịu, tiêu tốn thời gian CPU và làm rối log.<span class="cite"><a href="#ref-1">1</a></span> Gói <code>fail2ban</code>, theo sách là cách phổ biến nhất tại thời điểm viết, đơn giản là một script theo dõi log: thấy một số lần yêu cầu thất bại nhất định từ một máy trong một khung thời gian nhất định, nó dùng <code>iptables</code> tạo luật chặn lưu lượng từ máy đó, rồi gỡ luật sau một khoảng thời gian.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hai chế độ khởi động của sshd</h4>
+          <p>Ward phân biệt hai chế độ: <b>độc lập</b> (standalone) và <b>theo yêu cầu</b> (on-demand). Máy chủ độc lập phổ biến hơn nhiều, và chỉ đơn giản là chạy <code>sshd</code> với quyền root; tiến trình <code>sshd</code> ghi PID của nó vào <code>/var/run/sshd.pid</code>.<span class="cite"><a href="#ref-1">1</a></span> <span class="mono">systemd</span> có thể khởi động <code>sshd</code> theo yêu cầu qua một socket unit, nhưng ông khuyên đây <i>thường không phải ý hay</i>, vì máy chủ thỉnh thoảng cần sinh tệp khoá và việc đó có thể mất rất lâu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span> Trên Fedora, <code>sshd</code> được cài sẵn nhưng tắt; bật kèm khởi động bằng <code>systemctl enable sshd</code>, bật ngay bằng <code>systemctl start sshd</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Máy khách ngoài Unix</h4>
+          <p>Có máy khách SSH cho mọi hệ điều hành phổ biến. Ward đề xuất PuTTY như một máy khách Windows tốt và cơ bản, có kèm chương trình chép tệp an toàn; còn macOS vốn dựa trên Unix nên đã có sẵn OpenSSH.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">inetd / xinetd</span>
+      <h3>
+        <span class="standard-copy">Siêu máy chủ thời tiền systemd — và vì sao bạn vẫn nên biết</span>
+        <span class="easy-only">Người gác cửa chung cho nhiều dịch vụ</span>
+        <span class="en-only" lang="en">The pre-systemd superservers — and why you should still know them</span>
+      </h3>
+      <p class="standard-copy">Trước khi <span class="mono">systemd</span> và các socket unit trở nên phổ biến, có một nhóm máy chủ cung cấp cách chuẩn để dựng một dịch vụ mạng.<span class="cite"><a href="#ref-1">1</a></span> Lý do tồn tại rất rõ: nhiều dịch vụ mạng nhỏ giống nhau đến mức làm máy chủ độc lập cho từng dịch vụ là kém hiệu quả — mỗi máy chủ đều phải tự cấu hình lắng nghe cổng, kiểm soát truy cập và cấu hình cổng, những động tác giống hệt nhau; chỉ khi máy chủ <i>chấp nhận</i> một kết nối thì cách xử lý mới khác nhau.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ngày xưa, thay vì mỗi dịch vụ nuôi một người gác cửa riêng, người ta thuê một người gác cửa chung cho cả toà nhà. Ai gõ cửa nào thì người đó gọi đúng dịch vụ ra tiếp. <b>Nhớ nhé: một người gác cửa chung thì đỡ tốn hơn nhiều người gác cửa riêng.</b></p>
+      <p class="en-only" lang="en">Before <span class="mono">systemd</span> and its socket units became widespread, a handful of servers provided a standard means of building a network service.<span class="cite"><a href="#ref-1">1</a></span> The reason is plain: many minor network services are so alike in their connection requirements that implementing a standalone server for each is inefficient — every server must separately configure port listening, access control and port configuration, all done the same way; only when a server <i>accepts</i> a connection is communication handled differently.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trên một hệ thống cũ hoặc một hệ thống không dùng <span class="mono">systemd</span> — Ward nói đó chính là nơi bạn vẫn có thể bắt gặp <code>xinetd</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Trên những máy chủ đời cũ.</span>
+        <span class="en-only" lang="en">On an older system, or one that doesn't use <span class="mono">systemd</span> — Ward says that is exactly where you may still meet <code>xinetd</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>inetd hoạt động ra sao</h4>
+          <p>Cách truyền thống để đơn giản hoá việc dùng máy chủ là dùng daemon <code>inetd</code> — một kiểu <b>siêu máy chủ</b> được thiết kế để chuẩn hoá việc truy cập cổng mạng và giao diện giữa chương trình máy chủ với cổng mạng. Sau khi bạn khởi động <code>inetd</code>, nó đọc tệp cấu hình rồi lắng nghe trên các cổng mạng được định nghĩa trong đó; khi có kết nối mới đến, <code>inetd</code> gắn một tiến trình mới khởi động vào kết nối ấy.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>xinetd và số phận của nó</h4>
+          <p>Một phiên bản mới hơn của <code>inetd</code> tên là <code>xinetd</code> cho cấu hình dễ hơn và kiểm soát truy cập tốt hơn, nhưng — theo sách — <code>xinetd</code> gần như đã bị loại bỏ hoàn toàn để nhường chỗ cho <span class="mono">systemd</span>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>TCP wrappers — một lớp lịch sử nữa</h4>
+          <p>Trước khi các tường lửa tầng thấp như <code>iptables</code> trở nên phổ biến, nhiều quản trị viên dùng thư viện và daemon TCP wrapper để kiểm soát truy cập dịch vụ mạng: <code>inetd</code> chạy chương trình <code>tcpd</code>, chương trình này xem kết nối đến cùng các danh sách kiểm soát truy cập trong <code>/etc/hosts.allow</code> và <code>/etc/hosts.deny</code>, ghi log kết nối, và nếu thấy ổn thì bàn giao cho chương trình dịch vụ cuối. Ward nói bạn có thể còn gặp hệ thống dùng TCP wrapper, nhưng sách không đi sâu vì nó phần lớn đã không còn được dùng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đến đây bạn đã có một máy chủ cụ thể để soi. Nhưng “soi” bằng cách nào? Ward chuyển sang một hộp công cụ bốn món, và ông nói rõ nguyên tắc: một số công cụ đào xuống tầng vận chuyển và tầng mạng, <b>vì mọi thứ ở tầng ứng dụng cuối cùng đều ánh xạ xuống thứ gì đó ở các tầng thấp hơn</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Giờ bạn đã biết một máy chủ trông ra sao. Phần sau là bốn cái kính lúp để nhìn vào nó. <b>Nhớ nhé: biết dùng kính lúp quan trọng không kém biết máy chủ là gì.</b></p>
+    <p class="en-only" lang="en">By now you have one concrete server to inspect. But inspect it how? Ward turns to a four-tool kit, and states the principle plainly: some of these tools dig into the transport and network layers, <b>because everything in the application layer eventually maps down to something in those lower layers</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Bốn công cụ chẩn đoán, và một giao thức “không chịu chết”</span>
+      <span class="easy-only">Bốn cái kính lúp để soi mạng</span>
+      <span class="en-only" lang="en">Four diagnostic tools, and one protocol that refuses to die</span>
+    </h2>
+    <p class="standard-copy">Ward đặt bốn công cụ cạnh nhau theo một trật tự có chủ ý: <code>lsof</code> hỏi “<b>ai</b> đang giữ cổng nào”, <code>tcpdump</code> hỏi “<b>cái gì</b> đang đi qua dây”, <code>netcat</code> hỏi “tôi <b>tự tay</b> nối thử được không”, và <code>nmap</code> hỏi “nhìn từ <b>bên ngoài</b> thì máy này mở những gì”.<span class="cite"><a href="#ref-1">1</a></span> Trước đó ông nhắc lại <code>netstat</code> từ Chương 9 như công cụ gỡ lỗi dịch vụ mạng cơ bản.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span></p>
+    <p class="easy-only">Có bốn cách nhìn vào mạng: xem ai đang giữ cửa nào; xem cái gì đang chạy qua dây; tự mình gõ thử một cái cửa; và đứng từ ngoài đếm xem nhà này mở mấy cửa. <b>Nhớ nhé: bốn câu hỏi khác nhau cần bốn công cụ khác nhau.</b></p>
+    <p class="en-only" lang="en">Ward lines up four tools in a deliberate order: <code>lsof</code> asks “<b>who</b> is holding which port”, <code>tcpdump</code> asks “<b>what</b> is crossing the wire”, <code>netcat</code> asks “can I connect <b>by hand</b>”, and <code>nmap</code> asks “seen from <b>outside</b>, what does this machine have open”.<span class="cite"><a href="#ref-1">1</a></span> Before them he recalls <code>netstat</code> from Chapter 9 as the basic network service debugging tool.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-17">17</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Chế độ hỗn tạp</i> (<span lang="en">promiscuous mode</span>): bình thường hệ thống của bạn không bận tâm tới lưu lượng mạng không gửi tới một trong các địa chỉ MAC của nó. Nếu bạn cần thấy chính xác cái gì đang đi qua mạng, <code>tcpdump</code> đặt card mạng vào chế độ hỗn tạp và báo cáo mọi gói đi ngang.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Bình thường máy chỉ nghe thư gửi cho mình. Ở chế độ hỗn tạp, nó nghe hết mọi lá thư đi qua trước cửa. <b>Nhớ nhé: nghe hết thì thấy nhiều, nhưng chỉ nghe ở nơi bạn được phép.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <i>Promiscuous mode</i>: your system normally doesn't bother with network traffic that isn't addressed to one of its MAC addresses. If you need to see exactly what's crossing your network, <code>tcpdump</code> puts the network interface card into promiscuous mode and reports on every packet that comes across.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">lsof -n -i          ← ai giữ cổng<br>lsof -iTCP:443      ← lọc theo cổng<br>lsof -iTCP -sTCP:LISTEN<br>tcpdump udp or port 80 or port 443<br>netcat -l port_number<br>nmap 10.1.2.2</p>
+      <p class="easy-only">lsof -i → ai đang giữ cửa<br>tcpdump → nghe dây<br>netcat → gõ cửa thử<br>nmap → đếm cửa từ ngoài</p>
+      <p class="en-only" lang="en">lsof -n -i          ← who holds a port<br>lsof -iTCP:443      ← filter by port<br>lsof -iTCP -sTCP:LISTEN<br>tcpdump udp or port 80 or port 443<br>netcat -l port_number<br>nmap 10.1.2.2</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">lsof -i</span>
+      <h3>
+        <span class="standard-copy">lsof — từ “tệp đang mở” sang “cổng đang mở”</span>
+        <span class="easy-only">lsof: ai đang giữ cửa nào</span>
+        <span class="en-only" lang="en">lsof — from “open files” to “open ports”</span>
+      </h3>
+      <p class="standard-copy">Ward nhắc lại từ Chương 8: <code>lsof</code> không chỉ theo dõi tệp đang mở mà còn liệt kê các chương trình đang dùng hoặc lắng nghe các cổng. Chạy <code>lsof -i</code> để có danh sách đầy đủ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span> Một chi tiết quan trọng về quyền: khi bạn chạy lệnh này với tư cách người dùng thường, nó chỉ hiện các tiến trình của chính người dùng đó; chạy với quyền root mới thấy toàn cảnh.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Có một lệnh cho bạn xem toàn bộ danh sách “ai đang giữ cửa nào”. Nếu bạn là người dùng thường, bạn chỉ thấy phần của mình; muốn thấy hết thì phải là người quản trị. <b>Nhớ nhé: thấy được bao nhiêu phụ thuộc vào bạn là ai.</b></p>
+      <p class="en-only" lang="en">Ward recalls from Chapter 8 that <code>lsof</code> not only tracks open files but also lists the programs currently using or listening to ports. Run <code>lsof -i</code> for a complete list.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span> An important permission detail: run as a regular user it shows only that user's processes; run as root it shows the whole picture.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một chương trình báo “địa chỉ đang được dùng” — <code>lsof -i:port</code> cho bạn biết đúng tiến trình nào đang giữ.</span>
+        <span class="easy-only">Khi máy báo “cổng này có người dùng rồi”.</span>
+        <span class="en-only" lang="en">When a program reports “address already in use” — <code>lsof -i:port</code> names the exact process holding it.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cú pháp lọc đầy đủ</h4>
+          <p>Cú pháp đầy đủ là <code>lsof -iprotocol@host:port</code>, trong đó <i>protocol</i>, <code>@host</code> và <code>:port</code> đều tuỳ chọn và sẽ lọc đầu ra tương ứng.<span class="cite"><a href="#ref-1">1</a></span> Ví dụ của sách: <code>lsof -iTCP:443</code> cho các kết nối trên cổng TCP 443, tức cổng HTTPS.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Lọc theo phiên bản IP bằng <code>-i4</code> hoặc <code>-i6</code>, và có thể ghép, ví dụ <code>-i6TCP:443</code>. Bạn cũng có thể dùng tên dịch vụ trong <code>/etc/services</code> thay cho số, như <code>-iTCP:ssh</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Lọc theo trạng thái kết nối</h4>
+          <p>Bộ lọc tiện nhất, theo Ward, là trạng thái kết nối: <code>lsof -iTCP -sTCP:LISTEN</code> chỉ hiện các tiến trình đang lắng nghe trên cổng TCP, cho bạn “cái nhìn tổng quan tốt về các tiến trình máy chủ mạng đang chạy trên hệ thống”.<span class="cite"><a href="#ref-1">1</a></span> Nhưng ông cảnh báo: vì máy chủ UDP <i>không lắng nghe</i> và không có kết nối, bạn phải dùng <code>-iUDP</code> để thấy cả máy khách lẫn máy chủ UDP.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tắt phân giải tên cho nhanh</h4>
+          <p><code>lsof</code> giống <code>netstat</code> ở chỗ nó cố phân giải ngược mọi địa chỉ IP tìm được thành tên máy, khiến đầu ra chậm. Dùng <code>-n</code> để tắt phân giải tên, và <code>-P</code> để tắt tra cứu tên cổng trong <code>/etc/services</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">tcpdump</span>
+      <h3>
+        <span class="standard-copy">tcpdump — primitive, operator, và một giới hạn đạo đức</span>
+        <span class="easy-only">tcpdump: nghe xem cái gì chạy qua dây</span>
+        <span class="en-only" lang="en">tcpdump — primitives, operators, and an ethical limit</span>
+      </h3>
+      <p class="standard-copy">Gõ <code>tcpdump</code> không tham số sẽ cho đầu ra gồm mọi gói đi ngang — ví dụ của sách bắt được một yêu cầu ARP rồi cả một kết nối web.<span class="cite"><a href="#ref-1">1</a></span> Muốn cụ thể hơn thì thêm <b>bộ lọc</b>: bạn có thể lọc theo máy nguồn và đích, theo mạng, theo địa chỉ Ethernet, theo giao thức ở nhiều tầng khác nhau trong mô hình mạng, và nhiều thứ nữa.<span class="cite"><a href="#ref-1">1</a></span> Trong số các giao thức gói mà <code>tcpdump</code> nhận biết, Ward liệt kê ARP, RARP, ICMP, TCP, UDP, IP, IPv6, AppleTalk và IPX.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span></p>
+      <p class="easy-only">Có một công cụ nghe được mọi thứ chạy qua dây mạng. Nó nói rất nhiều, nên bạn phải bảo nó “chỉ nghe loại này thôi”. Và quan trọng nhất: chỉ nghe ở mạng của chính bạn. <b>Nhớ nhé: nghe lén mạng người khác là sai — chỉ nghe mạng của mình.</b></p>
+      <p class="en-only" lang="en">Typing <code>tcpdump</code> with no arguments produces output covering every packet that crosses — the book's example catches an ARP request and then a whole web connection.<span class="cite"><a href="#ref-1">1</a></span> To be more specific, add <b>filters</b>: you can filter on source and destination hosts, networks, Ethernet addresses, protocols at many different layers of the network model, and much more.<span class="cite"><a href="#ref-1">1</a></span> Among the packet protocols <code>tcpdump</code> recognises, Ward lists ARP, RARP, ICMP, TCP, UDP, IP, IPv6, AppleTalk and IPX.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-18">18</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một dịch vụ “im lặng” và bạn cần biết gói có thật sự tới nơi hay không. Ward gợi ý nếu bạn phải bắt gói nhiều, hãy cân nhắc một lựa chọn giao diện đồ hoạ thay cho <code>tcpdump</code>, chẳng hạn Wireshark.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn không biết thư có đến nơi hay không.</span>
+        <span class="en-only" lang="en">When a service goes silent and you need to know whether packets actually arrive. Ward suggests that if you do a lot of packet sniffing, consider a GUI alternative to <code>tcpdump</code> such as Wireshark.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Primitive — bảng 10-3 của sách</h4>
+          <p>Trong các ví dụ, <code>tcp</code>, <code>udp</code> và <code>port 80</code> là những phần tử cơ bản của bộ lọc, gọi là <b>primitive</b>. Bảng 10-3 liệt kê những primitive quan trọng nhất: <code>tcp</code> (gói TCP), <code>udp</code> (gói UDP), <code>ip</code> (gói IPv4), <code>ip6</code> (gói IPv6), <code>port port</code> (gói TCP và/hoặc UDP đi tới hoặc đi từ cổng đó), <code>host host</code> (gói tới hoặc từ máy đó), <code>net network</code> (gói tới hoặc từ mạng đó).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Operator</h4>
+          <p>Từ khoá <code>or</code> chỉ rằng điều kiện bên trái <i>hoặc</i> bên phải đúng là gói được qua bộ lọc; tương tự, <code>and</code> đòi cả hai điều kiện cùng đúng.<span class="cite"><a href="#ref-1">1</a></span> <code>tcpdump</code> dùng được nhiều toán tử (kể cả <code>!</code>) và bạn có thể nhóm chúng trong ngoặc. Nếu bạn định làm việc nghiêm túc với <code>tcpdump</code>, Ward yêu cầu đọc trang man <code>pcap-filter(7)</code>, đặc biệt là phần mô tả các primitive.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-21">21</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Giới hạn mà tác giả đặt ra</h4>
+          <p>Ward viết một ghi chú cảnh báo rõ ràng: đầu ra <code>tcpdump</code> trong ví dụ chỉ gồm thông tin header TCP (tầng vận chuyển) và IP (tầng internet), nhưng bạn <i>có thể</i> bảo <code>tcpdump</code> in toàn bộ nội dung gói. Dù ngày nay hầu hết lưu lượng mạng quan trọng đã được mã hoá qua TLS, <b>bạn không nên dò xét các mạng trừ khi bạn sở hữu chúng hoặc được phép</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-22">22</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">netcat / nc</span>
+      <h3>
+        <span class="standard-copy">netcat — con dao Thuỵ Sĩ khi telnet không đủ</span>
+        <span class="easy-only">netcat: tự tay nối thử</span>
+        <span class="en-only" lang="en">netcat — the Swiss army knife when telnet isn't enough</span>
+      </h3>
+      <p class="standard-copy">Nếu bạn cần linh hoạt hơn so với <code>telnet host port</code>, Ward giới thiệu <code>netcat</code> (hay <code>nc</code>): nó nối được tới cổng TCP/UDP ở xa, chỉ định cổng cục bộ, lắng nghe trên cổng, quét cổng, chuyển hướng vào/ra chuẩn tới và từ kết nối mạng, và nhiều nữa.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span> Mở một kết nối TCP: <code>netcat host port</code>. Lắng nghe trên một cổng: <code>netcat -l port_number</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Đây là công cụ cho bạn tự tay nối hai đầu mạng lại với nhau — một đầu gọi, một đầu nghe. Gõ gì ở đầu này thì hiện ở đầu kia. <b>Nhớ nhé: muốn hiểu mạng, hãy tự làm một đầu dây.</b></p>
+      <p class="en-only" lang="en">If you need more flexibility than <code>telnet host port</code> allows, Ward introduces <code>netcat</code> (or <code>nc</code>): it can connect to remote TCP/UDP ports, specify a local port, listen on ports, scan ports, redirect standard I/O to and from network connections, and more.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span> Open a TCP connection with <code>netcat host port</code>; listen on a port with <code>netcat -l port_number</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bạn muốn biết một cổng có thật sự mở từ phía bạn hay không, trước khi đổ lỗi cho ứng dụng.</span>
+        <span class="easy-only">Khi bạn muốn thử xem cửa có mở không.</span>
+        <span class="en-only" lang="en">When you want to know whether a port is genuinely reachable from your side, before blaming the application.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ba lưu ý của Ward về hành vi netcat</h4>
+          <p>Thứ nhất: mặc định gần như không có đầu ra gỡ lỗi — nếu hỏng, <code>netcat</code> hỏng im lặng, dù nó có đặt mã thoát thích hợp; thêm <code>-v</code> (“verbose”) nếu bạn muốn biết thêm. Thứ hai: máy khách <code>netcat</code> mặc định thử cả IPv4 lẫn IPv6, nhưng ở chế độ máy chủ thì mặc định IPv4; ép giao thức bằng <code>-4</code> hoặc <code>-6</code>. Thứ ba: tuỳ chọn <code>-u</code> chỉ định UDP thay cho TCP.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một cái bẫy về dòng lệnh</h4>
+          <p><code>netcat</code> kết thúc khi phía bên kia đóng kết nối, điều này có thể gây bối rối nếu bạn chuyển hướng đầu vào chuẩn vào <code>netcat</code>, vì bạn có thể không lấy lại được dấu nhắc sau khi gửi dữ liệu — khác với gần như mọi đường ống lệnh khác. Bạn có thể kết thúc kết nối bất cứ lúc nào bằng <kbd>CTRL-C</kbd>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">nmap</span>
+      <h3>
+        <span class="standard-copy">Quét cổng — và lời xin phép mà tác giả bắt buộc</span>
+        <span class="easy-only">Đếm cửa từ bên ngoài (phải xin phép)</span>
+        <span class="en-only" lang="en">Port scanning — and the permission the author insists on</span>
+      </h3>
+      <p class="standard-copy">Đôi khi bạn không biết các máy trên mạng của mình đang cung cấp dịch vụ gì, hay thậm chí địa chỉ IP nào đang được dùng. Chương trình Network Mapper (Nmap) quét mọi cổng trên một máy hoặc một mạng máy để tìm cổng mở và liệt kê chúng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-24">24</a></span> Ward kèm một cảnh báo không thể rõ hơn: <b>nếu người khác kiểm soát mạng mà bạn muốn quét, hãy xin phép</b> — quản trị viên mạng theo dõi các đợt quét cổng và thường sẽ chặn truy cập với các máy chạy chúng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-25">25</a></span></p>
+      <p class="easy-only">Có một công cụ đứng từ ngoài đếm xem một máy mở những cửa nào. Nhưng nhớ: chỉ đếm cửa nhà mình, hoặc nhà mà chủ nhà đã đồng ý. Đếm cửa nhà người lạ là việc không nên làm. <b>Nhớ nhé: xin phép trước, quét sau.</b></p>
+      <p class="en-only" lang="en">Sometimes you don't know what services the machines on your networks offer, or even which IP addresses are in use. The Network Mapper (Nmap) program scans all ports on a machine or network of machines looking for open ports and lists what it finds.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-24">24</a></span> Ward attaches an unmistakable warning: <b>if someone else controls the network you want to scan, ask for permission</b> — network administrators watch for port scans and usually disable access to the machines that run them.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-25">25</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi kiểm tra tường lửa của chính mình: Ward khuyên chạy quét từ ít nhất hai điểm — từ máy của bạn và từ một máy khác, có thể nằm ngoài mạng cục bộ — để có cái nhìn tổng quan về thứ tường lửa đang chặn.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn muốn biết tường lửa nhà mình đang chặn những gì.</span>
+        <span class="en-only" lang="en">When checking your own firewall: Ward advises scanning from at least two points — your own machine and another one, possibly outside your local network — for an overview of what the firewall blocks.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đọc kết quả quét mẫu</h4>
+          <p>Trong đầu ra mẫu của sách (<code>nmap 10.1.2.2</code>), nhiều dịch vụ hiện ra là mở, và Ward nhận xét rằng <i>phần lớn trong số đó không được bật theo mặc định trên hầu hết bản phân phối</i>; thực ra cái duy nhất ở đây thường bật sẵn là <b>cổng 111, cổng của <code>rpcbind</code></b>.<span class="cite"><a href="#ref-1">1</a></span> IANA gán cổng 111 cho <code>sunrpc</code>, “SUN Remote Procedure Call”.<span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Quét qua IPv6</h4>
+          <p>Nmap cũng quét được cổng trên IPv6 nếu bạn thêm tuỳ chọn <code>-6</code>. Ward chỉ ra một công dụng thực tế: đây là cách tiện để nhận diện các dịch vụ <i>không</i> hỗ trợ IPv6.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-24">24</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">RPC / rpcbind</span>
+      <h3>
+        <span class="standard-copy">Lời gọi thủ tục từ xa — “một trong những giao thức không chịu chết”</span>
+        <span class="easy-only">RPC: gọi hàm ở máy khác</span>
+        <span class="en-only" lang="en">Remote procedure calls — “one of those protocols that just doesn't want to die”</span>
+      </h3>
+      <p class="standard-copy">RPC là viết tắt của <i>remote procedure call</i>, một hệ thống nằm ở <b>phần dưới</b> của tầng ứng dụng, được thiết kế để lập trình viên dễ dựng các ứng dụng mạng máy khách/máy chủ, nơi một chương trình máy khách gọi các hàm thực thi trên một máy chủ ở xa.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-26">26</a></span> Mỗi loại chương trình máy chủ từ xa được nhận diện bằng một <b>số hiệu chương trình</b> được gán.<span class="cite"><a href="#ref-1">1</a></span> Các hiện thực RPC dùng giao thức vận chuyển như TCP và UDP, và cần một dịch vụ trung gian đặc biệt để ánh xạ số hiệu chương trình sang cổng TCP và UDP — máy chủ đó tên là <code>rpcbind</code>, và nó phải chạy trên bất kỳ máy nào muốn dùng dịch vụ RPC.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-27">27</a></span></p>
+      <p class="easy-only">RPC nghĩa là: chương trình ở máy này gọi một việc làm ở máy kia, y như gọi một hàm trong chính chương trình mình. Muốn thế thì phải có một “tổng đài” chỉ đường — đó là lý do có cổng 111. <b>Nhớ nhé: RPC cần một tổng đài, và tổng đài đó là một cửa mở.</b></p>
+      <p class="en-only" lang="en">RPC stands for <i>remote procedure call</i>, a system residing in the lower parts of the application layer, designed to make it easier for programmers to build client/server network applications where a client program calls functions that execute on a remote server.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-26">26</a></span> Each type of remote server program is identified by an assigned <b>program number</b>.<span class="cite"><a href="#ref-1">1</a></span> RPC implementations use transport protocols such as TCP and UDP, and require a special intermediary service to map program numbers to TCP and UDP ports; that server is <code>rpcbind</code>, and it must be running on any machine that wants to use RPC services.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-27">27</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Chạy <code>rpcinfo -p localhost</code> để xem máy bạn đang có những dịch vụ RPC nào.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-28">28</a></span></span>
+        <span class="easy-only">Khi bạn muốn xem máy mình còn dịch vụ cũ nào đang bật.</span>
+        <span class="en-only" lang="en">Run <code>rpcinfo -p localhost</code> to see which RPC services your computer has.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-28">28</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao nó “không chịu chết”</h4>
+          <p>Ward viết bằng giọng hơi mệt mỏi: “RPC là một trong những giao thức đơn giản là không chịu chết.” Network File System (NFS) và Network Information Service (NIS) đều dùng RPC, nhưng chúng hoàn toàn không cần thiết trên máy đứng độc lập. Thế nhưng mỗi khi bạn tưởng mình đã loại bỏ hết nhu cầu dùng <code>rpcbind</code> thì lại có thứ khác nổi lên — chẳng hạn hỗ trợ File Access Monitor (FAM) trong GNOME.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Liên hệ ngược lại với đợt quét</h4>
+          <p>Đây là chỗ chương tự khép một vòng nhỏ: cổng 111 xuất hiện trong kết quả <code>nmap</code> ở mục trước chính là <code>rpcbind</code>, và ở mục an ninh phía sau Ward lại lấy đúng “cổng TCP 111 cho máy chủ ánh xạ cổng RPC” làm ví dụ cho các dịch vụ nội bộ mà <i>không hệ thống nào khác trên thế giới cần biết tới</i>.<span class="cite"><a href="#ref-1">1</a></span> Đặc tả RPC phiên bản 2 nằm ở RFC 5531.<span class="cite"><a href="#ref-26">26</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Bốn công cụ trên đều là công cụ <b>nhìn</b>. Phần tiếp theo chuyển từ nhìn sang <b>quyết định</b>: Ward đưa ra một danh sách quy tắc ngón tay cái về an ninh, và ông trấn an rằng “may thay, bạn không cần biết nhiều lắm để giữ hệ thống của mình an toàn”.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Bốn công cụ vừa rồi giúp bạn <i>nhìn</i>. Phần sau dạy bạn <i>quyết định</i>: bật gì, tắt gì, chặn gì. <b>Nhớ nhé: nhìn rõ rồi mới quyết định đúng.</b></p>
+    <p class="en-only" lang="en">All four tools above are tools for <b>looking</b>. The next part shifts from looking to <b>deciding</b>: Ward offers a list of security rules of thumb, reassuring you that “fortunately, you don't need to know very much to keep your system safe”.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="socket-an-ninh" aria-labelledby="socket-an-ninh-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="socket-an-ninh-title">
+      <span class="standard-copy">An ninh mạng theo lối thực dụng, và socket — ranh giới cuối cùng</span>
+      <span class="easy-only">Giữ máy an toàn, và cái ống nối chương trình với mạng</span>
+      <span class="en-only" lang="en">Pragmatic network security, and sockets — the final boundary</span>
+    </h2>
+    <p class="standard-copy">Ward mở phần an ninh bằng một quan sát tỉnh táo: vì Linux là một biến thể Unix rất phổ biến trên nền PC, và đặc biệt vì nó được dùng rộng rãi cho máy chủ web, nó thu hút nhiều kẻ tìm cách đột nhập.<span class="cite"><a href="#ref-1">1</a></span> Ông cũng thừa nhận lĩnh vực này “thu hút những người cực đoan” ở cả hai phía. Nhưng kết luận của ông rất nhẹ nhõm: <b>may thay, bạn không cần biết nhiều lắm để giữ hệ thống của mình an toàn</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Máy Linux hay bị người lạ thử mò vào, vì nó được dùng nhiều để chạy trang web. Nhưng bạn không cần thành chuyên gia mới giữ được máy an toàn — chỉ cần vài thói quen đơn giản. <b>Nhớ nhé: an toàn phần lớn đến từ thói quen, không phải từ mẹo cao siêu.</b></p>
+    <p class="en-only" lang="en">Ward opens the security part with a level-headed observation: because Linux is a very popular Unix flavour on the PC platform, and especially because it is widely used for web servers, it attracts many who try to break in.<span class="cite"><a href="#ref-1">1</a></span> He grants the field “attracts extremists” on both sides. But his conclusion is a relief: <b>fortunately, you don't need to know very much to keep your system safe</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Cần nói rõ phạm vi: nội dung an ninh trong chương này là <b>phòng thủ và quản trị</b>. Ward mô tả các dạng tấn công để bạn biết mình đang phòng cái gì, và mọi hành động ông đề nghị đều là hành động trên hệ thống của chính bạn — tắt dịch vụ, chặn bằng tường lửa, cập nhật phần mềm, chọn bản phát hành hỗ trợ dài hạn. Trang này giữ đúng phạm vi đó.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Socket</i> là giao diện mà các tiến trình dùng để truy cập mạng thông qua nhân; theo cách diễn đạt của Ward, chúng <b>đại diện cho ranh giới giữa không gian người dùng và không gian nhân</b>, và chúng cũng thường được dùng cho giao tiếp liên tiến trình (IPC).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-29">29</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Socket là cái ống mà chương trình cắm vào để nói chuyện ra ngoài. Một đầu ống thuộc về chương trình của bạn, đầu kia thuộc về “ruột” của hệ điều hành. <b>Nhớ nhé: socket là chỗ chương trình chạm vào mạng.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A <i>socket</i> is the interface processes use to access the network through the kernel; in Ward's phrasing they <b>represent the boundary between user space and kernel space</b>, and they are often also used for interprocess communication (IPC).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-29">29</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">TCP  → stream socket  (SOCK_STREAM)<br>UDP  → datagram socket (SOCK_DGRAM)<br><br>listen() → accept() → fork()<br>listener socket ≠ read/write socket</p>
+      <p class="easy-only">TCP → ống liên tục<br>UDP → từng gói rời<br><br>nghe → nhận → giao cho người phụ việc</p>
+      <p class="en-only" lang="en">TCP  → stream socket  (SOCK_STREAM)<br>UDP  → datagram socket (SOCK_DGRAM)<br><br>listen() → accept() → fork()<br>listener socket ≠ read/write socket</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">rules of thumb</span>
+      <h3>
+        <span class="standard-copy">Sáu quy tắc ngón tay cái — toàn bộ phần “thực hành” của an ninh</span>
+        <span class="easy-only">Sáu thói quen giữ máy an toàn</span>
+        <span class="en-only" lang="en">Six rules of thumb — the whole practical end of security</span>
+      </h3>
+      <p class="standard-copy">Quy tắc đầu tiên và mạnh nhất: <b>chạy càng ít dịch vụ càng tốt</b> — kẻ xâm nhập không thể đột nhập vào những dịch vụ không tồn tại trên hệ thống của bạn; nếu bạn biết một dịch vụ là gì mà không dùng tới, đừng bật nó chỉ vì lý do duy nhất là có thể “sau này sẽ cần”.<span class="cite"><a href="#ref-1">1</a></span> Quy tắc thứ hai: <b>chặn càng nhiều càng tốt bằng tường lửa</b>, vì hệ thống Unix có một số dịch vụ nội bộ mà bạn có thể không biết — chẳng hạn cổng TCP 111 cho máy chủ ánh xạ cổng RPC — và không hệ thống nào khác trên thế giới cần biết tới chúng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Quy tắc số một: cửa nào không dùng thì đóng lại. Kẻ trộm không vào được cái cửa không tồn tại. Quy tắc số hai: dựng một hàng rào quanh nhà, vì trong nhà có những cửa nhỏ mà chính bạn cũng quên mất. <b>Nhớ nhé: ít cửa mở + một hàng rào = đã an toàn phần lớn.</b></p>
+      <p class="en-only" lang="en">The first and strongest rule: <b>run as few services as possible</b> — intruders can't break into services that don't exist on your system; if you know what a service is and you're not using it, don't turn it on for the sole reason that you might want it “at some later point”.<span class="cite"><a href="#ref-1">1</a></span> The second: <b>block as much as possible with a firewall</b>, because Unix systems have internal services you may not know about — such as TCP port 111 for the RPC port-mapping server — and no other system in the world should know about them.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi lần bạn dựng một máy mới và quyết định cài gói nào — đó chính là lúc quy tắc số một có hiệu lực.</span>
+        <span class="easy-only">Mỗi khi bạn cài một máy mới.</span>
+        <span class="en-only" lang="en">Every time you build a new machine and decide which packages to install — that is when rule one takes effect.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bốn quy tắc còn lại</h4>
+          <p><b>Theo dõi các dịch vụ bạn cung cấp ra internet</b> — nếu bạn chạy máy chủ SSH, Postfix hay tương tự, hãy giữ phần mềm cập nhật và nhận các cảnh báo an ninh phù hợp. <b>Dùng bản phát hành “hỗ trợ dài hạn” cho máy chủ</b> — các đội an ninh thường tập trung vào những bản phân phối ổn định, được hỗ trợ; các bản phát triển và thử nghiệm như Debian Unstable hay Fedora Rawhide nhận ít chú ý hơn nhiều. <b>Đừng cấp tài khoản cho người không cần</b> — chiếm quyền siêu người dùng từ một tài khoản cục bộ dễ hơn nhiều so với đột nhập từ xa. <b>Tránh cài các gói nhị phân đáng ngờ</b> — chúng có thể chứa ngựa thành Troy.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ba dạng tấn công mà ông phân loại</h4>
+          <p>Ward nêu ba loại tấn công mạng cơ bản có thể nhắm vào một máy Linux. <b>Chiếm quyền hoàn toàn</b> (full compromise): lấy được quyền siêu người dùng, tức kiểm soát toàn bộ máy. <b>Tấn công từ chối dịch vụ</b> (DoS): ngăn máy thực hiện dịch vụ mạng của nó, hoặc buộc máy hoạt động sai theo cách khác, mà không cần truy cập đặc biệt nào; ông nói các cuộc tấn công này khó ngăn hơn nhưng dễ phản ứng hơn. <b>Phần mềm độc hại</b> (malware): người dùng Linux phần lớn miễn nhiễm với sâu và virus qua email, đơn giản vì các trình thư của họ không dại tới mức thực sự chạy chương trình gửi kèm — nhưng mã độc cho Linux <i>vẫn tồn tại</i>, nên hãy tránh tải và cài phần mềm thực thi từ những nơi bạn chưa từng nghe tên.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hai loại lỗ hổng điển hình</h4>
+          <p>Có hai loại lỗ hổng cơ bản đáng lo: <b>tấn công trực tiếp</b> và <b>nghe lén mật khẩu dạng chữ thường</b>. Tấn công trực tiếp cố chiếm máy mà không tinh vi gì; một trong những cách phổ biến nhất là tìm ra một dịch vụ không được bảo vệ hoặc có lỗ hổng — đơn giản như một dịch vụ mặc định không xác thực, chẳng hạn một tài khoản quản trị không mật khẩu. Trong quá khứ, một kiểu tấn công trực tiếp phổ biến là khai thác tràn bộ đệm, khi lập trình viên bất cẩn không kiểm tra biên của một mảng đệm; điều này đã được giảm nhẹ phần nào nhờ các kỹ thuật ngẫu nhiên hoá bố trí không gian địa chỉ (ASLR) trong nhân và các biện pháp bảo vệ khác.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-30">30</a></span> Tấn công nghe lén bắt mật khẩu gửi đi dưới dạng chữ thường, hoặc dùng cơ sở dữ liệu mật khẩu lấy từ các vụ rò rỉ dữ liệu; Ward viết thẳng: “ngay khi kẻ tấn công có mật khẩu của bạn, mọi chuyện kết thúc”.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Những dịch vụ ông bảo luôn luôn tắt</h4>
+          <p>Ward chỉ đích danh một số dịch vụ “là mục tiêu tấn công kinh niên do hiện thực và thiết kế kém”, và nói bạn nên <b>luôn luôn vô hiệu hoá</b> chúng — dù chúng đều đã khá cũ và hiếm khi được bật mặc định trên hầu hết hệ thống ngày nay. <code>ftpd</code>: vì lý do nào đó, mọi máy chủ FTP dường như đầy lỗ hổng, và hầu hết dùng mật khẩu dạng chữ thường; nếu phải chuyển tệp giữa hai máy, hãy cân nhắc giải pháp dựa trên SSH hoặc một máy chủ <code>rsync</code>. <code>telnetd</code>, <code>rlogind</code>, <code>rexecd</code>: tất cả đều truyền dữ liệu phiên từ xa (kể cả mật khẩu) dưới dạng chữ thường; tránh chúng trừ khi bạn có phiên bản bật Kerberos.<span class="cite"><a href="#ref-1">1</a></span> Với dịch vụ không hỗ trợ mã hoá sẵn, ông gợi ý Stunnel — một gói bọc mã hoá, đặc biệt hợp để bọc các dịch vụ bạn thường kích hoạt bằng socket unit của <span class="mono">systemd</span> hoặc <code>inetd</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-31">31</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">security resources</span>
+      <h3>
+        <span class="standard-copy">Ba nguồn an ninh mà tác giả chỉ tên</span>
+        <span class="easy-only">Ba chỗ để đọc tin an ninh</span>
+        <span class="en-only" lang="en">The three security resources the author names</span>
+      </h3>
+      <p class="standard-copy">Ward liệt kê đúng ba nguồn tốt. <b>SANS Institute</b> cung cấp đào tạo, dịch vụ, một bản tin hằng tuần miễn phí liệt kê các lỗ hổng hàng đầu hiện tại, các chính sách an ninh mẫu và hơn nữa.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-32">32</a></span> <b>Bộ phận CERT</b> thuộc Viện Kỹ nghệ Phần mềm của Đại học Carnegie Mellon là nơi tốt để tìm những vấn đề nghiêm trọng nhất.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-33">33</a></span> <b>Insecure.org</b>, dự án của Gordon “Fyodor” Lyon — người tạo ra Nmap — là nơi để lấy Nmap và các chỉ dẫn tới đủ loại công cụ kiểm thử.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-34">34</a></span></p>
+      <p class="easy-only">Tác giả chỉ cho bạn ba chỗ đáng đọc để biết lỗ hổng mới. Đọc tin an ninh đều đặn là một thói quen tốt, giống như đọc dự báo thời tiết trước khi ra khơi. <b>Nhớ nhé: biết tin sớm thì vá sớm.</b></p>
+      <p class="en-only" lang="en">Ward names exactly three good resources. The <b>SANS Institute</b> offers training, services, a free weekly newsletter listing the top current vulnerabilities, sample security policies and more.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-32">32</a></span> The <b>CERT Division</b> of Carnegie Mellon University's Software Engineering Institute is a good place to look for the most severe problems.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-33">33</a></span> <b>Insecure.org</b>, a project from Nmap creator Gordon “Fyodor” Lyon, is where to go for Nmap and pointers to network testing tools.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-34">34</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bạn nhận trách nhiệm cho một máy chủ chạy thật — đăng ký nhận cảnh báo là việc đầu tiên nên làm.</span>
+        <span class="easy-only">Khi bạn bắt đầu trông coi một máy chủ thật.</span>
+        <span class="en-only" lang="en">When you take responsibility for a production server — subscribing to alerts is the first thing to do.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hướng học tiếp mà ông chỉ</h4>
+          <p>Nếu bạn quan tâm tới an ninh mạng, Ward nói bạn nên tìm hiểu kỹ về <b>Transport Layer Security (TLS)</b> và tiền thân của nó là <b>Secure Socket Layer (SSL)</b> — các tầng mạng ở không gian người dùng này thường được thêm vào máy khách và máy chủ mạng để hỗ trợ giao dịch mạng thông qua mã hoá khoá công khai và chứng chỉ.<span class="cite"><a href="#ref-1">1</a></span> Phiên bản TLS hiện hành, TLS 1.3, được chuẩn hoá trong RFC 8446.<span class="cite"><a href="#ref-22">22</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Bước kế tiếp mà ông gợi ý làm tay</h4>
+          <p>Trong mục “Looking Forward”, Ward gợi ý: nếu bạn muốn làm bẩn tay với các máy chủ mạng phức tạp, hãy thử các máy chủ web Apache hoặc nginx và máy chủ email Postfix. Máy chủ web đặc biệt dễ cài và hầu hết bản phân phối đều có gói sẵn; nếu máy của bạn nằm sau tường lửa hoặc router bật NAT, bạn có thể thử nghiệm cấu hình thoải mái mà không phải lo về an ninh.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">network sockets</span>
+      <h3>
+        <span class="standard-copy">Socket mạng — hai loại socket trong một máy chủ</span>
+        <span class="easy-only">Hai cái ống trong một máy chủ</span>
+        <span class="en-only" lang="en">Network sockets — two kinds of socket in one server</span>
+      </h3>
+      <p class="standard-copy">Đọc và ghi trên các kết nối mạng đã thiết lập thì dễ: chỉ cần vài lời gọi hệ thống, mô tả trong các trang man <code>recv(2)</code> và <code>send(2)</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-35">35</a></span> Điều quan trọng nhất từ góc nhìn của một tiến trình là làm sao <i>truy cập</i> được mạng khi dùng các lời gọi đó — và câu trả lời là socket.<span class="cite"><a href="#ref-1">1</a></span> Có nhiều loại socket vì tiến trình cần truy cập mạng theo những cách khác nhau: kết nối TCP được biểu diễn bằng <b>stream socket</b> (<code>SOCK_STREAM</code>, theo cách nhìn của lập trình viên), còn kết nối UDP bằng <b>datagram socket</b> (<code>SOCK_DGRAM</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-29">29</a></span></p>
+      <p class="easy-only">Một máy chủ thật ra có hai loại ống: một ống để <i>nghe xem có ai gọi không</i>, và mỗi lần có người gọi thì tạo thêm một ống riêng để nói chuyện với người đó. Ống nghe vẫn nằm im tại chỗ. <b>Nhớ nhé: ống để nghe và ống để nói là hai ống khác nhau.</b></p>
+      <p class="en-only" lang="en">Reading from and writing to network connections that are already set up is easy enough: all you need are some system calls, described in the <code>recv(2)</code> and <code>send(2)</code> manual pages.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-35">35</a></span> From a process's point of view the most important thing is how to <i>access</i> the network when using those calls — and the answer is a socket.<span class="cite"><a href="#ref-1">1</a></span> There are different socket types because processes need to access the network in different ways: TCP connections are represented by <b>stream sockets</b> (<code>SOCK_STREAM</code>, from a programmer's point of view), UDP connections by <b>datagram sockets</b> (<code>SOCK_DGRAM</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-29">29</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi bạn đọc mã nguồn của bất kỳ máy chủ mạng nào — <code>socket()</code>, <code>bind()</code>, <code>listen()</code>, <code>accept()</code> là bộ bốn bạn sẽ thấy lặp lại.</span>
+        <span class="easy-only">Khi bạn mở mã nguồn của một máy chủ ra xem.</span>
+        <span class="en-only" lang="en">Whenever you read the source of any network server — <code>socket()</code>, <code>bind()</code>, <code>listen()</code>, <code>accept()</code> is the quartet you keep seeing.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Lưu đồ Hình 10-1, đọc bằng lời</h4>
+          <p>Ward mô tả kiểu máy chủ này dùng <b>hai loại socket</b>: một để lắng nghe, một để đọc và ghi. Tiến trình chủ dùng socket lắng nghe để tìm kết nối từ mạng. Khi có kết nối mới đến, tiến trình chủ dùng lời gọi hệ thống <code>accept()</code> để chấp nhận kết nối — việc này <i>tạo ra</i> socket đọc/ghi dành riêng cho kết nối đó. Kế đến, tiến trình chủ dùng <code>fork()</code> để tạo tiến trình con lo kết nối. Cuối cùng, socket ban đầu vẫn là socket lắng nghe và tiếp tục tìm kết nối mới thay cho tiến trình chủ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-36">36</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao socket là một trừu tượng tốt</h4>
+          <p>Sau khi một tiến trình đã thiết lập một socket thuộc loại nhất định, nó có thể tương tác với socket theo cách hợp với loại đó. Đây chính là điều làm socket linh hoạt: nếu bạn cần đổi tầng vận chuyển bên dưới, <b>bạn không phải viết lại toàn bộ phần gửi và nhận dữ liệu</b>; bạn chủ yếu chỉ cần sửa mã khởi tạo.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Sách ông giới thiệu cho lập trình viên</h4>
+          <p>Nếu bạn là lập trình viên và muốn học cách dùng giao diện socket, Ward chỉ tới <i>Unix Network Programming, Volume 1</i>, tái bản lần thứ 3, của W. Richard Stevens, Bill Fenner và Andrew M. Rudoff (Addison-Wesley Professional, 2003) — ông gọi đó là cuốn hướng dẫn kinh điển; Volume 2 còn bàn về giao tiếp liên tiến trình.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-37">37</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">unix domain sockets</span>
+      <h3>
+        <span class="standard-copy">Unix domain socket — mạng mà không có mạng</span>
+        <span class="easy-only">Ống nối hai chương trình trong cùng một máy</span>
+        <span class="en-only" lang="en">Unix domain sockets — networking without a network</span>
+      </h3>
+      <p class="standard-copy">Không phải ứng dụng dùng tiện ích mạng nào cũng cần hai máy riêng biệt. Nhiều ứng dụng được dựng theo mô hình máy khách–máy chủ hoặc ngang hàng, trong đó các tiến trình chạy trên <i>cùng một máy</i> dùng giao tiếp liên tiến trình để thương lượng việc cần làm và ai làm.<span class="cite"><a href="#ref-1">1</a></span> Các tiến trình hoàn toàn có thể dùng mạng IP thông thường qua localhost (<code>127.0.0.1</code> hoặc <code>::1</code>), nhưng chúng thường dùng một loại socket đặc biệt thay thế: <b>Unix domain socket</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-38">38</a></span></p>
+      <p class="easy-only">Hai chương trình trong cùng một máy cũng cần nói chuyện với nhau. Chúng có thể đi vòng ra mạng rồi quay lại, nhưng như thế mất công. Có một loại ống nối thẳng, ngắn hơn và nhanh hơn, chỉ dùng trong nhà. <b>Nhớ nhé: nói chuyện trong nhà thì không cần ra ngoài đường.</b></p>
+      <p class="en-only" lang="en">Not every application that uses network facilities involves two separate hosts. Many are built as client-server or peer-to-peer mechanisms where processes running on the <i>same machine</i> use interprocess communication to negotiate what work needs doing and who does it.<span class="cite"><a href="#ref-1">1</a></span> Processes can use regular IP networking over localhost (<code>127.0.0.1</code> or <code>::1</code>), but they typically use a special kind of socket instead: the <b>Unix domain socket</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-38">38</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Ví dụ của Ward: tệp socket của D-Bus thường nằm ở <code>/var/run/dbus/system_bus_socket</code>, và máy chủ MySQL <code>mysqld</code> thường cũng cung cấp một Unix domain socket ở <code>/var/run/mysqld/mysqld.sock</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn thấy một tệp lạ tên đuôi “.sock” trong máy.</span>
+        <span class="en-only" lang="en">Ward's examples: the D-Bus socket file usually sits at <code>/var/run/dbus/system_bus_socket</code>, and the MySQL server <code>mysqld</code> usually also offers a Unix domain socket at <code>/var/run/mysqld/mysqld.sock</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hai lý do lập trình viên thích chúng</h4>
+          <p>Thứ nhất, chúng cho phép dùng <b>tệp socket đặc biệt trong hệ thống tệp để kiểm soát truy cập</b>: tiến trình nào không có quyền với tệp socket thì không dùng được nó. Và vì không có tương tác với mạng, chúng đơn giản hơn và ít bị các kiểu đột nhập mạng thông thường hơn. Thứ hai, vì nhân Linux <b>không phải đi qua nhiều tầng của hệ thống con mạng</b> khi làm việc với Unix domain socket, hiệu năng thường tốt hơn hẳn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-38">38</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một ghi chú dễ bị bỏ qua</h4>
+          <p>Ward nhắc: hãy nhớ rằng <b>Unix domain socket không phải socket mạng</b>, và không có mạng nào phía sau nó — bạn thậm chí không cần cấu hình mạng để dùng nó. Unix domain socket cũng <i>không bắt buộc</i> phải gắn với tệp socket: một tiến trình có thể tạo một Unix domain socket không tên và chia sẻ địa chỉ với tiến trình khác.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-38">38</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Cách nhìn chúng bằng lsof</h4>
+          <p>Bạn xem danh sách Unix domain socket đang dùng trên hệ thống bằng <code>lsof -U</code>. Ward cảnh báo trước rằng danh sách sẽ khá dài, vì nhiều ứng dụng dùng rất nhiều socket không tên — chúng hiện ra với chữ <code>socket</code> trong cột <code>NAME</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-19">19</a></span> Viết mã cho Unix domain socket cũng không khác mấy so với socket mạng thông thường, nên một số máy chủ mạng cung cấp cả hai đường giao tiếp.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Chương khép lại đúng chỗ nó nên khép: ở ranh giới. Ward tổng kết rằng suốt vài chương vừa rồi, sách đã dần dịch chuyển từ không gian nhân sang không gian người dùng, và chỉ vài tiện ích trong chương này — chẳng hạn <code>tcpdump</code> — còn tương tác với nhân.<span class="cite"><a href="#ref-1">1</a></span> Phần còn lại của chương, theo lời ông, là mô tả cách socket <b>bắc cầu qua khoảng cách</b> giữa tầng vận chuyển của nhân và tầng ứng dụng ở không gian người dùng.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Từ đây trở đi, sách bước hẳn ra khỏi “ruột máy” và vào thế giới các chương trình. Socket chính là chiếc cầu giữa hai bên. <b>Nhớ nhé: socket là chiếc cầu — một đầu là nhân, một đầu là chương trình của bạn.</b></p>
+    <p class="en-only" lang="en">The chapter closes exactly where it should: at a boundary. Ward sums up that over the last few chapters the book has gradually moved from kernel space into user space, and that only a few utilities discussed here — such as <code>tcpdump</code> — interact with the kernel.<span class="cite"><a href="#ref-1">1</a></span> The remainder of the chapter, in his words, describes how sockets <b>bridge the gap</b> between the kernel's transport layer and the user-space application layer.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== MISCONCEPTIONS ===================== -->
+<section class="section" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Đối chiếu</span>
+      <span class="en-only" lang="en">Against the text</span>
+    </p>
+    <h2 id="ngo-nhan-title">
+      <span class="standard-copy">Ba ngộ nhận mà chương này gỡ bỏ</span>
+      <span class="easy-only">Ba chỗ người mới hay hiểu nhầm</span>
+      <span class="en-only" lang="en">Three misconceptions this chapter removes</span>
+    </h2>
+    <p class="standard-copy">Phần này thuộc mức đọc <b>Đầy đủ</b>: nó đối chiếu điều người đọc thường nghĩ với điều bản văn thật sự nói.</p>
+    <p class="easy-only">Phần này hơi khó, bạn có thể bỏ qua và quay lại sau. <b>Nhớ nhé: hiểu chậm mà chắc vẫn hơn.</b></p>
+    <p class="en-only" lang="en">This block belongs to the <b>Đầy đủ</b> (full) reading level: it sets what readers usually assume against what the text actually says.</p>
+  </div>
+
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Header và nội dung là hai loại dữ liệu khác nhau trên mạng”</span>
+          <span class="en-only" lang="en">"Headers and body are two different kinds of data on the network"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> mạng hoặc hệ điều hành biết đâu là phần đầu thư, đâu là phần nội dung, và xử lý chúng khác nhau.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> dù <code>curl</code> in ra “Recv header” rồi “Recv data”, không hề có khác biệt nào trong cách <code>curl</code> nói với hệ điều hành để lấy chúng, trong cách hệ điều hành xử lý, hay trong cách mạng xử lý các gói bên dưới — khác biệt <b>hoàn toàn nằm trong ứng dụng không gian người dùng</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> the network or the operating system knows which part is header and which is body, and handles them differently.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> although <code>curl</code> prints “Recv header” and then “Recv data”, there is no difference in how <code>curl</code> talked to the operating system to retrieve them, in how the operating system handled them, or in how the network handled the packets underneath — the difference is <b>entirely within the user-space application</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Một máy chủ mạng là một tiến trình”</span>
+          <span class="en-only" lang="en">"A network server is one process"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> <code>sshd</code> hay <code>nginx</code> là một chương trình duy nhất đang chạy, phục vụ tất cả mọi người.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> đặc điểm chung của hầu hết máy chủ mạng là chúng hoạt động như <b>nhiều tiến trình</b> — ít nhất một tiến trình lắng nghe, và mỗi kết nối mới sinh ra một tiến trình con qua <code>fork()</code>, tiến trình con kết thúc khi kết nối đóng.<span class="cite"><a href="#ref-1">1</a></span> Nhưng mô hình này có ngoại lệ: máy chủ TCP hiệu năng cao như Apache có thể tạo sẵn worker khi khởi động để tránh chi phí <code>fork()</code>, còn máy chủ UDP không cần <code>fork()</code> gì cả vì không có kết nối để lắng nghe.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> <code>sshd</code> or <code>nginx</code> is a single running program serving everyone.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> a feature common to most network servers is that they operate as <b>multiple processes</b> — at least one listener, and each new connection spawns a child via <code>fork()</code> that terminates when the connection closes.<span class="cite"><a href="#ref-1">1</a></span> But the model has exceptions: high-performance TCP servers such as Apache may create worker processes at startup to avoid <code>fork()</code> overhead, and UDP servers don't fork at all because they have no connections to listen for.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Unix domain socket chỉ là mạng qua localhost”</span>
+          <span class="en-only" lang="en">"A Unix domain socket is just networking over localhost"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> nó cũng là socket mạng, chỉ khác là địa chỉ đích là chính máy mình.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> Ward viết thành một ghi chú riêng — <b>Unix domain socket không phải socket mạng, và không có mạng nào phía sau nó</b>; bạn thậm chí không cần cấu hình mạng để dùng nó.<span class="cite"><a href="#ref-1">1</a></span> Chính vì nhân không phải đi qua nhiều tầng của hệ thống con mạng mà hiệu năng của nó tốt hơn hẳn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-38">38</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> it is a network socket too, just with the local machine as the destination.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> Ward gives this its own note — a <b>Unix domain socket is not a network socket, and there's no network behind one</b>; you don't even need networking configured to use one.<span class="cite"><a href="#ref-1">1</a></span> It is precisely because the kernel doesn't traverse the many layers of its networking subsystem that performance is much better.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-38">38</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="tu-kiem-tra" aria-labelledby="tu-kiem-tra-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm tra</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="tu-kiem-tra-title">
+      <span class="standard-copy">Bạn đã nắm tầng ứng dụng chưa?</span>
+      <span class="easy-only">Thử trả lời xem nào</span>
+      <span class="en-only" lang="en">Do you have the application layer yet?</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Trả lời bằng lời của bạn, không tra sách. Nếu một câu khiến bạn ngập ngừng, đó chính là mục bạn nên đọc lại.</p>
+      <p class="easy-only">Thử trả lời miệng thôi, không cần giở lại. Câu nào bí thì quay lại đọc phần đó nhé. <b>Nhớ nhé: chỗ bí chính là chỗ cần học.</b></p>
+      <p class="en-only" lang="en">Answer in your own words, without looking back. Whichever question makes you hesitate points at the section you should reread.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Bài tập <code>telnet example.org 80</code> chứng minh chính xác hai điều gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao bạn phải tự tay kết thúc kết nối, thay vì máy chủ đóng nó ngay?</p>
+      </li>
+      <li>
+        <p>Vì sao “header” và “data” trong đầu ra của <code>curl</code> lại không phải hai loại dữ liệu khác nhau?</p>
+        <p class="deep-only">Gợi ý sâu hơn: dấu hiệu nào trong luồng byte khiến <code>curl</code> biết phải chuyển cách diễn giải?</p>
+      </li>
+      <li>
+        <p>Mô tả mô hình nhiều tiến trình của một máy chủ mạng — và nêu hai ngoại lệ mà sách chỉ ra.</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao máy chủ UDP không cần <code>fork()</code>?</p>
+      </li>
+      <li>
+        <p>Khác nhau giữa <code>sshd_config</code> và <code>ssh_config</code> là gì, và vì sao tác giả nhắc bạn cẩn thận?</p>
+        <p class="deep-only">Gợi ý sâu hơn: kể ba trong sáu tham số mà ông gọi là quan trọng nhất.</p>
+      </li>
+      <li>
+        <p>Cảnh báo “REMOTE HOST IDENTIFICATION HAS CHANGED!” nghĩa là gì, và bạn xử lý ra sao?</p>
+        <p class="deep-only">Gợi ý sâu hơn: thông điệp đó cho bạn biết chính xác cái gì về tệp <code>known_hosts</code>?</p>
+      </li>
+      <li>
+        <p>Dùng công cụ nào để trả lời câu “tiến trình nào đang lắng nghe trên cổng TCP 443?”</p>
+        <p class="deep-only">Gợi ý sâu hơn: hai tuỳ chọn nào giúp đầu ra chạy nhanh hơn, và chúng tắt cái gì?</p>
+      </li>
+      <li>
+        <p><code>tcpdump</code> làm gì với card mạng của bạn, và giới hạn đạo đức mà tác giả đặt ra là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: “primitive” và “operator” trong bộ lọc <code>tcpdump</code> khác nhau thế nào?</p>
+      </li>
+      <li>
+        <p>Trước khi quét một mạng bằng Nmap, tác giả yêu cầu bạn làm gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: trong kết quả quét mẫu, cổng nào là cổng thường bật sẵn — và nó thuộc dịch vụ nào?</p>
+      </li>
+      <li>
+        <p>Vì sao <code>rpcbind</code> phải tồn tại, và RPC làm gì với “số hiệu chương trình”?</p>
+        <p class="deep-only">Gợi ý sâu hơn: hai hệ thống nào mà sách nêu tên là vẫn dùng RPC?</p>
+      </li>
+      <li>
+        <p>Một máy chủ dùng hai loại socket nào, và <code>accept()</code> tạo ra loại nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: nếu đổi tầng vận chuyển bên dưới, phần mã nào bạn phải sửa?</p>
+      </li>
+      <li>
+        <p>Nêu hai lý do lập trình viên chọn Unix domain socket thay vì mạng qua localhost.</p>
+        <p class="deep-only">Gợi ý sâu hơn: một Unix domain socket có bắt buộc phải gắn với một tệp không?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Một “cổng” trên máy tính giống cái gì trong đời thật?</p></li>
+      <li><p>Khi có người gõ cửa, máy chủ làm gì?</p></li>
+      <li><p>SSH dùng để làm gì, và vì sao nó an toàn hơn cách cũ?</p></li>
+      <li><p>Chìa khoá công khai và chìa khoá riêng tư khác nhau ra sao?</p></li>
+      <li><p>Máy bạn hét lên “khoá đã thay đổi” thì nên làm gì?</p></li>
+      <li><p>Bốn công cụ soi mạng trong chương này, mỗi cái trả lời câu hỏi gì?</p></li>
+      <li><p>Trước khi quét cửa nhà người khác, bạn phải làm gì?</p></li>
+      <li><p>Quy tắc an toàn số một của tác giả là gì?</p></li>
+      <li><p>Hai chương trình trong cùng một máy nói chuyện với nhau bằng cách nào cho nhanh?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>
+        <p>What exactly are the two things the <code>telnet example.org 80</code> exercise demonstrates?</p>
+      </li>
+      <li>
+        <p>Why are “header” and “data” in <code>curl</code>'s output not two different kinds of data?</p>
+      </li>
+      <li>
+        <p>Describe a network server's multi-process model — and name the two exceptions the book points out.</p>
+      </li>
+      <li>
+        <p>What is the difference between <code>sshd_config</code> and <code>ssh_config</code>, and why does the author warn you?</p>
+      </li>
+      <li>
+        <p>What does the “REMOTE HOST IDENTIFICATION HAS CHANGED!” warning mean, and how do you handle it?</p>
+      </li>
+      <li>
+        <p>Which tool answers “which process is listening on TCP port 443?”</p>
+      </li>
+      <li>
+        <p>What does <code>tcpdump</code> do to your network card, and what ethical limit does the author set?</p>
+      </li>
+      <li>
+        <p>What does the author require you to do before scanning a network with Nmap?</p>
+      </li>
+      <li>
+        <p>Why must <code>rpcbind</code> exist, and what does RPC do with “program numbers”?</p>
+      </li>
+      <li>
+        <p>Which two kinds of socket does a server use, and which one does <code>accept()</code> create?</p>
+      </li>
+      <li>
+        <p>Give two reasons developers pick Unix domain sockets over networking via localhost.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Ở tầng ứng dụng, mọi thứ hoá ra rất người: một tiến trình ngồi chờ ở một cổng, một tiến trình khác gõ cửa, và <span class="closing-accent">ý nghĩa của những byte đi qua hoàn toàn do phần mềm tự đặt ra</span>. Suốt vài chương vừa rồi sách đã dần rời không gian nhân để vào không gian người dùng — và <span class="closing-accent">socket chính là chiếc cầu bắc qua khoảng cách ấy</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Máy chủ chỉ là một chương trình ngồi chờ ở một cái cửa; <span class="closing-accent">những dòng chữ đi qua chỉ có ý nghĩa khi chương trình gán ý nghĩa cho chúng</span>. Và <span class="closing-accent">socket là chiếc cầu nối chương trình với mạng</span>. <b>Nhớ nhé: cổng, tiến trình, và chiếc cầu — ba thứ đó là cả chương này.</b></p>
+    <p class="en-only" lang="en">At the application layer everything turns out to be rather human: one process waiting at a port, another knocking, and <span class="closing-accent">the meaning of the bytes that pass is something software alone assigns</span>. Over the last few chapters the book has gradually left kernel space for user space — and <span class="closing-accent">sockets are the bridge across that gap</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START -->
+<!-- Region owned by book-cover-curator; body authored by book-chapter-author.
+     Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-9-network-configuration.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 9 · Mạng và cấu hình mạng</span>
+    <span class="nav-title en-only" lang="en">Chapter 9 · Understanding Your Network and Its Configuration</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-11-shell-scripts.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 11 · Nhập môn shell script</span>
+    <span class="nav-title en-only" lang="en">Chapter 11 · Introduction to Shell Scripts</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, tái bản lần thứ 3, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chương 10, “Network Applications and Services”, trang 269–290.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd edition, No Starch Press, San Francisco, 2021 (ISBN 978-1-7185-0040-2) — Chapter 10, "Network Applications and Services", pp. 269–290.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="vi-only">Nội dung an ninh trong chương là <b>phòng thủ và quản trị hệ thống</b>: trang này trình bày đúng hướng dẫn của tác giả về việc bảo vệ máy của chính bạn, và không mở rộng sang kỹ thuật tấn công. Cảnh báo của chính tác giả về việc <i>xin phép trước khi quét cổng</i> và <i>không dò xét mạng không thuộc về bạn</i> được giữ nguyên trong thân bài.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en">The security material in this chapter is <b>defensive and administrative</b>: this page presents the author's guidance on protecting your own machine and does not extend it into attack technique. The author's own warnings about <i>asking permission before port scanning</i> and <i>not snooping on networks you don't own</i> are kept in the body.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Brian Ward, <i>How Linux Works: What Every Superuser Should Know</i>, 3rd ed., No Starch Press, 2021, ch. 10 “Network Applications and Services”, pp. 269–290. — <a href="https://openlibrary.org/books/OL29462444M" target="_blank" rel="noopener noreferrer">openlibrary.org/books/OL29462444M</a></li>
+      <li id="ref-2">“Service Name and Transport Protocol Port Number Registry”, IANA — the assignments for <code>ssh</code> 22, <code>telnet</code> 23, <code>http</code> 80, <code>sunrpc</code> 111, <code>https</code> 443 and <code>syslog</code> 514. <a href="https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml" target="_blank" rel="noopener noreferrer">iana.org/assignments/service-names-port-numbers</a></li>
+      <li id="ref-3">RFC 9112, <i>HTTP/1.1</i>, R. Fielding, M. Nottingham, J. Reschke (eds.), IETF, June 2022. <a href="https://www.rfc-editor.org/rfc/rfc9112" target="_blank" rel="noopener noreferrer">rfc-editor.org/rfc/rfc9112</a></li>
+      <li id="ref-4">RFC 854, <i>Telnet Protocol Specification</i>, J. Postel, J. Reynolds, IETF, May 1983. <a href="https://www.rfc-editor.org/rfc/rfc854" target="_blank" rel="noopener noreferrer">rfc-editor.org/rfc/rfc854</a></li>
+      <li id="ref-5"><code>curl</code> manual page — the <code>--trace-ascii</code> option, curl.se. <a href="https://curl.se/docs/manpage.html" target="_blank" rel="noopener noreferrer">curl.se/docs/manpage.html</a></li>
+      <li id="ref-6"><code>fork(2)</code> — Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man2/fork.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/fork.2.html</a></li>
+      <li id="ref-7">RFC 768, <i>User Datagram Protocol</i>, J. Postel, IETF, August 1980. <a href="https://www.rfc-editor.org/rfc/rfc768" target="_blank" rel="noopener noreferrer">rfc-editor.org/rfc/rfc768</a></li>
+      <li id="ref-8">RFC 4251, <i>The Secure Shell (SSH) Protocol Architecture</i>, T. Ylonen, C. Lonvick (ed.), IETF, January 2006. <a href="https://www.rfc-editor.org/rfc/rfc4251" target="_blank" rel="noopener noreferrer">rfc-editor.org/rfc/rfc4251</a></li>
+      <li id="ref-9">OpenSSH project home page — the free SSH implementation Ward names, with <code>ssh</code> and <code>sshd</code>. <a href="https://www.openssh.com/" target="_blank" rel="noopener noreferrer">openssh.com</a></li>
+      <li id="ref-10"><code>sshd_config(5)</code> — OpenSSH daemon configuration file, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man5/sshd_config.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/sshd_config.5.html</a></li>
+      <li id="ref-11"><code>ssh-keygen(1)</code> — authentication key generation, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/ssh-keygen.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/ssh-keygen.1.html</a></li>
+      <li id="ref-12">“OpenSSH Release Notes” — OpenSSH 10.0/10.0p2 (2025-04-09), removal of DSA signature support. <a href="https://www.openssh.com/releasenotes.html" target="_blank" rel="noopener noreferrer">openssh.com/releasenotes.html</a></li>
+      <li id="ref-13"><code>scp(1)</code> — OpenSSH secure file copy, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man1/scp.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/scp.1.html</a></li>
+      <li id="ref-14">Fail2Ban project home page — the log-watching ban daemon. <a href="https://www.fail2ban.org/" target="_blank" rel="noopener noreferrer">fail2ban.org</a></li>
+      <li id="ref-15"><code>systemd.socket(5)</code> — socket unit configuration, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man5/systemd.socket.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/systemd.socket.5.html</a></li>
+      <li id="ref-16"><code>xinetd.conf(5)</code> — the extended internet services daemon configuration, Debian manual pages. <a href="https://manpages.debian.org/bookworm/xinetd/xinetd.conf.5.en.html" target="_blank" rel="noopener noreferrer">manpages.debian.org — xinetd.conf(5)</a></li>
+      <li id="ref-17"><code>netstat(8)</code> — network statistics, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man8/netstat.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/netstat.8.html</a></li>
+      <li id="ref-18"><code>tcpdump(1)</code> — dump traffic on a network, tcpdump.org. <a href="https://www.tcpdump.org/manpages/tcpdump.1.html" target="_blank" rel="noopener noreferrer">tcpdump.org/manpages/tcpdump.1.html</a></li>
+      <li id="ref-19"><code>lsof(8)</code> — list open files, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man8/lsof.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/lsof.8.html</a></li>
+      <li id="ref-20"><code>services(5)</code> — the <code>/etc/services</code> Internet network services list, man7.org. <a href="https://man7.org/linux/man-pages/man5/services.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/services.5.html</a></li>
+      <li id="ref-21"><code>pcap-filter(7)</code> — packet filter syntax, primitives and operators, tcpdump.org. <a href="https://www.tcpdump.org/manpages/pcap-filter.7.html" target="_blank" rel="noopener noreferrer">tcpdump.org/manpages/pcap-filter.7.html</a></li>
+      <li id="ref-22">RFC 8446, <i>The Transport Layer Security (TLS) Protocol Version 1.3</i>, E. Rescorla, IETF, August 2018. <a href="https://www.rfc-editor.org/rfc/rfc8446" target="_blank" rel="noopener noreferrer">rfc-editor.org/rfc/rfc8446</a></li>
+      <li id="ref-23"><code>nc(1)</code> — arbitrary TCP and UDP connections and listens, OpenBSD manual pages. <a href="https://man.openbsd.org/nc.1" target="_blank" rel="noopener noreferrer">man.openbsd.org/nc.1</a></li>
+      <li id="ref-24">“Nmap Reference Guide” — the Nmap manual, nmap.org. <a href="https://nmap.org/book/man.html" target="_blank" rel="noopener noreferrer">nmap.org/book/man.html</a></li>
+      <li id="ref-25">“Legal Issues” — <i>Nmap Network Scanning</i>, nmap.org, on obtaining permission before scanning networks you do not control. <a href="https://nmap.org/book/legal-issues.html" target="_blank" rel="noopener noreferrer">nmap.org/book/legal-issues.html</a></li>
+      <li id="ref-26">RFC 5531, <i>RPC: Remote Procedure Call Protocol Specification Version 2</i>, R. Thurlow, IETF, May 2009. <a href="https://www.rfc-editor.org/rfc/rfc5531" target="_blank" rel="noopener noreferrer">rfc-editor.org/rfc/rfc5531</a></li>
+      <li id="ref-27"><code>rpcbind(8)</code> — universal addresses to RPC program number mapper, man7.org. <a href="https://man7.org/linux/man-pages/man8/rpcbind.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/rpcbind.8.html</a></li>
+      <li id="ref-28"><code>rpcinfo(8)</code> — report RPC information, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man8/rpcinfo.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/rpcinfo.8.html</a></li>
+      <li id="ref-29"><code>socket(7)</code> — Linux socket interface, <code>SOCK_STREAM</code> and <code>SOCK_DGRAM</code>, man7.org. <a href="https://man7.org/linux/man-pages/man7/socket.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/socket.7.html</a></li>
+      <li id="ref-30">“Documentation for /proc/sys/kernel” — the <code>randomize_va_space</code> ASLR setting, The Linux Kernel documentation. <a href="https://www.kernel.org/doc/html/latest/admin-guide/sysctl/kernel.html" target="_blank" rel="noopener noreferrer">kernel.org — sysctl/kernel</a></li>
+      <li id="ref-31">Stunnel project home page — the TLS wrapper Ward recommends for services with no native encryption. <a href="https://www.stunnel.org/" target="_blank" rel="noopener noreferrer">stunnel.org</a></li>
+      <li id="ref-32">SANS Institute — training, newsletters and security policy templates. <a href="https://www.sans.org/" target="_blank" rel="noopener noreferrer">sans.org</a></li>
+      <li id="ref-33">CERT Division, Software Engineering Institute, Carnegie Mellon University. <a href="https://www.sei.cmu.edu/about/divisions/cert/" target="_blank" rel="noopener noreferrer">sei.cmu.edu — CERT Division</a></li>
+      <li id="ref-34">Insecure.Org — Gordon “Fyodor” Lyon's project and the Nmap distribution site. <a href="https://insecure.org/" target="_blank" rel="noopener noreferrer">insecure.org</a></li>
+      <li id="ref-35"><code>recv(2)</code> — receive a message from a socket, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man2/recv.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/recv.2.html</a></li>
+      <li id="ref-36"><code>accept(2)</code> — accept a connection on a socket, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man2/accept.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/accept.2.html</a></li>
+      <li id="ref-37">W. Richard Stevens, Bill Fenner, Andrew M. Rudoff, <i>Unix Network Programming, Volume 1</i>, 3rd ed., Addison-Wesley Professional, 2003 — the guide Ward names for the socket interface. <a href="https://openlibrary.org/books/OL9290835M" target="_blank" rel="noopener noreferrer">openlibrary.org/books/OL9290835M</a></li>
+      <li id="ref-38"><code>unix(7)</code> — sockets for local interprocess communication, Linux manual page, man7.org. <a href="https://man7.org/linux/man-pages/man7/unix.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/unix.7.html</a></li>
+    </ol>
+
+    <!-- NAV:START -->
+    <!-- Footer neighbour row — owned by book-cover-curator, body authored by
+         book-chapter-author. Absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-9-network-configuration.html">chapter 9</a>
+      <a href="chapter-11-shell-scripts.html">chapter 11</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('hlw-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('hlw-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('hlw-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

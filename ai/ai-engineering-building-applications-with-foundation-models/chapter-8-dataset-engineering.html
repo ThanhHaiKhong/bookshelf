@@ -1,0 +1,1813 @@
+<!doctype html>
+<html lang="vi" data-reading-mode="deep">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Chương 8 — Kỹ thuật dữ liệu — của cuốn AI Engineering (Chip Huyen, O’Reilly 2024), diễn giải song ngữ Việt–Anh: ba tiêu chí chất lượng, độ phủ và số lượng; thu thập, gán nhãn và tổng hợp dữ liệu; giới hạn của dữ liệu do AI sinh ra và hiện tượng sụp đổ mô hình; soi, khử trùng lặp, làm sạch và định dạng.">
+<title>Chương 8 · Kỹ thuật dữ liệu · AI Engineering</title>
+<link rel="icon" href="data:,">
+<script>
+  (function () {
+    const validModes = ["easy", "quick", "deep"];
+    let storedMode = "deep";
+    let storedLang = "vi";
+    try {
+      const preference = localStorage.getItem("aie-reading-mode");
+      if (validModes.includes(preference)) storedMode = preference;
+      if (localStorage.getItem("aie-lang") === "en") storedLang = "en";
+    } catch (_) {}
+    document.documentElement.dataset.readingMode = storedMode;
+    document.documentElement.dataset.lang = storedLang;
+    document.documentElement.setAttribute("lang", storedLang);
+  })();
+</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&family=Noto+Serif:wght@600;700&display=swap">
+
+<style>
+  :root {
+    --bg: #eef4ec;
+    --surface: #f5faf3;
+    --surface-strong: #ffffff;
+    --ink: #17281c;
+    --muted: #566b56;
+    --line: #cfe3c9;
+    --teal: #3f7d52;
+    --teal-soft: #d9ecdb;
+    --blue: #2f7d78;
+    --blue-soft: #d3e9e6;
+    --amber: #b0812b;
+    --amber-soft: #f0e5cb;
+    --leaf: #5aa15f;
+    --leaf-soft: #dcecd6;
+    --shadow: 0 22px 60px rgba(20, 50, 28, 0.14);
+    --display: "Noto Serif", Georgia, serif;
+    --body: "Be Vietnam Pro", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10231a;
+      --surface: #163020;
+      --surface-strong: #1d3b28;
+      --ink: #e9f5ea;
+      --muted: #9fc3a3;
+      --line: #294a35;
+      --teal: #6fce86;
+      --teal-soft: #163a24;
+      --blue: #63c3bc;
+      --blue-soft: #123833;
+      --amber: #e0b45f;
+      --amber-soft: #3a2f18;
+      --leaf: #7fd08a;
+      --leaf-soft: #163a22;
+      --shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #10231a;
+    --surface: #163020;
+    --surface-strong: #1d3b28;
+    --ink: #e9f5ea;
+    --muted: #9fc3a3;
+    --line: #294a35;
+    --teal: #6fce86;
+    --teal-soft: #163a24;
+    --blue: #63c3bc;
+    --blue-soft: #123833;
+    --amber: #e0b45f;
+    --amber-soft: #3a2f18;
+    --leaf: #7fd08a;
+    --leaf-soft: #163a22;
+    --shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(circle at 8% 4%, color-mix(in srgb, var(--teal-soft) 74%, transparent), transparent 31rem),
+      var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    line-height: 1.72;
+    overflow-x: hidden;
+  }
+
+  a { color: var(--teal); }
+
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible {
+    outline: 3px solid var(--amber);
+    outline-offset: 4px;
+  }
+
+  .page {
+    width: min(1180px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 28px 0 72px;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 10px 0 28px;
+  }
+
+  .book-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .book-label::before {
+    content: "";
+    width: 28px;
+    height: 2px;
+    background: var(--teal);
+  }
+
+  .reading-controls {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+  }
+
+  .reading-controls button {
+    min-height: 44px;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 13px;
+    background: transparent;
+    color: var(--muted);
+    font: 600 0.8rem var(--body);
+    cursor: pointer;
+  }
+
+  html[data-reading-mode="easy"] .reading-controls button[data-mode="easy"],
+  html[data-reading-mode="quick"] .reading-controls button[data-mode="quick"],
+  html[data-reading-mode="deep"] .reading-controls button[data-mode="deep"] {
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+    align-items: center;
+    gap: clamp(36px, 7vw, 92px);
+    min-height: 620px;
+    padding: 46px clamp(24px, 5vw, 64px);
+    border: 1px solid var(--line);
+    border-radius: 34px 34px 8px 34px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .hero::after {
+    content: "AI ENGINEERING / 08";
+    position: absolute;
+    right: 22px;
+    bottom: 16px;
+    color: var(--line);
+    font: 500 0.72rem var(--mono);
+    letter-spacing: 0.14em;
+  }
+
+  .eyebrow {
+    color: var(--teal);
+    font: 500 0.78rem var(--mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--display);
+    line-height: 1.13;
+    text-wrap: balance;
+  }
+
+  h1 {
+    max-width: 720px;
+    margin: 18px 0 24px;
+    font-size: clamp(3rem, 6.4vw, 6.2rem);
+    letter-spacing: -0.045em;
+  }
+
+  html[data-reading-mode="easy"] h1 {
+    font-size: clamp(2.6rem, 5.2vw, 5rem);
+  }
+
+  .hero-title-accent {
+    color: var(--teal);
+    font-style: italic;
+  }
+
+  .hero-copy > p {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: clamp(1.02rem, 1.5vw, 1.22rem);
+  }
+
+  .thesis {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    align-items: start;
+    margin-top: 34px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+  }
+
+  .thesis-mark {
+    color: var(--amber);
+    font: 700 1.5rem var(--display);
+  }
+
+  .thesis strong { display: block; margin-bottom: 4px; }
+  .thesis p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+
+  .system-map {
+    position: relative;
+    width: min(100%, 470px);
+    aspect-ratio: 1;
+    margin: auto;
+  }
+
+  .system-map::before,
+  .system-map::after {
+    content: "";
+    position: absolute;
+    inset: 14%;
+    border: 1px dashed var(--line);
+    border-radius: 50%;
+  }
+
+  .system-map::after {
+    inset: 29%;
+    border-style: solid;
+    opacity: 0.75;
+  }
+
+  .core {
+    position: absolute;
+    inset: 36%;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--surface);
+    text-align: center;
+    font: 600 0.77rem/1.35 var(--mono);
+    letter-spacing: 0.05em;
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--teal-soft) 72%, transparent);
+  }
+
+  .node {
+    position: absolute;
+    width: 132px;
+    min-height: 92px;
+    display: grid;
+    align-content: center;
+    gap: 4px;
+    padding: 15px;
+    border: 1px solid var(--line);
+    border-radius: 22px 22px 5px 22px;
+    background: var(--surface-strong);
+    box-shadow: 0 12px 30px color-mix(in srgb, var(--ink) 10%, transparent);
+  }
+
+  .node b { font-family: var(--display); font-size: 1rem; }
+  .node small { color: var(--muted); font-size: 0.7rem; line-height: 1.4; }
+  .node-resilience { top: 2%; left: 50%; transform: translateX(-50%); }
+  .node-organization { left: 2%; bottom: 8%; }
+  .node-hierarchy { right: 2%; bottom: 8%; }
+
+  .node-resilience b { color: var(--teal); }
+  .node-organization b { color: var(--blue); }
+  .node-hierarchy b { color: var(--amber); }
+
+  .pulse {
+    position: absolute;
+    inset: 29%;
+    border-radius: 50%;
+    border: 2px solid var(--teal);
+    opacity: 0;
+    animation: pulse 4.8s ease-out infinite;
+  }
+
+  @keyframes pulse {
+    0% { transform: scale(0.6); opacity: 0; }
+    18% { opacity: 0.34; }
+    78%, 100% { transform: scale(1.9); opacity: 0; }
+  }
+
+  .section {
+    padding: clamp(74px, 10vw, 128px) clamp(4px, 3vw, 28px) 0;
+  }
+
+  .section-heading {
+    display: grid;
+    grid-template-columns: minmax(210px, 0.42fr) minmax(0, 1fr);
+    gap: clamp(28px, 7vw, 86px);
+    align-items: end;
+    margin-bottom: 44px;
+  }
+
+  .section-heading h2 {
+    margin: 8px 0 0;
+    font-size: clamp(2rem, 4vw, 3.8rem);
+    letter-spacing: -0.035em;
+  }
+
+  .section-heading p {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: 1.04rem;
+  }
+
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .overview-card {
+    display: grid;
+    gap: 18px;
+    min-height: 280px;
+    padding: 26px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .overview-card:first-child { border-radius: 28px 8px 8px 8px; }
+  .overview-card:last-child { border-radius: 8px 28px 8px 8px; }
+
+  .overview-card .term {
+    font: 500 0.7rem var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .overview-card h3 { margin: 0; font-size: 1.72rem; }
+  .overview-card p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+  .overview-card .result { align-self: end; padding-top: 14px; border-top: 1px solid var(--line); font-weight: 600; }
+  .overview-card.teal .term, .overview-card.teal .result { color: var(--teal); }
+  .overview-card.blue .term, .overview-card.blue .result { color: var(--blue); }
+  .overview-card.amber .term, .overview-card.amber .result { color: var(--amber); }
+
+  .info-block {
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface-strong);
+  }
+
+  .info-block h4 {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font: 500 0.72rem var(--mono);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .info-block p { margin: 0; font-size: 0.92rem; }
+
+  .signal {
+    padding: 18px 20px;
+    border-left: 4px solid var(--teal);
+    background: var(--teal-soft);
+    color: var(--ink);
+    font-size: 0.92rem;
+  }
+
+  .signal strong { display: block; margin-bottom: 4px; }
+
+  html:not([data-reading-mode="easy"]) .easy-only,
+  html[data-reading-mode="easy"] .standard-copy,
+  html:not([data-reading-mode="deep"]) .deep-only {
+    display: none !important;
+  }
+
+  /* Bilingual: EN shows the single standard translation; VN keeps 3 modes.
+     .vi-only marks Vietnamese text outside the reading-mode system. */
+  html:not([data-lang="en"]) .en-only { display: none !important; }
+  html[data-lang="en"] .standard-copy,
+  html[data-lang="en"] .easy-only,
+  html[data-lang="en"] .deep-only,
+  html[data-lang="en"] .vi-only,
+  html[data-lang="en"] .reading-controls { display: none !important; }
+
+  .lang-controls {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+  }
+
+  .lang-controls button {
+    min-height: 44px;
+    min-width: 48px;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 13px;
+    background: transparent;
+    color: var(--muted);
+    font: 600 0.8rem var(--body);
+    cursor: pointer;
+  }
+
+  html:not([data-lang="en"]) .lang-controls button[data-lang-option="vi"],
+  html[data-lang="en"] .lang-controls button[data-lang-option="en"] {
+    background: var(--teal);
+    color: var(--surface);
+  }
+
+  .topbar-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .synthesis {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  .loop-diagram,
+  .synthesis-copy {
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .loop-diagram {
+    min-height: 500px;
+    position: relative;
+    display: grid;
+    place-items: center;
+    padding: 38px;
+    border-radius: 34px 8px 8px 8px;
+    overflow: hidden;
+  }
+
+  .loop-diagram::before {
+    content: "";
+    width: 65%;
+    aspect-ratio: 1;
+    border: 2px solid var(--line);
+    border-radius: 50%;
+  }
+
+  .loop-center {
+    position: absolute;
+    width: 150px;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--surface);
+    text-align: center;
+    font: 600 0.9rem/1.45 var(--body);
+  }
+
+  .loop-label {
+    position: absolute;
+    width: 150px;
+    padding: 13px 15px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-strong);
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .loop-label.top { top: 11%; color: var(--teal); }
+  .loop-label.left { left: 7%; bottom: 14%; color: var(--blue); }
+  .loop-label.right { right: 7%; bottom: 14%; color: var(--amber); }
+
+  .synthesis-copy {
+    display: grid;
+    align-content: center;
+    gap: 24px;
+    padding: clamp(28px, 5vw, 54px);
+    border-radius: 8px 34px 34px 8px;
+  }
+
+  .synthesis-copy h3 { margin: 0; font-size: clamp(2rem, 3.4vw, 3rem); }
+  .synthesis-copy > p { margin: 0; color: var(--muted); }
+
+  .equation {
+    display: grid;
+    gap: 10px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    background: var(--surface-strong);
+  }
+
+  .equation-row {
+    display: grid;
+    grid-template-columns: minmax(110px, 0.65fr) 1fr;
+    gap: 16px;
+    align-items: baseline;
+    font-size: 0.9rem;
+  }
+
+  .equation-row b { font-family: var(--display); font-size: 1.05rem; }
+  .equation-row span { color: var(--muted); }
+
+  .surprise-lead {
+    display: grid;
+    grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
+    gap: clamp(28px, 6vw, 72px);
+    align-items: center;
+    margin-bottom: 22px;
+    padding: clamp(28px, 5vw, 52px);
+    border: 1px solid var(--line);
+    border-radius: 34px 8px 34px 8px;
+    background: var(--surface);
+  }
+
+  .surprise-lead-copy {
+    display: grid;
+    gap: 18px;
+  }
+
+  .surprise-lead-copy p { margin: 0; }
+  .surprise-lead-copy .deep-only { color: var(--muted); font-size: 0.94rem; }
+
+  .definition {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--display);
+    font-size: clamp(1.25rem, 2vw, 1.62rem);
+    line-height: 1.5;
+  }
+
+  .english-term { color: var(--muted); font: 500 0.75rem var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+
+  .surprise-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .surprise-mechanism {
+    --mechanism-accent: var(--teal);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 18px;
+    align-content: start;
+    padding: 26px;
+    border: 1px solid var(--line);
+    border-top: 4px solid var(--mechanism-accent);
+    border-radius: 8px 24px 8px 24px;
+    background: var(--surface);
+  }
+
+  .surprise-number {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--mechanism-accent);
+    color: var(--surface);
+    font: 500 0.76rem var(--mono);
+  }
+
+  .surprise-content {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .surprise-content h3 {
+    margin: 0;
+    font-size: clamp(1.35rem, 2.3vw, 1.85rem);
+  }
+
+  .surprise-content > p { margin: 0; color: var(--muted); }
+  .surprise-content .info-block { margin-top: 2px; }
+  .surprise-connection { margin-top: 22px; }
+
+  .mechanics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .chapter-path {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 18px 0 0;
+  }
+
+  .chapter-path a {
+    display: grid;
+    gap: 5px;
+    min-height: 82px;
+    align-content: center;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .chapter-path a:first-child { border-radius: 20px 5px 5px 5px; }
+  .chapter-path a:last-child { border-radius: 5px 20px 5px 5px; }
+  .chapter-path a:hover { border-color: var(--teal); background: var(--surface-strong); }
+  .chapter-path b { font-family: var(--display); }
+  .chapter-path span { color: var(--muted); font: 500 0.7rem var(--mono); letter-spacing: 0.05em; text-transform: uppercase; }
+
+  .trap-lead { border-top: 4px solid var(--leaf); }
+  .trap-grid { margin-top: 22px; }
+  .trap-card { --mechanism-accent: var(--leaf); }
+  .trap-card:nth-child(4n + 2) { --mechanism-accent: var(--teal); }
+  .trap-card:nth-child(4n + 3) { --mechanism-accent: var(--blue); }
+  .trap-card:nth-child(4n) { --mechanism-accent: var(--amber); }
+  .trap-card .english-term { overflow-wrap: anywhere; }
+
+  .opportunity {
+    margin-top: 2px;
+    padding: 18px 20px;
+    border-left: 4px solid var(--leaf);
+    background: var(--leaf-soft);
+    color: var(--ink);
+    font-size: 0.92rem;
+  }
+
+  .opportunity strong { display: block; margin-bottom: 4px; color: var(--leaf); }
+
+  .trap-comparison {
+    display: grid;
+    gap: 18px;
+    margin-top: 24px;
+    padding: clamp(26px, 5vw, 46px);
+    border: 1px solid var(--line);
+    border-radius: 28px 8px 28px 8px;
+    background: var(--surface);
+  }
+
+  .trap-comparison h3 { margin: 0; font-size: clamp(1.65rem, 3vw, 2.35rem); }
+
+  .comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .comparison-card {
+    display: grid;
+    gap: 10px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--leaf);
+    background: var(--surface-strong);
+  }
+
+  .comparison-card h4 { margin: 0; font: 700 1rem var(--body); }
+  .comparison-card p { margin: 0; color: var(--muted); font-size: 0.88rem; }
+
+  .myths {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .myth {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 16px;
+    padding: 23px;
+    border-top: 1px solid var(--line);
+  }
+
+  .myth-mark {
+    color: var(--amber);
+    font: 700 1.4rem var(--display);
+  }
+
+  .myth h3 { margin: 0 0 6px; font: 700 1.08rem var(--body); }
+  .myth p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+  .diagnostic {
+    display: grid;
+    grid-template-columns: 0.72fr 1.28fr;
+    gap: clamp(28px, 7vw, 84px);
+    padding: clamp(34px, 6vw, 64px);
+    border-radius: 34px 8px 34px 8px;
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .diagnostic h2 { margin: 10px 0 18px; font-size: clamp(2.3rem, 4.5vw, 4rem); }
+  .diagnostic .eyebrow { color: var(--surface); }
+  .diagnostic-intro p { margin: 0; color: color-mix(in srgb, var(--surface) 70%, transparent); }
+
+  .question-list {
+    display: grid;
+    gap: 0;
+    counter-reset: question;
+  }
+
+  .question {
+    counter-increment: question;
+    display: grid;
+    grid-template-columns: 38px 1fr;
+    gap: 14px;
+    padding: 18px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--surface) 22%, transparent);
+  }
+
+  .question::before {
+    content: counter(question, decimal-leading-zero);
+    color: var(--teal);
+    font: 500 0.74rem var(--mono);
+  }
+
+  .question strong { display: block; margin-bottom: 5px; }
+  .question span { color: color-mix(in srgb, var(--surface) 70%, transparent); font-size: 0.88rem; }
+
+  .closing {
+    display: grid;
+    grid-template-columns: 0.45fr 1.55fr;
+    gap: clamp(28px, 8vw, 100px);
+    align-items: start;
+    padding: clamp(74px, 10vw, 128px) clamp(4px, 3vw, 28px) 40px;
+  }
+
+  .closing .eyebrow { padding-top: 12px; }
+  .closing blockquote {
+    margin: 0;
+    font: 600 clamp(1.7rem, 3.6vw, 3.25rem)/1.35 var(--display);
+    letter-spacing: -0.025em;
+  }
+
+  .closing-accent { color: var(--teal); }
+
+  .chapter-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: clamp(24px, 3.5vw, 40px);
+    padding-top: clamp(24px, 3.5vw, 40px);
+    border-top: 1px solid var(--line);
+  }
+
+  .chapter-nav .nav-cell {
+    display: grid;
+    gap: 5px;
+    align-content: start;
+    padding: 18px 22px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .chapter-nav a.nav-cell:hover {
+    border-color: var(--teal);
+    background: var(--surface-strong);
+  }
+
+  .chapter-nav .nav-next { text-align: right; }
+
+  .chapter-nav .nav-cell.disabled { opacity: 0.55; }
+
+  .chapter-nav .nav-label {
+    color: var(--muted);
+    font: 500 0.7rem var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .chapter-nav .nav-title {
+    font-family: var(--display);
+    font-size: clamp(1.05rem, 1.8vw, 1.28rem);
+    line-height: 1.25;
+  }
+
+  @media (max-width: 620px) {
+    .chapter-nav { grid-template-columns: 1fr; }
+    .chapter-nav .nav-next { text-align: left; }
+  }
+
+  .cite { font: 500 0.82em var(--mono); white-space: nowrap; }
+  .cite a { color: var(--amber); text-decoration: none; }
+  .cite a:hover { text-decoration: underline; }
+  .cite a::before { content: "["; }
+  .cite a::after { content: "]"; }
+
+  .footer-main { display: grid; gap: 10px; }
+
+  .ref-list { margin: 2px 0 0; padding-left: 1.4em; display: grid; gap: 4px; }
+  .ref-list li { font-size: 0.78rem; }
+  .ref-list li:target { color: var(--ink); font-weight: 600; }
+
+  footer {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    margin-top: clamp(24px, 3.5vw, 40px);
+    padding: clamp(24px, 3.5vw, 40px) clamp(4px, 3vw, 28px) 0;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+
+  footer p { max-width: 80ch; margin: 0; }
+  footer .edition { font-family: var(--mono); white-space: nowrap; }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; min-height: auto; }
+    .system-map { width: min(100%, 420px); }
+    .section-heading,
+    .synthesis,
+    .surprise-lead,
+    .surprise-grid,
+    .comparison-grid,
+    .diagnostic,
+    .closing { grid-template-columns: 1fr; }
+    .chapter-path { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .overview-grid { grid-template-columns: 1fr; }
+    .overview-card { min-height: auto; border-radius: 18px !important; }
+    .loop-diagram { min-height: 440px; }
+  }
+
+  @media (max-width: 620px) {
+    .page { width: min(100% - 20px, 1180px); padding-top: 12px; }
+    .topbar { flex-direction: column; align-items: stretch; gap: 14px; }
+    .book-label { max-width: none; }
+    .reading-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+    .reading-controls button { width: 100%; padding: 8px 6px; font-size: 0.78rem; white-space: nowrap; }
+    .hero { padding: 34px 20px 54px; border-radius: 24px 24px 6px 24px; }
+    h1 { font-size: clamp(2.7rem, 14vw, 4rem); }
+    .system-map { aspect-ratio: auto; display: grid; gap: 10px; }
+    .system-map::before,
+    .system-map::after,
+    .core,
+    .pulse { display: none; }
+    .node { position: static; transform: none; width: 100%; min-height: auto; }
+    .mechanics, .myths { grid-template-columns: 1fr; }
+    .chapter-path { grid-template-columns: 1fr; }
+    .chapter-path a { min-height: auto; border-radius: 12px !important; }
+    .surprise-lead { padding: 28px 20px; }
+    .surprise-mechanism { grid-template-columns: 1fr; padding: 22px 20px; }
+    .trap-comparison { padding: 24px 20px; }
+    .equation-row { grid-template-columns: 1fr; gap: 3px; }
+    .loop-diagram { min-height: 390px; padding: 20px; }
+    .loop-label { width: 122px; padding: 10px; font-size: 0.7rem; }
+    .loop-label.left { left: 2%; }
+    .loop-label.right { right: 2%; }
+    .diagnostic { padding: 32px 22px; }
+    footer { grid-template-columns: 1fr; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .pulse { animation: none; }
+  }
+
+  /* SECTION-RAIL:START — on-page section index (scroll-spy); markup injected by the bottom script */
+  .section-rail {
+    position: fixed;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 50;
+    padding: 10px;
+    pointer-events: none;
+  }
+  .section-rail::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--surface-strong);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    transform: translateX(-6px);
+    transform-origin: left center;
+    transition: opacity 0.18s ease, transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+  }
+  .section-rail::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 42px;
+    pointer-events: auto;
+  }
+  .section-rail:hover::before,
+  .section-rail:focus-within::before {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .section-rail__list {
+    position: relative;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .section-rail__list::before {
+    content: "";
+    position: absolute;
+    left: 13px;
+    top: 16px;
+    bottom: 16px;
+    width: 2px;
+    transform: translateX(-50%);
+    background: var(--line);
+    border-radius: 2px;
+  }
+  .section-rail__link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--muted);
+    pointer-events: none;
+    transition: background-color 0.16s ease, color 0.16s ease;
+  }
+  .section-rail:hover .section-rail__link,
+  .section-rail:focus-within .section-rail__link { pointer-events: auto; }
+  .section-rail__tick {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: 0 0 0 2px var(--line);
+    transition: transform 0.2s cubic-bezier(0.34, 1.28, 0.64, 1), background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .section-rail__label {
+    white-space: nowrap;
+    font: 500 0.78rem/1.35 var(--body);
+    letter-spacing: -0.005em;
+    opacity: 0;
+    transition: opacity 0.16s ease;
+  }
+  .section-rail:hover .section-rail__label,
+  .section-rail:focus-within .section-rail__label { opacity: 1; }
+  .section-rail__link:hover { background: var(--teal-soft); color: var(--ink); }
+  .section-rail__link:hover .section-rail__tick { box-shadow: 0 0 0 2px var(--teal); }
+  .section-rail__item.is-active .section-rail__link { color: var(--ink); }
+  .section-rail__item.is-active .section-rail__tick {
+    background: var(--teal);
+    box-shadow: 0 0 0 3px var(--teal-soft);
+    transform: scale(1.5);
+  }
+  @media (max-width: 1279px) { .section-rail { display: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .section-rail::before,
+    .section-rail__tick,
+    .section-rail__label,
+    .section-rail__link { transition: none; }
+  }
+  /* SECTION-RAIL:END */
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="topbar">
+    <div class="book-label"><span class="standard-copy">AI Engineering · Chương 8 · Kỹ thuật dữ liệu</span><span class="easy-only">AI Engineering · Chương 8 · Kỹ thuật dữ liệu</span><span class="en-only" lang="en">AI Engineering · Chapter 8 · Dataset Engineering</span></div>
+    <div class="topbar-controls">
+      <div class="lang-controls" role="group" aria-label="Ngôn ngữ / Language">
+        <button type="button" data-lang-option="vi" aria-pressed="true">VI</button>
+        <button type="button" data-lang-option="en" aria-pressed="false">EN</button>
+      </div>
+      <div class="reading-controls" role="group" aria-label="Chế độ đọc">
+        <button type="button" data-mode="easy" aria-label="Dễ hiểu: giải thích bằng ví dụ cho người mới và trẻ nhỏ" aria-pressed="false">Dễ hiểu</button>
+        <button type="button" data-mode="quick" aria-pressed="false">Tóm tắt</button>
+        <button type="button" data-mode="deep" aria-pressed="true">Đầy đủ</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="hero" aria-labelledby="page-title">
+    <div class="hero-copy">
+      <div class="eyebrow"><span class="standard-copy">Chương 8 · Kỹ thuật dữ liệu</span><span class="easy-only">Chương 8 · Kỹ thuật dữ liệu</span><span class="en-only" lang="en">Chapter 8 · Dataset Engineering</span></div>
+      <h1 id="page-title"><span class="standard-copy">Phần <span class="hero-title-accent">không tự động hóa</span> được</span><span class="easy-only">Cho máy ăn gì, <span class="hero-title-accent">nó thành thế ấy</span></span><span class="en-only" lang="en">The part that <span class="hero-title-accent">won’t automate</span></span></h1>
+      <p class="standard-copy">Chương này mở đầu bằng một câu rất gọn: chất lượng của một mô hình phụ thuộc vào chất lượng dữ liệu huấn luyện nó — đội ML giỏi nhất thế giới với sức tính vô hạn cũng không giúp được gì nếu ta không có dữ liệu.<span class="cite"><a href="#ref-1">1</a></span> Nhưng đây không chỉ là chương phụ trợ cho tinh chỉnh. Khi ngày càng ít công ty đủ sức tự huấn luyện mô hình từ đầu, dữ liệu trở thành thứ duy nhất còn lại để tạo khác biệt — và “kỹ thuật dữ liệu” tách ra thành một nghề với vai trò riêng: người gán nhãn, người dựng tập dữ liệu, kỹ sư chất lượng dữ liệu.</p>
+      <p class="easy-only">Chương này nói về thức ăn của máy. Máy học từ ví dụ, nên ví dụ tốt thì máy giỏi, ví dụ tệ thì máy dở — giống như nấu ăn: nguyên liệu hỏng thì đầu bếp giỏi mấy cũng chịu. Nhớ nhé: chọn dữ liệu là phần khó nhất và không có máy nào làm hộ được.</p>
+      <p class="en-only" lang="en">The chapter opens with a blunt line: the quality of a model depends on the quality of its training data — the best ML team in the world with infinite compute can’t help you finetune a good model if you have no data.<span class="cite"><a href="#ref-1">1</a></span> But this is not merely finetuning’s supply chain. As fewer companies can afford to build models from scratch, data becomes the remaining way to differentiate — and data work has hardened into dedicated roles: data labelers, dataset creators, data quality engineers.</p>
+      <div class="thesis">
+        <div class="thesis-mark">∴</div>
+        <div>
+          <strong class="standard-copy">Luận đề của chương</strong>
+          <strong class="easy-only">Điều quan trọng nhất</strong>
+          <strong class="en-only" lang="en">The chapter’s thesis</strong>
+          <p class="standard-copy">Mục tiêu của kỹ thuật dữ liệu là tạo ra một tập dữ liệu cho phép huấn luyện mô hình tốt nhất có thể, lý tưởng là trong ngân sách đã định. Dù mỗi giai đoạn huấn luyện cần dữ liệu khác nhau, việc tuyển chọn luôn quy về ba tiêu chí giống nhau: <strong>chất lượng</strong>, <strong>độ phủ</strong>, <strong>số lượng</strong>. Và ba bước — tuyển chọn, sinh ra, xử lý — không đi theo đường thẳng; ta sẽ phải quay đi quay lại giữa chúng.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Muốn máy giỏi thì phải lo ba thứ về thức ăn của nó: ngon (không hỏng), đủ loại (không chỉ một món), và đủ nhiều. Nhớ nhé: ba thứ ấy quan trọng như nhau, thiếu cái nào cũng hỏng.</p>
+          <p class="en-only" lang="en">The goal of dataset engineering is to create a dataset that lets you train the best model you can, ideally within your allotted budget. Different training phases need datasets with different attributes, but curation always reduces to the same three criteria: <strong>quality</strong>, <strong>coverage</strong>, <strong>quantity</strong>. And the three stages — curation, generation, processing — are not a linear path; you will go back and forth between them.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="system-map" role="img" aria-label="Ba tiêu chí của một tập dữ liệu quanh lõi dữ liệu: chất lượng, độ phủ và số lượng / Three criteria around the dataset core: quality, coverage and quantity">
+      <div class="pulse"></div>
+      <div class="core"><span class="vi-only">TẬP<br>DỮ LIỆU</span><span class="en-only" lang="en">THE<br>DATASET</span></div>
+      <div class="node node-resilience">
+        <b><span class="vi-only">Chất lượng</span><span class="en-only" lang="en">Quality</span></b>
+        <small class="standard-copy">Sáu đặc tính: liên quan, khớp yêu cầu, nhất quán, đúng định dạng, đủ độc nhất, tuân thủ</small>
+        <small class="easy-only">Nguyên liệu không hỏng.</small>
+        <small class="en-only" lang="en">Relevant, aligned, consistent, formatted, unique, compliant</small>
+      </div>
+      <div class="node node-organization">
+        <b><span class="vi-only">Độ phủ</span><span class="en-only" lang="en">Coverage</span></b>
+        <small class="standard-copy">Phủ hết dải bài toán và cách diễn đạt của người dùng thật</small>
+        <small class="easy-only">Đủ loại món, không chỉ một món.</small>
+        <small class="en-only" lang="en">The range of problems real users actually bring</small>
+      </div>
+      <div class="node node-hierarchy">
+        <b><span class="vi-only">Số lượng</span><span class="en-only" lang="en">Quantity</span></b>
+        <small class="standard-copy">Tùy kỹ thuật tinh chỉnh, độ khó tác vụ và mô hình nền</small>
+        <small class="easy-only">Bao nhiêu là đủ, tùy việc.</small>
+        <small class="en-only" lang="en">Depends on technique, task difficulty and base model</small>
+      </div>
+    </div>
+  </section>
+
+  <nav class="chapter-path" aria-label="Mạch chương">
+    <a href="#curation">
+      <span class="vi-only">01 · Tuyển chọn</span><span class="en-only" lang="en">01 · Curation</span>
+      <b><span class="standard-copy">Ba tiêu chí</span><span class="easy-only">Ngon, đủ loại, đủ nhiều</span><span class="en-only" lang="en">The three criteria</span></b>
+    </a>
+    <a href="#sourcing">
+      <span class="vi-only">02 · Nguồn &amp; tổng hợp</span><span class="en-only" lang="en">02 · Sourcing</span>
+      <b><span class="standard-copy">Lấy dữ liệu từ đâu</span><span class="easy-only">Kiếm ví dụ ở đâu</span><span class="en-only" lang="en">Where data comes from</span></b>
+    </a>
+    <a href="#processing">
+      <span class="vi-only">03 · Xử lý</span><span class="en-only" lang="en">03 · Processing</span>
+      <b><span class="standard-copy">Soi, khử trùng, làm sạch</span><span class="easy-only">Rửa và xếp lại</span><span class="en-only" lang="en">Inspect, dedupe, clean</span></b>
+    </a>
+    <a href="#diagnostic">
+      <span class="vi-only">04 · Tự kiểm</span><span class="en-only" lang="en">04 · Diagnostic</span>
+      <b><span class="standard-copy">Câu hỏi cho tập của bạn</span><span class="easy-only">Tự hỏi mình</span><span class="en-only" lang="en">Questions for your set</span></b>
+    </a>
+  </nav>
+
+  <section class="section" id="curation" aria-labelledby="curation-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Tuyển chọn dữ liệu</span><span class="easy-only">Chọn thức ăn cho máy</span><span class="en-only" lang="en">Data curation</span></div>
+        <h2 id="curation-title"><span class="standard-copy">Chất lượng, độ phủ, số lượng</span><span class="easy-only">Ngon, đủ loại, đủ nhiều</span><span class="en-only" lang="en">Quality, coverage, quantity</span></h2>
+      </div>
+      <p class="standard-copy">Tuyển chọn dữ liệu không chỉ là thêm dữ liệu mới để mô hình học hành vi mới, mà còn là <em>gỡ bỏ</em> dữ liệu cũ để mô hình quên đi hành vi xấu. Huyen kể một ví dụ rất đời: người dùng phàn nàn chatbot hơi kiêu — hỏi một câu có đúng sự thật không thì nó trả lời “câu này đúng, nhưng văn phong có thể hay hơn” rồi tự viết lại. Truy ra, trong dữ liệu huấn luyện có nhiều ví dụ gợi ý không ai yêu cầu; cách chữa là xóa chúng đi và đặt hàng ví dụ mới.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Chọn thức ăn cho máy có hai việc: thêm món mới để máy học điều hay, và bỏ món cũ để máy quên điều dở. Nhớ nhé: đôi khi cách dạy tốt nhất là lấy bớt ví dụ xấu đi, chứ không phải thêm ví dụ mới.</p>
+      <p class="en-only" lang="en">Curation isn’t only about creating data so a model learns new behaviours; it is also about removing data so it unlearns bad ones. Huyen gives a very everyday example: users complain a chatbot is a little arrogant — ask it to verify a statement and it answers “the statement is correct, but its style can be improved”, then rewrites it unprompted. Investigate, and you find training examples full of unsolicited suggestions; the fix is to remove them and commission new ones.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+
+    <div class="surprise-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Nếu coi huấn luyện mô hình như nấu ăn, dữ liệu là nguyên liệu: chất lượng là nguyên liệu không hỏng, độ phủ là trộn đúng tỉ lệ, số lượng là bao nhiêu nguyên liệu.</p>
+        <p class="definition easy-only">Dạy máy giống như nấu ăn. Dữ liệu là nguyên liệu: phải tươi, phải đủ loại, và phải đủ nhiều.</p>
+        <p class="definition en-only" lang="en">If model training is cooking, the data is the ingredients: quality is ingredients that aren’t spoiled, coverage is the right mix, quantity is how much of it you have.</p>
+        <p class="deep-only">Ẩn dụ bếp núc này là của chính tác giả, và nó có ích vì nó nhắc rằng ba tiêu chí không thay thế được nhau: thêm đường không cứu được trứng ung.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="equation">
+        <div class="equation-row">
+          <b><span class="vi-only">Chất lượng</span><span class="en-only" lang="en">Quality</span></b>
+          <span><span class="standard-copy">Liên quan · khớp yêu cầu tác vụ · nhất quán · đúng định dạng · đủ độc nhất · tuân thủ</span><span class="easy-only">Ví dụ đúng và sạch.</span><span class="en-only" lang="en">Relevant · aligned with task requirements · consistent · correctly formatted · sufficiently unique · compliant</span></span>
+        </div>
+        <div class="equation-row">
+          <b><span class="vi-only">Độ phủ</span><span class="en-only" lang="en">Coverage</span></b>
+          <span><span class="standard-copy">Phủ hết dải bài toán và cách diễn đạt mà người dùng thật sự mang tới — còn gọi là độ đa dạng</span><span class="easy-only">Đủ loại tình huống.</span><span class="en-only" lang="en">The range of problems, and phrasings, real users actually bring — also called diversity</span></span>
+        </div>
+        <div class="equation-row">
+          <b><span class="vi-only">Số lượng</span><span class="en-only" lang="en">Quantity</span></b>
+          <span><span class="standard-copy">Tùy kỹ thuật tinh chỉnh, độ phức tạp của tác vụ, và mô hình nền đã gần đích tới đâu</span><span class="easy-only">Đủ nhiều cho việc mình làm.</span><span class="en-only" lang="en">Depends on the finetuning technique, task complexity, and how close the base model already is</span></span>
+        </div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">01</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Data quality</div>
+          <h3><span class="standard-copy">Chất lượng — sáu đặc tính của một ví dụ tốt</span><span class="easy-only">Nguyên liệu tươi</span><span class="en-only" lang="en">Quality — six properties of a good example</span></h3>
+          <p class="standard-copy">Định nghĩa của bà rất thực dụng: dữ liệu là chất lượng cao nếu nó giúp ta làm được việc của mình một cách hiệu quả và đáng tin. Cụ thể hơn, bà liệt kê sáu đặc tính — <span lang="en">relevant</span> (liên quan), <span lang="en">aligned with task requirements</span> (khớp với yêu cầu tác vụ), <span lang="en">consistent</span> (nhất quán), <span lang="en">correctly formatted</span> (đúng định dạng), <span lang="en">sufficiently unique</span> (đủ độc nhất) và <span lang="en">compliant</span> (tuân thủ).<span class="cite"><a href="#ref-1">1</a></span> Chữ “khớp” được chọn thay cho “chính xác” là có chủ ý: tùy tác vụ, một câu trả lời đúng vẫn có thể không phải thứ người dùng cần.</p>
+          <p class="easy-only">Một ví dụ tốt là ví dụ đúng việc mình đang dạy, làm đúng như yêu cầu, không mâu thuẫn với các ví dụ khác, viết đúng khuôn, không bị lặp lại, và không vi phạm luật. Nhớ nhé: đúng chưa chắc đã hợp — phải hợp với việc mình cần.</p>
+          <p class="en-only" lang="en">Her definition is pragmatic: data is high-quality if it helps you do your job efficiently and reliably. More concretely she lists six properties — relevant, aligned with task requirements, consistent, correctly formatted, sufficiently unique, and compliant.<span class="cite"><a href="#ref-1">1</a></span> The word “aligned” is deliberate rather than “accurate” or “correct”: depending on the task, an accurate response may not be what the user wants.</p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Trong bản hướng dẫn gán nhãn. Sáu đặc tính này không phải khẩu hiệu — chúng là những câu phải viết rõ ra trước khi ai đó bắt đầu gán nhãn, nếu không mỗi người sẽ hiểu “tốt” một kiểu.</span>
+            <span class="easy-only">Trong tờ hướng dẫn cho người chấm bài: phải nói rõ thế nào là tốt, không thì mỗi người chấm một kiểu.</span>
+            <span class="en-only" lang="en">In your annotation guideline. The six properties are not slogans — they are the sentences you must write down before anyone starts labelling, or every annotator will define “good” differently.</span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Ít mà tinh</h4>
+              <p>Nhóm làm họ mô hình Yi thấy 10.000 chỉ dẫn được soạn kỹ vượt trội hàng trăm nghìn chỉ dẫn nhiễu.<span class="cite"><a href="#ref-3">3</a></span> Nghiên cứu <span lang="en">“LIMA: Less Is More for Alignment”</span> đi xa hơn: một mô hình Llama 65 tỉ tham số tinh chỉnh trên đúng 1.000 cặp chỉ dẫn–phản hồi được tuyển kỹ cho ra câu trả lời ngang bằng hoặc được người chấm ưa hơn GPT-4 trong 43% trường hợp — dù đổi lại, LIMA không bền vững như mô hình cấp sản phẩm.<span class="cite"><a href="#ref-2">2</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Sáu, bảy hay mười hai đặc tính?</h4>
+              <p>Con số sáu là khung của riêng cuốn sách, và tác giả nói thẳng điều đó trong chú thích: IBM định nghĩa chất lượng dữ liệu theo bảy chiều (đầy đủ, độc nhất, hợp lệ, kịp thời, chính xác, nhất quán, phù hợp mục đích), còn Wikipedia thêm năm chiều nữa. Bà chọn thu hẹp về sáu vì đang bàn riêng chất lượng dữ liệu <em>cho tinh chỉnh</em>, không phải chất lượng dữ liệu nói chung.<span class="cite"><a href="#ref-1">1</a></span> Nếu bạn gặp con số khác ở nơi khác, nhiều khả năng đó là một khung khác chứ không phải một mâu thuẫn.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">02</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Data coverage · diversity</div>
+          <h3><span class="standard-copy">Độ phủ — dữ liệu phải giống người dùng thật</span><span class="easy-only">Đủ loại tình huống</span><span class="en-only" lang="en">Coverage — data must look like real users</span></h3>
+          <p class="standard-copy">Dữ liệu huấn luyện phải phủ được dải bài toán ta mong mô hình giải. Người dùng thật vừa hỏi nhiều thứ khác nhau, vừa diễn đạt rất khác nhau — nên nếu có người viết chỉ dẫn dài kèm tài liệu và có người viết một dòng cụt lủn, tập tinh chỉnh phải có cả hai. Nếu câu hỏi của họ thường sai chính tả, tập dữ liệu cũng phải có ví dụ sai chính tả.<span class="cite"><a href="#ref-1">1</a></span> Mỗi ứng dụng lại có trục đa dạng riêng: một công cụ dịch Pháp–Anh không cần đa dạng ngôn ngữ nhưng cần đa dạng chủ đề và văn phong; một chatbot bán hàng toàn cầu thì ngược lại.</p>
+          <p class="easy-only">Nếu chỉ dạy máy bằng một kiểu câu hỏi, gặp kiểu khác là nó lúng túng. Người thật hỏi đủ kiểu, có người viết dài, có người viết ngắn, có người gõ sai chính tả. Nhớ nhé: dạy đủ kiểu thì máy mới quen được với đời thật.</p>
+          <p class="en-only" lang="en">Training data should cover the range of problems you expect the model to solve. Real users ask about many things and phrase them very differently — so if some write long instructions with references and others write one terse line, your finetuning data needs both. If their queries typically contain typos, include examples with typos.<span class="cite"><a href="#ref-1">1</a></span> Every application has its own diversity axes: a French-to-English tool needs no language diversity but benefits from topic and register diversity; a global shopping chatbot is the opposite.</p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Meta nói Llama 3 không khác các đời Llama trước bao nhiêu về kiến trúc; phần tăng hiệu năng “chủ yếu đến từ cải thiện chất lượng và độ đa dạng của dữ liệu, cùng với quy mô huấn luyện lớn hơn”.<span class="cite"><a href="#ref-4">4</a></span></span>
+            <span class="easy-only">Llama 3 mạnh hơn đời trước không phải nhờ đổi máy, mà chủ yếu nhờ thức ăn tốt hơn và đa dạng hơn.</span>
+            <span class="en-only" lang="en">Meta says Llama 3 doesn’t deviate much from earlier Llamas in architecture; its gains are “primarily driven by improvements in data quality and diversity as well as by increased training scale”.<span class="cite"><a href="#ref-4">4</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Bảng trộn của Llama 3</h4>
+              <p>Mỗi giai đoạn huấn luyện có tỉ lệ trộn miền tối ưu khác nhau. Ở tiền huấn luyện: 50% kiến thức tổng quát tiếng Anh, 25% toán và suy luận, 17% lập trình, 8% đa ngữ. Ở tinh chỉnh có giám sát: 52,66% / 21,19% / 14,89% / 3,01%, cộng thêm 8,14% dạng đề thi và 0,11% ngữ cảnh dài. Ở tinh chỉnh theo sở thích, kiến thức tổng quát vọt lên 81,99% còn toán cộng mã chỉ còn 12,82% — hợp lý, vì mục tiêu lúc này là phản ánh đúng phân bố sở thích thật của người dùng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Đa dạng cũng có trần</h4>
+              <p>Bài <span lang="en">“Scaling Instruction-Finetuned Language Models”</span> cho thấy hiệu năng tăng mạnh khi số tác vụ tinh chỉnh đi từ 9 lên 282, rồi bắt đầu chững lại — vẫn nhích lên nhưng ngày một ít cho tới 1.836 tác vụ.<span class="cite"><a href="#ref-5">5</a></span> Và đa dạng không phải lúc nào cũng có lợi: cuốn sách dẫn <span lang="en">“The Data Addition Dilemma”</span> cho thấy trong một số trường hợp, thêm dữ liệu càng không đồng nhất lại càng làm hiệu năng tệ đi.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">03</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Data quantity</div>
+          <h3><span class="standard-copy">Số lượng — bao nhiêu là đủ</span><span class="easy-only">Bao nhiêu ví dụ thì đủ</span><span class="en-only" lang="en">Quantity — how much is enough</span></h3>
+          <p class="standard-copy">Hỏi cần bao nhiêu dữ liệu cũng giống như hỏi cần bao nhiêu tiền: câu trả lời thay đổi rất rộng tùy hoàn cảnh.<span class="cite"><a href="#ref-1">1</a></span> Ngoài chất lượng và độ đa dạng, ba yếu tố quyết định con số: <strong>kỹ thuật tinh chỉnh</strong> (tinh chỉnh toàn phần đòi hỏi nhiều dữ liệu hơn PEFT hàng bậc độ lớn), <strong>độ phức tạp của tác vụ</strong>, và <strong>mô hình nền đã gần đích tới đâu</strong>. Lời khuyên vận hành của bà rất cụ thể: bắt đầu bằng một tập nhỏ được soạn kỹ — chừng 50 ví dụ — để xem tinh chỉnh có cải thiện gì không; trong đại đa số trường hợp, 50–100 ví dụ đã đủ để thấy tiến bộ.</p>
+          <p class="easy-only">Không có con số cố định. Việc dễ thì ít ví dụ cũng xong; việc khó thì cần nhiều. Mẹo hay: thử trước với khoảng 50 ví dụ làm thật cẩn thận, xem máy có khá lên không rồi hãy đầu tư thêm. Nhớ nhé: thử ít trước, đừng gom cả núi dữ liệu rồi mới biết là vô ích.</p>
+          <p class="en-only" lang="en">Asking how much data you need is like asking how much money you need: the answer varies enormously.<span class="cite"><a href="#ref-1">1</a></span> Beyond quality and diversity, three factors drive the number: <strong>the finetuning technique</strong> (full finetuning needs orders of magnitude more data than PEFT), <strong>task complexity</strong>, and <strong>how close the base model already is</strong>. Her operational advice is concrete: start with a small, well-crafted set — say 50 examples — to see whether finetuning helps at all; in the vast majority of cases you should see improvement with 50–100 examples.</p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Quy tắc ngón tay cái: ít dữ liệu thì dùng PEFT trên mô hình mạnh hơn; nhiều dữ liệu thì tinh chỉnh toàn phần trên mô hình nhỏ hơn.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Ít ví dụ thì nhờ mô hình xịn dạy nhanh; nhiều ví dụ thì dạy lại hẳn một mô hình nhỏ.</span>
+            <span class="en-only" lang="en">Rule of thumb: with little data, use PEFT on a more advanced model; with a lot of data, use full finetuning on a smaller one.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Lợi ích giảm dần</h4>
+              <p>Có thể ước lượng nhu cầu bằng cách tinh chỉnh trên các tập con — 25%, 50%, 100% — rồi vẽ đường cong hiệu năng theo kích thước tập. Dốc đứng nghĩa là nhân đôi dữ liệu sẽ đáng tiền; đường phẳng nghĩa là không. Thông thường đường cong này giảm dần: 1.000 ví dụ đầu có thể nâng độ chính xác mười điểm phần trăm, 1.000 ví dụ sau chỉ còn năm.<span class="cite"><a href="#ref-1">1</a></span> Để so sánh quy mô: Llama 2 và Llama 3 được huấn luyện trên 2 nghìn tỉ và 16 nghìn tỉ token — nếu mỗi ví dụ dài 2.000 token thì tương đương 1 tỉ và 15 tỉ ví dụ.</p>
+            </div>
+            <div class="info-block">
+              <h4>Hóa xương (<span lang="en">ossification</span>)</h4>
+              <p>Có một nghịch lý: khi dữ liệu rất nhiều, tinh chỉnh từ mô hình đã tiền huấn luyện đôi khi lại kém hơn huấn luyện từ đầu. Hiện tượng này gọi là <em lang="en">ossification</em> — tiền huấn luyện “hóa xương” trọng số khiến chúng khó thích ứng với dữ liệu tinh chỉnh; mô hình nhỏ dễ bị hơn mô hình lớn.<span class="cite"><a href="#ref-1">1</a></span> Cũng cần nhớ: số lượng cuối cùng còn do ví tiền quyết định — ngân sách 10.000 đô với giá gán nhãn 2 đô một ví dụ nghĩa là tối đa 5.000 ví dụ, và tiền tiêu cho dữ liệu là tiền không còn cho sức tính.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong><span class="vi-only">Ba tiêu chí không độc lập</span><span class="en-only" lang="en">The three criteria are not independent</span></strong>
+      <span class="standard-copy">Nhóm LIMA huấn luyện một mô hình 7 tỉ tham số trên ba tập cùng cỡ — đúng 2.000 ví dụ mỗi tập: một tập chất lượng cao nhưng ít đa dạng, một tập đa dạng nhưng chất lượng thấp, một tập vừa đa dạng vừa chất lượng cao. Tập thứ ba thắng.<span class="cite"><a href="#ref-2">2</a></span> Nói cách khác, không thể đổi độ phủ lấy chất lượng, cũng không thể đổi số lượng lấy cả hai.</span>
+      <span class="easy-only">Người ta thử dạy một máy bằng ba rổ ví dụ bằng nhau: rổ ngon mà ít loại, rổ nhiều loại mà dở, và rổ vừa ngon vừa nhiều loại. Rổ thứ ba thắng. Nhớ nhé: phải vừa ngon vừa đủ loại, chứ không chọn một.</span>
+      <span class="en-only" lang="en">The LIMA team trained a 7B model on three same-sized datasets — 2,000 examples each: one high-quality but not diverse, one diverse but low-quality, one both. The third won.<span class="cite"><a href="#ref-2">2</a></span> You cannot trade coverage for quality, nor quantity for either.</span>
+    </aside>
+  </section>
+
+  <section class="section" id="sourcing" aria-labelledby="sourcing-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Thu thập, gán nhãn, tổng hợp</span><span class="easy-only">Kiếm ví dụ ở đâu</span><span class="en-only" lang="en">Acquisition, annotation, synthesis</span></div>
+        <h2 id="sourcing-title"><span class="standard-copy">Dữ liệu đến từ đâu</span><span class="easy-only">Lấy ví dụ ở đâu ra</span><span class="en-only" lang="en">Where the data comes from</span></h2>
+      </div>
+      <p class="standard-copy">Quá trình dựng một tập dữ liệu hiếm khi đi một mạch. Huyen phác một ví dụ rất thật: tìm được một tập công khai 10.000 ví dụ, lọc bỏ chỉ dẫn kém còn 9.000, tách riêng 3.000 ví dụ có phản hồi kém, tự viết lại 3.000 phản hồi ấy, rồi phát hiện thiếu chủ đề X nên soạn 100 mẫu khung và dùng AI sinh 2.000 chỉ dẫn mới — cuối cùng ra 11.000 ví dụ. Và bà nói ngay rằng đây đã là bản đơn giản hóa: phần lớn các bước bị giấu đi để tiết kiệm giấy và cứu người đọc khỏi buồn chán.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Gom ví dụ giống như đi chợ nhiều lần chứ không phải một lần. Lấy một ít ở chỗ này, bỏ bớt món hỏng, tự làm thêm món còn thiếu, rồi lại quay lại chợ. Nhớ nhé: không ai gom đủ dữ liệu trong một lần đi.</p>
+      <p class="en-only" lang="en">Building a dataset is rarely a single pass. Huyen sketches a realistic one: find a public set of 10,000 examples, drop the low-quality instructions to leave 9,000, set aside 3,000 with poor responses, hand-write those 3,000 responses, then notice topic X is missing and write 100 templates so an AI can synthesise 2,000 more instructions — ending at 11,000. And she says outright that this is already a simplification, with most steps hidden to conserve paper and spare the reader.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Mục tiêu của thu thập dữ liệu là tạo ra một tập đủ lớn, đủ chất lượng và đủ đa dạng — mà vẫn tôn trọng quyền riêng tư của người dùng và tuân thủ quy định.</p>
+        <p class="definition easy-only">Gom ví dụ sao cho đủ nhiều, đủ tốt, đủ loại — và không xâm phạm chuyện riêng tư của ai.</p>
+        <p class="definition en-only" lang="en">The goal of data acquisition is a sufficiently large dataset with the quality and diversity you need, while respecting user privacy and complying with regulations.</p>
+        <p class="deep-only">Bốn kênh chính: dữ liệu từ chính ứng dụng của mình, dữ liệu công khai, gán nhãn thủ công, và tổng hợp. Một tập thật thường là hỗn hợp của cả bốn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="equation">
+        <div class="equation-row">
+          <b><span class="vi-only">Dữ liệu ứng dụng</span><span class="en-only" lang="en">Application data</span></b>
+          <span><span class="standard-copy">Nguồn quan trọng nhất: nó khớp đúng phân bố mà ta quan tâm</span><span class="easy-only">Chính người dùng của bạn tạo ra.</span><span class="en-only" lang="en">The most important source: it matches the distribution you care about</span></span>
+        </div>
+        <div class="equation-row">
+          <b><span class="vi-only">Dữ liệu công khai</span><span class="en-only" lang="en">Public data</span></b>
+          <span><span class="standard-copy">Hugging Face, Kaggle, Dataset Search, data.gov — dùng được, nhưng đừng tin tuyệt đối và luôn kiểm giấy phép</span><span class="easy-only">Có sẵn trên mạng, nhưng phải xem kỹ.</span><span class="en-only" lang="en">Hugging Face, Kaggle, Dataset Search, data.gov — usable, but never fully trusted, and always check the licence</span></span>
+        </div>
+        <div class="equation-row">
+          <b><span class="vi-only">Gán nhãn</span><span class="en-only" lang="en">Annotation</span></b>
+          <span><span class="standard-copy">Khó không chỉ vì công gán nhãn, mà vì viết được bản hướng dẫn rõ ràng</span><span class="easy-only">Tự chấm lấy, và phải có luật chấm.</span><span class="en-only" lang="en">Hard not only because of the labelling but because of writing a clear guideline</span></span>
+        </div>
+        <div class="equation-row">
+          <b><span class="vi-only">Tổng hợp</span><span class="en-only" lang="en">Synthesis</span></b>
+          <span><span class="standard-copy">Sinh dữ liệu bằng quy tắc, mô phỏng, hoặc bằng chính AI</span><span class="easy-only">Nhờ máy tự nghĩ ra ví dụ.</span><span class="en-only" lang="en">Generate data by rules, by simulation, or with AI itself</span></span>
+        </div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">04</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Data flywheel</div>
+          <h3><span class="standard-copy">Bánh đà dữ liệu — nguồn tốt nhất là người dùng của bạn</span><span class="easy-only">Người dùng chính là nguồn</span><span class="en-only" lang="en">The data flywheel — your best source is your users</span></h3>
+          <p class="standard-copy">Nguồn quan trọng nhất, theo bà, thường là dữ liệu từ chính ứng dụng của mình. Nếu dựng được một bánh đà dữ liệu — lấy dữ liệu người dùng sinh ra để liên tục cải thiện sản phẩm — đó là lợi thế lớn. Lý do kỹ thuật rất đơn giản: dữ liệu ứng dụng hoàn toàn liên quan và khớp với tác vụ, tức là nó khớp đúng phân bố ta quan tâm, điều cực khó đạt được với bất kỳ nguồn nào khác.<span class="cite"><a href="#ref-1">1</a></span> Dữ liệu ấy có ba dạng: nội dung người dùng tạo ra, dữ liệu hệ thống sinh ra từ việc họ dùng, và phản hồi của họ.</p>
+          <p class="easy-only">Ví dụ tốt nhất không nằm trên mạng mà nằm ngay trong ứng dụng của bạn: chính những câu người dùng hỏi mỗi ngày. Nhớ nhé: giữ lại những gì người dùng làm, đó là kho báu không ai sao chép được.</p>
+          <p class="en-only" lang="en">The most important source, she says, is typically data from your own application. If you can build a data flywheel — using data your users generate to continually improve the product — that is a significant advantage. The technical reason is simple: application data is perfectly relevant and aligned with your task, which means it matches the distribution you care about, something almost impossible to achieve from any other source.<span class="cite"><a href="#ref-1">1</a></span> It comes in three forms: user content, system-generated usage data, and user feedback.</p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Việc thiết kế hệ thống phản hồi người dùng được để dành hẳn cho Chương 10 — đó là chỗ bánh đà này khép vòng.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Cách hỏi ý kiến người dùng được nói kỹ ở Chương 10.</span>
+            <span class="en-only" lang="en">Designing the user-feedback system is saved for Chapter 10 — that is where this flywheel closes its loop.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Dữ liệu đã thành một nghề</h4>
+              <p>Một chỉ dấu rất cụ thể nằm trong chú thích của chương: trong danh sách đóng góp của GPT-3, chỉ hai người được ghi công cho việc thu thập, lọc, khử trùng lặp và phân tích trùng lắp dữ liệu. Ba năm sau, với GPT-4, tám mươi người được ghi công ở các khâu dữ liệu khác nhau — chưa kể những người gán nhãn thuê qua nhà cung cấp.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Kiểm giấy phép trước khi dùng</h4>
+              <p>Bà nhắc một điều dễ bỏ qua: nên tận dụng dữ liệu công khai nhưng đừng bao giờ tin nó hoàn toàn, và luôn cố hiểu dữ liệu đến từ đâu. Ngay cả khi một tập có giấy phép cho phép dùng thương mại, vẫn có khả năng một phần của nó bắt nguồn từ nguồn không cho phép.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">05</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Annotation guidelines</div>
+          <h3><span class="standard-copy">Bản hướng dẫn gán nhãn — phần khó nhất</span><span class="easy-only">Luật chấm bài</span><span class="en-only" lang="en">Annotation guidelines — the hardest part</span></h3>
+          <p class="standard-copy">Gán nhãn khó không chỉ vì công gán nhãn, mà vì phải viết được bản hướng dẫn rõ ràng: thế nào là một phản hồi tốt, và cái gì làm nó tốt? Một phản hồi có thể vừa đúng vừa vô dụng không? Khác nhau giữa 3 điểm và 4 điểm là gì? Một số đội, trong đó có LinkedIn, cho biết bản hướng dẫn gán nhãn nằm trong những phần khó nhất của cả đường ống kỹ thuật AI của họ.<span class="cite"><a href="#ref-1">1</a></span> Bà nói thẳng rằng thật đáng lo khi nhiều người bỏ dở việc gán nhãn cẩn thận giữa chừng, hy vọng mô hình sẽ tự đoán ra câu trả lời đúng.</p>
+          <p class="easy-only">Chấm bài khó, nhưng viết ra <em>luật chấm</em> còn khó hơn: thế nào là bài hay, vì sao bài này 3 điểm mà bài kia 4 điểm. Nhớ nhé: chưa viết được luật chấm thì đừng bắt đầu chấm.</p>
+          <p class="en-only" lang="en">Annotation is hard not just because of the labelling but because of the guideline: what does a good response look like, and what makes it good? Can a response be correct but unhelpful? What separates a 3 from a 4? Some teams, including LinkedIn, have reported that annotation guidelines were among the most challenging parts of their AI engineering pipeline.<span class="cite"><a href="#ref-1">1</a></span> She notes how alarming it is that people abandon careful annotation halfway, hoping their models will figure out the right responses on their own.</p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Tin vui: hướng dẫn gán nhãn giống hệt hướng dẫn cho dữ liệu đánh giá ở Chương 4. Đây là thêm một lý do để đầu tư vào tiêu chí đánh giá — nếu may mắn, chính các ví dụ đánh giá có thể làm hạt giống để tổng hợp dữ liệu mới.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Luật chấm bài dùng cho việc dạy cũng chính là luật chấm bài dùng để kiểm tra — làm một lần, dùng hai nơi.</span>
+            <span class="en-only" lang="en">The good news: these guidelines are the same as the ones for evaluation data in Chapter 4. Another argument for investing in evaluation criteria — if you’re lucky, your eval examples can seed synthetic data.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Nhất quán là một đại lượng đo được</h4>
+              <p>Nếu hai người gán nhãn cùng một ví dụ mà kết quả lệch nhau nhiều thì mô hình sẽ bị rối. Khi mỗi ví dụ có nhiều hơn một nhãn, hãy tính độ bất đồng giữa các người gán nhãn, xem lại những ví dụ mâu thuẫn và giải quyết chúng. Cũng nên vẽ phân bố điểm theo từng người: có người quen cho điểm cao, có người quen viết ngắn.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Mệt cũng là một nguồn lỗi</h4>
+              <p>Có những chỉ dấu chất lượng rất phản trực giác. Cuốn sách dẫn Kern và cộng sự (2024): các nhãn được gán trong nửa sau của một phiên gán nhãn có chất lượng thấp hơn, nhiều khả năng do người gán nhãn chán hoặc mệt.<span class="cite"><a href="#ref-1">1</a></span> Điều này có nghĩa siêu dữ liệu về <em>thời điểm</em> gán nhãn cũng là tín hiệu để lọc.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">06</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Data synthesis</div>
+          <h3><span class="standard-copy">Tổng hợp — để máy tự sinh ví dụ</span><span class="easy-only">Nhờ máy nghĩ ra ví dụ</span><span class="en-only" lang="en">Synthesis — letting the model make its own examples</span></h3>
+          <p class="standard-copy">Có năm lý do người ta tổng hợp dữ liệu: tăng số lượng, tăng độ phủ, đôi khi tăng cả chất lượng, tránh vấn đề riêng tư, và chưng cất mô hình.<span class="cite"><a href="#ref-1">1</a></span> Cách làm cũng rất đa dạng — từ khuôn mẫu và bộ sinh giả lập, tới mô phỏng, tới dùng chính mô hình nền tảng. Với dữ liệu chỉ dẫn, quy trình thường là: bắt đầu từ một danh sách chủ đề hoặc khuôn mẫu, sinh một số chỉ dẫn cho mỗi mục, rồi sinh một hay nhiều phản hồi cho mỗi chỉ dẫn. UltraChat chẳng hạn: nhóm tác giả nhờ ChatGPT sinh 30 chủ đề đời sống, mỗi chủ đề 30–50 chủ đề con, rồi sinh chỉ dẫn và phản hồi cho từng chủ đề con.<span class="cite"><a href="#ref-7">7</a></span></p>
+          <p class="easy-only">Nếu thiếu ví dụ, ta có thể nhờ chính máy nghĩ ra thêm: cho nó một danh sách chủ đề rồi bảo nó đặt câu hỏi và tự trả lời. Nhớ nhé: máy nghĩ ra ví dụ rất nhanh, nhưng ví dụ ấy chưa chắc đã đúng.</p>
+          <p class="en-only" lang="en">There are five reasons to synthesise data: to increase quantity, to increase coverage, sometimes to increase quality, to mitigate privacy concerns, and to distil models.<span class="cite"><a href="#ref-1">1</a></span> The methods range from templates and fake-data generators, through simulation, to using foundation models themselves. For instruction data the recipe is usually: start from a list of topics or templates, generate some instructions per item, then one or more responses per instruction. UltraChat, for instance: the authors had ChatGPT generate 30 everyday topics, 30–50 subtopics each, then instructions and responses for every subtopic.<span class="cite"><a href="#ref-7">7</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Alpaca: các nhà nghiên cứu Stanford bắt đầu từ 175 cặp chỉ dẫn–phản hồi hạt giống của tập Self-Instruct<span class="cite"><a href="#ref-8">8</a></span> rồi dùng <span lang="en">text-davinci-003</span> sinh ra 52.000 cặp mới.<span class="cite"><a href="#ref-6">6</a></span> MetaMath: viết lại 15.000 ví dụ của MATH và GSM-8K theo nhiều cách để tạo ra gần 400.000 ví dụ.<span class="cite"><a href="#ref-16">16</a></span></span>
+            <span class="easy-only">Từ 175 ví dụ mẫu, người ta nhờ máy nhân lên thành 52.000 ví dụ để dạy một mô hình mới.</span>
+            <span class="en-only" lang="en">Alpaca: Stanford researchers began with 175 seed (instruction, response) pairs from the Self-Instruct seed dataset<span class="cite"><a href="#ref-8">8</a></span> and used text-davinci-003 to generate 52,000 more.<span class="cite"><a href="#ref-6">6</a></span> MetaMath: rewriting the 15,000 examples in MATH and GSM-8K produced almost 400,000.<span class="cite"><a href="#ref-16">16</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Người ta chỉ tổng hợp thứ mình xác minh được</h4>
+              <p>Giống như đánh giá dẫn dắt phát triển ở Chương 4, người ta có xu hướng sinh ra loại dữ liệu mà mình kiểm được. Đó là lý do phần lớn dữ liệu tổng hợp dùng cho Llama 3 là dữ liệu lập trình: nó kiểm được bằng cách chạy. Quy trình của nhóm Llama 3 gồm sáu bước — sinh đề bài, sinh lời giải, sinh <em>bài kiểm thử đơn vị</em> bằng AI, bắt AI sửa lỗi dựa trên phản hồi của trình phân tích cú pháp và kiểm thử, dịch mã sang ngôn ngữ khác rồi lọc bỏ phần không qua kiểm thử, và cuối cùng sinh giải thích rồi xác minh bằng dịch ngược. Kết quả: hơn 2,7 triệu ví dụ liên quan tới lập trình cho tinh chỉnh có giám sát của Llama 3.1, với khoảng 20% lời giải ban đầu sai nhưng tự sửa được.<span class="cite"><a href="#ref-4">4</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Chưng cất mô hình</h4>
+              <p>Chưng cất là huấn luyện một mô hình nhỏ (trò) bắt chước một mô hình lớn (thầy) bằng chính dữ liệu do thầy sinh ra. DistilBERT giảm 40% kích thước BERT mà giữ 97% năng lực hiểu ngôn ngữ và nhanh hơn 60%.<span class="cite"><a href="#ref-12">12</a></span> Alpaca chỉ bằng 4% kích thước mô hình thầy 175 tỉ tham số.<span class="cite"><a href="#ref-6">6</a></span> Nhưng không phải cứ huấn luyện bằng dữ liệu tổng hợp là chưng cất: Nemotron-4-340B-Instruct được tinh chỉnh bằng dữ liệu do một mô hình <em>nhỏ hơn</em> sinh ra và vượt luôn thầy trên nhiều tác vụ.<span class="cite"><a href="#ref-13">13</a></span> Lưu ý pháp lý: nhiều giấy phép cấm dùng đầu ra của mô hình để huấn luyện mô hình khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">07</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Model collapse · limits of AI-generated data</div>
+          <h3><span class="standard-copy">Giới hạn — và hiện tượng sụp đổ mô hình</span><span class="easy-only">Khi máy học từ chính nó</span><span class="en-only" lang="en">The limits — and model collapse</span></h3>
+          <p class="standard-copy">Dữ liệu tổng hợp sẽ ngày càng quan trọng, nhưng theo bà, nó có lẽ sẽ không bao giờ thay thế hoàn toàn dữ liệu do người tạo ra. Có bốn lý do chính: khó kiểm soát chất lượng; bắt chước hời hợt; nguy cơ <em lang="en">model collapse</em> (sụp đổ mô hình); và việc sinh bằng AI làm mờ xuất xứ dữ liệu.<span class="cite"><a href="#ref-1">1</a></span> Riêng lý do thứ hai được ghi lại trong <span lang="en">“The False Promise of Imitating Proprietary LLMs”</span>: mô hình bắt chước giỏi sao chép <em>văn phong</em> của mô hình thầy nhưng chật vật với độ chính xác sự thật và khả năng tổng quát hóa ra ngoài dữ liệu huấn luyện.<span class="cite"><a href="#ref-11">11</a></span></p>
+          <p class="easy-only">Nếu máy chỉ học từ bài do máy viết ra, qua nhiều vòng nó sẽ quên dần những chuyện hiếm và chỉ còn nhớ chuyện thường gặp — giống như chép lại bản chép, mỗi lần lại mờ đi một chút. Nhớ nhé: phải luôn trộn thêm ví dụ thật của con người vào.</p>
+          <p class="en-only" lang="en">Synthetic data will keep growing in importance, but she argues it may never fully replace human-generated data. Four main reasons: quality control is hard; imitation can be superficial; there is the risk of model collapse; and AI generation obscures data lineage.<span class="cite"><a href="#ref-1">1</a></span> The second is documented in “The False Promise of Imitating Proprietary LLMs”: imitation models are good at mimicking the teacher’s style but struggle with factual accuracy and generalisation beyond the training data.<span class="cite"><a href="#ref-11">11</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Bắt chước có thể ép mô hình trò nói dối: nếu thầy giải được toán khó, huấn luyện trò trên các lời giải ấy thực chất dạy trò tạo ra thứ <em>trông giống</em> lời giải, kể cả khi trò không giải nổi.<span class="cite"><a href="#ref-11">11</a></span></span>
+            <span class="easy-only">Bắt chước lời giải mà không hiểu thì chỉ học được cách nói cho giống người biết làm.</span>
+            <span class="en-only" lang="en">Imitation can force the student to hallucinate: if the teacher can solve hard maths, training on its solutions teaches the student to produce things that <em>look like</em> solutions, even when it cannot solve them.<span class="cite"><a href="#ref-11">11</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Cơ chế của sụp đổ</h4>
+              <p>Bài <span lang="en">“The Curse of Recursion”</span> đặt tên cho hiện tượng này và chứng minh nó xảy ra ở nhiều họ mô hình, từ bộ tự mã hóa biến phân tới LLM.<span class="cite"><a href="#ref-9">9</a></span> Một cách giải thích: mô hình thiên về sinh ra các sự kiện <em>nhiều khả năng</em> và ít khi sinh ra sự kiện hiếm; qua nhiều vòng lặp, cái thường gặp bị thổi phồng còn cái hiếm biến mất. Điều đáng nói là bức tranh không bi quan tuyệt đối: <span lang="en">“Is Model Collapse Inevitable?”</span> lập luận rằng sụp đổ là tất yếu <em>nếu toàn bộ</em> tập huấn luyện là dữ liệu tổng hợp, nhưng có thể tránh được bằng cách trộn dữ liệu tổng hợp với dữ liệu thật — dù chưa nghiên cứu nào đưa ra được tỉ lệ khuyến nghị dứt khoát.<span class="cite"><a href="#ref-10">10</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Xuất xứ mờ</h4>
+              <p>Đây là giới hạn tinh tế nhất. Nếu ta dùng mô hình X để sinh dữ liệu huấn luyện mô hình của mình, mà X từng được huấn luyện trên dữ liệu vi phạm bản quyền, mô hình của ta cũng có thể vi phạm. Tệ hơn, nếu sau đó ta đánh giá mô hình mình trên chuẩn B mà X cũng đã học B, kết quả trên B đã bị nhiễm bẩn. Không có xuất xứ rõ ràng thì rất khó đánh giá tính khả thi thương mại hay tin vào con số hiệu năng.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong><span class="vi-only">Không phải cứ do máy sinh ra là kém hơn</span><span class="en-only" lang="en">Machine-made doesn’t mean worse</span></strong>
+      <span class="standard-copy">Anthropic đã dùng nhiều kỹ thuật tổng hợp để tạo các tập dữ liệu kiểm tra 154 hành vi khác nhau của AI — tính cách, quan điểm chính trị, lập trường đạo đức, thiên kiến xã hội. Khi so trực tiếp, họ kết luận rằng “các tập dữ liệu do mô hình ngôn ngữ viết tiệm cận chất lượng của tập do người viết, đôi khi còn vượt”.<span class="cite"><a href="#ref-15">15</a></span> Điểm mấu chốt không phải nguồn gốc của dữ liệu mà là có xác minh được nó hay không.</span>
+      <span class="easy-only">Có nghiên cứu cho thấy đề bài do máy soạn đôi khi còn tốt ngang, thậm chí hơn đề do người soạn. Nhớ nhé: quan trọng là kiểm được, chứ không phải ai làm ra.</span>
+      <span class="en-only" lang="en">Anthropic used a range of synthesis techniques to build datasets testing 154 different AI behaviours — personality traits, political views, ethical stances, social biases. In head-to-head comparisons they concluded that “LM-written datasets approach the quality of human-written ones, sometimes even exceeding them”.<span class="cite"><a href="#ref-15">15</a></span> What matters is not where the data came from but whether you can verify it.</span>
+    </aside>
+
+    <div class="trap-comparison deep-only">
+      <h3><span class="standard-copy">Ba hiểu lầm hay gặp</span><span class="en-only" lang="en">Three common misconceptions</span></h3>
+      <p class="standard-copy">Ba câu dưới đây nghe rất hợp lý, và đều sai theo một cách tốn kém.</p>
+      <p class="en-only" lang="en">The three statements below sound perfectly reasonable, and each is wrong in an expensive way.</p>
+      <div class="comparison-grid">
+        <div class="comparison-card">
+          <h4><span class="standard-copy">“Càng nhiều dữ liệu càng tốt”</span><span class="en-only" lang="en">“More data is always better”</span></h4>
+          <p class="standard-copy">Một lượng nhỏ dữ liệu chất lượng cao có thể vượt một lượng lớn dữ liệu nhiễu: 10.000 chỉ dẫn soạn kỹ thắng hàng trăm nghìn chỉ dẫn ẩu.<span class="cite"><a href="#ref-3">3</a></span> Lợi ích của mỗi ví dụ thêm vào cũng giảm dần, và trong vài trường hợp thêm dữ liệu quá dị biệt còn làm hiệu năng tệ đi.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="en-only" lang="en">A small amount of high-quality data can beat a large amount of noisy data: 10,000 carefully crafted instructions outperformed hundreds of thousands of noisy ones.<span class="cite"><a href="#ref-3">3</a></span> Each extra example also yields less than the last, and in some cases adding more heterogeneous data actively hurts.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="comparison-card">
+          <h4><span class="standard-copy">“Dữ liệu tổng hợp là dữ liệu miễn phí”</span><span class="en-only" lang="en">“Synthetic data is free data”</span></h4>
+          <p class="standard-copy">Nó rẻ để sinh ra nhưng không rẻ để tin. Phải xác minh; phải đề phòng bắt chước hời hợt<span class="cite"><a href="#ref-11">11</a></span>; phải trộn dữ liệu thật để tránh sụp đổ qua nhiều vòng<span class="cite"><a href="#ref-10">10</a></span>; và phải chấp nhận rằng xuất xứ của nó đã mờ đi.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="en-only" lang="en">It is cheap to produce but not cheap to trust. You must verify it; guard against superficial imitation<span class="cite"><a href="#ref-11">11</a></span>; mix in real data to avoid collapse across iterations<span class="cite"><a href="#ref-10">10</a></span>; and accept that its lineage is now obscured.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="comparison-card">
+          <h4><span class="standard-copy">“Chương này chỉ dành cho người tinh chỉnh”</span><span class="en-only" lang="en">“This chapter is only for people who finetune”</span></h4>
+          <p class="standard-copy">Tác giả đặt chương ngay sau tinh chỉnh, nhưng phạm vi rộng hơn thế: hướng dẫn gán nhãn ở đây trùng với hướng dẫn đánh giá ở Chương 4, và bánh đà dữ liệu ứng dụng khép vòng ở Chương 10. Ai xây hệ thống AI cũng phải làm dữ liệu, kể cả khi không bao giờ chạy một lệnh huấn luyện nào.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="en-only" lang="en">The chapter sits right after finetuning, but its scope is wider: the annotation guidelines here are the same ones as the evaluation guidelines in Chapter 4, and the application data flywheel closes its loop in Chapter 10. Anyone building an AI system does data work, even if they never launch a training run.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="processing" aria-labelledby="processing-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Xử lý dữ liệu</span><span class="easy-only">Rửa và xếp lại</span><span class="en-only" lang="en">Data processing</span></div>
+        <h2 id="processing-title"><span class="standard-copy">Soi, khử trùng lặp, làm sạch, định dạng</span><span class="easy-only">Rửa sạch rồi xếp cho gọn</span><span class="en-only" lang="en">Inspect, dedupe, clean, format</span></h2>
+      </div>
+      <p class="standard-copy">Khi đã có dữ liệu thô, phần việc còn lại nghe rất tầm thường nhưng quyết định phần lớn kết quả. Huyen đưa mấy lời khuyên vận hành rất thực tế: làm các bước theo thứ tự nào tiết kiệm thời gian và sức tính nhất (nếu làm sạch tốn hơn khử trùng lặp thì khử trùng lặp trước, và ngược lại); luôn chạy thử trên một mẫu nhỏ trước khi áp kịch bản lên toàn bộ dữ liệu; và tránh sửa dữ liệu tại chỗ — hãy giữ một bản gốc, vì đội khác có thể cần xử lý khác, và vì lỗi trong kịch bản của bạn có thể làm hỏng dữ liệu.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Có nguyên liệu rồi thì phải rửa, bỏ phần hỏng, bỏ phần trùng, rồi xếp đúng khay. Mẹo: thử rửa vài món trước đã, và luôn giữ lại một phần nguyên bản phòng khi làm hỏng. Nhớ nhé: đừng bao giờ sửa thẳng vào bản gốc.</p>
+      <p class="en-only" lang="en">Once you have raw data, the remaining work sounds mundane and decides most of the outcome. Huyen’s operational advice is practical: do the steps in whichever order saves time and compute (if cleaning costs more than deduplicating, dedupe first — and vice versa); always trial-run your scripts before applying them to everything; and avoid changing data in place — keep a copy of the original, because another team may need to process it differently and because bugs in your scripts can corrupt it.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+
+    <div class="surprise-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Nhìn dữ liệu bằng mắt mình, trong mười lăm phút, thường cho ra một hiểu biết tiết kiệm được hàng giờ đau đầu.</p>
+        <p class="definition easy-only">Ngồi xem thử dữ liệu mười lăm phút thường phát hiện ra thứ mà không công cụ nào chỉ cho bạn.</p>
+        <p class="definition en-only" lang="en">Staring at your data for fifteen minutes usually gives you an insight that saves hours of headaches.</p>
+        <p class="deep-only">Đây là kinh nghiệm bà rút ra từ mọi dự án đã làm; bà dẫn thêm một câu của Greg Brockman, đồng sáng lập OpenAI: “Soi dữ liệu bằng tay có lẽ là hoạt động có tỉ lệ giá trị trên danh tiếng cao nhất trong học máy.”<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="equation">
+        <div class="equation-row">
+          <b><span class="vi-only">Soi</span><span class="en-only" lang="en">Inspect</span></b>
+          <span><span class="standard-copy">Thống kê, phân bố token, độ dài, chủ đề, ngôn ngữ, bất đồng giữa người gán nhãn</span><span class="easy-only">Xem thử dữ liệu có gì.</span><span class="en-only" lang="en">Statistics, token and length distributions, topics, languages, inter-annotator disagreement</span></span>
+        </div>
+        <div class="equation-row">
+          <b><span class="vi-only">Khử trùng lặp</span><span class="en-only" lang="en">Deduplicate</span></b>
+          <span><span class="standard-copy">So từng cặp, băm (MinHash, bộ lọc Bloom), hoặc giảm chiều rồi so</span><span class="easy-only">Bỏ các ví dụ giống hệt nhau.</span><span class="en-only" lang="en">Pairwise comparison, hashing (MinHash, Bloom filter), or dimensionality reduction first</span></span>
+        </div>
+        <div class="equation-row">
+          <b><span class="vi-only">Làm sạch &amp; lọc</span><span class="en-only" lang="en">Clean &amp; filter</span></b>
+          <span><span class="standard-copy">Bỏ token định dạng thừa, bỏ dữ liệu không tuân thủ, bỏ dữ liệu kém</span><span class="easy-only">Bỏ rác và bỏ phần không được dùng.</span><span class="en-only" lang="en">Strip extraneous formatting tokens, remove non-compliant data, drop low-quality examples</span></span>
+        </div>
+        <div class="equation-row">
+          <b><span class="vi-only">Định dạng</span><span class="en-only" lang="en">Format</span></b>
+          <span><span class="standard-copy">Đưa về đúng khuôn hội thoại và bộ tách token mà mô hình mong đợi</span><span class="easy-only">Xếp đúng khay mà máy quen.</span><span class="en-only" lang="en">Into the exact chat template and tokenizer the model expects</span></span>
+        </div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">08</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Inspect data</div>
+          <h3><span class="standard-copy">Soi dữ liệu — việc không có công cụ nào thay được</span><span class="easy-only">Ngồi xem dữ liệu</span><span class="en-only" lang="en">Inspect — the step no tool replaces</span></h3>
+          <p class="standard-copy">Việc đầu tiên với một tập thô là soi để cảm nhận chất lượng của nó: dữ liệu đến từ đâu, đã được xử lý thế nào, đã dùng vào việc gì khác. Rồi vẽ phân bố: token nào hay gặp, độ dài đầu vào và phản hồi ra sao, có token đặc biệt nào không, chủ đề và ngôn ngữ trong dữ liệu liên quan tới tác vụ tới đâu. Vẽ các phân bố ấy theo nguồn, theo thời gian, theo người gán nhãn — rồi hỏi: có mẫu câu hỏi nào luôn nhận phản hồi ngắn hơn không? Có ngoại lai nào không, và vì sao?<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Trước khi nấu, hãy mở từng túi nguyên liệu ra xem. Đọc thử vài ví dụ, tự chấm lại vài câu xem mình có chấm giống người kia không. Nhớ nhé: công cụ vẽ biểu đồ không thay được đôi mắt mình.</p>
+          <p class="en-only" lang="en">The first thing to do with a raw dataset is inspect it to get a feel for its quality: where it came from, how it was processed, what else it has been used for. Then plot distributions: which tokens are common, input and response lengths, any special tokens, how relevant the topics and languages are to your task. Plot them by source, by time, by annotator — then ask: which question patterns always get shorter answers? Are there outliers, and why?<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Một cách soi rất hay: chọn vài câu hỏi trong tập đã gán nhãn và tự gán nhãn lại, xem nhãn của mình có khớp nhãn có sẵn không. Đó là cách nhanh nhất để biết nhãn đáng tin tới đâu.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Tự chấm thử vài bài rồi so với điểm có sẵn — sẽ biết ngay người chấm trước có đáng tin không.</span>
+            <span class="en-only" lang="en">A good trick: pick a few annotated queries and annotate them yourself, then see whether your labels match. It is the fastest way to learn how trustworthy the annotations are.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Sáng tạo trong thống kê</h4>
+              <p>Thống kê để soi dữ liệu không nhất thiết phải tầm thường. Cuốn sách dẫn một nhóm nghiên cứu Microsoft (2023) dùng phân bố bộ ba (động từ, tân ngữ trực tiếp, danh từ) cùng độ dài phản hồi để so sánh đầu ra của GPT-3 và GPT-4 trên cùng một bộ chỉ dẫn; GPT-4 cho dải kết hợp động từ–danh từ rộng và đa dạng hơn, đồng thời phản hồi dài hơn. Kiểu phân tích này hữu ích để đánh giá cả dữ liệu lẫn mô hình.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Câu hỏi khi soi</h4>
+              <p>Nếu điểm số lẽ ra phải phân phối chuẩn, điểm của <em>từng</em> người gán nhãn có chuẩn không? Có ví dụ nào cùng câu hỏi mà khác phản hồi? Có ví dụ nào cùng phản hồi mà khác câu hỏi? Những câu hỏi tưởng vụn vặt ấy chính là thứ phát hiện ra trùng lặp, mâu thuẫn và lỗi quy trình trước khi chúng thành lỗi mô hình.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">09</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Deduplicate data</div>
+          <h3><span class="standard-copy">Khử trùng lặp — cái giá của bản sao</span><span class="easy-only">Bỏ bản sao</span><span class="en-only" lang="en">Deduplicate — what copies cost</span></h3>
+          <p class="standard-copy">Dữ liệu trùng lặp làm lệch phân bố và đưa thiên kiến vào mô hình — một tập mà mọi đồ màu đỏ tình cờ đều bị nhân bản sẽ dạy mô hình kết luận sai rằng đồ màu đỏ thì đắt. Nó còn gây nhiễm bẩn tập kiểm tra: khi chia dữ liệu trùng thành tập huấn luyện và tập kiểm tra, một ví dụ có thể nằm ở bên này còn bản sao của nó nằm ở bên kia.<span class="cite"><a href="#ref-1">1</a></span> Trùng lặp cũng có nhiều dạng khó thấy: trùng cả tài liệu, trùng trong một tài liệu (cùng một đoạn xuất hiện hai lần), và trùng chéo tài liệu (một câu trích dẫn nổi tiếng xuất hiện khắp nơi).</p>
+          <p class="easy-only">Nếu trong rổ có ba quả táo giống hệt nhau, máy sẽ tưởng táo quan trọng gấp ba. Tệ hơn: một quả nằm ở phần dạy, quả kia nằm ở phần thi — thế là máy thi lại đúng bài đã học. Nhớ nhé: bỏ bản sao đi trước khi dạy.</p>
+          <p class="en-only" lang="en">Duplicated data skews the distribution and injects bias — a set where every red item happens to be duplicated teaches the model that red things are expensive. It also causes test-set contamination: split duplicated data into train and test and one copy lands on each side.<span class="cite"><a href="#ref-1">1</a></span> Duplication comes in forms that are hard to spot: whole-document, intra-document (the same paragraph twice in one file), and cross-document (a popular quote appearing everywhere).</p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Một nghiên cứu của Anthropic cho thấy chỉ cần lặp lại 0,1% dữ liệu 100 lần là đủ để hiệu năng của một mô hình 800 triệu tham số tụt xuống ngang mô hình 400 triệu tham số, dù 90% token còn lại vẫn độc nhất.<span class="cite"><a href="#ref-14">14</a></span></span>
+            <span class="easy-only">Chỉ cần chép lại một phần rất nhỏ của bài học nhiều lần là máy đã học kém hẳn đi.</span>
+            <span class="en-only" lang="en">An Anthropic study showed that repeating 0.1% of the data 100 times degrades an 800M-parameter model to the performance of a 400M-parameter one, even though the other 90% of tokens remain unique.<span class="cite"><a href="#ref-14">14</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Ba cách khử</h4>
+              <p>So từng cặp: tính điểm tương đồng của mỗi ví dụ với mọi ví dụ khác bằng khớp chính xác, khớp n-gram, khớp mờ hay tương đồng ngữ nghĩa — chính xác nhưng đắt với tập lớn. Băm: đưa các ví dụ vào các rổ khác nhau rồi chỉ so trong cùng rổ; MinHash và bộ lọc Bloom thuộc nhóm này. Giảm chiều: rút gọn số chiều trước rồi mới so từng cặp, tái dùng được nhiều kỹ thuật của tìm kiếm vector ở Chương 6.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>“Trùng” là một định nghĩa, không phải một sự thật</h4>
+              <p>Trước khi khử, phải tự trả lời: trùng ở mức tài liệu, đoạn, câu hay token? Hai đoạn phải giống hệt mới tính là trùng, hay chồng lấn 80% đã đủ? Hai danh sách cùng phần tử nhưng khác thứ tự có phải là trùng không?<span class="cite"><a href="#ref-1">1</a></span> Ngưỡng bạn chọn ở đây quyết định phần lớn kết quả của bước này.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">10</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Clean, filter &amp; format</div>
+          <h3><span class="standard-copy">Làm sạch và định dạng — chi tiết nhỏ, hậu quả lớn</span><span class="easy-only">Rửa sạch, xếp đúng khay</span><span class="en-only" lang="en">Clean and format — small details, large consequences</span></h3>
+          <p class="standard-copy">Phần lớn dữ liệu công khai được cào từ Internet, nên thẻ HTML thừa rất phổ biến — trừ khi bạn muốn dạy mô hình về thẻ HTML, hãy bỏ chúng đi. Kế đến là tuân thủ: gỡ mọi thứ vi phạm chính sách, từ thông tin định danh cá nhân tới dữ liệu có bản quyền hay độc hại, và xóa hẳn những trường không được phép dùng. Cuối cùng là định dạng: mỗi mô hình có bộ tách token riêng và mong đợi một khuôn hội thoại riêng — đưa sai khuôn có thể sinh ra những lỗi rất kỳ quặc.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Nguyên liệu mua về còn dính rác: mã trang web, khoảng trắng thừa, thông tin riêng tư của người khác. Rửa sạch rồi xếp đúng khay mà máy quen nhìn. Nhớ nhé: xếp sai khay thì máy học sai, dù nguyên liệu vẫn ngon.</p>
+          <p class="en-only" lang="en">Most public data is scraped from the internet, so stray HTML tags are common — unless you want to train your model on HTML tags, remove them. Then compliance: strip anything that violates your policies, from PII to copyrighted or toxic content, and delete fields you are not allowed to use. Finally formatting: every model has its own tokenizer and expects a specific chat template — the wrong one causes strange bugs.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Databricks phát hiện rằng chỉ riêng việc bỏ các token Markdown và HTML thừa đã nâng độ chính xác của mô hình lên 20% và giảm độ dài đầu vào 60%.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Chỉ cần bỏ mã trang web thừa, một đội đã làm máy giỏi hơn hẳn mà lại tốn ít chữ hơn.</span>
+            <span class="en-only" lang="en">Databricks found that simply removing extraneous Markdown and HTML tokens improved their model’s accuracy by 20% while cutting input token length by 60%.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Khuôn prompt sau tinh chỉnh</h4>
+              <p>Chỉ dẫn dùng khi tinh chỉnh thường khác chỉ dẫn dùng khi làm kỹ thuật prompt: khi đã có đủ ví dụ, mô hình học được hành vi mong muốn từ chính các ví dụ, nên không cần mô tả tác vụ hay ví dụ mẫu nữa. Một prompt ba ví dụ có thể được chuyển thẳng thành ba ví dụ huấn luyện, và sau khi tinh chỉnh, prompt rút gọn còn đúng <code>{INPUT} --&gt;</code>. Nhưng lúc dùng thì prompt phải khớp <em>y hệt</em> khuôn đã huấn luyện: thiếu mũi tên, thêm tiền tố “Item: ”, hay thừa một dấu cách ở cuối đều có thể gây lỗi.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Lọc khi dư dữ liệu</h4>
+              <p>Nếu có nhiều dữ liệu hơn mức cần hoặc mức kham nổi, có thể lọc tiếp bằng học chủ động để chọn các ví dụ giúp mô hình học được nhiều nhất, hoặc bằng lấy mẫu theo tầm quan trọng. Hiệu quả của chúng phụ thuộc vào việc bạn có cách đánh giá tầm quan trọng của từng ví dụ hay không. Nhóm nghiên cứu của Meta, trong bài về tỉa dữ liệu, kết luận rằng tìm ra các độ đo tỉa dữ liệu tốt có thể giảm đáng kể chi phí tài nguyên của học sâu hiện đại.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong><span class="vi-only">Thứ tự không cố định</span><span class="en-only" lang="en">The order is not fixed</span></strong>
+      <span class="standard-copy">Với dữ liệu lớn, mỗi bước xử lý có thể mất hàng giờ, thậm chí hàng ngày. Vì thế hãy sắp thứ tự theo cái nào tiết kiệm hơn: nếu làm sạch mỗi ví dụ tốn thời gian hơn khử trùng lặp, hãy khử trùng lặp trước; nếu ngược lại, hãy lọc dữ liệu kém trước.<span class="cite"><a href="#ref-1">1</a></span></span>
+      <span class="easy-only">Việc nào nhanh thì làm trước để đỡ mất công — bỏ bản sao trước rồi hãy rửa, hoặc ngược lại, tùy cái nào tốn thời gian hơn.</span>
+      <span class="en-only" lang="en">With a large dataset each processing step can take hours, even days. So order them by whichever saves more: if cleaning each example costs more than deduplicating, dedupe first; if not, filter out the low-quality data first.<span class="cite"><a href="#ref-1">1</a></span></span>
+    </aside>
+  </section>
+
+  <section class="section" id="diagnostic" aria-labelledby="diagnostic-title">
+    <div class="diagnostic">
+      <div class="diagnostic-intro">
+        <div class="eyebrow"><span class="standard-copy">Tự kiểm</span><span class="easy-only">Tự hỏi mình</span><span class="en-only" lang="en">Diagnostic</span></div>
+        <h2 id="diagnostic-title"><span class="standard-copy">Năm câu hỏi cho tập dữ liệu của bạn</span><span class="easy-only">Năm câu tự hỏi</span><span class="en-only" lang="en">Five questions for your dataset</span></h2>
+        <p class="standard-copy">Không câu nào đòi bạn phải chạy một lệnh huấn luyện. Chúng chỉ đòi bạn nhìn thẳng vào dữ liệu mình đang có — điều mà theo tác giả, mười lăm phút là đủ để bắt đầu.</p>
+        <p class="easy-only">Không cần máy móc gì, chỉ cần ngồi xem lại dữ liệu của mình và tự trả lời.</p>
+        <p class="en-only" lang="en">None of these requires you to launch a training run. They only ask you to look squarely at the data you already have — which, per the author, takes about fifteen minutes to start.</p>
+      </div>
+      <div>
+        <div class="question-list standard-copy">
+          <div class="question">
+            <div>
+              <strong>Bạn muốn mô hình học <em>hành vi</em> nào, và dữ liệu của bạn có thể hiện đúng hành vi ấy không?</strong>
+              <span>Dữ liệu huấn luyện phải trưng ra chính những hành vi ta muốn mô hình học được.</span>
+              <span class="deep-only">Với suy luận từng bước, dữ liệu phải chứa phản hồi từng bước — và loại dữ liệu này hiếm hơn hẳn dữ liệu chỉ dẫn thường, vì giải thích cách giải một bài toán tốn công hơn nhiều so với chỉ đưa đáp số.<span class="cite"><a href="#ref-1">1</a></span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Có hành vi nào cần mô hình <em>quên</em> đi không?</strong>
+              <span>Tuyển chọn không chỉ là thêm vào mà còn là gỡ ra: tìm các ví dụ đang dạy mô hình thói xấu và bỏ chúng đi.</span>
+              <span class="deep-only">Ví dụ của chính tác giả: chatbot cứ tự ý viết lại câu của người dùng, truy ra là do trong dữ liệu có nhiều nhãn kèm gợi ý không ai yêu cầu.<span class="cite"><a href="#ref-1">1</a></span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Bản hướng dẫn gán nhãn của bạn đã trả lời được câu “3 điểm khác 4 điểm ở chỗ nào” chưa?</strong>
+              <span>Nếu chưa, mọi con số chất lượng phía sau đều là ảo.</span>
+              <span class="deep-only">Và nếu đã có bộ tiêu chí đánh giá từ Chương 4, đừng viết lại từ đầu — đó là cùng một tài liệu.<span class="cite"><a href="#ref-1">1</a></span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Bạn đã thử với 50 ví dụ chưa, trước khi đặt hàng 50.000?</strong>
+              <span>Trong đại đa số trường hợp, 50–100 ví dụ đã đủ để thấy tinh chỉnh có ích hay không.</span>
+              <span class="deep-only">Nếu tập nhỏ không cải thiện gì, tập lớn hiếm khi cứu được — nhưng hãy loại trừ các nguyên nhân khác trước: siêu tham số, chất lượng dữ liệu, prompt soạn ẩu.<span class="cite"><a href="#ref-1">1</a></span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Nếu dùng dữ liệu tổng hợp, bạn <em>xác minh</em> nó bằng cách nào?</strong>
+              <span>Người ta chỉ nên tổng hợp thứ mình kiểm được: bằng tính đúng đắn chức năng, bằng giám khảo AI, hoặc bằng heuristic.</span>
+              <span class="deep-only">Và dù xác minh tốt tới đâu, hãy giữ dữ liệu thật trong hỗn hợp: sụp đổ mô hình là tất yếu nếu toàn bộ tập huấn luyện là dữ liệu tổng hợp.<span class="cite"><a href="#ref-10">10</a></span></span>
+            </div>
+          </div>
+        </div>
+        <div class="question-list easy-only">
+          <div class="question">
+            <div>
+              <strong>Bạn muốn máy học làm gì, và ví dụ của bạn có làm đúng điều ấy không?</strong>
+              <span>Muốn máy giải từng bước thì ví dụ cũng phải giải từng bước.</span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Có thói xấu nào của máy cần bỏ không?</strong>
+              <span>Nếu có, hãy tìm những ví dụ đang dạy nó thói ấy và lấy ra.</span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Bạn đã viết ra luật chấm bài chưa?</strong>
+              <span>Phải nói rõ thế nào là tốt, không thì mỗi người chấm một kiểu.</span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Bạn đã thử với 50 ví dụ trước chưa?</strong>
+              <span>Thử ít trước, thấy có ích rồi hãy làm nhiều.</span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Nếu để máy tự nghĩ ra ví dụ, ai kiểm lại?</strong>
+              <span>Luôn trộn thêm ví dụ thật của con người vào.</span>
+            </div>
+          </div>
+        </div>
+        <div class="question-list en-only" lang="en">
+          <div class="question">
+            <div>
+              <strong>Which <em>behaviours</em> do you want the model to learn, and does your data exhibit them?</strong>
+              <span>Training data should exhibit the behaviours you want the model to learn — step-by-step answers require step-by-step data.<span class="cite"><a href="#ref-1">1</a></span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Is there a behaviour the model needs to <em>unlearn</em>?</strong>
+              <span>Curation is removal as well as addition: find the examples teaching the bad habit and take them out.<span class="cite"><a href="#ref-1">1</a></span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Does your annotation guideline answer “what separates a 3 from a 4”?</strong>
+              <span>If not, every quality number downstream is fiction — and if you already wrote evaluation criteria in Chapter 4, that is the same document.<span class="cite"><a href="#ref-1">1</a></span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Have you tried 50 examples before commissioning 50,000?</strong>
+              <span>In the vast majority of cases, 50–100 examples are enough to tell whether finetuning helps at all.<span class="cite"><a href="#ref-1">1</a></span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>If you use synthetic data, how do you <em>verify</em> it?</strong>
+              <span>Synthesise only what you can check — and keep real data in the mix: collapse is inevitable if the entire training set is synthetic.<span class="cite"><a href="#ref-10">10</a></span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="closing" id="closing" aria-labelledby="closing-title">
+    <div class="eyebrow" id="closing-title"><span class="standard-copy">Đọng lại</span><span class="easy-only">Đọng lại</span><span class="en-only" lang="en">The distillation</span></div>
+    <div>
+      <blockquote class="standard-copy">Ta có thể tự động hóa việc <span class="closing-accent">sinh ra</span> dữ liệu, nhưng không tự động hóa được việc <span class="closing-accent">nghĩ xem mình cần dữ liệu gì</span> — và càng không tự động hóa được <span class="closing-accent">sự để ý tới chi tiết</span>.<span class="cite"><a href="#ref-1">1</a></span></blockquote>
+      <blockquote class="easy-only">Máy có thể tự nghĩ ra ví dụ, nhưng không tự nghĩ được <span class="closing-accent">mình cần ví dụ gì</span>. Nhớ nhé: phần ấy vẫn là việc của con người.</blockquote>
+      <blockquote class="en-only" lang="en">You can automate <span class="closing-accent">generating</span> data, but you can’t automate <span class="closing-accent">thinking through what data you want</span> — and you certainly can’t automate <span class="closing-accent">paying attention to details</span>.<span class="cite"><a href="#ref-1">1</a></span></blockquote>
+    </div>
+  </section>
+
+  <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+  <nav class="chapter-nav" aria-label="Điều hướng chương">
+    <a class="nav-cell nav-prev" href="chapter-7-finetuning.html">
+      <div class="nav-label">◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span></div>
+      <div class="nav-title"><span class="vi-only">Chương 7 · Tinh chỉnh</span><span class="en-only" lang="en">Chapter 7 · Finetuning</span></div>
+    </a>
+    <a class="nav-cell nav-next" href="chapter-9-inference-optimization.html">
+      <div class="nav-label"><span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶</div>
+      <div class="nav-title"><span class="vi-only">Chương 9 · Tối ưu suy luận</span><span class="en-only" lang="en">Chapter 9 · Inference Optimization</span></div>
+    </a>
+  </nav>
+  <!-- NAV:END -->
+
+  <footer>
+    <div class="footer-main">
+      <p class="standard-copy"><strong>Nguồn chính:</strong> Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, ấn bản thứ nhất, tháng 12 năm 2024 (ISBN 9781098166304) — Chương 8, <em lang="en">Dataset Engineering</em>. Trang này là bản diễn giải và tổng hợp phục vụ học tập, không phải bản dịch nguyên văn hoặc bản sao nội dung sách. Các ví dụ trong chế độ “Dễ hiểu” là minh họa do người biên soạn thêm vào.</p>
+      <p class="easy-only"><strong>Nguồn chính:</strong> Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, 2024 — Chương 8. Đây là bản diễn giải để học, không phải bản dịch. Các ví dụ dễ hiểu là do người biên soạn thêm vào cho dễ hình dung.</p>
+      <p class="en-only" lang="en"><strong>Primary source:</strong> Chip Huyen, <em>AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, first edition, December 2024 (ISBN 9781098166304) — Chapter 8, <em>Dataset Engineering</em>. This page is an interpretive study companion, not a verbatim translation or reproduction of the book. Examples in the “Dễ hiểu” mode are added illustrations by the compiler.</p>
+      <p class="vi-only"><strong>Tham chiếu</strong></p>
+      <p class="en-only" lang="en"><strong>References</strong></p>
+      <ol class="ref-list">
+        <li id="ref-1">Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em> — Chapter 8, “Dataset Engineering” (O’Reilly Media, 2024). <a href="https://www.oreilly.com/library/view/ai-engineering/9781098166298/" target="_blank" rel="noopener noreferrer">oreilly.com — trang sách</a></li>
+        <li id="ref-2">Chunting Zhou et al., “LIMA: Less Is More for Alignment” (2023). <a href="https://arxiv.org/abs/2305.11206" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2305.11206</a></li>
+        <li id="ref-3">01.AI, “Yi: Open Foundation Models by 01.AI” (Young et al., 2024). <a href="https://arxiv.org/abs/2403.04652" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2403.04652</a></li>
+        <li id="ref-4">Llama Team, AI @ Meta, “The Llama 3 Herd of Models” (Dubey et al., 2024). <a href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2407.21783</a></li>
+        <li id="ref-5">Hyung Won Chung et al., “Scaling Instruction-Finetuned Language Models” (2022). <a href="https://arxiv.org/abs/2210.11416" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2210.11416</a></li>
+        <li id="ref-6">Rohan Taori et al., “Alpaca: A Strong, Replicable Instruction-Following Model” — Stanford CRFM (2023). <a href="https://crfm.stanford.edu/2023/03/13/alpaca.html" target="_blank" rel="noopener noreferrer">crfm.stanford.edu — Alpaca</a></li>
+        <li id="ref-7">Ning Ding et al., “Enhancing Chat Language Models by Scaling High-quality Instructional Conversations” (UltraChat, 2023). <a href="https://arxiv.org/abs/2305.14233" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2305.14233</a></li>
+        <li id="ref-8">Yizhong Wang et al., “Self-Instruct: Aligning Language Models with Self-Generated Instructions” (2022). <a href="https://arxiv.org/abs/2212.10560" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2212.10560</a></li>
+        <li id="ref-9">Ilia Shumailov et al., “The Curse of Recursion: Training on Generated Data Makes Models Forget” (2023); later published as “AI models collapse when trained on recursively generated data”, <em lang="en">Nature</em>, July 2024. <a href="https://arxiv.org/abs/2305.17493" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2305.17493</a> · <a href="https://www.nature.com/articles/s41586-024-07566-y" target="_blank" rel="noopener noreferrer">nature.com</a></li>
+        <li id="ref-10">Matthias Gerstgrasser et al., “Is Model Collapse Inevitable? Breaking the Curse of Recursion by Accumulating Real and Synthetic Data” (2024). <a href="https://arxiv.org/abs/2404.01413" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2404.01413</a></li>
+        <li id="ref-11">Arnav Gudibande et al., “The False Promise of Imitating Proprietary LLMs” (2023). <a href="https://arxiv.org/abs/2305.15717" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2305.15717</a></li>
+        <li id="ref-12">Victor Sanh et al., “DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter” (2019). <a href="https://arxiv.org/abs/1910.01108" target="_blank" rel="noopener noreferrer">arxiv.org/abs/1910.01108</a></li>
+        <li id="ref-13">NVIDIA, “Nemotron-4 340B Technical Report” (2024). <a href="https://arxiv.org/abs/2406.11704" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2406.11704</a></li>
+        <li id="ref-14">Danny Hernandez et al., “Scaling Laws and Interpretability of Learning from Repeated Data” — Anthropic (2022). <a href="https://arxiv.org/abs/2205.10487" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2205.10487</a></li>
+        <li id="ref-15">Ethan Perez et al., “Discovering Language Model Behaviors with Model-Written Evaluations” — Anthropic (2022). <a href="https://arxiv.org/abs/2212.09251" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2212.09251</a></li>
+        <li id="ref-16">Longhui Yu et al., “MetaMath: Bootstrap Your Own Mathematical Questions for Large Language Models” (2023). <a href="https://arxiv.org/abs/2309.12284" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2309.12284</a></li>
+        <li id="ref-17">Chip Huyen — <a href="https://huyenchip.com/books/" target="_blank" rel="noopener noreferrer">huyenchip.com/books — trang giới thiệu sách của tác giả</a></li>
+        <li id="ref-18">Mã nguồn và tài liệu bổ trợ chính thức của sách — <a href="https://github.com/chiphuyen/aie-book" target="_blank" rel="noopener noreferrer">github.com/chiphuyen/aie-book</a></li>
+      </ol>
+      <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+      <p class="vi-only">Trong bộ bài: <a href="index.html">Trang bìa</a> · <a href="chapter-7-finetuning.html">Chương 7 · Tinh chỉnh</a> · <a href="chapter-9-inference-optimization.html">Chương 9 · Tối ưu suy luận</a></p>
+      <p class="en-only" lang="en">In this series: <a href="index.html">Cover</a> · <a href="chapter-7-finetuning.html">Chapter 7 · Finetuning</a> · <a href="chapter-9-inference-optimization.html">Chapter 9 · Inference Optimization</a></p>
+      <!-- NAV:END -->
+    </div>
+    <div class="edition"><span class="standard-copy">VI · 2026</span><span class="easy-only">VI · 2026</span><span class="en-only" lang="en">EN · 2026</span></div>
+  </footer>
+</main>
+
+
+<script>
+  (function () {
+    const STORAGE_KEY = "aie-reading-mode";
+    const VALID_MODES = ["easy", "quick", "deep"];
+    const modeButtons = document.querySelectorAll(".reading-controls [data-mode]");
+
+    function setMode(requestedMode, persist) {
+      const mode = VALID_MODES.includes(requestedMode) ? requestedMode : "deep";
+      document.documentElement.dataset.readingMode = mode;
+      modeButtons.forEach(function (button) {
+        button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
+      });
+      if (persist) {
+        try { localStorage.setItem(STORAGE_KEY, mode); } catch (_) {}
+      }
+    }
+
+    setMode(document.documentElement.dataset.readingMode, false);
+    modeButtons.forEach(function (button) {
+      button.addEventListener("click", function () { setMode(button.dataset.mode, true); });
+    });
+
+    const LANG_KEY = "aie-lang";
+    const langButtons = document.querySelectorAll(".lang-controls [data-lang-option]");
+
+    function setLang(requestedLang, persist) {
+      const lang = requestedLang === "en" ? "en" : "vi";
+      document.documentElement.dataset.lang = lang;
+      document.documentElement.setAttribute("lang", lang);
+      langButtons.forEach(function (button) {
+        button.setAttribute("aria-pressed", String(button.dataset.langOption === lang));
+      });
+      if (persist) {
+        try { localStorage.setItem(LANG_KEY, lang); } catch (_) {}
+      }
+    }
+
+    setLang(document.documentElement.dataset.lang, false);
+    langButtons.forEach(function (button) {
+      button.addEventListener("click", function () { setLang(button.dataset.langOption, true); });
+    });
+  })();
+
+  /* SECTION-RAIL: on-page section index (scroll-spy). Built from the page's own id'd
+     sections; reuses each heading's vi-only/en-only + reading-mode spans so language
+     and reading mode are handled by the existing CSS. No per-page markup. */
+  (function () {
+    if (document.querySelector(".section-rail")) return;
+    var main = document.querySelector("main") || document.body;
+    var targets = Array.prototype.slice.call(
+      document.querySelectorAll("main .section[id], main .closing[id]")
+    );
+    if (targets.length < 2) return;
+
+    function labelFor(sec) {
+      var id = sec.getAttribute("aria-labelledby");
+      var el = (id && document.getElementById(id)) ||
+               sec.querySelector(".section-heading h2, h2, h3, .eyebrow");
+      return el ? el.innerHTML : sec.id;
+    }
+
+    var nav = document.createElement("nav");
+    nav.className = "section-rail";
+    nav.setAttribute("aria-label", "Mục lục trang");
+    var list = document.createElement("ol");
+    list.className = "section-rail__list";
+    var byId = {};
+
+    targets.forEach(function (sec) {
+      var li = document.createElement("li");
+      li.className = "section-rail__item";
+      var a = document.createElement("a");
+      a.className = "section-rail__link";
+      a.href = "#" + sec.id;
+      a.innerHTML =
+        '<span class="section-rail__tick" aria-hidden="true"></span>' +
+        '<span class="section-rail__label">' + labelFor(sec) + "</span>";
+      li.appendChild(a);
+      list.appendChild(li);
+      byId[sec.id] = li;
+    });
+    nav.appendChild(list);
+    main.appendChild(nav);
+
+    var activeId = null;
+    function setActive(id) {
+      if (id === activeId) return;
+      if (activeId && byId[activeId]) byId[activeId].classList.remove("is-active");
+      if (id && byId[id]) byId[id].classList.add("is-active");
+      activeId = id;
+    }
+    function update() {
+      var line = window.innerHeight * 0.3;
+      var current = targets[0].id;
+      for (var i = 0; i < targets.length; i++) {
+        if (targets[i].getBoundingClientRect().top - line <= 0) current = targets[i].id;
+      }
+      setActive(current);
+    }
+    var ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(function () { update(); ticking = false; });
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    update();
+  })();
+</script>
+</body>
+</html>

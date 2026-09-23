@@ -1,0 +1,2005 @@
+<!doctype html>
+<html lang="vi" data-reading-mode="deep">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Chương 9 — Tối ưu suy luận: đọc hiểu song ngữ Việt–Anh chương Inference Optimization trong AI Engineering của Chip Huyen. Nút thắt compute-bound và memory bandwidth-bound, các chỉ số TTFT, TPOT, throughput, goodput, MFU, MBU, cùng kỹ thuật tối ưu ở cấp mô hình và cấp dịch vụ.">
+<title>Tối ưu suy luận · Chương 9 · AI Engineering</title>
+<link rel="icon" href="data:,">
+<script>
+  (function () {
+    const validModes = ["easy", "quick", "deep"];
+    let storedMode = "deep";
+    let storedLang = "vi";
+    try {
+      const preference = localStorage.getItem("aie-reading-mode");
+      if (validModes.includes(preference)) storedMode = preference;
+      if (localStorage.getItem("aie-lang") === "en") storedLang = "en";
+    } catch (_) {}
+    document.documentElement.dataset.readingMode = storedMode;
+    document.documentElement.dataset.lang = storedLang;
+    document.documentElement.setAttribute("lang", storedLang);
+  })();
+</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&family=Noto+Serif:wght@600;700&display=swap">
+
+<style>
+  :root {
+    --bg: #eef4ec;
+    --surface: #f5faf3;
+    --surface-strong: #ffffff;
+    --ink: #17281c;
+    --muted: #566b56;
+    --line: #cfe3c9;
+    --teal: #3f7d52;
+    --teal-soft: #d9ecdb;
+    --blue: #2f7d78;
+    --blue-soft: #d3e9e6;
+    --amber: #b0812b;
+    --amber-soft: #f0e5cb;
+    --leaf: #5aa15f;
+    --leaf-soft: #dcecd6;
+    --shadow: 0 22px 60px rgba(20, 50, 28, 0.14);
+    --display: "Noto Serif", Georgia, serif;
+    --body: "Be Vietnam Pro", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10231a;
+      --surface: #163020;
+      --surface-strong: #1d3b28;
+      --ink: #e9f5ea;
+      --muted: #9fc3a3;
+      --line: #294a35;
+      --teal: #6fce86;
+      --teal-soft: #163a24;
+      --blue: #63c3bc;
+      --blue-soft: #123833;
+      --amber: #e0b45f;
+      --amber-soft: #3a2f18;
+      --leaf: #7fd08a;
+      --leaf-soft: #163a22;
+      --shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #10231a;
+    --surface: #163020;
+    --surface-strong: #1d3b28;
+    --ink: #e9f5ea;
+    --muted: #9fc3a3;
+    --line: #294a35;
+    --teal: #6fce86;
+    --teal-soft: #163a24;
+    --blue: #63c3bc;
+    --blue-soft: #123833;
+    --amber: #e0b45f;
+    --amber-soft: #3a2f18;
+    --leaf: #7fd08a;
+    --leaf-soft: #163a22;
+    --shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(circle at 8% 4%, color-mix(in srgb, var(--teal-soft) 74%, transparent), transparent 31rem),
+      var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    line-height: 1.72;
+    overflow-x: hidden;
+  }
+
+  a { color: var(--teal); }
+
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible {
+    outline: 3px solid var(--amber);
+    outline-offset: 4px;
+  }
+
+  .page {
+    width: min(1180px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 28px 0 72px;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 10px 0 28px;
+  }
+
+  .book-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .book-label::before {
+    content: "";
+    width: 28px;
+    height: 2px;
+    background: var(--teal);
+  }
+
+  .reading-controls {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+  }
+
+  .reading-controls button {
+    min-height: 44px;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 13px;
+    background: transparent;
+    color: var(--muted);
+    font: 600 0.8rem var(--body);
+    cursor: pointer;
+  }
+
+  html[data-reading-mode="easy"] .reading-controls button[data-mode="easy"],
+  html[data-reading-mode="quick"] .reading-controls button[data-mode="quick"],
+  html[data-reading-mode="deep"] .reading-controls button[data-mode="deep"] {
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+    align-items: center;
+    gap: clamp(36px, 7vw, 92px);
+    min-height: 620px;
+    padding: 46px clamp(24px, 5vw, 64px);
+    border: 1px solid var(--line);
+    border-radius: 34px 34px 8px 34px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .hero::after {
+    content: "AI ENGINEERING / 09";
+    position: absolute;
+    right: 22px;
+    bottom: 16px;
+    color: var(--line);
+    font: 500 0.72rem var(--mono);
+    letter-spacing: 0.14em;
+  }
+
+  .eyebrow {
+    color: var(--teal);
+    font: 500 0.78rem var(--mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--display);
+    line-height: 1.13;
+    text-wrap: balance;
+  }
+
+  h1 {
+    max-width: 720px;
+    margin: 18px 0 24px;
+    font-size: clamp(3rem, 6.4vw, 6.2rem);
+    letter-spacing: -0.045em;
+  }
+
+  html[data-reading-mode="easy"] h1 {
+    font-size: clamp(2.6rem, 5.2vw, 5rem);
+  }
+
+  .hero-title-accent {
+    color: var(--teal);
+    font-style: italic;
+  }
+
+  .hero-copy > p {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: clamp(1.02rem, 1.5vw, 1.22rem);
+  }
+
+  .thesis {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    align-items: start;
+    margin-top: 34px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+  }
+
+  .thesis-mark {
+    color: var(--amber);
+    font: 700 1.5rem var(--display);
+  }
+
+  .thesis strong { display: block; margin-bottom: 4px; }
+  .thesis p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+
+  .system-map {
+    position: relative;
+    width: min(100%, 470px);
+    aspect-ratio: 1;
+    margin: auto;
+  }
+
+  .system-map::before,
+  .system-map::after {
+    content: "";
+    position: absolute;
+    inset: 14%;
+    border: 1px dashed var(--line);
+    border-radius: 50%;
+  }
+
+  .system-map::after {
+    inset: 29%;
+    border-style: solid;
+    opacity: 0.75;
+  }
+
+  .core {
+    position: absolute;
+    inset: 36%;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--surface);
+    text-align: center;
+    font: 600 0.77rem/1.35 var(--mono);
+    letter-spacing: 0.05em;
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--teal-soft) 72%, transparent);
+  }
+
+  .node {
+    position: absolute;
+    width: 132px;
+    min-height: 92px;
+    display: grid;
+    align-content: center;
+    gap: 4px;
+    padding: 15px;
+    border: 1px solid var(--line);
+    border-radius: 22px 22px 5px 22px;
+    background: var(--surface-strong);
+    box-shadow: 0 12px 30px color-mix(in srgb, var(--ink) 10%, transparent);
+  }
+
+  .node b { font-family: var(--display); font-size: 1rem; }
+  .node small { color: var(--muted); font-size: 0.7rem; line-height: 1.4; }
+  .node-resilience { top: 2%; left: 50%; transform: translateX(-50%); }
+  .node-organization { left: 2%; bottom: 8%; }
+  .node-hierarchy { right: 2%; bottom: 8%; }
+
+  .node-resilience b { color: var(--teal); }
+  .node-organization b { color: var(--blue); }
+  .node-hierarchy b { color: var(--amber); }
+
+  .pulse {
+    position: absolute;
+    inset: 29%;
+    border-radius: 50%;
+    border: 2px solid var(--teal);
+    opacity: 0;
+    animation: pulse 4.8s ease-out infinite;
+  }
+
+  @keyframes pulse {
+    0% { transform: scale(0.6); opacity: 0; }
+    18% { opacity: 0.34; }
+    78%, 100% { transform: scale(1.9); opacity: 0; }
+  }
+
+  .section {
+    padding: clamp(74px, 10vw, 128px) clamp(4px, 3vw, 28px) 0;
+  }
+
+  .section-heading {
+    display: grid;
+    grid-template-columns: minmax(210px, 0.42fr) minmax(0, 1fr);
+    gap: clamp(28px, 7vw, 86px);
+    align-items: end;
+    margin-bottom: 44px;
+  }
+
+  .section-heading h2 {
+    margin: 8px 0 0;
+    font-size: clamp(2rem, 4vw, 3.8rem);
+    letter-spacing: -0.035em;
+  }
+
+  .section-heading p {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: 1.04rem;
+  }
+
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .overview-card {
+    display: grid;
+    gap: 18px;
+    min-height: 280px;
+    padding: 26px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .overview-card:first-child { border-radius: 28px 8px 8px 8px; }
+  .overview-card:last-child { border-radius: 8px 28px 8px 8px; }
+
+  .overview-card .term {
+    font: 500 0.7rem var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .overview-card h3 { margin: 0; font-size: 1.72rem; }
+  .overview-card p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+  .overview-card .result { align-self: end; padding-top: 14px; border-top: 1px solid var(--line); font-weight: 600; }
+  .overview-card.teal .term, .overview-card.teal .result { color: var(--teal); }
+  .overview-card.blue .term, .overview-card.blue .result { color: var(--blue); }
+  .overview-card.amber .term, .overview-card.amber .result { color: var(--amber); }
+
+  .info-block {
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface-strong);
+  }
+
+  .info-block h4 {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font: 500 0.72rem var(--mono);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .info-block p { margin: 0; font-size: 0.92rem; }
+
+  .signal {
+    padding: 18px 20px;
+    border-left: 4px solid var(--teal);
+    background: var(--teal-soft);
+    color: var(--ink);
+    font-size: 0.92rem;
+  }
+
+  .signal strong { display: block; margin-bottom: 4px; }
+
+  html:not([data-reading-mode="easy"]) .easy-only,
+  html[data-reading-mode="easy"] .standard-copy,
+  html:not([data-reading-mode="deep"]) .deep-only {
+    display: none !important;
+  }
+
+  /* Bilingual: EN shows the single standard translation; VN keeps 3 modes.
+     .vi-only marks Vietnamese text outside the reading-mode system. */
+  html:not([data-lang="en"]) .en-only { display: none !important; }
+  html[data-lang="en"] .standard-copy,
+  html[data-lang="en"] .easy-only,
+  html[data-lang="en"] .deep-only,
+  html[data-lang="en"] .vi-only,
+  html[data-lang="en"] .reading-controls { display: none !important; }
+
+  .lang-controls {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+  }
+
+  .lang-controls button {
+    min-height: 44px;
+    min-width: 48px;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 13px;
+    background: transparent;
+    color: var(--muted);
+    font: 600 0.8rem var(--body);
+    cursor: pointer;
+  }
+
+  html:not([data-lang="en"]) .lang-controls button[data-lang-option="vi"],
+  html[data-lang="en"] .lang-controls button[data-lang-option="en"] {
+    background: var(--teal);
+    color: var(--surface);
+  }
+
+  .topbar-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .synthesis {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  .loop-diagram,
+  .synthesis-copy {
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .loop-diagram {
+    min-height: 500px;
+    position: relative;
+    display: grid;
+    place-items: center;
+    padding: 38px;
+    border-radius: 34px 8px 8px 8px;
+    overflow: hidden;
+  }
+
+  .loop-diagram::before {
+    content: "";
+    width: 65%;
+    aspect-ratio: 1;
+    border: 2px solid var(--line);
+    border-radius: 50%;
+  }
+
+  .loop-center {
+    position: absolute;
+    width: 150px;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--surface);
+    text-align: center;
+    font: 600 0.9rem/1.45 var(--body);
+  }
+
+  .loop-label {
+    position: absolute;
+    width: 150px;
+    padding: 13px 15px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-strong);
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .loop-label.top { top: 11%; color: var(--teal); }
+  .loop-label.left { left: 7%; bottom: 14%; color: var(--blue); }
+  .loop-label.right { right: 7%; bottom: 14%; color: var(--amber); }
+
+  .synthesis-copy {
+    display: grid;
+    align-content: center;
+    gap: 24px;
+    padding: clamp(28px, 5vw, 54px);
+    border-radius: 8px 34px 34px 8px;
+  }
+
+  .synthesis-copy h3 { margin: 0; font-size: clamp(2rem, 3.4vw, 3rem); }
+  .synthesis-copy > p { margin: 0; color: var(--muted); }
+
+  .equation {
+    display: grid;
+    gap: 10px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    background: var(--surface-strong);
+  }
+
+  .equation-row {
+    display: grid;
+    grid-template-columns: minmax(110px, 0.65fr) 1fr;
+    gap: 16px;
+    align-items: baseline;
+    font-size: 0.9rem;
+  }
+
+  .equation-row b { font-family: var(--display); font-size: 1.05rem; }
+  .equation-row span { color: var(--muted); }
+
+  .surprise-lead {
+    display: grid;
+    grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
+    gap: clamp(28px, 6vw, 72px);
+    align-items: center;
+    margin-bottom: 22px;
+    padding: clamp(28px, 5vw, 52px);
+    border: 1px solid var(--line);
+    border-radius: 34px 8px 34px 8px;
+    background: var(--surface);
+  }
+
+  .surprise-lead-copy {
+    display: grid;
+    gap: 18px;
+  }
+
+  .surprise-lead-copy p { margin: 0; }
+  .surprise-lead-copy .deep-only { color: var(--muted); font-size: 0.94rem; }
+
+  .definition {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--display);
+    font-size: clamp(1.25rem, 2vw, 1.62rem);
+    line-height: 1.5;
+  }
+
+  .english-term { color: var(--muted); font: 500 0.75rem var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+
+  .surprise-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .surprise-mechanism {
+    --mechanism-accent: var(--teal);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 18px;
+    align-content: start;
+    padding: 26px;
+    border: 1px solid var(--line);
+    border-top: 4px solid var(--mechanism-accent);
+    border-radius: 8px 24px 8px 24px;
+    background: var(--surface);
+  }
+
+  .surprise-number {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--mechanism-accent);
+    color: var(--surface);
+    font: 500 0.76rem var(--mono);
+  }
+
+  .surprise-content {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .surprise-content h3 {
+    margin: 0;
+    font-size: clamp(1.35rem, 2.3vw, 1.85rem);
+  }
+
+  .surprise-content > p { margin: 0; color: var(--muted); }
+  .surprise-content .info-block { margin-top: 2px; }
+  .surprise-connection { margin-top: 22px; }
+
+  .mechanics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .chapter-path {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 18px 0 0;
+  }
+
+  .chapter-path a {
+    display: grid;
+    gap: 5px;
+    min-height: 82px;
+    align-content: center;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .chapter-path a:first-child { border-radius: 20px 5px 5px 5px; }
+  .chapter-path a:last-child { border-radius: 5px 20px 5px 5px; }
+  .chapter-path a:hover { border-color: var(--teal); background: var(--surface-strong); }
+  .chapter-path b { font-family: var(--display); }
+  .chapter-path span { color: var(--muted); font: 500 0.7rem var(--mono); letter-spacing: 0.05em; text-transform: uppercase; }
+
+  .trap-lead { border-top: 4px solid var(--leaf); }
+  .trap-grid { margin-top: 22px; }
+  .trap-card { --mechanism-accent: var(--leaf); }
+  .trap-card:nth-child(4n + 2) { --mechanism-accent: var(--teal); }
+  .trap-card:nth-child(4n + 3) { --mechanism-accent: var(--blue); }
+  .trap-card:nth-child(4n) { --mechanism-accent: var(--amber); }
+  .trap-card .english-term { overflow-wrap: anywhere; }
+
+  .opportunity {
+    margin-top: 2px;
+    padding: 18px 20px;
+    border-left: 4px solid var(--leaf);
+    background: var(--leaf-soft);
+    color: var(--ink);
+    font-size: 0.92rem;
+  }
+
+  .opportunity strong { display: block; margin-bottom: 4px; color: var(--leaf); }
+
+  .trap-comparison {
+    display: grid;
+    gap: 18px;
+    margin-top: 24px;
+    padding: clamp(26px, 5vw, 46px);
+    border: 1px solid var(--line);
+    border-radius: 28px 8px 28px 8px;
+    background: var(--surface);
+  }
+
+  .trap-comparison h3 { margin: 0; font-size: clamp(1.65rem, 3vw, 2.35rem); }
+
+  .comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .comparison-card {
+    display: grid;
+    gap: 10px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--leaf);
+    background: var(--surface-strong);
+  }
+
+  .comparison-card h4 { margin: 0; font: 700 1rem var(--body); }
+  .comparison-card p { margin: 0; color: var(--muted); font-size: 0.88rem; }
+
+  .myths {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .myth {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 16px;
+    padding: 23px;
+    border-top: 1px solid var(--line);
+  }
+
+  .myth-mark {
+    color: var(--amber);
+    font: 700 1.4rem var(--display);
+  }
+
+  .myth h3 { margin: 0 0 6px; font: 700 1.08rem var(--body); }
+  .myth p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+  .diagnostic {
+    display: grid;
+    grid-template-columns: 0.72fr 1.28fr;
+    gap: clamp(28px, 7vw, 84px);
+    padding: clamp(34px, 6vw, 64px);
+    border-radius: 34px 8px 34px 8px;
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .diagnostic h2 { margin: 10px 0 18px; font-size: clamp(2.3rem, 4.5vw, 4rem); }
+  .diagnostic .eyebrow { color: var(--surface); }
+  .diagnostic-intro p { margin: 0; color: color-mix(in srgb, var(--surface) 70%, transparent); }
+
+  .question-list {
+    display: grid;
+    gap: 0;
+    counter-reset: question;
+  }
+
+  .question {
+    counter-increment: question;
+    display: grid;
+    grid-template-columns: 38px 1fr;
+    gap: 14px;
+    padding: 18px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--surface) 22%, transparent);
+  }
+
+  .question::before {
+    content: counter(question, decimal-leading-zero);
+    color: var(--teal);
+    font: 500 0.74rem var(--mono);
+  }
+
+  .question strong { display: block; margin-bottom: 5px; }
+  .question span { color: color-mix(in srgb, var(--surface) 70%, transparent); font-size: 0.88rem; }
+
+  .closing {
+    display: grid;
+    grid-template-columns: 0.45fr 1.55fr;
+    gap: clamp(28px, 8vw, 100px);
+    align-items: start;
+    padding: clamp(74px, 10vw, 128px) clamp(4px, 3vw, 28px) 40px;
+  }
+
+  .closing .eyebrow { padding-top: 12px; }
+  .closing blockquote {
+    margin: 0;
+    font: 600 clamp(1.7rem, 3.6vw, 3.25rem)/1.35 var(--display);
+    letter-spacing: -0.025em;
+  }
+
+  .closing-accent { color: var(--teal); }
+
+  .chapter-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: clamp(24px, 3.5vw, 40px);
+    padding-top: clamp(24px, 3.5vw, 40px);
+    border-top: 1px solid var(--line);
+  }
+
+  .chapter-nav .nav-cell {
+    display: grid;
+    gap: 5px;
+    align-content: start;
+    padding: 18px 22px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .chapter-nav a.nav-cell:hover {
+    border-color: var(--teal);
+    background: var(--surface-strong);
+  }
+
+  .chapter-nav .nav-next { text-align: right; }
+
+  .chapter-nav .nav-cell.disabled { opacity: 0.55; }
+
+  .chapter-nav .nav-label {
+    color: var(--muted);
+    font: 500 0.7rem var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .chapter-nav .nav-title {
+    font-family: var(--display);
+    font-size: clamp(1.05rem, 1.8vw, 1.28rem);
+    line-height: 1.25;
+  }
+
+  @media (max-width: 620px) {
+    .chapter-nav { grid-template-columns: 1fr; }
+    .chapter-nav .nav-next { text-align: left; }
+  }
+
+  .cite { font: 500 0.82em var(--mono); white-space: nowrap; }
+  .cite a { color: var(--amber); text-decoration: none; }
+  .cite a:hover { text-decoration: underline; }
+  .cite a::before { content: "["; }
+  .cite a::after { content: "]"; }
+
+  .footer-main { display: grid; gap: 10px; }
+
+  .ref-list { margin: 2px 0 0; padding-left: 1.4em; display: grid; gap: 4px; }
+  .ref-list li { font-size: 0.78rem; }
+  .ref-list li:target { color: var(--ink); font-weight: 600; }
+
+  footer {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    margin-top: clamp(24px, 3.5vw, 40px);
+    padding: clamp(24px, 3.5vw, 40px) clamp(4px, 3vw, 28px) 0;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+
+  footer p { max-width: 80ch; margin: 0; }
+  footer .edition { font-family: var(--mono); white-space: nowrap; }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; min-height: auto; }
+    .system-map { width: min(100%, 420px); }
+    .section-heading,
+    .synthesis,
+    .surprise-lead,
+    .surprise-grid,
+    .comparison-grid,
+    .diagnostic,
+    .closing { grid-template-columns: 1fr; }
+    .chapter-path { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .overview-grid { grid-template-columns: 1fr; }
+    .overview-card { min-height: auto; border-radius: 18px !important; }
+    .loop-diagram { min-height: 440px; }
+  }
+
+  @media (max-width: 620px) {
+    .page { width: min(100% - 20px, 1180px); padding-top: 12px; }
+    .topbar { flex-direction: column; align-items: stretch; gap: 14px; }
+    .book-label { max-width: none; }
+    .reading-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+    .reading-controls button { width: 100%; padding: 8px 6px; font-size: 0.78rem; white-space: nowrap; }
+    .hero { padding: 34px 20px 54px; border-radius: 24px 24px 6px 24px; }
+    h1 { font-size: clamp(2.7rem, 14vw, 4rem); }
+    .system-map { aspect-ratio: auto; display: grid; gap: 10px; }
+    .system-map::before,
+    .system-map::after,
+    .core,
+    .pulse { display: none; }
+    .node { position: static; transform: none; width: 100%; min-height: auto; }
+    .mechanics, .myths { grid-template-columns: 1fr; }
+    .chapter-path { grid-template-columns: 1fr; }
+    .chapter-path a { min-height: auto; border-radius: 12px !important; }
+    .surprise-lead { padding: 28px 20px; }
+    .surprise-mechanism { grid-template-columns: 1fr; padding: 22px 20px; }
+    .trap-comparison { padding: 24px 20px; }
+    .equation-row { grid-template-columns: 1fr; gap: 3px; }
+    .loop-diagram { min-height: 390px; padding: 20px; }
+    .loop-label { width: 122px; padding: 10px; font-size: 0.7rem; }
+    .loop-label.left { left: 2%; }
+    .loop-label.right { right: 2%; }
+    .diagnostic { padding: 32px 22px; }
+    footer { grid-template-columns: 1fr; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .pulse { animation: none; }
+  }
+
+  /* SECTION-RAIL:START — on-page section index (scroll-spy); markup injected by the bottom script */
+  .section-rail {
+    position: fixed;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 50;
+    padding: 10px;
+    pointer-events: none;
+  }
+  .section-rail::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--surface-strong);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    transform: translateX(-6px);
+    transform-origin: left center;
+    transition: opacity 0.18s ease, transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+  }
+  .section-rail::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 42px;
+    pointer-events: auto;
+  }
+  .section-rail:hover::before,
+  .section-rail:focus-within::before {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .section-rail__list {
+    position: relative;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .section-rail__list::before {
+    content: "";
+    position: absolute;
+    left: 13px;
+    top: 16px;
+    bottom: 16px;
+    width: 2px;
+    transform: translateX(-50%);
+    background: var(--line);
+    border-radius: 2px;
+  }
+  .section-rail__link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--muted);
+    pointer-events: none;
+    transition: background-color 0.16s ease, color 0.16s ease;
+  }
+  .section-rail:hover .section-rail__link,
+  .section-rail:focus-within .section-rail__link { pointer-events: auto; }
+  .section-rail__tick {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: 0 0 0 2px var(--line);
+    transition: transform 0.2s cubic-bezier(0.34, 1.28, 0.64, 1), background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .section-rail__label {
+    white-space: nowrap;
+    font: 500 0.78rem/1.35 var(--body);
+    letter-spacing: -0.005em;
+    opacity: 0;
+    transition: opacity 0.16s ease;
+  }
+  .section-rail:hover .section-rail__label,
+  .section-rail:focus-within .section-rail__label { opacity: 1; }
+  .section-rail__link:hover { background: var(--teal-soft); color: var(--ink); }
+  .section-rail__link:hover .section-rail__tick { box-shadow: 0 0 0 2px var(--teal); }
+  .section-rail__item.is-active .section-rail__link { color: var(--ink); }
+  .section-rail__item.is-active .section-rail__tick {
+    background: var(--teal);
+    box-shadow: 0 0 0 3px var(--teal-soft);
+    transform: scale(1.5);
+  }
+  @media (max-width: 1279px) { .section-rail { display: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .section-rail::before,
+    .section-rail__tick,
+    .section-rail__label,
+    .section-rail__link { transition: none; }
+  }
+  /* SECTION-RAIL:END */
+</style>
+</head><body>
+<main class="page">
+  <header class="topbar">
+    <div class="book-label"><span class="standard-copy">AI Engineering · Chip Huyen · Chương 9</span><span class="easy-only">AI Engineering · Chip Huyen · Chương 9</span><span class="en-only" lang="en">AI Engineering · Chip Huyen · Chapter 9</span></div>
+    <div class="topbar-controls">
+      <div class="lang-controls" role="group" aria-label="Ngôn ngữ / Language">
+        <button type="button" data-lang-option="vi" aria-pressed="true">VI</button>
+        <button type="button" data-lang-option="en" aria-pressed="false">EN</button>
+      </div>
+      <div class="reading-controls" role="group" aria-label="Chế độ đọc">
+        <button type="button" data-mode="easy" aria-label="Dễ hiểu: giải thích bằng ví dụ cho người mới và trẻ nhỏ" aria-pressed="false">Dễ hiểu</button>
+        <button type="button" data-mode="quick" aria-pressed="false">Tóm tắt</button>
+        <button type="button" data-mode="deep" aria-pressed="true">Đầy đủ</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="hero" aria-labelledby="page-title">
+    <div class="hero-copy">
+      <div class="eyebrow"><span class="standard-copy">Chương 9 · Tối ưu suy luận</span><span class="easy-only">Chương 9 · Tối ưu suy luận</span><span class="en-only" lang="en">Chapter 9 · Inference Optimization</span></div>
+      <h1 id="page-title"><span class="standard-copy">Nhanh hơn và <span class="hero-title-accent">rẻ hơn</span></span><span class="easy-only">Làm cho máy trả lời <span class="hero-title-accent">nhanh hơn</span></span><span class="en-only" lang="en">Faster and <span class="hero-title-accent">cheaper</span></span></h1>
+      <p class="standard-copy">Tám chương trước bàn chuyện làm mô hình <em>tốt hơn</em>. Chương này đổi trục: làm nó <em>nhanh hơn</em> và <em>rẻ hơn</em>. Huyen mở đầu bằng một lời cảnh báo rất thực tế — một mô hình dù giỏi đến mấy, nếu quá chậm thì người dùng mất kiên nhẫn, hoặc tệ hơn, dự đoán của nó trở nên vô dụng; còn nếu quá đắt thì lợi ích thu về không bõ.<span class="cite"><a href="#ref-1">1</a></span> Tối ưu suy luận vì thế không phải việc làm đẹp cuối dự án, mà là điều kiện để sản phẩm tồn tại.</p>
+      <p class="easy-only">Từ đầu sách tới giờ ta toàn học cách làm máy trả lời <em>đúng</em>. Bài này học cách làm máy trả lời <em>nhanh</em> và <em>đỡ tốn tiền</em>. Vì máy trả lời đúng mà phải chờ cả phút thì chẳng ai dùng, còn trả lời nhanh mà tốn quá nhiều tiền thì cũng không làm nổi. Nhớ nhé: nhanh và rẻ cũng là một phần của "hay".</p>
+      <p class="en-only" lang="en">The previous chapters were about making models <em>better</em>. This one switches axis: making them <em>faster</em> and <em>cheaper</em>. Huyen opens with a blunt practical warning — no matter how good your model is, if it is too slow your users lose patience, or worse, its predictions become useless; and if it is too expensive, the return on investment is not worth it.<span class="cite"><a href="#ref-1">1</a></span> Inference optimization is therefore not end-of-project polish, it is a condition for the product to exist at all.</p>
+      <div class="thesis">
+        <div class="thesis-mark">∴</div>
+        <div>
+          <strong class="standard-copy">Luận đề của chương</strong>
+          <strong class="easy-only">Ý chính của bài</strong>
+          <strong class="en-only" lang="en">The chapter's thesis</strong>
+          <p class="standard-copy">Tối ưu là việc tìm ra nút thắt rồi gỡ đúng nút thắt đó — và nó có thể diễn ra ở ba cấp: mô hình, phần cứng, và dịch vụ suy luận. Huyen ví von: tối ưu cấp mô hình là làm mũi tên tốt hơn, tối ưu cấp phần cứng là rèn một cung thủ khỏe hơn, còn tối ưu cấp dịch vụ là chỉnh lại toàn bộ quy trình bắn, gồm cả cây cung lẫn điều kiện ngắm.<span class="cite"><a href="#ref-1">1</a></span> Vì hai nút thắt lớn của mô hình ngôn ngữ nằm ở giải mã tự hồi quy và cơ chế attention, phần lớn kỹ thuật trong chương xoay quanh đúng hai chỗ ấy.</p>
+          <p class="easy-only">Muốn làm gì đó nhanh hơn, trước hết phải biết nó đang bị kẹt ở đâu — giống như muốn hết tắc đường thì phải tìm đúng chỗ tắc. Máy trả lời chậm có thể vì nó phải tính quá nhiều, hoặc vì nó phải khuân dữ liệu đi lại quá nhiều. Nhớ nhé: sửa đúng chỗ kẹt mới nhanh, sửa lung tung thì chỉ tốn công.</p>
+          <p class="en-only" lang="en">Optimization is about identifying bottlenecks and addressing them — and it can happen at three levels: the model, the hardware, and the inference service. Huyen's analogy: model-level optimization is like crafting better arrows, hardware-level optimization is like training a stronger archer, and service-level optimization is like refining the whole shooting process, bow and aiming conditions included.<span class="cite"><a href="#ref-1">1</a></span> Because the two big bottlenecks of a language model sit in autoregressive decoding and the attention mechanism, most of the chapter's techniques target exactly those two places.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="system-map" role="img" aria-label="Tối ưu suy luận diễn ra ở ba cấp: cấp mô hình, cấp phần cứng và cấp dịch vụ suy luận / Inference optimization happens at three levels: model, hardware and inference service">
+      <div class="pulse"></div>
+      <div class="core"><span class="vi-only">TỐI ƯU<br>SUY LUẬN</span><span class="en-only" lang="en">INFERENCE<br>OPTIMIZATION</span></div>
+      <div class="node node-resilience">
+        <b><span class="vi-only">Cấp mô hình</span><span class="en-only" lang="en">Model level</span></b>
+        <small class="standard-copy">Nén mô hình, giải mã suy đoán, tối ưu attention</small>
+        <small class="easy-only">Làm cho chính cái máy gọn và nhanh hơn.</small>
+        <small class="en-only" lang="en">Compression, speculative decoding, attention optimization</small>
+      </div>
+      <div class="node node-organization">
+        <b><span class="vi-only">Cấp phần cứng</span><span class="en-only" lang="en">Hardware level</span></b>
+        <small class="standard-copy">FLOP/s, dung lượng và băng thông bộ nhớ, điện năng</small>
+        <small class="easy-only">Chọn con chip hợp với việc mình làm.</small>
+        <small class="en-only" lang="en">FLOP/s, memory size and bandwidth, power</small>
+      </div>
+      <div class="node node-hierarchy">
+        <b><span class="vi-only">Cấp dịch vụ</span><span class="en-only" lang="en">Service level</span></b>
+        <small class="standard-copy">Gộp lô, tách prefill/decode, cache prompt, song song hóa</small>
+        <small class="easy-only">Sắp xếp lại cách nhận và trả đơn hàng.</small>
+        <small class="en-only" lang="en">Batching, prefill/decode split, prompt cache, parallelism</small>
+      </div>
+    </div>
+  </section>
+
+  <nav class="chapter-path" aria-label="Mạch chương">
+    <a href="#bottlenecks">
+      <span><span class="vi-only">Mục 01</span><span class="en-only" lang="en">Part 01</span></span>
+      <b><span class="standard-copy">Hai nút thắt</span><span class="easy-only">Máy kẹt ở đâu</span><span class="en-only" lang="en">Two bottlenecks</span></b>
+    </a>
+    <a href="#metrics">
+      <span><span class="vi-only">Mục 02</span><span class="en-only" lang="en">Part 02</span></span>
+      <b><span class="standard-copy">Đo trước khi tối ưu</span><span class="easy-only">Đo tốc độ thế nào</span><span class="en-only" lang="en">Measure first</span></b>
+    </a>
+    <a href="#model-level">
+      <span><span class="vi-only">Mục 03</span><span class="en-only" lang="en">Part 03</span></span>
+      <b><span class="standard-copy">Tối ưu cấp mô hình</span><span class="easy-only">Sửa chính cái máy</span><span class="en-only" lang="en">Model level</span></b>
+    </a>
+    <a href="#service-level">
+      <span><span class="vi-only">Mục 04</span><span class="en-only" lang="en">Part 04</span></span>
+      <b><span class="standard-copy">Tối ưu cấp dịch vụ</span><span class="easy-only">Sắp xếp lại hàng đợi</span><span class="en-only" lang="en">Service level</span></b>
+    </a>
+  </nav>
+
+  <section class="section" id="bottlenecks" aria-labelledby="bottlenecks-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Mục 01 · Nút thắt</span><span class="easy-only">Mục 01 · Máy kẹt ở đâu</span><span class="en-only" lang="en">Part 01 · Bottlenecks</span></div>
+        <h2 id="bottlenecks-title"><span class="standard-copy">Hai kiểu kẹt</span><span class="easy-only">Máy chậm vì hai lý do</span><span class="en-only" lang="en">Two ways to be stuck</span></h2>
+      </div>
+      <p class="standard-copy">Huyen đặt nền cho cả chương bằng một phân biệt tưởng nhỏ mà quyết định mọi thứ về sau: một tác vụ chậm vì nó phải <em>tính</em> quá nhiều, hay chậm vì nó phải <em>chuyển dữ liệu</em> quá nhiều? Hai nguyên nhân ấy cần hai loại thuốc khác nhau — và với mô hình ngôn ngữ tự hồi quy, hai nguyên nhân ấy xuất hiện ở hai pha khác nhau của cùng một lần trả lời.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Hình dung một quán ăn chậm. Có thể vì đầu bếp nấu chậm — tay nghề có hạn. Cũng có thể vì đầu bếp nấu rất nhanh nhưng nguyên liệu để tận kho xa, chạy đi chạy lại mất thời gian. Hai lý do khác nhau thì cách chữa cũng khác nhau.</p>
+      <p class="en-only" lang="en">Huyen grounds the whole chapter in a distinction that looks small but decides everything downstream: is a task slow because it has too much to <em>compute</em>, or because it has too much data to <em>move</em>? The two causes need different medicine — and in an autoregressive language model, the two causes show up in two different phases of the very same response.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Tối ưu là tìm nút thắt rồi gỡ đúng nút thắt đó — như người quy hoạch giao thông phải tìm ra điểm ùn tắc trước khi mở đường.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="definition easy-only">Muốn hết tắc đường, phải biết đang tắc ở khúc nào đã.</p>
+        <p class="definition en-only" lang="en">Optimization is about identifying bottlenecks and addressing them — the way a city planner must first find the congestion point before widening any road.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="deep-only">Khái niệm compute-bound và memory bandwidth-bound đến từ bài báo <span lang="en">“Roofline”</span> (Williams và cộng sự, 2009). Về mặt toán học, một phép tính được xếp vào loại nào là tùy vào <strong>arithmetic intensity</strong> của nó — số phép tính số học trên mỗi byte truy cập bộ nhớ.<span class="cite"><a href="#ref-2">2</a></span> Các công cụ đo như <span lang="en">NVIDIA Nsight</span> vẽ ra biểu đồ roofline đúng để trả lời câu hỏi này.</p>
+      </div>
+      <div class="equation">
+        <div class="equation-row"><b lang="en">Compute-bound</b><span class="standard-copy">Thời gian hoàn tất bị quyết định bởi khối lượng tính toán. Ví dụ của Huyen: giải mã mật khẩu.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Chậm vì phải tính quá nhiều.</span><span class="en-only" lang="en">Time-to-complete is set by the computation required. Huyen's example: password decryption.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b lang="en">Bandwidth-bound</b><span class="standard-copy">Bị chặn bởi tốc độ chuyển dữ liệu trong hệ thống, ví dụ giữa bộ nhớ và bộ xử lý.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Chậm vì phải khuân đồ đi lại quá xa.</span><span class="en-only" lang="en">Constrained by the data transfer rate inside the system, e.g. between memory and processors.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b lang="en">Prefill</b><span class="standard-copy">Mô hình xử lý toàn bộ token đầu vào song song → compute-bound.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Máy đọc hết câu hỏi một lượt.</span><span class="en-only" lang="en">The model processes the input tokens in parallel → compute-bound.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b lang="en">Decode</b><span class="standard-copy">Mô hình sinh từng token một, phải nạp ma trận trọng số lớn vào GPU → bandwidth-bound.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Máy viết câu trả lời từng chữ một.</span><span class="en-only" lang="en">The model generates one token at a time, loading large weight matrices into the GPU → memory bandwidth-bound.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">01</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Compute-bound vs memory bandwidth-bound</div>
+          <h3><span class="standard-copy">Kẹt tính toán — kẹt băng thông</span><span class="easy-only">Nấu chậm hay chạy kho chậm</span><span class="en-only" lang="en">Compute-bound vs bandwidth-bound</span></h3>
+          <p class="standard-copy">Một tác vụ compute-bound bị quyết định bởi lượng tính toán cần làm; một tác vụ memory bandwidth-bound bị quyết định bởi tốc độ dữ liệu di chuyển trong hệ thống — ví dụ khi dữ liệu nằm ở bộ nhớ CPU còn mô hình chạy trên GPU.<span class="cite"><a href="#ref-1">1</a></span> Kiến trúc và khối lượng công việc khác nhau cho ra nút thắt khác nhau: suy luận của mô hình sinh ảnh như <span lang="en">Stable Diffusion</span> thường compute-bound, còn suy luận của mô hình ngôn ngữ tự hồi quy thường bandwidth-bound.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Hai cái chậm khác nhau. Một là "đầu bếp nấu chậm": phải tính nhiều quá. Hai là "kho ở xa": tính thì nhanh nhưng phải chạy đi lấy nguyên liệu liên tục. Máy vẽ tranh thường kẹt kiểu một, còn máy viết chữ thường kẹt kiểu hai. Nhớ nhé: chậm vì tính nhiều khác với chậm vì khuân nhiều.</p>
+          <p class="en-only" lang="en">A compute-bound task is determined by the computation it needs; a memory bandwidth-bound task is determined by how fast data moves inside the system — for instance when data sits in CPU memory while the model runs on GPUs.<span class="cite"><a href="#ref-1">1</a></span> Different architectures and workloads produce different bottlenecks: inference for image generators like Stable Diffusion is typically compute-bound, while inference for autoregressive language models is typically memory bandwidth-bound.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Khi bạn nâng cấp lên con chip nhiều FLOP/s hơn mà độ trễ gần như không đổi — rất có thể bạn đang kẹt băng thông chứ không kẹt tính toán, và tiền chi thêm đã đi sai chỗ.</span>
+            <span class="easy-only">Mua bếp xịn hơn mà quán vẫn chậm — vì vấn đề nằm ở cái kho, không phải cái bếp.</span>
+            <span class="en-only" lang="en">When you upgrade to a chip with more FLOP/s and latency barely moves, you were probably bandwidth-bound rather than compute-bound — and the extra money went to the wrong place.</span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Nhập nhằng thuật ngữ</h4>
+              <p>Huyen dành hẳn một hộp cảnh báo cho chữ <span lang="en">memory-bound</span>: có người dùng nó để chỉ giới hạn <em>dung lượng</em> bộ nhớ (lỗi OOM quen thuộc), có người dùng nó để chỉ giới hạn <em>băng thông</em>. Bà lập luận rằng giới hạn dung lượng thường gỡ được bằng cách chia nhỏ tác vụ, nên rốt cuộc nó cũng quy về băng thông.<span class="cite"><a href="#ref-1">1</a></span> Chính bài báo <span lang="en">“Roofline”</span> dùng <span lang="en">memory-bound</span> theo nghĩa bandwidth-bound; vì vậy trang này theo cách gọi đầy đủ của sách — <span lang="en">memory bandwidth-bound</span> — thay vì âm thầm chọn một nghĩa.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Thuốc nào cho bệnh nào</h4>
+              <p>Tác vụ compute-bound được tăng tốc bằng cách trải ra nhiều chip hơn hoặc dùng chip nhiều FLOP/s hơn. Tác vụ bandwidth-bound được tăng tốc bằng chip có băng thông cao hơn.<span class="cite"><a href="#ref-1">1</a></span> Tại thời điểm sách viết, do sự phổ biến của kiến trúc transformer và giới hạn của công nghệ tăng tốc hiện có, phần lớn workload AI và dữ liệu đang là bandwidth-bound.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">02</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Prefill and decode</div>
+          <h3><span class="standard-copy">Prefill và decode — một câu trả lời, hai tính cách</span><span class="easy-only">Đọc đề và viết bài</span><span class="en-only" lang="en">Prefill and decode — one response, two personalities</span></h3>
+          <p class="standard-copy">Suy luận của mô hình ngôn ngữ dựa trên transformer gồm hai bước. <strong lang="en">Prefill</strong>: mô hình xử lý các token đầu vào song song, giới hạn bởi số phép tính phần cứng làm được trong một khoảng thời gian — nên nó compute-bound. <strong lang="en">Decode</strong>: mô hình sinh từng token một, mỗi bước phải nạp những ma trận lớn vào GPU, giới hạn bởi tốc độ nạp dữ liệu — nên nó bandwidth-bound.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Máy trả lời qua hai chặng. Chặng một là <em>đọc đề</em>: nó đọc hết câu hỏi của bạn cùng một lúc, rất nhanh. Chặng hai là <em>viết bài</em>: nó viết từng chữ một, chữ sau phải chờ chữ trước. Nhớ nhé: đọc đề thì đọc một lượt, viết bài thì viết từng chữ — nên chặng hai bao giờ cũng lâu hơn.</p>
+          <p class="en-only" lang="en">Inference for a transformer-based language model has two steps. <strong>Prefill</strong>: the model processes input tokens in parallel, limited by how many operations the hardware can execute in a given time — so it is compute-bound. <strong>Decode</strong>: the model generates one token at a time, each step loading large matrices into the GPU, limited by how fast data can be loaded — so it is memory bandwidth-bound.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Đây là lý do gần như mọi chỉ số và mọi kỹ thuật ở phần sau đều tách đôi: một nửa nói về prefill, một nửa nói về decode. Kể cả việc tách hai pha ra hai cụm máy riêng cũng bắt nguồn từ đây.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Vì hai chặng khác nhau nên người ta đo riêng, chữa riêng, thậm chí cho chạy trên hai máy riêng.</span>
+            <span class="en-only" lang="en">This is why nearly every metric and technique later in the chapter splits in two: half is about prefill, half about decode. Even running the two phases on separate machines starts here.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Điều gì quyết định tỉ lệ</h4>
+              <p>Các yếu tố chi phối lượng tính toán prefill và decode — và do đó chi phối nút thắt của máy chủ — gồm độ dài ngữ cảnh, độ dài đầu ra, và chiến lược gộp lô yêu cầu. Ngữ cảnh dài thường đẩy workload về phía bandwidth-bound, nhưng các kỹ thuật tối ưu khéo léo có thể gỡ bỏ nút thắt ấy.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Chi phí lệch hẳn về đầu ra</h4>
+              <p>Ở các nhà cung cấp API, một token đầu ra tốn khoảng gấp hai tới bốn lần một token đầu vào. Trong một thí nghiệm của Anyscale, một token đầu ra đơn lẻ có tác động lên độ trễ tương đương khoảng 100 token đầu vào.<span class="cite"><a href="#ref-3">3</a></span> Cải thiện quá trình sinh tự hồi quy dù chỉ vài phần trăm cũng đáng giá.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">03</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Inference server and inference service</div>
+          <h3><span class="standard-copy">Máy chủ suy luận và dịch vụ suy luận</span><span class="easy-only">Ai là người chạy cái máy</span><span class="en-only" lang="en">Inference server and inference service</span></h3>
+          <p class="standard-copy">Thành phần chạy mô hình trong môi trường sản xuất gọi là <strong lang="en">inference server</strong>: nó chứa các mô hình có sẵn, có quyền truy cập phần cứng, và dựa trên yêu cầu từ ứng dụng mà cấp phát tài nguyên để chạy mô hình phù hợp. Nó là một phần của <strong lang="en">inference service</strong> rộng hơn — thứ chịu trách nhiệm nhận, định tuyến và có thể tiền xử lý yêu cầu trước khi chúng tới máy chủ.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Có hai vai. Một là cái bếp thật sự nấu món — nó giữ công thức và có bếp lò. Hai là cả cái nhà hàng bao quanh: người nhận đơn, người chia đơn về đúng bếp, người mang món ra. Nhớ nhé: chạy được mô hình mới chỉ là cái bếp, còn cả nhà hàng nữa mới thành dịch vụ.</p>
+          <p class="en-only" lang="en">The component that runs model inference in production is called an <strong>inference server</strong>: it hosts the available models, has access to the necessary hardware, and allocates resources to run the right model based on application requests. It is part of a broader <strong>inference service</strong>, which also receives, routes and possibly preprocesses requests before they reach the server.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Các <span lang="en">model API</span> như của OpenAI hay Google chính là dịch vụ suy luận. Nếu bạn dùng chúng, bạn sẽ không phải tự cài đặt phần lớn kỹ thuật trong chương này; nếu bạn tự host mô hình, bạn chịu trách nhiệm xây, tối ưu và bảo trì toàn bộ dịch vụ ấy.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Dùng API của người ta thì họ lo hết. Tự chạy máy thì mình phải tự lo.</span>
+            <span class="en-only" lang="en">Model APIs from OpenAI or Google <em>are</em> inference services. If you use them, you will not implement most of the techniques in this chapter; if you host a model yourself, you own building, optimising and maintaining that service.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">04</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Online and batch inference APIs</div>
+          <h3><span class="standard-copy">API trực tuyến và API theo lô</span><span class="easy-only">Hàng gấp và hàng thường</span><span class="en-only" lang="en">Online and batch APIs</span></h3>
+          <p class="standard-copy">Nhiều nhà cung cấp mở hai loại API. <strong lang="en">Online API</strong> tối ưu cho độ trễ: yêu cầu được xử lý ngay khi tới. <strong lang="en">Batch API</strong> tối ưu cho chi phí: chấp nhận độ trễ cao hơn để mở đường cho nhiều kỹ thuật tối ưu hơn, gồm gộp lô và dùng phần cứng rẻ hơn. Tại thời điểm sách viết, cả Google Gemini lẫn OpenAI đều bán batch API với mức giảm giá 50% và thời gian hoàn tất tính bằng giờ thay vì giây hay phút.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+          <p class="easy-only">Giống gửi bưu kiện: có dịch vụ hỏa tốc và dịch vụ thường. Hỏa tốc thì tới ngay nhưng đắt; dịch vụ thường rẻ hơn một nửa nhưng phải chờ vài tiếng. Nhớ nhé: việc nào không gấp thì gửi đường thường cho rẻ.</p>
+          <p class="en-only" lang="en">Many providers offer two API types. <strong>Online APIs</strong> optimise for latency: requests are processed as soon as they arrive. <strong>Batch APIs</strong> optimise for cost: higher latency opens the door to a broader range of optimisations, including batching requests and using cheaper hardware. As of the book's writing, both Google Gemini and OpenAI offered batch APIs at a 50% cost reduction with turnaround in the order of hours rather than seconds or minutes.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Huyen liệt kê những việc hợp với batch API: sinh dữ liệu tổng hợp, báo cáo định kỳ (tóm tắt tin nhắn Slack, phân tích cảm xúc các lượt nhắc thương hiệu), xử lý tài liệu khi tiếp nhận khách hàng mới, xử lý lại toàn bộ dữ liệu khi đổi mô hình, và cập nhật cơ sở tri thức bằng cách đánh chỉ mục lại.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Việc không ai ngồi chờ — như tóm tắt cả đống tài liệu qua đêm — thì gửi đường thường.</span>
+            <span class="en-only" lang="en">Huyen lists what fits a batch API: synthetic data generation, periodic reporting (summarising Slack messages, sentiment analysis of brand mentions), onboarding customers whose documents must all be processed, reprocessing everything for a model migration, and knowledge base re-indexing.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Khác với batch của ML cổ điển</h4>
+              <p>Huyen cảnh báo rằng batch API của mô hình nền tảng khác hẳn <span lang="en">batch inference</span> trong ML truyền thống. Ở ML truyền thống, batch nghĩa là <em>tính trước</em> dự đoán khi yêu cầu chưa tới — làm được với hệ gợi ý vì đầu vào hữu hạn và dự đoán được. Với mô hình nền tảng, đầu vào mở, khó đoán hết prompt của người dùng.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Chế độ streaming</h4>
+              <p>API thường trả về câu trả lời hoàn chỉnh, nhưng với giải mã tự hồi quy thì chờ rất lâu. Nhiều online API cung cấp <span lang="en">streaming mode</span>, trả từng token ngay khi sinh ra, rút ngắn thời gian chờ token đầu. Cái giá là bạn không kịp chấm điểm câu trả lời trước khi người dùng nhìn thấy nó — dù vẫn có thể sửa hoặc gỡ về sau khi phát hiện rủi ro.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Nối sang mục sau</strong>
+      <strong class="easy-only">Nối sang phần sau</strong>
+      <strong class="en-only" lang="en">Bridging to the next part</strong>
+      <span class="standard-copy">Đã biết máy có thể kẹt ở hai chỗ, câu hỏi kế tiếp là: làm sao biết mình đang kẹt ở đâu, và kẹt tới mức nào? Huyen trả lời bằng một bộ chỉ số — và bà nhấn mạnh rằng "trước khi nhảy vào tối ưu, cần hiểu mình đang tối ưu cho chỉ số nào".<span class="cite"><a href="#ref-1">1</a></span></span>
+      <span class="easy-only">Biết máy có thể kẹt hai kiểu rồi. Giờ phải học cách đo xem nó đang kẹt kiểu nào.</span>
+      <span class="en-only" lang="en">Now that we know there are two ways to be stuck, the next question is how to tell which one you are in, and by how much. Huyen answers with a set of metrics — insisting that "before jumping into optimization, it's important to understand what metrics to optimize for".<span class="cite"><a href="#ref-1">1</a></span></span>
+    </aside>
+  </section>
+
+  <section class="section" id="metrics" aria-labelledby="metrics-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Mục 02 · Chỉ số</span><span class="easy-only">Mục 02 · Đo tốc độ</span><span class="en-only" lang="en">Part 02 · Metrics</span></div>
+        <h2 id="metrics-title"><span class="standard-copy">Đo trước khi tối ưu</span><span class="easy-only">Đo xem máy nhanh chậm ra sao</span><span class="en-only" lang="en">Measure before you optimise</span></h2>
+      </div>
+      <p class="standard-copy">Từ phía người dùng, trục trung tâm là <strong>độ trễ</strong> — còn chất lượng câu trả lời, Huyen nhắc, là thuộc tính của mô hình chứ không phải của dịch vụ suy luận. Nhưng người làm ứng dụng còn phải nhìn thêm <strong>thông lượng</strong> và <strong>mức tận dụng</strong>, vì chính hai thứ đó định ra chi phí.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Muốn biết máy nhanh hay chậm thì phải đo. Người dùng quan tâm: bao lâu thì có chữ đầu tiên, và chữ sau ra nhanh không. Người làm chủ còn quan tâm: mỗi giờ phục vụ được bao nhiêu người, và cỗ máy đắt tiền kia có đang được dùng hết công suất không.</p>
+      <p class="en-only" lang="en">From the user's perspective the central axis is <strong>latency</strong> — response quality, Huyen notes, is a property of the model itself, not of the inference service. But application developers must also watch <strong>throughput</strong> and <strong>utilization</strong>, because those two determine cost.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Độ trễ là một <em>phân phối</em>, không phải một con số. Vì vậy trung bình có thể đánh lừa bạn, còn phân vị mới nói thật.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="definition easy-only">Đừng chỉ nhìn số trung bình — một khách phải chờ rất lâu sẽ bị con số trung bình che mất.</p>
+        <p class="definition en-only" lang="en">Latency is a <em>distribution</em>, not a number. Averages can mislead you; percentiles tell the truth.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="deep-only">Huyen đưa một ví dụ rất gọn: mười yêu cầu có TTFT lần lượt 100, 102, 100, 100, 99, 104, 110, 90, 3.000 và 95 ms. Trung bình là 390 ms — khiến dịch vụ của bạn trông chậm hơn thực tế rất nhiều. Có thể một lỗi mạng đã làm chậm một yêu cầu, hoặc một prompt đặc biệt dài đã kéo dài pha prefill; dù là gì thì bạn cũng nên đi tìm hiểu.<span class="cite"><a href="#ref-1">1</a></span> Các phân vị nên theo dõi thường là p50, p90, p95 và p99; vẽ TTFT theo độ dài đầu vào cũng rất có ích.</p>
+      </div>
+      <div class="equation">
+        <div class="equation-row"><b lang="en">TTFT</b><span class="standard-copy">Time to first token — bao lâu thì token đầu tiên xuất hiện; tương ứng với pha prefill và phụ thuộc độ dài đầu vào.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Bao lâu thì có chữ đầu tiên.</span><span class="en-only" lang="en">Time to first token — how quickly the first token appears; corresponds to the prefill step and depends on input length.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b lang="en">TPOT</b><span class="standard-copy">Time per output token — mỗi token sau token đầu mất bao lâu. Nếu mỗi token mất 100 ms thì câu trả lời 1.000 token mất 100 giây.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Mỗi chữ tiếp theo mất bao lâu.</span><span class="en-only" lang="en">Time per output token — how long each token after the first takes. At 100 ms per token, a 1,000-token response takes 100 s.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b><span class="vi-only">Tổng độ trễ</span><span class="en-only" lang="en">Total latency</span></b><span class="standard-copy">= TTFT + TPOT × số token đầu ra.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Bằng thời gian chờ chữ đầu, cộng thời gian viết nốt phần còn lại.</span><span class="en-only" lang="en">= TTFT + TPOT × number of output tokens.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b lang="en">Throughput</b><span class="standard-copy">Số token đầu ra mỗi giây dịch vụ sinh được, tính trên toàn bộ người dùng và yêu cầu. Thường đo bằng tokens/s (TPS).<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Một giây cả hệ thống viết được bao nhiêu chữ.</span><span class="en-only" lang="en">Output tokens per second across all users and requests, usually measured in tokens/s (TPS).<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b lang="en">Goodput</b><span class="standard-copy">Số yêu cầu mỗi giây <em>thỏa mãn SLO</em>. Nếu dịch vụ hoàn tất 100 yêu cầu/phút nhưng chỉ 30 đạt SLO thì goodput là 30.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Số khách được phục vụ <em>đúng hẹn</em>, không tính số khách bị trễ.</span><span class="en-only" lang="en">Requests per second that <em>satisfy the SLO</em>. If a service completes 100 requests/minute but only 30 meet the SLO, its goodput is 30.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b lang="en">MFU</b><span class="standard-copy">Model FLOP/s Utilization — tỉ lệ giữa thông lượng quan sát được và thông lượng lý thuyết tối đa khi chip chạy ở peak FLOP/s.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Cỗ máy tính được bao nhiêu phần trăm sức của nó.</span><span class="en-only" lang="en">Model FLOP/s Utilization — observed throughput relative to the theoretical maximum at the chip's peak FLOP/s.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b lang="en">MBU</b><span class="standard-copy">Model Bandwidth Utilization = (số tham số × byte/tham số × tokens/s) / băng thông lý thuyết.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Đường ống chuyển dữ liệu đang dùng hết mấy phần.</span><span class="en-only" lang="en">Model Bandwidth Utilization = (parameter count × bytes/param × tokens/s) / theoretical bandwidth.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">05</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">TTFT and TPOT — the same total, two experiences</div>
+          <h3><span class="standard-copy">Cùng một tổng, hai trải nghiệm</span><span class="easy-only">Chờ lâu ở đầu hay chờ lai rai</span><span class="en-only" lang="en">Same total, two experiences</span></h3>
+          <p class="standard-copy">Hai ứng dụng có tổng độ trễ như nhau vẫn có thể cho trải nghiệm rất khác, tùy tỉ lệ TTFT và TPOT. Người dùng của bạn thích token đầu tiên hiện ngay rồi chờ lâu hơn giữa các token, hay thích chờ lâu hơn một chút ở đầu rồi chữ chạy vèo vèo? Huyen nói phải có nghiên cứu người dùng mới biết — và việc dịch chuyển máy từ decoding sang prefilling (hoặc ngược lại) cho phép đánh đổi giữa hai chỉ số này.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Hai tiệm cùng giao hàng trong một tiếng. Tiệm A gọi lại ngay rồi làm chậm; tiệm B im lặng một lúc rồi làm nhanh. Tổng như nhau nhưng cảm giác khác hẳn. Nhớ nhé: cái người ta nhớ không phải tổng thời gian, mà là lúc nào mình bắt đầu thấy có chuyện xảy ra.</p>
+          <p class="en-only" lang="en">Two applications with the same total latency can offer very different experiences depending on how TTFT and TPOT split. Do your users prefer instant first tokens with a longer wait between tokens, or a slightly longer wait up front with fast generation afterwards? Huyen says user studies are needed to find out — and shifting compute instances from decoding to prefilling (or back) is what lets you trade one for the other.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Huyen dẫn một mốc cụ thể cho streaming: người đọc rất nhanh cũng chỉ đọc được khoảng 120 ms mỗi token, nên TPOT quanh 120 ms — tức 6–8 token mỗi giây — là đủ cho phần lớn tình huống. Nhanh hơn nữa gần như không ai nhận ra.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Chữ chạy nhanh hơn mắt đọc thì cũng chẳng để làm gì.</span>
+            <span class="en-only" lang="en">Huyen gives a concrete anchor for streaming: a very fast reader reads about 120 ms per token, so a TPOT of around 120 ms — roughly 6–8 tokens per second — is sufficient for most use cases. Faster than that, almost nobody notices.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>TTFT của mô hình ≠ TTFT của người dùng</h4>
+              <p>Trong các truy vấn kiểu CoT hay tác tử, mô hình sinh nhiều bước trung gian không hiện ra cho người dùng: nó lập kế hoạch, thực hiện hành động và ghi log, rồi mới sinh câu trả lời cuối. Từ góc nhìn mô hình, token đầu tiên ra ở bước một; từ góc nhìn người dùng, mãi bước ba mới thấy. Một số đội dùng chỉ số <span lang="en">time to publish</span> để nói rõ rằng họ đang đo tới token <em>người dùng nhìn thấy</em>.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Họ hàng của TPOT</h4>
+              <p>Cùng đo khoảng cách giữa các token đầu ra còn có <span lang="en">time between tokens</span> (TBT) và <span lang="en">inter-token latency</span> (ITL). Huyen ghi chú rằng TBT là cách gọi của LinkedIn còn ITL là cách gọi của NVIDIA — một ví dụ nhỏ cho thấy thuật ngữ trong lĩnh vực này vẫn chưa hội tụ.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">06</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Throughput, cost, and the latency trade-off</div>
+          <h3><span class="standard-copy">Thông lượng, chi phí, và cái giá phải trả</span><span class="easy-only">Đông khách thì mỗi khách chờ lâu hơn</span><span class="en-only" lang="en">Throughput, cost, and the trade-off</span></h3>
+          <p class="standard-copy">Thông lượng gắn thẳng với chi phí tính toán: thông lượng càng cao thì giá mỗi token càng rẻ. Huyen tính mẫu — hệ thống tốn 2 đô/giờ và đạt 100 token/giây thì khoảng 5,556 đô cho mỗi triệu token đầu ra; nếu mỗi yêu cầu sinh trung bình 200 token thì decode 1.000 yêu cầu tốn 1,11 đô. Cộng thêm phần prefill (2 đô/giờ, 100 yêu cầu/phút → 0,33 đô cho 1.000 yêu cầu), tổng là 1,44 đô.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Một cái bếp chạy cả giờ tốn ngần ấy tiền. Nấu được càng nhiều món trong giờ đó thì mỗi món càng rẻ. Nhưng nấu nhiều cùng lúc thì mỗi người lại phải chờ lâu hơn một chút. Nhớ nhé: rẻ và nhanh thường kéo nhau về hai phía.</p>
+          <p class="en-only" lang="en">Throughput is directly linked to compute cost: higher throughput usually means lower cost per token. Huyen works the arithmetic — a system costing $2/h at 100 tokens/s comes to about $5.556 per 1M output tokens; at 200 output tokens per request, decoding 1K requests costs $1.11. Adding prefill ($2/h at 100 requests/minute → $0.33 per 1K requests) gives $1.44 in total.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Theo đội AI của LinkedIn sau một năm triển khai sản phẩm AI sinh, chuyện tăng gấp đôi hoặc gấp ba thông lượng là không hiếm — nếu bạn chịu hi sinh TTFT và TPOT.<span class="cite"><a href="#ref-5">5</a></span> Đó chính là lý do đừng chọn dịch vụ chỉ bằng thông lượng và giá.</span>
+            <span class="easy-only">Muốn rẻ gấp đôi thì thường phải chấp nhận chờ lâu hơn.</span>
+            <span class="en-only" lang="en">According to LinkedIn's AI team reflecting on a year of shipping generative AI products, it is not uncommon to double or triple throughput — if you are willing to sacrifice TTFT and TPOT.<span class="cite"><a href="#ref-5">5</a></span> Which is exactly why you should not pick a service on throughput and price alone.</span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>So sánh thông lượng là so sánh khập khiễng</h4>
+              <p>Ngay cả với mô hình, phần cứng và workload tương đương, so thông lượng trực tiếp cũng chỉ gần đúng — vì "token" là gì lại tùy vào bộ tách token, mà mỗi mô hình có bộ tách riêng. Huyen khuyên so sánh hiệu quả của các máy chủ suy luận bằng chỉ số như <em>chi phí mỗi yêu cầu</em>.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Vì sao goodput ra đời</h4>
+              <p>Goodput là chỉ số mượn từ ngành mạng, đếm số yêu cầu mỗi giây thỏa mãn SLO. Giả sử SLO của bạn là TTFT tối đa 200 ms và TPOT tối đa 100 ms: dịch vụ hoàn tất 100 yêu cầu/phút nhưng chỉ 30 đạt chuẩn thì goodput là 30 yêu cầu/phút. Chỉ số này giữ cho việc chạy theo thông lượng không âm thầm phá hỏng trải nghiệm.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">07</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Utilization, MFU, and MBU</div>
+          <h3><span class="standard-copy">"GPU utilization" là một cái bẫy</span><span class="easy-only">Máy bận không có nghĩa là máy giỏi</span><span class="en-only" lang="en">"GPU utilization" is a trap</span></h3>
+          <p class="standard-copy">Chỉ số <span lang="en">GPU utilization</span> mà công cụ <code lang="en">nvidia-smi</code> hiển thị chỉ là <em>phần trăm thời gian GPU đang xử lý tác vụ</em>. Huyen chỉ ra chỗ hỏng bằng một ví dụ nhỏ: một GPU làm được 100 phép tính mỗi giây vẫn có thể báo 100% utilization trong khi nó chỉ đang làm đúng một phép tính mỗi giây. Bạn trả tiền cho 100 mà dùng có 1.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Một người ngồi ở bàn làm việc suốt tám tiếng chưa chắc đã làm được nhiều việc. Cái ta cần biết không phải "có ngồi không" mà "làm được bao nhiêu". Nhớ nhé: bận rộn không đồng nghĩa với hiệu quả.</p>
+          <p class="en-only" lang="en">The <span>GPU utilization</span> metric shown by <code>nvidia-smi</code> is merely <em>the percentage of time the GPU is actively processing tasks</em>. Huyen exposes the flaw with a small example: a GPU capable of 100 operations per second can report 100% utilization while performing exactly one operation per second. You are paying for 100 and using 1.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Ví dụ tính MBU của Huyen: mô hình 7B ở FP16 (2 byte mỗi tham số) đạt 100 token/giây thì băng thông đang dùng là 7B × 2 × 100 = 700 GB/s. Chạy trên A100-80GB với băng thông lý thuyết 2 TB/s, MBU là 700 GB/s ÷ 2 TB/s = 70%.<span class="cite"><a href="#ref-1">1</a></span> Phép tính này cũng cho thấy vì sao lượng tử hóa quan trọng: ít byte mỗi tham số nghĩa là tốn ít băng thông quý giá hơn.</span>
+            <span class="easy-only">Chữ nhẹ hơn thì chuyển qua ống dẫn nhanh hơn — đó là lý do người ta "rút gọn" mô hình.</span>
+            <span class="en-only" lang="en">Huyen's MBU worked example: a 7B model in FP16 (two bytes per parameter) at 100 tokens/s uses 7B × 2 × 100 = 700 GB/s of bandwidth. On an A100-80GB with a theoretical 2 TB/s, that is an MBU of 700 GB/s ÷ 2 TB/s = 70%.<span class="cite"><a href="#ref-1">1</a></span> The same arithmetic shows why quantization matters: fewer bytes per parameter means less of that precious bandwidth consumed.</span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>MFU thực tế thấp đến đâu</h4>
+              <p>Bảng 9-1 của sách trích từ bài báo PaLM (Chowdhery và cộng sự, 2022): GPT-3 175B trên V100 đạt MFU 21,3%; Gopher 280B trên 4.096 TPU v3 đạt 32,5%; Megatron-Turing NLG 530B trên 2.240 A100 đạt 30,2%; PaLM 540B trên 6.144 TPU v4 đạt 46,2%.<span class="cite"><a href="#ref-6">6</a></span> Với huấn luyện, MFU trên 50% nhìn chung được coi là tốt.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Tận dụng cao chưa chắc đã đáng mừng</h4>
+              <p>Huyen chốt lại rằng mục tiêu không phải là tìm con chip có mức tận dụng cao nhất. Thứ bạn thật sự quan tâm là làm xong việc nhanh hơn và rẻ hơn; một tỉ lệ tận dụng cao chẳng nói lên điều gì nếu cả chi phí lẫn độ trễ đều tăng.<span class="cite"><a href="#ref-1">1</a></span> Workload compute-bound thường có MFU cao và MBU thấp; workload bandwidth-bound thì ngược lại.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">08</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">AI accelerators — three numbers that matter</div>
+          <h3><span class="standard-copy">Ba con số của một con chip</span><span class="easy-only">Chọn máy theo ba con số</span><span class="en-only" lang="en">Three numbers on a chip spec</span></h3>
+          <p class="standard-copy">Huyen tóm gọn cả một chương phần cứng vào ba đặc tính quan trọng xuyên suốt mọi tình huống: <strong>năng lực tính toán</strong> (FLOP/s, phụ thuộc độ chính xác số học), <strong>dung lượng và băng thông bộ nhớ</strong>, và <strong>điện năng tiêu thụ</strong>. Và ba câu hỏi khi chọn chip: phần cứng có chạy nổi workload của bạn không, mất bao lâu, và tốn bao nhiêu.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Chọn máy cũng như chọn xe tải: chở được bao nhiêu, chạy nhanh cỡ nào, tốn xăng ra sao. Ba câu hỏi ấy là đủ. Nhớ nhé: chọn xe phải hợp với hàng mình chở, chứ không phải cứ xe to là hơn.</p>
+          <p class="en-only" lang="en">Huyen compresses a whole hardware chapter into three characteristics that matter across use cases: <strong>computational capabilities</strong> (FLOP/s, which depends on numerical precision), <strong>memory size and bandwidth</strong>, and <strong>power consumption</strong>. And three questions when choosing a chip: can the hardware run your workloads, how long does it take, and how much does it cost.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Quy tắc chọn rất thẳng: workload compute-bound thì tìm chip nhiều FLOP/s; workload memory-bound thì bỏ tiền cho chip băng thông cao và nhiều bộ nhớ hơn.<span class="cite"><a href="#ref-1">1</a></span> Nói cách khác, mục 01 quyết định mục này.</span>
+            <span class="easy-only">Kẹt vì tính nhiều thì mua bếp khỏe; kẹt vì khuân nhiều thì mở rộng đường vào kho.</span>
+            <span class="en-only" lang="en">The selection rule is blunt: if your workloads are compute-bound, look for chips with more FLOP/s; if they are memory-bound, spend the money on higher bandwidth and more memory.<span class="cite"><a href="#ref-1">1</a></span> In other words, Part 01 decides this part.</span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Ba tầng bộ nhớ</h4>
+              <p>Một accelerator thường làm việc với ba tầng bộ nhớ: <strong>CPU memory (DRAM)</strong>, băng thông thấp nhất, khoảng 25–50 GB/s; <strong>GPU HBM</strong>, thường 256 GB/s tới hơn 1,5 TB/s, với GPU tiêu dùng có khoảng 24–80 GB; và <strong>GPU on-chip SRAM</strong>, tốc độ thường vượt 10 TB/s nhưng dung lượng rất nhỏ, thường từ 40 MB trở xuống.<span class="cite"><a href="#ref-1">1</a></span> Rất nhiều việc tối ưu GPU thực chất là tận dụng cho khéo đúng cái thang bậc này.</p>
+            </div>
+            <div class="info-block">
+              <h4>Điện là một nút thắt thật</h4>
+              <p>Một NVIDIA A100 có 54 tỉ transistor, H100 có 80 tỉ. Một H100 chạy hết công suất suốt một năm tiêu thụ khoảng 7.000 kWh — để so sánh, một hộ gia đình Mỹ trung bình dùng 10.000 kWh mỗi năm.<span class="cite"><a href="#ref-1">1</a></span> Huyen coi điện là nút thắt thật sự của việc mở rộng quy mô tính toán.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Nối sang mục sau</strong>
+      <strong class="easy-only">Nối sang phần sau</strong>
+      <strong class="en-only" lang="en">Bridging to the next part</strong>
+      <span class="standard-copy">Có chỉ số rồi thì mới nói chuyện chữa. Huyen chia thuốc thành hai nhóm lớn: sửa chính mô hình, và sửa cách phục vụ mô hình. Nhóm thứ nhất có thể làm mô hình thay đổi hành vi; nhóm thứ hai thì không đụng vào mô hình.<span class="cite"><a href="#ref-1">1</a></span></span>
+      <span class="easy-only">Đo xong rồi thì tới lúc chữa. Có hai cách: sửa chính cái máy, hoặc sửa cách xếp hàng quanh nó.</span>
+      <span class="en-only" lang="en">With metrics in hand, we can talk about treatment. Huyen sorts the medicine into two families: changing the model itself, and changing how the model is served. The first can alter the model's behaviour; the second leaves the model untouched.<span class="cite"><a href="#ref-1">1</a></span></span>
+    </aside>
+  </section>
+
+  <section class="section" id="model-level" aria-labelledby="model-level-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Mục 03 · Cấp mô hình</span><span class="easy-only">Mục 03 · Sửa chính cái máy</span><span class="en-only" lang="en">Part 03 · Model level</span></div>
+        <h2 id="model-level-title"><span class="standard-copy">Sửa chính mô hình</span><span class="easy-only">Làm cái máy gọn và nhanh hơn</span><span class="en-only" lang="en">Changing the model itself</span></h2>
+      </div>
+      <p class="standard-copy">Phần lớn mô hình nền tảng hôm nay đi theo kiến trúc transformer và có một thành phần mô hình ngôn ngữ tự hồi quy. Huyen chỉ ra ba đặc điểm khiến suy luận của chúng ngốn tài nguyên: <strong>kích thước mô hình</strong>, <strong>giải mã tự hồi quy</strong>, và <strong>cơ chế attention</strong> — và các kỹ thuật cấp mô hình chính là ba hướng tấn công tương ứng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Muốn máy chạy nhanh, cách thứ nhất là sửa chính cái máy: làm nó nhỏ lại, hoặc dạy nó viết nhiều chữ một lúc thay vì từng chữ, hoặc giúp nó bớt phải đọc lại những gì đã đọc.</p>
+      <p class="en-only" lang="en">Most of today's foundation models follow the transformer architecture and contain an autoregressive language model component. Huyen names the three characteristics that make their inference resource-intensive: <strong>model size</strong>, <strong>autoregressive decoding</strong>, and <strong>the attention mechanism</strong> — and the model-level techniques are the three corresponding lines of attack.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Lý tưởng thì tối ưu tốc độ và chi phí không nên đổi chất lượng mô hình. Nhưng nhiều kỹ thuật vẫn gây suy giảm — đó là lý do cùng một mô hình Llama, các nhà cung cấp khác nhau lại cho kết quả benchmark hơi khác nhau.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+        <p class="definition easy-only">Làm máy nhanh hơn đôi khi khiến nó trả lời kém đi một chút — nên phải kiểm tra lại sau khi tối ưu.</p>
+        <p class="definition en-only" lang="en">Ideally, optimising for speed and cost should not change model quality. But many techniques do cause degradation — which is why the same Llama model, served by different providers, shows slightly different benchmark results.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+        <p class="deep-only">Đây là điểm phân biệt then chốt giữa hai mục cuối của chương: tối ưu cấp mô hình thường phải <em>sửa chính mô hình</em>, nên có thể đổi hành vi của nó; còn tối ưu cấp dịch vụ giữ nguyên mô hình và chỉ đổi cách phục vụ, nên lẽ ra không được làm đổi chất lượng đầu ra.<span class="cite"><a href="#ref-1">1</a></span> Khi mua dịch vụ suy luận, đây là câu hỏi đáng hỏi thẳng nhà cung cấp.</p>
+      </div>
+      <div class="equation">
+        <div class="equation-row"><b lang="en">Quantization</b><span class="standard-copy">Giảm độ chính xác số học để thu nhỏ dấu chân bộ nhớ và tăng thông lượng. Từ 32 bit xuống 16 bit là giảm một nửa bộ nhớ.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Ghi số thô hơn cho nhẹ đi.</span><span class="en-only" lang="en">Reduce numerical precision to shrink the memory footprint and raise throughput. From 32 to 16 bits halves the footprint.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b lang="en">Distillation</b><span class="standard-copy">Huấn luyện một mô hình nhỏ bắt chước hành vi của mô hình lớn (bàn ở Chương 8).<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Dạy học trò nhỏ bắt chước thầy lớn.</span><span class="en-only" lang="en">Train a small model to mimic the behaviour of a large one (covered in Chapter 8).<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b lang="en">Pruning</b><span class="standard-copy">Hoặc bỏ hẳn các nút của mạng, hoặc đưa những tham số ít hữu ích nhất về 0 để mô hình thưa hơn.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Tỉa bớt những cành không sinh trái.</span><span class="en-only" lang="en">Either remove whole nodes from the network, or set the least useful parameters to zero to make the model sparse.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b><span class="vi-only">Cỡ KV cache</span><span class="en-only" lang="en">KV cache size</span></b><span class="standard-copy">2 × B × S × L × H × M — lô, độ dài chuỗi, số lớp, chiều mô hình, số byte mỗi giá trị.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Sổ ghi nhớ càng dài thì càng chiếm chỗ.</span><span class="en-only" lang="en">2 × B × S × L × H × M — batch, sequence length, layers, model dimension, bytes per value.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">09</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Model compression</div>
+          <h3><span class="standard-copy">Nén mô hình — và vì sao pruning ít được dùng</span><span class="easy-only">Làm mô hình nhỏ lại</span><span class="en-only" lang="en">Compression — and why pruning is rare</span></h3>
+          <p class="standard-copy">Lượng tử hóa chỉ trọng số là cách phổ biến nhất, theo Huyen, vì dễ dùng, chạy được ngay với nhiều mô hình, và cực kỳ hiệu quả — dù bà nhắc rằng ta đã gần tới giới hạn, không thể xuống dưới 1 bit mỗi giá trị. Chưng cất cũng thường gặp vì cho ra mô hình nhỏ mà hành vi tương đương mô hình lớn hơn nhiều.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Muốn cái máy nhẹ đi thì có ba cách: ghi số thô hơn, dạy một học trò nhỏ bắt chước thầy, hoặc tỉa bớt những phần không cần. Cách thứ nhất phổ biến nhất vì dễ làm nhất. Nhớ nhé: nhẹ đi thì nhanh hơn, nhưng đừng nhẹ tới mức quên mất việc.</p>
+          <p class="en-only" lang="en">Weight-only quantization is by far the most popular approach, Huyen writes, because it is easy to use, works out of the box for many models, and is extremely effective — though she notes we are close to its limit, since you cannot go below 1 bit per value. Distillation is also common, because it yields a small model whose behaviour is comparable to a much larger one for your needs.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Pruning có kết quả nghiên cứu rất đẹp — Frankle và Carbin (2019) cho thấy có thể giảm hơn 90% số tham số khác 0 của một số mạng đã huấn luyện mà không hại độ chính xác.<span class="cite"><a href="#ref-8">8</a></span> Nhưng trong thực tế nó ít được dùng: khó làm, đòi hiểu kiến trúc gốc, hiệu quả thường kém các cách khác, và mô hình thưa lại không phải kiến trúc phần cứng nào cũng tận dụng được.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Trong phòng thí nghiệm thì tỉa cành rất hiệu quả; ra đời thật thì ít ai làm vì khó và máy móc không tận dụng được.</span>
+            <span class="en-only" lang="en">Pruning has beautiful research results — Frankle and Carbin (2019) showed non-zero parameter counts of certain trained networks can be cut by over 90% without compromising accuracy.<span class="cite"><a href="#ref-8">8</a></span> In practice it is uncommon: it is hard to do, requires understanding the original architecture, the gain is often smaller than other approaches, and not all hardware exploits the resulting sparsity.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Hai nghĩa của pruning</h4>
+              <p>Một là bỏ hẳn các nút của mạng — tức đổi kiến trúc và giảm số tham số. Hai là tìm những tham số ít hữu ích nhất cho dự đoán rồi đặt chúng về 0; cách này không giảm tổng số tham số, chỉ giảm số tham số khác 0, làm mô hình thưa hơn, vừa giảm chỗ lưu vừa tăng tốc tính toán.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Pruning như công cụ tìm kiến trúc</h4>
+              <p>Mô hình đã tỉa có thể dùng luôn hoặc tinh chỉnh tiếp để khôi phục phần chất lượng đã mất. Huyen còn dẫn một hướng khác: pruning giúp <em>phát hiện</em> những kiến trúc triển vọng (Liu và cộng sự, 2018), và các kiến trúc đã tỉa ấy — nhỏ hơn kiến trúc gốc — cũng có thể huấn luyện lại từ đầu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">10</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Speculative decoding</div>
+          <h3><span class="standard-copy">Giải mã suy đoán — để người yếu viết nháp</span><span class="easy-only">Cho người viết nhanh viết nháp trước</span><span class="en-only" lang="en">Speculative decoding — let the weak model draft</span></h3>
+          <p class="standard-copy">Một mô hình nhanh nhưng yếu hơn (<span lang="en">draft model</span>) sinh trước một chuỗi K token; mô hình đích xác minh cả K token ấy <em>song song</em>, chấp nhận chuỗi con dài nhất tính từ trái sang mà nó đồng ý, rồi tự sinh thêm một token. Nếu không token nháp nào được nhận, vòng lặp chỉ cho ra một token do mô hình đích sinh; nếu tất cả được nhận, nó cho ra K + 1 token.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Giống như có một bạn viết nhanh ngồi viết nháp vài chữ trước, rồi thầy giáo đọc lướt một lượt — chữ nào đúng ý thì giữ, tới chữ đầu tiên sai thì bỏ từ đó về sau. Đọc lướt bao giờ cũng nhanh hơn tự viết. Nhớ nhé: kiểm bài nhanh hơn làm bài.</p>
+          <p class="en-only" lang="en">A faster but weaker <strong>draft model</strong> generates a sequence of K tokens; the target model verifies all K <em>in parallel</em>, accepts the longest left-to-right subsequence it agrees with, then generates one extra token itself. If no draft token is accepted, the loop yields only the one token from the target model; if all are accepted, it yields K + 1 tokens.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Để tăng tốc Chinchilla-70B, DeepMind huấn luyện một mô hình nháp 4B cùng kiến trúc; nó sinh token nhanh gấp tám lần mô hình đích (1,8 ms/token so với 14,1 ms/token), giúp giảm hơn một nửa tổng độ trễ mà không ảnh hưởng chất lượng.<span class="cite"><a href="#ref-10">10</a></span> Kỹ thuật này đã có trong vLLM, TensorRT-LLM và llama.cpp.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Có nơi đã làm thử: người viết nháp nhanh gấp tám lần, và cả bài xong nhanh hơn gấp đôi.</span>
+            <span class="en-only" lang="en">To speed up Chinchilla-70B, DeepMind trained a 4B draft model of the same architecture; it generates a token eight times faster than the target (1.8 ms/token vs 14.1 ms/token), halving overall response latency without compromising quality.<span class="cite"><a href="#ref-10">10</a></span> The technique now ships in vLLM, TensorRT-LLM and llama.cpp.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Vì sao nó không phản tác dụng</h4>
+              <p>Ba nhận xét làm nên kỹ thuật này. Một, xác minh nhanh hơn sinh vì xác minh song song hóa được còn sinh thì tuần tự — nói cách khác, giải mã suy đoán biến hồ sơ tính toán của decode thành hồ sơ của prefill. Hai, trong một chuỗi đầu ra có những token dễ đoán hơn hẳn, nên một mô hình yếu vẫn đạt tỉ lệ chấp nhận cao. Ba, decode vốn bandwidth-bound nên thường còn FLOP nhàn rỗi để xác minh gần như miễn phí.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Chọn K thế nào</h4>
+              <p>Tỉ lệ chấp nhận phụ thuộc lĩnh vực: với văn bản có cấu trúc chặt như mã nguồn, tỉ lệ thường cao hơn. K lớn nghĩa là mô hình đích phải gọi xác minh ít lần hơn, nhưng tỉ lệ chấp nhận lại thấp đi. Mô hình nháp có thể thuộc kiến trúc bất kỳ, song lý tưởng nhất là dùng chung từ vựng và bộ tách token với mô hình đích.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">11</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Inference with reference &amp; parallel decoding</div>
+          <h3><span class="standard-copy">Chép lại từ đề bài, và viết nhiều chữ cùng lúc</span><span class="easy-only">Chép lại phần có sẵn</span><span class="en-only" lang="en">Copy from the input, and write several tokens at once</span></h3>
+          <p class="standard-copy"><strong lang="en">Inference with reference</strong> giống giải mã suy đoán, nhưng token nháp không do mô hình nào sinh ra mà được <em>chọn từ chính đầu vào</em>. Nó không cần mô hình phụ, đổi lại chỉ hữu ích khi đầu ra trùng lặp nhiều với ngữ cảnh — như hệ thống truy xuất, viết mã, hay hội thoại nhiều lượt. Trong bài báo gốc (Yang và cộng sự, 2023), kỹ thuật này đạt tốc độ sinh nhanh gấp hai lần ở những tình huống ấy.<span class="cite"><a href="#ref-11">11</a></span></p>
+          <p class="easy-only">Nhiều khi câu trả lời chỉ là chép lại một đoạn trong đề bài — ví dụ khi bạn nhờ sửa lỗi một đoạn mã, phần lớn đoạn mã vẫn giữ nguyên. Vậy thì cứ chép, đừng viết lại từng chữ. Nhớ nhé: cái gì đã có sẵn thì đừng viết lại.</p>
+          <p class="en-only" lang="en"><strong>Inference with reference</strong> works like speculative decoding, except the draft tokens are not generated by a model but <em>selected from the input</em>. It needs no extra model, but is useful only where output overlaps heavily with context — retrieval systems, coding, multi-turn conversations. In the original paper (Yang et al., 2023) it achieved a two-times generation speedup in such use cases.<span class="cite"><a href="#ref-11">11</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Giải mã song song đi xa hơn: nó phá luôn sự phụ thuộc tuần tự, sinh x<sub>t+1</sub>, x<sub>t+2</sub>… cùng lúc. Nó khả thi vì biết phần đã có thường đủ để đoán vài token kế — ví dụ của Huyen: với "the cat sits", dù chưa biết chữ sau là "on", "under" hay "behind", bạn vẫn đoán được chữ tiếp sau nữa là "the".<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Có những chỗ trong câu đoán trước được, như "con mèo ngồi trên… cái gì đó" — chữ "cái" thì chắc chắn rồi.</span>
+            <span class="en-only" lang="en">Parallel decoding goes further, breaking the sequential dependency to generate x<sub>t+1</sub>, x<sub>t+2</sub>… simultaneously. It works because the existing sequence is often enough to predict the next few tokens — Huyen's example: given "the cat sits", without knowing whether the next token is "on", "under" or "behind", you can still predict the word after it is "the".<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Hai kiểu giải mã song song</h4>
+              <p>Token song song có thể do cùng một bộ giải mã sinh ra, như trong <span lang="en">Lookahead decoding</span> (Fu và cộng sự, 2024), hoặc do nhiều đầu giải mã khác nhau, như trong <span lang="en">Medusa</span> (Cai và cộng sự, 2024). Trong Medusa, mô hình gốc được gắn thêm nhiều đầu giải mã; mỗi đầu là một lớp mạng nhỏ được huấn luyện để dự đoán một token ở vị trí tương lai cụ thể, huấn luyện cùng mô hình gốc nhưng mô hình gốc bị đóng băng.<span class="cite"><a href="#ref-12">12</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Xác minh và cái giá của sự phức tạp</h4>
+              <p>Vì không sinh tuần tự, các token phải được xác minh xem có khớp với nhau không. Lookahead dùng phương pháp Jacobi — nên họ thuật toán này còn gọi là <span lang="en">Jacobi decoding</span>; Medusa dùng attention dạng cây để chọn tổ hợp triển vọng nhất. NVIDIA công bố Medusa giúp tăng tốc sinh token của Llama 3.1 tới 1,9 lần trên GPU HGX H200 của họ.<span class="cite"><a href="#ref-13">13</a></span> Huyen thừa nhận thẳng: giải mã song song không trực giác, và vài kỹ thuật như Medusa khá khó cài đặt.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">12</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">KV cache and attention optimization</div>
+          <h3><span class="standard-copy">KV cache — cuốn sổ ngày càng dày</span><span class="easy-only">Cuốn sổ ghi nhớ</span><span class="en-only" lang="en">The KV cache — a notebook that keeps growing</span></h3>
+          <p class="standard-copy">Để sinh token kế tiếp, mô hình cần vector key và value của mọi token trước đó. Thay vì tính lại từ đầu mỗi bước, nó lưu chúng vào <strong lang="en">KV cache</strong> và chỉ tính vector cho token mới nhất.<span class="cite"><a href="#ref-1">1</a></span> Cái giá: cache phình theo độ dài chuỗi và theo cỡ lô. Một bài báo của Google tính rằng với mô hình hơn 500B dùng multi-head attention, batch 512, ngữ cảnh 2.048, KV cache lên tới 3 TB — gấp ba lần trọng số của chính mô hình đó.<span class="cite"><a href="#ref-14">14</a></span></p>
+          <p class="easy-only">Mỗi khi viết thêm một chữ, máy phải nhớ lại tất cả những chữ đã viết. Để khỏi đọc lại từ đầu, nó ghi sẵn vào một cuốn sổ. Nhưng cuốn sổ ấy càng viết càng dày, tới lúc không còn chỗ để nữa. Nhớ nhé: ghi sổ giúp nhanh hơn, nhưng sổ cũng chiếm chỗ.</p>
+          <p class="en-only" lang="en">To generate the next token, the model needs the key and value vectors of every previous token. Rather than recompute them each step, it stores them in a <strong>KV cache</strong> and computes vectors only for the newest token.<span class="cite"><a href="#ref-1">1</a></span> The price: the cache grows with sequence length and with batch size. A Google paper calculated that for a 500B+ model with multi-head attention, batch size 512 and context length 2,048, the KV cache totals 3 TB — three times the size of that model's weights.<span class="cite"><a href="#ref-14">14</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Character.AI cho biết hội thoại trung bình của họ có lịch sử 180 tin nhắn, nên nút thắt chính của thông lượng suy luận là cỡ KV cache. Ba thiết kế attention — multi-query attention, xen kẽ local và global attention, và cross-layer attention — giúp họ giảm KV cache hơn 20 lần, tới mức bộ nhớ không còn là nút thắt khi phục vụ lô lớn.<span class="cite"><a href="#ref-15">15</a></span></span>
+            <span class="easy-only">Có công ty chat với người dùng suốt, sổ dày kinh khủng; họ tìm cách ghi gọn lại hơn hai mươi lần.</span>
+            <span class="en-only" lang="en">Character.AI reports an average conversation history of 180 messages, making KV cache size their primary inference-throughput bottleneck. Three attention designs — multi-query attention, interleaved local and global attention, and cross-layer attention — cut their KV cache by over 20 times, to the point where memory is no longer the bottleneck for large batch sizes.<span class="cite"><a href="#ref-15">15</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Ba hướng tối ưu attention</h4>
+              <p>Huyen chia chúng thành ba nhóm. <strong>Thiết kế lại cơ chế attention</strong> — local windowed attention, cross-layer attention, multi-query attention, grouped-query attention; vì đổi kiến trúc nên chỉ áp dụng được khi huấn luyện hoặc tinh chỉnh. <strong>Tối ưu KV cache</strong> — như PagedAttention của vLLM, chia cache thành các khối không liền kề để giảm phân mảnh và cho phép chia sẻ bộ nhớ linh hoạt. <strong>Viết kernel</strong> — như FlashAttention, hợp nhất nhiều toán tử thường dùng trong transformer thành một.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span><span class="cite"><a href="#ref-17">17</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Tính thử cỡ cache</h4>
+              <p>Công thức là 2 × B × S × L × H × M. Ví dụ của sách: Llama 2 13B có 40 lớp và chiều mô hình 5.120; với batch 32, chuỗi 2.048 và 2 byte mỗi giá trị, KV cache cần 2 × 32 × 2.048 × 40 × 5.120 × 2 = 54 GB nếu không tối ưu gì.<span class="cite"><a href="#ref-1">1</a></span> Lưu ý rằng KV cache chỉ dùng khi suy luận, không dùng khi huấn luyện — lúc huấn luyện mọi token đã biết trước nên tính được một lần.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Nối sang mục sau</strong>
+      <strong class="easy-only">Nối sang phần sau</strong>
+      <strong class="en-only" lang="en">Bridging to the next part</strong>
+      <span class="standard-copy">Nhóm kỹ thuật này có một đặc điểm chung: nó đụng vào mô hình. Nhóm kế tiếp thì không — nó chỉ sắp xếp lại tài nguyên và hàng đợi, và vì thế lẽ ra không làm đổi chất lượng đầu ra.<span class="cite"><a href="#ref-1">1</a></span> Huyen minh họa bằng một nghiên cứu tình huống của PyTorch: với Llama-7B trên A100 80 GB, đội PyTorch lần lượt gọi <code lang="en">torch.compile</code>, lượng tử hóa trọng số xuống INT8, rồi xuống INT4, rồi thêm giải mã suy đoán — mỗi bước đẩy thông lượng lên một bậc, dù chính họ không nói rõ các bước ấy ảnh hưởng chất lượng đầu ra ra sao.<span class="cite"><a href="#ref-18">18</a></span></span>
+      <span class="easy-only">Mấy cách vừa rồi đều động vào chính cái máy. Phần sau thì không động vào máy, chỉ sắp xếp lại cách nhận việc thôi.</span>
+      <span class="en-only" lang="en">These techniques share one trait: they touch the model. The next family does not — it only rearranges resources and queues, and so should not change output quality.<span class="cite"><a href="#ref-1">1</a></span> Huyen illustrates with a PyTorch case study: for Llama-7B on an 80 GB A100, the team called <code>torch.compile</code>, quantized weights to INT8, then to INT4, then added speculative decoding — each step raising throughput another notch, though it was unclear how those steps affected output quality.<span class="cite"><a href="#ref-18">18</a></span></span>
+    </aside>
+  </section>
+
+  <section class="section" id="service-level" aria-labelledby="service-level-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span class="standard-copy">Mục 04 · Cấp dịch vụ</span><span class="easy-only">Mục 04 · Sắp xếp lại hàng đợi</span><span class="en-only" lang="en">Part 04 · Service level</span></div>
+        <h2 id="service-level-title"><span class="standard-copy">Sắp xếp lại cách phục vụ</span><span class="easy-only">Sắp lại hàng cho khéo</span><span class="en-only" lang="en">Rearranging how you serve</span></h2>
+      </div>
+      <p class="standard-copy">Phần lớn kỹ thuật cấp dịch vụ xoay quanh quản lý tài nguyên: cho trước một lượng tính toán và bộ nhớ cố định cùng khối lượng công việc biến động, làm sao cấp phát hiệu quả để tối ưu độ trễ và chi phí. Khác với nhóm cấp mô hình, chúng không sửa mô hình và lẽ ra không đổi chất lượng đầu ra.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Phần này không động vào cái máy nữa. Nó chỉ lo sắp xếp: ai vào trước, ai đi chung chuyến, cái gì đã làm rồi thì để dành dùng lại.</p>
+      <p class="en-only" lang="en">Most service-level techniques are about resource management: given a fixed amount of compute and memory and dynamic workloads, how do you allocate efficiently to optimise latency and cost. Unlike the model-level family, they do not modify models and should not change output quality.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Xử lý từng yêu cầu riêng lẻ giống như ai nấy lái xe riêng; gộp lô là cho tất cả lên một chuyến xe buýt. Xe buýt chở được nhiều người hơn, nhưng cũng làm chuyến đi của mỗi người dài ra một chút.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="definition easy-only">Đi chung xe buýt thì chở được nhiều người hơn, nhưng mỗi người phải chờ thêm chút ít.</p>
+        <p class="definition en-only" lang="en">Processing each request separately is like everyone driving their own car; batching is putting them all on a bus. A bus moves more people, but it also makes each person's journey a bit longer.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="deep-only">Huyen theo ẩn dụ xe buýt suốt cả ba kiểu gộp lô, và nó rất đắt. <strong lang="en">Static batching</strong> là chiếc xe chờ đầy ghế mới chạy — yêu cầu đầu tiên phải chờ yêu cầu cuối cùng, dù nó tới muộn cỡ nào. <strong lang="en">Dynamic batching</strong> là xe chạy theo giờ cố định hoặc khi đã đầy, tùy cái nào tới trước — giữ độ trễ trong tầm kiểm soát, đổi lại lô có thể chưa đầy nên phí chỗ. <strong lang="en">Continuous batching</strong> là xe vừa trả một khách xuống là đón ngay khách mới lên, giữ tỉ lệ lấp đầy cao nhất.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="equation">
+        <div class="equation-row"><b lang="en">Static batching</b><span class="standard-copy">Gộp một số lượng đầu vào cố định; cả lô phải chờ đủ mới chạy.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Xe chờ đủ khách mới lăn bánh.</span><span class="en-only" lang="en">Group a fixed number of inputs; the whole batch waits until it is full.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b lang="en">Dynamic batching</b><span class="standard-copy">Đặt cửa sổ thời gian tối đa: batch 4, cửa sổ 100 ms thì chạy khi đủ 4 yêu cầu hoặc khi hết 100 ms, tùy cái nào trước.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Xe chạy theo giờ, đủ khách hay chưa cũng đi.</span><span class="en-only" lang="en">Set a maximum time window: with batch size 4 and a 100 ms window, run when four requests arrive or when 100 ms passes, whichever comes first.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b lang="en">Continuous batching</b><span class="standard-copy">Trả từng câu trả lời ngay khi nó xong và nhận yêu cầu mới vào chỗ trống; còn gọi là in-flight batching.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Trả khách xuống là đón ngay khách mới.</span><span class="en-only" lang="en">Return each response as soon as it completes and slot a new request into its place; also called in-flight batching.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b lang="en">Tensor parallelism</b><span class="standard-copy">Chia các tensor trong một toán tử ra nhiều thiết bị — cách chia mô hình phổ biến nhất khi suy luận.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Chia một phép tính lớn cho nhiều máy cùng làm.</span><span class="en-only" lang="en">Partition the tensors inside an operator across devices — the most common way to split a model for inference.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+        <div class="equation-row"><b lang="en">Replica parallelism</b><span class="standard-copy">Tạo nhiều bản sao của cùng một mô hình để nhận nhiều yêu cầu cùng lúc; dễ triển khai nhất.<span class="cite"><a href="#ref-1">1</a></span></span><span class="easy-only">Mở thêm quầy giống hệt quầy cũ.</span><span class="en-only" lang="en">Create multiple replicas of the model to handle more concurrent requests; the easiest strategy to implement.<span class="cite"><a href="#ref-1">1</a></span></span></div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">13</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Continuous batching</div>
+          <h3><span class="standard-copy">Đừng bắt câu ngắn chờ câu dài</span><span class="easy-only">Ai xong trước thì về trước</span><span class="en-only" lang="en">Don't make short answers wait for long ones</span></h3>
+          <p class="standard-copy">Trong cách gộp lô ngây thơ, cả lô phải xong hết mới trả về. Với LLM điều này rất tai hại: nếu một yêu cầu sinh 10 token còn yêu cầu khác sinh 1.000 token thì câu ngắn phải chờ câu dài, tạo ra độ trễ hoàn toàn không cần thiết. <strong lang="en">Continuous batching</strong>, giới thiệu trong bài báo Orca (Yu và cộng sự, 2022), cho phép trả câu trả lời ngay khi nó xong và nhận yêu cầu mới vào chỗ vừa trống.<span class="cite"><a href="#ref-19">19</a></span></p>
+          <p class="easy-only">Tưởng tượng cả lớp làm bài, ai xong trước vẫn phải ngồi chờ bạn chậm nhất mới được nộp — vô lý quá. Cách hay hơn: ai xong thì nộp và ra về, chỗ trống có bạn mới vào ngồi ngay. Nhớ nhé: đừng bắt người nhanh chờ người chậm.</p>
+          <p class="en-only" lang="en">In naive batching, the whole batch must complete before any response is returned. For LLMs that is costly: if one request generates 10 tokens and another generates 1,000, the short response waits for the long one, creating entirely unnecessary latency. <strong>Continuous batching</strong>, introduced in the Orca paper (Yu et al., 2022), returns each response as soon as it completes and admits a new request into the freed slot.<span class="cite"><a href="#ref-19">19</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Đây là lý do các framework phục vụ LLM hiện đại đều quảng cáo <span lang="en">continuous</span> hoặc <span lang="en">in-flight batching</span> như tính năng hàng đầu. Nếu bạn đánh giá một dịch vụ suy luận, đây là câu hỏi đáng hỏi trước cả khi hỏi về phần cứng.</span>
+            <span class="easy-only">Phần mềm phục vụ hiện đại nào cũng làm được điều này — nên cứ hỏi cho chắc.</span>
+            <span class="en-only" lang="en">This is why every modern LLM serving framework advertises <span>continuous</span> or <span>in-flight batching</span> as a headline feature. If you are evaluating an inference service, ask about this before you ask about hardware.</span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Nó hoạt động bằng cách nào</h4>
+              <p>Continuous batching gộp lô một cách <em>chọn lọc</em>: chỉ gộp những thao tác mà việc sinh câu trả lời này không giữ chân câu trả lời kia. Sau khi một yêu cầu trong lô xong và được trả về, dịch vụ đưa một yêu cầu khác vào đúng chỗ đó, khiến việc gộp lô diễn ra liên tục.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Đánh đổi của dynamic batching</h4>
+              <p>Dynamic batching giữ độ trễ trong tầm kiểm soát vì yêu cầu tới sớm không bị yêu cầu tới muộn giam lại. Nhược điểm: lô có thể chưa đầy khi tới hạn xử lý, nên phí một phần năng lực tính toán.<span class="cite"><a href="#ref-1">1</a></span> Đó chính là hình minh họa 9-15 trong sách — gộp lô động dễ chịu về độ trễ nhưng kém hiệu quả về tính toán.</p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">14</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Decoupling prefill and decode</div>
+          <h3><span class="standard-copy">Tách prefill khỏi decode</span><span class="easy-only">Tách bếp đọc đề và bếp viết bài</span><span class="en-only" lang="en">Decoupling prefill and decode</span></h3>
+          <p class="standard-copy">Vì prefill compute-bound còn decode bandwidth-bound, để cả hai trên cùng một máy khiến chúng tranh tài nguyên và làm xấu cả TTFT lẫn TPOT. Huyen mô tả rất cụ thể: một GPU đang chạy gần hết công suất có thể nhận thêm một việc nhẹ như decode, nhưng thêm một truy vấn mới nghĩa là thêm cả một việc prefill — và việc prefill ấy sẽ rút cạn tài nguyên tính toán của các việc decode đang chạy, làm chậm TPOT của chúng.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Trong bếp có hai việc: đọc đơn hàng và nấu món. Đọc đơn rất nặng đầu, nấu món thì nặng tay. Bắt một người làm cả hai thì việc nào cũng chậm. Tách ra hai người thì trôi hẳn. Nhớ nhé: hai việc khác tính chất thì đừng dồn cho một chỗ.</p>
+          <p class="en-only" lang="en">Because prefill is compute-bound and decode is memory bandwidth-bound, running both on the same machine makes them compete for resources and degrades both TTFT and TPOT. Huyen is concrete: a GPU already near peak capacity might absorb another light decoding job, but adding a new query means adding a prefilling job too — and that one prefilling job drains compute from the existing decoding jobs, slowing their TPOT.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Tỉ lệ máy prefill trên máy decode phụ thuộc workload và ưu tiên. Huyen đưa hai khoảng tham khảo: nếu chuỗi đầu vào thường dài và bạn ưu tiên TTFT, tỉ lệ có thể nằm giữa 2:1 và 4:1; nếu đầu vào ngắn và bạn ưu tiên TPOT, tỉ lệ có thể là 1:2 tới 1:1.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Đề dài thì cần nhiều người đọc đề; đề ngắn mà bài dài thì cần nhiều người viết.</span>
+            <span class="en-only" lang="en">The ratio of prefill to decode instances depends on workload and priority. Huyen gives two reference ranges: if input sequences are long and you prioritise TTFT, the ratio can be 2:1 to 4:1; if inputs are short and you prioritise TPOT, it can be 1:2 to 1:1.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Bằng chứng từ nghiên cứu</h4>
+              <p><span lang="en">“DistServe”</span> (Zhong và cộng sự, 2024) và <span lang="en">“Inference Without Interference”</span> (Hu và cộng sự, 2024) cho thấy với nhiều LLM và ứng dụng phổ biến, giao prefill và decode cho các instance khác nhau — ví dụ các GPU khác nhau — cải thiện đáng kể lượng yêu cầu xử lý được trong khi vẫn giữ ràng buộc độ trễ.<span class="cite"><a href="#ref-20">20</a></span><span class="cite"><a href="#ref-21">21</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Chi phí truyền trạng thái</h4>
+              <p>Tách hai pha nghĩa là phải chuyển trạng thái trung gian từ instance prefill sang instance decode. Điểm đáng chú ý là bài báo cho thấy chi phí truyền thông này không lớn trong các cụm GPU hiện đại có kết nối băng thông cao như NVLink trong cùng một node.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-20">20</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">15</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Prompt caching</div>
+          <h3><span class="standard-copy">Cache prompt — đừng đọc lại thứ đã đọc</span><span class="easy-only">Đọc một lần rồi để dành</span><span class="en-only" lang="en">Prompt caching — stop re-reading the same text</span></h3>
+          <p class="standard-copy">Nhiều prompt trong một ứng dụng có những đoạn trùng nhau — điển hình nhất là <span lang="en">system prompt</span>. Không có cache thì mô hình phải xử lý lại đoạn ấy với từng truy vấn; có cache thì nó chỉ xử lý một lần cho truy vấn đầu tiên. Huyen đưa một phép nhân rất thuyết phục: nếu system prompt của bạn dài 1.000 token và ứng dụng gọi API một triệu lần mỗi ngày, cache prompt giúp bạn khỏi phải xử lý khoảng một tỉ token đầu vào lặp lại mỗi ngày.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Mỗi lần bạn hỏi, máy lại phải đọc lại từ đầu bản nội quy dài dằng dặc rồi mới trả lời. Cache giống như bảo nó: đọc một lần thôi, nhớ lấy, lần sau khỏi đọc lại. Nhớ nhé: thứ gì lặp lại y hệt thì làm một lần là đủ.</p>
+          <p class="en-only" lang="en">Many prompts in an application share overlapping segments — most typically the system prompt. Without a cache the model reprocesses it on every query; with a cache it is processed once, for the first query. Huyen's arithmetic is persuasive: if your system prompt is 1,000 tokens and your application makes one million API calls a day, a prompt cache saves you from processing roughly one billion repetitive input tokens daily.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Bảng 9-3 của sách, lấy số từ Anthropic (2024): chat với một cuốn sách (prompt 100.000 token được cache) giảm TTFT từ 11,5 giây xuống 2,4 giây (−79%) và giảm 90% chi phí; prompt nhiều ví dụ (10.000 token) từ 1,6 xuống 1,1 giây (−31%) và giảm 86% chi phí; hội thoại 10 lượt với system prompt dài từ khoảng 10 giây xuống khoảng 2,5 giây (−75%) và giảm 53% chi phí.<span class="cite"><a href="#ref-22">22</a></span></span>
+            <span class="easy-only">Có nơi đo được: hỏi về một cuốn sách dài, nhờ cache mà chờ từ 11 giây rút còn hơn 2 giây.</span>
+            <span class="en-only" lang="en">Table 9-3 of the book, with figures from Anthropic (2024): chatting with a book (100,000-token cached prompt) cuts TTFT from 11.5 s to 2.4 s (−79%) and cost by 90%; many-shot prompting (10,000-token prompt) from 1.6 s to 1.1 s (−31%) and cost by 86%; a 10-turn conversation with a long system prompt from ~10 s to ~2.5 s (−75%) and cost by 53%.<span class="cite"><a href="#ref-22">22</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Không miễn phí</h4>
+              <p>Giống KV cache, cache prompt có thể rất lớn và chiếm bộ nhớ. Tại thời điểm sách viết, Google Gemini tính token đầu vào đã cache rẻ hơn 75% so với token đầu vào thường, nhưng bạn phải trả thêm phí lưu cache — sách ghi mức 1,00 đô cho mỗi triệu token mỗi giờ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-23">23</a></span> Nếu không dùng API có sẵn tính năng này, tự cài đặt đòi khá nhiều công sức kỹ thuật.</p>
+            </div>
+            <div class="info-block">
+              <h4>Còn gọi là gì</h4>
+              <p>Cache prompt còn có tên <span lang="en">context cache</span> hoặc <span lang="en">prefix cache</span>. Nó đặc biệt hữu ích với các truy vấn quanh cùng một tài liệu dài — một cuốn sách, một codebase — và với hội thoại dài, khi phần xử lý các tin nhắn trước được dùng lại cho tin nhắn sau. Kể từ khi Gim và cộng sự giới thiệu vào tháng 11 năm 2023, nó được đưa vào các model API rất nhanh.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-24">24</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number">16</div>
+        <div class="surprise-content">
+          <div class="english-term" lang="en">Parallelism strategies</div>
+          <h3><span class="standard-copy">Song song hóa — chia việc hay chia mô hình</span><span class="easy-only">Nhiều máy cùng làm</span><span class="en-only" lang="en">Parallelism — split the work or split the model</span></h3>
+          <p class="standard-copy">Đơn giản nhất là <strong lang="en">replica parallelism</strong>: tạo nhiều bản sao của mô hình để nhận nhiều yêu cầu cùng lúc, đổi lại tốn nhiều chip hơn. Khi mô hình lớn tới mức không vừa một máy, ta cần <strong lang="en">model parallelism</strong> — chia chính mô hình ra nhiều máy. Cách chia phổ biến nhất khi suy luận là <strong lang="en">tensor parallelism</strong>: phân mảnh các tensor trong một toán tử ra nhiều thiết bị, ví dụ chia một ma trận theo cột khi nhân hai ma trận.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Hai cách chia việc. Một là mở thêm quầy y hệt quầy cũ, ai tới thì vào quầy nào cũng được. Hai là khi cái máy to quá không nhét vừa một phòng, ta chia nó ra nhiều phòng, mỗi phòng giữ một phần. Nhớ nhé: đông khách thì thêm quầy, máy to quá thì chia máy.</p>
+          <p class="en-only" lang="en">The simplest is <strong>replica parallelism</strong>: create multiple copies of the model to handle more concurrent requests, at the cost of more chips. When a model is too big for one machine, you need <strong>model parallelism</strong> — splitting the model across machines. The most common split for inference is <strong>tensor parallelism</strong>: partitioning the tensors inside an operator across devices, for example splitting one matrix columnwise in a matrix multiplication.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy nó ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Tensor parallelism cho hai lợi ích: phục vụ được mô hình lớn không vừa một máy, và giảm độ trễ — dù lợi ích thứ hai có thể bị bào mòn bởi chi phí truyền thông thêm. Ngược lại, <span lang="en">pipeline parallelism</span> làm tăng tổng độ trễ mỗi yêu cầu, nên với ứng dụng khắt khe về độ trễ, người ta thường tránh nó và chọn replica parallelism.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Chia máy ra nhiều phòng thì chạy được máy to, nhưng đi lại giữa các phòng cũng mất thời gian.</span>
+            <span class="en-only" lang="en">Tensor parallelism gives two benefits: it lets you serve models that do not fit on one machine, and it reduces latency — though extra communication overhead can eat into the second. <span>Pipeline parallelism</span>, by contrast, increases total per-request latency, so latency-sensitive applications typically avoid it in favour of replica parallelism.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Bài toán xếp thùng</h4>
+              <p>Nhét mô hình đủ cỡ vào chip đủ cỡ là một bài toán <span lang="en">bin-packing</span>. Ví dụ của Huyen: với hỗn hợp mô hình 8B, 13B, 34B, 70B và GPU 24 GB, 40 GB, 48 GB, 80 GB, nếu số chip cố định bạn phải quyết định tạo bao nhiêu bản sao cho mỗi mô hình và đặt bản nào lên GPU nào — có nên đặt ba mô hình 13B lên một GPU 40 GB, hay để dành GPU ấy cho một mô hình 34B?<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Hai kiểu song song cho chuỗi dài</h4>
+              <p>Hai kỹ thuật ít gặp hơn nhưng đáng biết. <strong lang="en">Context parallelism</strong>: chính chuỗi đầu vào được chia ra các thiết bị, ví dụ nửa đầu xử lý trên máy 1, nửa sau trên máy 2. <strong lang="en">Sequence parallelism</strong>: các toán tử cần cho toàn bộ đầu vào được chia ra các máy — ví dụ attention chạy trên máy 1 còn feedforward chạy trên máy 2.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Điều Huyen chốt lại</strong>
+      <strong class="easy-only">Điều cần nhớ nhất</strong>
+      <strong class="en-only" lang="en">Huyen's own bottom line</strong>
+      <span class="standard-copy">Ở phần tổng kết chương, Huyen nêu bốn kỹ thuật có tác động lớn nhất trên nhiều tình huống: <strong>lượng tử hóa</strong> (nhìn chung hiệu quả với hầu hết mô hình), <strong>tensor parallelism</strong> (vừa giảm độ trễ vừa cho phép phục vụ mô hình lớn hơn), <strong>replica parallelism</strong> (tương đối dễ triển khai), và <strong>tối ưu cơ chế attention</strong> (tăng tốc đáng kể các mô hình transformer).<span class="cite"><a href="#ref-1">1</a></span></span>
+      <span class="easy-only">Nếu chỉ nhớ bốn thứ thôi: làm mô hình nhẹ đi, chia phép tính cho nhiều máy, mở thêm bản sao, và sửa chỗ attention.</span>
+      <span class="en-only" lang="en">In the chapter summary, Huyen names the four most impactful techniques across use cases: <strong>quantization</strong> (generally works well across models), <strong>tensor parallelism</strong> (both reduces latency and enables serving larger models), <strong>replica parallelism</strong> (relatively straightforward to implement), and <strong>attention mechanism optimization</strong> (significantly accelerates transformer models).<span class="cite"><a href="#ref-1">1</a></span></span>
+    </aside>
+
+    <div class="trap-comparison deep-only">
+      <h3 class="standard-copy">Ba hiểu lầm hay gặp</h3>
+      <h3 class="en-only" lang="en">Three common misconceptions</h3>
+      <p class="standard-copy">Chương này dễ bị đọc sai theo ba hướng. Mỗi hướng đều dẫn tới một quyết định kỹ thuật tốn kém.</p>
+      <p class="en-only" lang="en">This chapter is easy to misread in three directions. Each one leads to an expensive engineering decision.</p>
+      <div class="comparison-grid">
+        <div class="comparison-card">
+          <h4 class="standard-copy">"Mua chip mạnh hơn là xong"</h4>
+          <h4 class="en-only" lang="en">"Just buy a faster chip"</h4>
+          <p class="standard-copy">Chip nhiều FLOP/s chỉ cứu được workload compute-bound. Suy luận mô hình ngôn ngữ tự hồi quy chủ yếu bandwidth-bound, nên tiền nên đi vào băng thông và vào việc giảm số byte phải chuyển — tức lượng tử hóa và quản lý KV cache.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="en-only" lang="en">More FLOP/s only rescues compute-bound workloads. Autoregressive LLM inference is mostly bandwidth-bound, so the money belongs in bandwidth and in reducing the bytes that must move — quantization and KV cache management.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="comparison-card">
+          <h4 class="standard-copy">"GPU utilization 100% là tối ưu tốt"</h4>
+          <h4 class="en-only" lang="en">"100% GPU utilization means we're optimised"</h4>
+          <p class="standard-copy">Chỉ số của <code lang="en">nvidia-smi</code> chỉ đếm <em>thời gian</em> GPU đang bận, không đếm <em>lượng việc</em> nó làm. Con chip làm được 100 phép tính mỗi giây vẫn báo 100% khi chỉ làm một phép tính mỗi giây. MFU và MBU mới là chỉ số nói thật.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="en-only" lang="en">The <code>nvidia-smi</code> metric counts the <em>time</em> a GPU is busy, not the <em>work</em> it does. A chip capable of 100 operations per second still reports 100% while doing one. MFU and MBU are the honest metrics.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="comparison-card">
+          <h4 class="standard-copy">"Nhanh hơn thì luôn tốt hơn"</h4>
+          <h4 class="en-only" lang="en">"Faster is always better"</h4>
+          <p class="standard-copy">Tối ưu là chuỗi đánh đổi. Tăng thông lượng thường hy sinh độ trễ; nhiều kỹ thuật cấp mô hình có thể làm chất lượng suy giảm. Đó là lý do goodput — số yêu cầu <em>đạt SLO</em> — hữu ích hơn thông lượng trần trụi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+          <p class="en-only" lang="en">Optimization is a chain of trade-offs. Raising throughput usually costs latency; many model-level techniques can degrade quality. That is why goodput — requests that <em>meet the SLO</em> — is more useful than raw throughput.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="diagnostic" aria-labelledby="diagnostic-title">
+    <div class="diagnostic">
+      <div class="diagnostic-intro">
+        <div class="eyebrow"><span class="standard-copy">Tự kiểm</span><span class="easy-only">Tự hỏi mình</span><span class="en-only" lang="en">Self-diagnostic</span></div>
+        <h2 id="diagnostic-title"><span class="standard-copy">Hệ thống của bạn đang kẹt ở đâu?</span><span class="easy-only">Máy của bạn chậm vì đâu?</span><span class="en-only" lang="en">Where is your system stuck?</span></h2>
+        <p class="standard-copy">Sáu câu hỏi theo đúng mạch chương: tìm nút thắt, đo cho đúng, rồi mới chọn thuốc. Trả lời được cả sáu là bạn đã có một bản đồ tối ưu cho hệ thống của mình.</p>
+        <p class="easy-only">Sáu câu hỏi giúp bạn tìm xem máy của mình đang kẹt chỗ nào.</p>
+        <p class="en-only" lang="en">Six questions following the chapter's own arc: find the bottleneck, measure it properly, then pick the medicine. Answer all six and you have an optimization map for your own system.</p>
+      </div>
+      <div>
+        <div class="question-list standard-copy">
+          <div class="question">
+            <div>
+              <strong>Workload của bạn compute-bound hay memory bandwidth-bound?</strong>
+              <span>Nếu chưa trả lời được thì mọi quyết định mua phần cứng đều là đoán mò. Công cụ đo như NVIDIA Nsight vẽ biểu đồ roofline đúng để trả lời câu này.<span class="cite"><a href="#ref-2">2</a></span> <span class="deep-only">Nhớ rằng prefill và decode cho ra hai câu trả lời khác nhau trong cùng một lần suy luận — nên câu hỏi đúng phải là "kẹt ở pha nào".</span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Bạn đang theo dõi TTFT và TPOT riêng, hay chỉ có một con số "độ trễ"?</strong>
+              <span>Tổng độ trễ = TTFT + TPOT × số token đầu ra; hai ứng dụng cùng tổng vẫn cho trải nghiệm rất khác. <span class="deep-only">Và với ứng dụng kiểu tác tử, TTFT mà mô hình thấy không phải TTFT mà người dùng thấy — cân nhắc đo thêm "time to publish".</span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Bạn nhìn trung bình hay nhìn phân vị?</strong>
+              <span>Một yêu cầu 3.000 ms lẫn vào chín yêu cầu quanh 100 ms đủ để kéo trung bình lên 390 ms.<span class="cite"><a href="#ref-1">1</a></span> <span class="deep-only">Theo dõi p50, p90, p95, p99, và vẽ TTFT theo độ dài đầu vào để thấy đâu là ngoại lệ thật, đâu là quy luật.</span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Bạn đã tính goodput chưa, hay mới chỉ tính throughput?</strong>
+              <span>Nếu chưa định nghĩa SLO thì không thể tính goodput — mà không có goodput thì rất dễ tối ưu thông lượng tới mức phá hỏng trải nghiệm. <span class="deep-only">LinkedIn ghi nhận có thể tăng gấp đôi, gấp ba thông lượng nếu chịu hy sinh TTFT và TPOT.<span class="cite"><a href="#ref-5">5</a></span></span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Prompt của bạn có bao nhiêu phần lặp lại giữa các truy vấn?</strong>
+              <span>System prompt dài và tài liệu dùng chung là ứng viên số một cho cache prompt. <span class="deep-only">Làm phép nhân của Huyen cho chính hệ thống của bạn: độ dài phần lặp × số lượt gọi mỗi ngày — con số ấy thường lớn tới mức gây sốc.<span class="cite"><a href="#ref-1">1</a></span></span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Dịch vụ suy luận bạn đang dùng có gộp lô liên tục và tách prefill/decode không?</strong>
+              <span>Đây là hai câu hỏi nên hỏi nhà cung cấp trước khi bàn tới phần cứng. <span class="deep-only">Và hỏi thêm câu thứ ba: họ dùng kỹ thuật tối ưu nào có thể làm đổi hành vi mô hình — vì cùng một mô hình Llama qua các nhà cung cấp khác nhau cho điểm benchmark khác nhau.<span class="cite"><a href="#ref-7">7</a></span></span></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="question-list easy-only">
+          <div class="question">
+            <div>
+              <strong>Máy của bạn chậm vì phải tính nhiều, hay vì phải khuân nhiều?</strong>
+              <span>Hai lý do khác nhau cần hai cách chữa khác nhau.</span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Bạn có đo riêng "chờ chữ đầu" và "tốc độ viết tiếp" không?</strong>
+              <span>Hai thứ này cho cảm giác rất khác nhau, dù cộng lại có thể bằng nhau.</span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Bạn có đang bị con số trung bình đánh lừa không?</strong>
+              <span>Một người phải chờ cực lâu sẽ bị trung bình che mất.</span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Bạn đếm số khách được phục vụ, hay số khách được phục vụ <em>đúng hẹn</em>?</strong>
+              <span>Chỉ con số thứ hai mới nói lên chất lượng dịch vụ.</span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Có đoạn nào máy phải đọc đi đọc lại mỗi lần không?</strong>
+              <span>Nếu có, hãy để dành nó lại — đọc một lần là đủ.</span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Người nhanh có đang phải chờ người chậm không?</strong>
+              <span>Nếu có, hãy để ai xong trước thì về trước.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="question-list en-only" lang="en">
+          <div class="question">
+            <div>
+              <strong>Is your workload compute-bound or memory bandwidth-bound?</strong>
+              <span>Until you can answer this, every hardware purchase is guesswork. Profiling tools like NVIDIA Nsight draw a roofline chart precisely to answer it.<span class="cite"><a href="#ref-2">2</a></span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Do you track TTFT and TPOT separately, or just one "latency" number?</strong>
+              <span>Total latency = TTFT + TPOT × output tokens; two apps with the same total can feel entirely different.</span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Are you looking at averages or percentiles?</strong>
+              <span>One 3,000 ms request among nine around 100 ms is enough to drag the average to 390 ms.<span class="cite"><a href="#ref-1">1</a></span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Have you computed goodput, or only throughput?</strong>
+              <span>Without a defined SLO there is no goodput — and without goodput it is easy to optimise throughput straight through your user experience.<span class="cite"><a href="#ref-5">5</a></span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>How much of your prompt repeats across queries?</strong>
+              <span>Long system prompts and shared documents are the prime candidates for a prompt cache. Run Huyen's multiplication on your own traffic.<span class="cite"><a href="#ref-1">1</a></span></span>
+            </div>
+          </div>
+          <div class="question">
+            <div>
+              <strong>Does your inference service do continuous batching and prefill/decode decoupling?</strong>
+              <span>Ask these two before discussing hardware — and a third: which optimizations do they use that could change model behaviour?<span class="cite"><a href="#ref-7">7</a></span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="closing" id="closing" aria-labelledby="closing-title">
+    <div class="eyebrow" id="closing-title"><span class="standard-copy">Đọng lại</span><span class="easy-only">Đọng lại</span><span class="en-only" lang="en">The distillation</span></div>
+    <blockquote>
+      <span class="standard-copy">Tối ưu là <span class="closing-accent">tìm đúng nút thắt</span> rồi gỡ đúng nó. Đo trước, chữa sau — vì một cỗ máy <span class="closing-accent">bận rộn</span> chưa chắc đã là một cỗ máy <span class="closing-accent">hữu ích</span>.</span>
+      <span class="easy-only">Muốn nhanh hơn thì phải biết mình <span class="closing-accent">đang kẹt ở đâu</span>. Đo trước, sửa sau — vì <span class="closing-accent">bận rộn</span> không có nghĩa là <span class="closing-accent">làm được việc</span>.</span>
+      <span class="en-only" lang="en">Optimization is <span class="closing-accent">finding the right bottleneck</span> and removing that one. Measure first, treat second — because a <span class="closing-accent">busy</span> machine is not necessarily a <span class="closing-accent">useful</span> one.</span>
+    </blockquote>
+  </section>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+  <nav class="chapter-nav" aria-label="Điều hướng chương">
+    <a class="nav-cell nav-prev" href="chapter-8-dataset-engineering.html">
+      <span class="nav-label">◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span></span>
+      <span class="nav-title"><span class="vi-only">Chương 8 · Kỹ thuật dữ liệu</span><span class="en-only" lang="en">Chapter 8 · Dataset Engineering</span></span>
+    </a>
+    <a class="nav-cell nav-next" href="chapter-10-ai-engineering-architecture-and-user-feedback.html">
+      <span class="nav-label"><span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶</span>
+      <span class="nav-title"><span class="vi-only">Chương 10 · Kiến trúc kỹ thuật AI và phản hồi người dùng</span><span class="en-only" lang="en">Chapter 10 · AI Engineering Architecture and User Feedback</span></span>
+    </a>
+  </nav>
+<!-- NAV:END -->
+
+  <footer>
+    <div class="footer-main">
+      <p class="standard-copy"><strong>Nguồn chính:</strong> Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, ấn bản thứ nhất, tháng 12 năm 2024 (ISBN 9781098166304) — Chương 9, <em lang="en">Inference Optimization</em>. Trang này là bản diễn giải và tổng hợp phục vụ học tập, không phải bản dịch nguyên văn hoặc bản sao nội dung sách. Các ví dụ trong chế độ “Dễ hiểu” là minh họa do người biên soạn thêm vào.</p>
+      <p class="easy-only"><strong>Nguồn chính:</strong> Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, 2024 — Chương 9. Đây là bản diễn giải để học, không phải bản dịch. Các ví dụ dễ hiểu là do người biên soạn thêm vào cho dễ hình dung.</p>
+      <p class="en-only" lang="en"><strong>Primary source:</strong> Chip Huyen, <em>AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, first edition, December 2024 (ISBN 9781098166304) — Chapter 9, <em>Inference Optimization</em>. This page is an interpretive study companion, not a verbatim translation or reproduction of the book. Examples in the “Dễ hiểu” mode are added illustrations by the compiler.</p>
+      <p class="vi-only"><strong>Tham chiếu</strong></p>
+      <p class="en-only" lang="en"><strong>References</strong></p>
+      <ol class="ref-list">
+        <li id="ref-1">Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em> — Chapter 9, “Inference Optimization” (O’Reilly Media, 2024). <a href="https://www.oreilly.com/library/view/ai-engineering/9781098166298/" target="_blank" rel="noopener noreferrer">oreilly.com — trang sách</a> · <a href="https://huyenchip.com/books/" target="_blank" rel="noopener noreferrer">huyenchip.com/books</a> · <a href="https://github.com/chiphuyen/aie-book" target="_blank" rel="noopener noreferrer">github.com/chiphuyen/aie-book</a></li>
+        <li id="ref-2">Samuel Williams, Andrew Waterman, David Patterson — “Roofline: An Insightful Visual Performance Model for Multicore Architectures” (2009). <a href="https://people.eecs.berkeley.edu/~kubitron/cs252/handouts/papers/RooflineVyNoYellow.pdf" target="_blank" rel="noopener noreferrer">berkeley.edu — PDF</a></li>
+        <li id="ref-3">Waleed Kadous et al. — “Llmperf: Impact of tokenization on the performance of LLMs” (Anyscale, 2023). <a href="https://www.anyscale.com/blog/llm-performance-part-1-impact-of-tokenization-on-the-performance-of-llms" target="_blank" rel="noopener noreferrer">anyscale.com</a></li>
+        <li id="ref-4">OpenAI — Batch API documentation. <a href="https://platform.openai.com/docs/guides/batch" target="_blank" rel="noopener noreferrer">platform.openai.com/docs/guides/batch</a></li>
+        <li id="ref-5">LinkedIn Engineering — “Musings on Building a Generative AI Product” (2024). <a href="https://www.linkedin.com/blog/engineering/generative-ai/musings-on-building-a-generative-ai-product" target="_blank" rel="noopener noreferrer">linkedin.com/blog/engineering</a></li>
+        <li id="ref-6">Aakanksha Chowdhery et al. — “PaLM: Scaling Language Modeling with Pathways” (2022). <a href="https://arxiv.org/abs/2204.02311" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2204.02311</a></li>
+        <li id="ref-7">Cerebras — “Llama 3.1 model quality evaluation: Cerebras, Groq, Together and Fireworks” (2024). <a href="https://www.cerebras.ai/blog/llama3.1-model-quality-evaluation-cerebras-groq-together-and-fireworks" target="_blank" rel="noopener noreferrer">cerebras.ai/blog</a></li>
+        <li id="ref-8">Jonathan Frankle, Michael Carbin — “The Lottery Ticket Hypothesis: Finding Sparse, Trainable Neural Networks” (2019). <a href="https://arxiv.org/abs/1803.03635" target="_blank" rel="noopener noreferrer">arxiv.org/abs/1803.03635</a></li>
+        <li id="ref-9">Zhuang Liu et al. — “Rethinking the Value of Network Pruning” (2018). <a href="https://arxiv.org/abs/1810.05270" target="_blank" rel="noopener noreferrer">arxiv.org/abs/1810.05270</a></li>
+        <li id="ref-10">Charlie Chen et al. — “Accelerating Large Language Model Decoding with Speculative Sampling” (DeepMind, 2023). <a href="https://arxiv.org/abs/2302.01318" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2302.01318</a></li>
+        <li id="ref-11">Nan Yang et al. — “Inference with Reference: Lossless Acceleration of Large Language Models” (2023). <a href="https://arxiv.org/abs/2304.04487" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2304.04487</a></li>
+        <li id="ref-12">Tianle Cai et al. — “Medusa: Simple LLM Inference Acceleration Framework with Multiple Decoding Heads” (2024). <a href="https://arxiv.org/abs/2401.10774" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2401.10774</a></li>
+        <li id="ref-13">NVIDIA Developer Blog — “Low latency inference: up to 1.9× higher Llama 3.1 performance with Medusa on NVIDIA HGX H200” (2024). <a href="https://developer.nvidia.com/blog/low-latency-inference-chapter-1-up-to-1-9x-higher-llama-3-1-performance-with-medusa-on-nvidia-hgx-h200-with-nvlink-switch/" target="_blank" rel="noopener noreferrer">developer.nvidia.com</a></li>
+        <li id="ref-14">Reiner Pope et al. — “Efficiently Scaling Transformer Inference” (Google, 2022). <a href="https://arxiv.org/abs/2211.05102" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2211.05102</a></li>
+        <li id="ref-15">Character.AI Research — “Optimizing AI Inference at Character.AI” (2024). <a href="https://research.character.ai/optimizing-inference/" target="_blank" rel="noopener noreferrer">research.character.ai</a></li>
+        <li id="ref-16">Woosuk Kwon et al. — “Efficient Memory Management for Large Language Model Serving with PagedAttention” (vLLM, 2023). <a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2309.06180</a></li>
+        <li id="ref-17">Tri Dao et al. — “FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness” (2022). <a href="https://arxiv.org/abs/2205.14135" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2205.14135</a></li>
+        <li id="ref-18">PyTorch Team — “Accelerating Generative AI with PyTorch II: GPT, Fast” (2023). <a href="https://pytorch.org/blog/accelerating-generative-ai-2/" target="_blank" rel="noopener noreferrer">pytorch.org/blog</a></li>
+        <li id="ref-19">Gyeong-In Yu et al. — “Orca: A Distributed Serving System for Transformer-Based Generative Models” (OSDI 2022). <a href="https://www.usenix.org/conference/osdi22/presentation/yu" target="_blank" rel="noopener noreferrer">usenix.org — OSDI 2022</a></li>
+        <li id="ref-20">Yinmin Zhong et al. — “DistServe: Disaggregating Prefill and Decoding for Goodput-optimized Large Language Model Serving” (2024). <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2401.09670</a></li>
+        <li id="ref-21">Cunchen Hu et al. — “Inference Without Interference: Disaggregate LLM Inference for Mixed Downstream Workloads” (2024). <a href="https://arxiv.org/abs/2401.11181" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2401.11181</a></li>
+        <li id="ref-22">Anthropic — Prompt caching documentation. <a href="https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching" target="_blank" rel="noopener noreferrer">docs.anthropic.com</a></li>
+        <li id="ref-23">Google — Gemini API context caching documentation. <a href="https://ai.google.dev/gemini-api/docs/caching" target="_blank" rel="noopener noreferrer">ai.google.dev</a></li>
+        <li id="ref-24">In Gim et al. — “Prompt Cache: Modular Attention Reuse for Low-Latency Inference” (2023). <a href="https://arxiv.org/abs/2311.04934" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2311.04934</a></li>
+      </ol>
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+      <p class="vi-only"><strong>Trong bộ bài:</strong> <a href="index.html">Trang bìa</a> · <a href="chapter-8-dataset-engineering.html">Chương 8 · Kỹ thuật dữ liệu</a> · <a href="chapter-10-ai-engineering-architecture-and-user-feedback.html">Chương 10 · Kiến trúc kỹ thuật AI và phản hồi người dùng</a></p>
+      <p class="en-only" lang="en"><strong>In this series:</strong> <a href="index.html">Cover</a> · <a href="chapter-8-dataset-engineering.html">Chapter 8 · Dataset Engineering</a> · <a href="chapter-10-ai-engineering-architecture-and-user-feedback.html">Chapter 10 · AI Engineering Architecture and User Feedback</a></p>
+<!-- NAV:END -->
+    </div>
+    <div class="edition"><span class="standard-copy">VI · 2026</span><span class="easy-only">VI · 2026</span><span class="en-only" lang="en">EN · 2026</span></div>
+  </footer>
+</main>
+
+
+<script>
+  (function () {
+    const STORAGE_KEY = "aie-reading-mode";
+    const VALID_MODES = ["easy", "quick", "deep"];
+    const modeButtons = document.querySelectorAll(".reading-controls [data-mode]");
+
+    function setMode(requestedMode, persist) {
+      const mode = VALID_MODES.includes(requestedMode) ? requestedMode : "deep";
+      document.documentElement.dataset.readingMode = mode;
+      modeButtons.forEach(function (button) {
+        button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
+      });
+      if (persist) {
+        try { localStorage.setItem(STORAGE_KEY, mode); } catch (_) {}
+      }
+    }
+
+    setMode(document.documentElement.dataset.readingMode, false);
+    modeButtons.forEach(function (button) {
+      button.addEventListener("click", function () { setMode(button.dataset.mode, true); });
+    });
+
+    const LANG_KEY = "aie-lang";
+    const langButtons = document.querySelectorAll(".lang-controls [data-lang-option]");
+
+    function setLang(requestedLang, persist) {
+      const lang = requestedLang === "en" ? "en" : "vi";
+      document.documentElement.dataset.lang = lang;
+      document.documentElement.setAttribute("lang", lang);
+      langButtons.forEach(function (button) {
+        button.setAttribute("aria-pressed", String(button.dataset.langOption === lang));
+      });
+      if (persist) {
+        try { localStorage.setItem(LANG_KEY, lang); } catch (_) {}
+      }
+    }
+
+    setLang(document.documentElement.dataset.lang, false);
+    langButtons.forEach(function (button) {
+      button.addEventListener("click", function () { setLang(button.dataset.langOption, true); });
+    });
+  })();
+
+  /* SECTION-RAIL: on-page section index (scroll-spy). Built from the page's own id'd
+     sections; reuses each heading's vi-only/en-only + reading-mode spans so language
+     and reading mode are handled by the existing CSS. No per-page markup. */
+  (function () {
+    if (document.querySelector(".section-rail")) return;
+    var main = document.querySelector("main") || document.body;
+    var targets = Array.prototype.slice.call(
+      document.querySelectorAll("main .section[id], main .closing[id]")
+    );
+    if (targets.length < 2) return;
+
+    function labelFor(sec) {
+      var id = sec.getAttribute("aria-labelledby");
+      var el = (id && document.getElementById(id)) ||
+               sec.querySelector(".section-heading h2, h2, h3, .eyebrow");
+      return el ? el.innerHTML : sec.id;
+    }
+
+    var nav = document.createElement("nav");
+    nav.className = "section-rail";
+    nav.setAttribute("aria-label", "Mục lục trang");
+    var list = document.createElement("ol");
+    list.className = "section-rail__list";
+    var byId = {};
+
+    targets.forEach(function (sec) {
+      var li = document.createElement("li");
+      li.className = "section-rail__item";
+      var a = document.createElement("a");
+      a.className = "section-rail__link";
+      a.href = "#" + sec.id;
+      a.innerHTML =
+        '<span class="section-rail__tick" aria-hidden="true"></span>' +
+        '<span class="section-rail__label">' + labelFor(sec) + "</span>";
+      li.appendChild(a);
+      list.appendChild(li);
+      byId[sec.id] = li;
+    });
+    nav.appendChild(list);
+    main.appendChild(nav);
+
+    var activeId = null;
+    function setActive(id) {
+      if (id === activeId) return;
+      if (activeId && byId[activeId]) byId[activeId].classList.remove("is-active");
+      if (id && byId[id]) byId[id].classList.add("is-active");
+      activeId = id;
+    }
+    function update() {
+      var line = window.innerHeight * 0.3;
+      var current = targets[0].id;
+      for (var i = 0; i < targets.length; i++) {
+        if (targets[i].getBoundingClientRect().top - line <= 0) current = targets[i].id;
+      }
+      setActive(current);
+    }
+    var ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(function () { update(); ticking = false; });
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    update();
+  })();
+</script>
+</body>
+</html>

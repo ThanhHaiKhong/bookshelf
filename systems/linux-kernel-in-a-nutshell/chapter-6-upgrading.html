@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="vi" data-mode="standard" data-lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 6 · Nâng cấp nhân — Linux Kernel in a Nutshell</title>
+<meta name="description" content="Người đồng hành song ngữ Việt/Anh cho Chương 6 &quot;Upgrading a Kernel&quot; của Linux Kernel in a Nutshell (Greg Kroah-Hartman, O'Reilly, 2006): tải đúng bản vá, áp bằng patch -p1, và giữ nguyên cấu hình cũ với make oldconfig.">
+<script>
+/* pre-hydration: đọc lựa chọn đã lưu trước khi vẽ, tránh nháy màn hình */
+(function () {
+  try {
+    var m = localStorage.getItem("lkn-reading-mode");
+    var l = localStorage.getItem("lkn-lang");
+    if (m === "standard" || m === "easy" || m === "deep") document.documentElement.setAttribute("data-mode", m);
+    if (l === "vi" || l === "en") document.documentElement.setAttribute("data-lang", l);
+    if (localStorage.getItem("lkn-theme") === "dark") document.documentElement.setAttribute("data-theme", "dark");
+  } catch (e) {}
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --teal: #0f766e;
+  --blue: #1d4ed8;
+  --amber: #b45309;
+  --leaf: #4d7c0f;
+  --ink: #16202a;
+  --ink-soft: #4a5a68;
+  --ink-faint: #7c8b98;
+  --surface: #fbfaf7;
+  --surface-2: #ffffff;
+  --surface-3: #f2efe8;
+  --line: #ded8cd;
+  --line-soft: #ebe6dc;
+  --shadow: 0 1px 2px rgba(22, 32, 42, .05), 0 8px 24px rgba(22, 32, 42, .06);
+  --serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --measure: 34rem;
+}
+:root[data-theme="dark"] {
+  --teal: #5eead4;
+  --blue: #93b4ff;
+  --amber: #fbbf24;
+  --leaf: #a3e635;
+  --ink: #e8eef4;
+  --ink-soft: #a6b6c4;
+  --ink-faint: #74869a;
+  --surface: #11171d;
+  --surface-2: #171f27;
+  --surface-3: #1e2831;
+  --line: #2d3945;
+  --line-soft: #232e38;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --teal: #5eead4; --blue: #93b4ff; --amber: #fbbf24; --leaf: #a3e635;
+    --ink: #e8eef4; --ink-soft: #a6b6c4; --ink-faint: #74869a;
+    --surface: #11171d; --surface-2: #171f27; --surface-3: #1e2831;
+    --line: #2d3945; --line-soft: #232e38;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.72;
+  -webkit-font-smoothing: antialiased;
+}
+main { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem 4rem; }
+p { margin: 0 0 1.05rem; max-width: var(--measure); }
+a { color: var(--blue); }
+h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; line-height: 1.22; color: var(--ink); }
+code, kbd, samp { font-family: var(--mono); font-size: .88em; background: var(--surface-3); padding: .12em .38em; border-radius: 4px; }
+
+/* ---------- reading mode + bilingual visibility ---------- */
+.easy-only, .deep-only, .en-only { display: none; }
+:root[data-mode="standard"] .standard-copy,
+:root[data-mode="deep"] .standard-copy { display: revert; }
+:root[data-mode="deep"] .deep-only { display: revert; }
+:root[data-mode="easy"] .standard-copy { display: none; }
+:root[data-mode="easy"] .easy-only { display: revert; }
+:root[data-lang="vi"] .vi-only { display: revert; }
+:root[data-lang="en"] .vi-only,
+:root[data-lang="en"] .standard-copy,
+:root[data-lang="en"] .easy-only,
+:root[data-lang="en"] .deep-only { display: none; }
+:root[data-lang="en"] .en-only { display: revert; }
+:root[data-lang="en"] .mode-switch { opacity: .35; pointer-events: none; }
+
+/* ---------- topbar ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: .7rem 1.5rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.book-label { font-size: .78rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; margin-right: auto; }
+.switch-group { display: flex; gap: .3rem; align-items: center; }
+.switch-group + .switch-group { margin-left: .35rem; }
+.switch-label { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin-right: .25rem; }
+button.chip {
+  font: inherit; font-size: .78rem; font-weight: 600;
+  padding: .3rem .72rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft);
+  transition: background .15s, color .15s, border-color .15s;
+}
+button.chip:hover { border-color: var(--teal); color: var(--teal); }
+button.chip[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: var(--surface); }
+:root[data-theme="dark"] button.chip[aria-pressed="true"] { color: #0b1116; }
+
+/* ---------- hero ---------- */
+.hero {
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  gap: 2.75rem; align-items: center;
+  padding: 3.75rem 0 3rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.hero::after {
+  content: "LKN / 06";
+  position: absolute; top: 1.15rem; right: 0;
+  font-family: var(--mono); font-size: .72rem; letter-spacing: .22em;
+  color: var(--ink-faint);
+}
+.eyebrow { font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--teal); font-weight: 700; margin: 0 0 .85rem; }
+.hero h1 { font-size: clamp(2.05rem, 4.6vw, 3.1rem); margin: 0 0 1.15rem; letter-spacing: -.015em; }
+.hero p { font-size: 1.06rem; color: var(--ink-soft); }
+.thesis {
+  margin-top: 1.5rem; padding: 1.05rem 1.25rem 1.05rem 2.6rem;
+  position: relative; max-width: var(--measure);
+  background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--amber);
+  border-radius: 0 10px 10px 0; box-shadow: var(--shadow);
+}
+.thesis::before { content: "∴"; position: absolute; left: .95rem; top: .95rem; font-size: 1.15rem; color: var(--amber); }
+.thesis p { margin: 0; font-size: .97rem; color: var(--ink); }
+
+/* ---------- CSS diagrams ---------- */
+.system-map {
+  position: relative; display: grid; gap: .75rem;
+  padding: 1.5rem; border-radius: 16px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.system-map .core {
+  justify-self: center; text-align: center;
+  padding: .85rem 1.25rem; border-radius: 999px;
+  background: var(--teal); color: var(--surface); font-weight: 700; font-size: .9rem;
+  max-width: 100%;
+}
+:root[data-theme="dark"] .system-map .core { color: #0b1116; }
+.system-map .spokes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
+.system-map .node {
+  padding: .8rem .85rem; border-radius: 12px; text-align: center;
+  background: var(--surface-3); border: 1px solid var(--line-soft);
+}
+.system-map .node b { display: block; font-size: .82rem; color: var(--ink); margin-bottom: .3rem; }
+.system-map .node small { display: block; font-size: .73rem; line-height: 1.5; color: var(--ink-soft); }
+.loop-diagram { display: grid; gap: .55rem; padding: 1.25rem; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.loop-diagram .step { padding: .6rem .8rem; border-radius: 10px; background: var(--surface-3); border-left: 3px solid var(--blue); font-size: .82rem; }
+
+/* ---------- chapter path ---------- */
+.chapter-path {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem;
+  margin: 2.5rem 0 3rem;
+}
+.chapter-path a {
+  display: block; padding: .9rem 1rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+  transition: border-color .15s, transform .15s;
+}
+.chapter-path a:hover { border-color: var(--teal); transform: translateY(-2px); }
+.chapter-path span { display: block; font-size: .67rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.chapter-path b { display: block; font-family: var(--serif); font-size: .96rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- sections ---------- */
+.section { padding: 2.75rem 0; border-top: 1px solid var(--line-soft); }
+.section-heading h2 { font-size: clamp(1.5rem, 3vw, 2.05rem); margin: 0 0 .9rem; }
+.section-heading p { color: var(--ink-soft); }
+.surprise-lead {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem;
+  margin: 1.75rem 0 2rem;
+}
+.definition, .equation { padding: 1rem 1.15rem; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); font-size: .92rem; }
+.definition { border-left: 3px solid var(--blue); }
+.equation { border-left: 3px solid var(--leaf); font-family: var(--mono); font-size: .82rem; line-height: 1.7; }
+.definition p, .equation p { margin: 0; max-width: none; }
+
+.surprise-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.1rem; }
+.trap-grid { grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
+.surprise-grid > li {
+  padding: 1.25rem 1.35rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.english-term { display: inline-block; font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--amber); margin-bottom: .45rem; }
+.surprise-grid h3 { font-size: 1.05rem; margin: 0 0 .7rem; }
+.surprise-grid p { font-size: .93rem; max-width: none; }
+.opportunity {
+  margin-top: .9rem; padding: .75rem .9rem; border-radius: 10px;
+  background: var(--surface-3); border-left: 3px solid var(--leaf); font-size: .87rem;
+}
+.opportunity p { margin: 0; font-size: .87rem; }
+.mechanics { margin-top: .9rem; display: grid; gap: .7rem; }
+.info-block { padding: .75rem .9rem; border-radius: 10px; border: 1px dashed var(--line); background: var(--surface); }
+.info-block h4 { font-size: .85rem; margin: 0 0 .35rem; color: var(--teal); }
+.info-block p { margin: 0; font-size: .86rem; }
+.result { margin-top: .7rem; font-size: .86rem; color: var(--ink-soft); }
+
+.signal {
+  margin: 2rem 0 0; padding: 1.1rem 1.3rem; border-radius: 12px;
+  background: var(--surface-3); border: 1px solid var(--line-soft); border-top: 3px solid var(--blue);
+}
+.signal p { margin: 0 0 .6rem; font-size: .93rem; }
+.signal p:last-child { margin-bottom: 0; }
+
+/* ---------- misconceptions ---------- */
+.trap-comparison { margin: 2.5rem 0; }
+.comparison-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; margin-top: 1.25rem; }
+.comparison-card {
+  padding: 1.1rem 1.25rem; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--line); border-top: 3px solid var(--amber);
+}
+.comparison-card h3 { font-size: .98rem; margin: 0 0 .6rem; }
+.comparison-card p { font-size: .9rem; max-width: none; }
+.comparison-card .myth { color: var(--amber); font-weight: 600; }
+.comparison-card .fact { color: var(--teal); font-weight: 600; }
+
+/* ---------- diagnostic ---------- */
+.diagnostic { padding: 1.75rem; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.diagnostic-intro p { font-size: .97rem; }
+.question-list { counter-reset: q; list-style: none; margin: 1.25rem 0 0; padding: 0; display: grid; gap: .9rem; }
+.question-list > li { counter-increment: q; position: relative; padding-left: 2.4rem; font-size: .93rem; }
+.question-list > li::before {
+  content: counter(q, decimal-leading-zero);
+  position: absolute; left: 0; top: .05rem;
+  font-family: var(--mono); font-size: .78rem; font-weight: 600; color: var(--teal);
+  border: 1px solid var(--line); border-radius: 6px; padding: .05rem .38rem;
+}
+.question-list .deep-only { margin-top: .4rem; font-size: .87rem; color: var(--ink-soft); }
+
+/* ---------- closing ---------- */
+.closing { padding: 3rem 0 1rem; border-top: 1px solid var(--line-soft); }
+.closing blockquote {
+  margin: 0; padding: 1.5rem 0 0; max-width: 46rem;
+  font-family: var(--serif); font-size: clamp(1.15rem, 2.4vw, 1.55rem); line-height: 1.5; color: var(--ink);
+}
+.closing blockquote p { max-width: none; font-size: inherit; line-height: inherit; }
+.closing-accent { color: var(--teal); font-style: italic; }
+
+/* ---------- chapter nav ---------- */
+.chapter-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 3rem 0 0; }
+.nav-cell {
+  display: block; padding: 1rem 1.15rem; border-radius: 12px; text-decoration: none;
+  background: var(--surface-2); border: 1px solid var(--line); transition: border-color .15s, transform .15s;
+}
+a.nav-cell:hover { border-color: var(--teal); transform: translateY(-2px); }
+.nav-cell.disabled { opacity: .5; background: var(--surface-3); cursor: default; }
+.nav-next { text-align: right; }
+.nav-label { display: block; font-size: .68rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: .3rem; }
+.nav-title { display: block; font-family: var(--serif); font-size: .95rem; font-weight: 600; color: var(--ink); }
+
+/* ---------- footer + references ---------- */
+footer {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.5rem; align-items: start;
+  margin-top: 3rem; padding: 2rem 0 3rem; border-top: 1px solid var(--line);
+  font-size: .85rem; color: var(--ink-soft);
+}
+.footer-main p { max-width: 48rem; font-size: .85rem; }
+.footer-label { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; margin: 1.5rem 0 .6rem; }
+.ref-list { margin: 0; padding-left: 1.4rem; display: grid; gap: .5rem; }
+.ref-list li { font-size: .82rem; line-height: 1.6; }
+.edition { font-family: var(--mono); font-size: .7rem; letter-spacing: .12em; color: var(--ink-faint); white-space: nowrap; }
+.cite { font-size: .7em; vertical-align: super; line-height: 0; margin-left: .1em; }
+.cite a { text-decoration: none; padding: 0 .12em; }
+
+/* SECTION-RAIL:START */
+.section-rail {
+  position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+  z-index: 30; padding: .6rem .5rem; display: none;
+}
+.section-rail__list { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+.section-rail__list a {
+  display: flex; align-items: center; gap: .55rem;
+  text-decoration: none; color: var(--ink-faint); font-size: .74rem; line-height: 1.25;
+}
+.section-rail__list a::before {
+  content: ""; flex: 0 0 auto; width: 1.15rem; height: 2px; border-radius: 2px;
+  background: var(--line); transition: width .2s, background .2s;
+}
+.section-rail__label {
+  max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0;
+  transition: max-width .24s ease, opacity .18s ease;
+}
+.section-rail:hover .section-rail__label,
+.section-rail:focus-within .section-rail__label { max-width: 13rem; opacity: 1; }
+.section-rail:hover, .section-rail:focus-within {
+  background: color-mix(in srgb, var(--surface-2) 94%, transparent);
+  border: 1px solid var(--line-soft); border-left: 0; border-radius: 0 12px 12px 0; box-shadow: var(--shadow);
+}
+.section-rail__list a:hover,
+.section-rail__list a[aria-current="true"] { color: var(--teal); }
+.section-rail__list a[aria-current="true"]::before { width: 1.9rem; background: var(--teal); }
+@media (min-width: 1180px) { .section-rail { display: block; } }
+/* SECTION-RAIL:END */
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 2rem; padding-top: 2.5rem; }
+  .hero::after { position: static; display: block; margin-bottom: .75rem; }
+  .system-map .spokes { grid-template-columns: minmax(0, 1fr); }
+  footer { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 620px) {
+  body { font-size: 16px; }
+  main { padding: 0 1.1rem 3rem; }
+  .topbar { padding: .6rem 1.1rem; gap: .5rem; }
+  .book-label { width: 100%; margin-right: 0; }
+  .chapter-nav { grid-template-columns: minmax(0, 1fr); }
+  .nav-next { text-align: left; }
+  .diagnostic { padding: 1.25rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">Linux Kernel in a Nutshell · <span class="vi-only">Chương 6 · Nâng cấp nhân</span><span class="en-only" lang="en">Chapter 6 · Upgrading a Kernel</span></div>
+  <div class="switch-group mode-switch">
+    <span class="switch-label vi-only">Mức đọc</span><span class="switch-label en-only" lang="en">Level</span>
+    <button class="chip" type="button" data-set-mode="easy" aria-pressed="false"><span class="vi-only">Dễ hiểu</span><span class="en-only" lang="en">Easy</span></button>
+    <button class="chip" type="button" data-set-mode="standard" aria-pressed="true"><span class="vi-only">Tiêu chuẩn</span><span class="en-only" lang="en">Standard</span></button>
+    <button class="chip" type="button" data-set-mode="deep" aria-pressed="false"><span class="vi-only">Đầy đủ</span><span class="en-only" lang="en">Deep</span></button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-set-lang="vi" aria-pressed="true">VI</button>
+    <button class="chip" type="button" data-set-lang="en" aria-pressed="false">EN</button>
+  </div>
+  <div class="switch-group">
+    <button class="chip" type="button" data-toggle-theme aria-pressed="false"><span class="vi-only">Tối</span><span class="en-only" lang="en">Dark</span></button>
+  </div>
+</header>
+
+<nav class="section-rail" aria-label="Mục lục trong trang"><ul class="section-rail__list"></ul></nav>
+
+<main>
+
+<section class="hero" id="nang-cap" aria-labelledby="nang-cap-title">
+  <div>
+    <p class="eyebrow"><span class="vi-only">Phần I · Dựng nhân · Chương 6</span><span class="en-only" lang="en">Part I · Building the Kernel · Chapter 6</span></p>
+    <h1 id="nang-cap-title">
+      <span class="standard-copy">Nâng cấp nhân mà không đánh mất cấu hình</span>
+      <span class="easy-only">Lên bản mới mà vẫn giữ nguyên những gì đã chỉnh</span>
+      <span class="en-only" lang="en">Upgrading a kernel without losing your configuration</span>
+    </h1>
+    <p class="standard-copy">Kroah-Hartman mở chương bằng đúng tình huống ai cũng gặp: bạn đã có một nhân tự dựng chạy hoàn hảo, trừ đúng một chuyện nhỏ mà bạn biết đã được sửa trong bản mới nhất; hoặc một lỗ hổng bảo mật được phát hiện và một bản <span lang="en">stable</span> mới vừa ra <span class="cite"><a href="#ref-1">1</a></span>. Dù theo đường nào, bạn cũng đứng trước cùng một nỗi sợ: nâng cấp rồi thì mất hết công sức đã bỏ vào cái cấu hình hoàn hảo kia <span class="cite"><a href="#ref-1">1</a></span>. Cả chương này tồn tại để nói rằng nỗi sợ đó không có cơ sở.</p>
+    <p class="easy-only">Bạn đã tự làm một cái nhân chạy rất ổn. Rồi có bản mới sửa đúng cái lỗi bạn đang gặp, hoặc có bản vá lỗ hổng bảo mật <span class="cite"><a href="#ref-1">1</a></span>. Bạn muốn lên bản mới nhưng sợ mất hết những gì đã chỉnh <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: chương này cho thấy bạn không mất gì cả.</p>
+    <p class="en-only" lang="en">Kroah-Hartman opens the chapter with the situation everyone eventually meets: you have a custom-built kernel working just wonderfully except for one little thing you know is fixed in the latest release; or a security problem is found and a new stable kernel release is made public <span class="cite"><a href="#ref-1">1</a></span>. Either way you face the same fear: upgrading means losing all the time and effort that went into that perfect kernel configuration <span class="cite"><a href="#ref-1">1</a></span>. This whole chapter exists to show the fear is unfounded.</p>
+    <p class="deep-only">Chương này khép lại Phần I của sách. Chương 3 dạy lấy mã nguồn, chương 4 dạy cấu hình và dựng, chương 5 dạy cài và khởi động. Chương 6 là chương đầu tiên giả định bạn <em>đã</em> có một nhân của riêng mình — nó không dạy làm lại từ đầu, mà dạy cách <em>di chuyển</em> một cấu hình đã trưởng thành sang một cây mã mới. Đó là kỹ năng bạn sẽ dùng nhiều lần hơn tất cả các chương trước cộng lại.</p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận điểm chương 6.</b> Nâng cấp không phải là dựng lại từ đầu. Chỉ cần năm bước đơn giản để nâng một nhân từ một bản đã dựng trước đó <span class="cite"><a href="#ref-1">1</a></span>, và ba bước đầu — lấy mã mới, áp thay đổi, cấu hình lại dựa trên cấu hình cũ — là toàn bộ nội dung mới của chương; hai bước cuối (dựng và cài) đã được mô tả từ trước <span class="cite"><a href="#ref-1">1</a></span>. Việc đầu tiên, trước mọi lệnh khác, là sao lưu tệp <code>.config</code> <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="easy-only"><b>Ý chính.</b> Lên bản mới chỉ cần năm bước, và ba bước đầu là phần mới phải học <span class="cite"><a href="#ref-1">1</a></span>. Hai bước cuối bạn đã biết rồi <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: việc đầu tiên phải làm là chép tệp <code>.config</code> ra chỗ an toàn <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="en-only" lang="en"><b>Chapter 6 thesis.</b> Upgrading is not rebuilding from scratch. Only five simple steps are needed to upgrade a kernel from a previously built one <span class="cite"><a href="#ref-1">1</a></span>, and the first three — get the new source, apply the changes, reconfigure from the previous configuration — are the whole of what is new here; the last two (build and install) work exactly as described before <span class="cite"><a href="#ref-1">1</a></span>. The very first action, before any command, is to back up the <code>.config</code> file <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: ba bước mới của việc nâng cấp — tải bản vá, áp bản vá bằng patch -p1, và cấu hình lại bằng make oldconfig. Diagram: the three new steps of an upgrade — download the patch, apply it with patch -p1, and reconfigure with make oldconfig.">
+    <div class="core"><span class="vi-only">Nâng cấp, giữ nguyên <code>.config</code></span><span class="en-only" lang="en">Upgrade, keep your <code>.config</code></span></div>
+    <div class="spokes">
+      <div class="node">
+        <b><span class="vi-only">Lấy bản vá</span><span class="en-only" lang="en">Get the patch</span></b>
+        <small class="standard-copy">Tải phần chênh lệch giữa hai bản, không tải lại toàn bộ cây mã.</small>
+        <small class="easy-only">Chỉ tải phần khác nhau, không tải lại cả bộ.</small>
+        <small class="en-only" lang="en">Download the difference between two releases, not the whole tree again.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Áp bản vá</span><span class="en-only" lang="en">Apply the patch</span></b>
+        <small class="standard-copy">Giải nén rồi chạy <code>patch -p1</code> ngay trong thư mục mã nguồn.</small>
+        <small class="easy-only">Giải nén, rồi chạy một lệnh duy nhất.</small>
+        <small class="en-only" lang="en">Uncompress, then run <code>patch -p1</code> from inside the source directory.</small>
+      </div>
+      <div class="node">
+        <b><span class="vi-only">Cấu hình lại</span><span class="en-only" lang="en">Reconfigure</span></b>
+        <small class="standard-copy"><code>make oldconfig</code> giữ mọi lựa chọn cũ, chỉ hỏi về tùy chọn mới.</small>
+        <small class="easy-only">Máy giữ lựa chọn cũ, chỉ hỏi cái nào mới.</small>
+        <small class="en-only" lang="en"><code>make oldconfig</code> keeps every old answer and only asks about new options.</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<nav class="chapter-path" aria-label="Lối đi trong chương">
+  <a href="#sao-luu">
+    <span>01</span>
+    <b><span class="standard-copy">Sao lưu trước, năm bước sau</span><span class="easy-only">Chép ra một bản dự phòng</span><span class="en-only" lang="en">Back up first, five steps after</span></b>
+  </a>
+  <a href="#tai-ban-va">
+    <span>02</span>
+    <b><span class="standard-copy">Tải bản vá đúng</span><span class="easy-only">Tải đúng miếng vá</span><span class="en-only" lang="en">Downloading the right patch</span></b>
+  </a>
+  <a href="#ap-ban-va">
+    <span>03</span>
+    <b><span class="standard-copy">Áp bản vá và kiểm chứng</span><span class="easy-only">Vá vào rồi kiểm lại</span><span class="en-only" lang="en">Applying the patch and verifying</span></b>
+  </a>
+  <a href="#cau-hinh-lai">
+    <span>04</span>
+    <b><span class="standard-copy">Cấu hình lại bằng <code>make oldconfig</code></span><span class="easy-only">Giữ lại lựa chọn cũ</span><span class="en-only" lang="en">Reconfiguring with <code>make oldconfig</code></span></b>
+  </a>
+  <a href="#tu-dong-hoa">
+    <span>05</span>
+    <b><span class="standard-copy">Tự động hóa được không?</span><span class="easy-only">Máy làm hộ được không?</span><span class="en-only" lang="en">Can this be automated?</span></b>
+  </a>
+</nav>
+
+<section class="section" id="sao-luu" aria-labelledby="sao-luu-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 01 · Trước khi bắt đầu</span><span class="en-only" lang="en">Concept cluster 01 · Before you begin</span></p>
+    <h2 id="sao-luu-title">
+      <span class="standard-copy">Sao lưu <code>.config</code>, rồi đếm năm bước</span>
+      <span class="easy-only">Chép tệp cấu hình ra, rồi đi năm bước</span>
+      <span class="en-only" lang="en">Back up <code>.config</code>, then count five steps</span>
+    </h2>
+    <p class="standard-copy">Câu lệnh đầu tiên của chương không phải lệnh nâng cấp mà là lệnh phòng thân. Ông viết thẳng: hãy sao lưu tệp <code>.config</code> trong thư mục mã nguồn, vì bạn đã bỏ thời gian và công sức tạo ra nó và nó cần được giữ lại phòng khi có gì trục trặc trong lúc nâng cấp <span class="cite"><a href="#ref-1">1</a></span>. Ví dụ trong sách là hai lệnh: vào thư mục <code>~/linux/linux-2.6.17.11</code> rồi <code>cp .config ../good_config</code> <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    <p class="easy-only">Lệnh đầu tiên trong chương không phải để nâng cấp, mà để phòng khi hỏng. Ông bảo: chép tệp <code>.config</code> ra ngoài trước đã <span class="cite"><a href="#ref-1">1</a></span>. Trong sách là hai lệnh ngắn, chép nó thành một tệp tên <code>good_config</code> <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: chép ra một bản trước khi động vào bất cứ thứ gì.</p>
+    <p class="en-only" lang="en">The chapter's first command is not an upgrade command but an insurance policy. He says it plainly: back up the <code>.config</code> file in the kernel source directory, because you have spent time and effort creating it and it should be saved in case something goes wrong during the upgrade <span class="cite"><a href="#ref-1">1</a></span>. The book's example is two lines: change into <code>~/linux/linux-2.6.17.11</code>, then <code>cp .config ../good_config</code> <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    <p class="deep-only">Để ý chi tiết nhỏ mà có ý: bản sao được đặt ở thư mục <em>cha</em>, ngoài cây mã nguồn. Mọi bước sau đó — áp bản vá, đổi tên thư mục, thậm chí xóa cây mã đi làm lại — đều không chạm tới nó. Nếu đặt bản sao bên trong cây mã, bạn đang cất dù trong chính chiếc máy bay có thể rơi.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Tệp <code>.config</code>.</b> Tệp văn bản trong thư mục gốc cây mã nguồn, ghi lại câu trả lời cho từng tùy chọn cấu hình nhân. Đây là toàn bộ “bản sắc” nhân của bạn; mọi thứ khác đều dựng lại được từ mã nguồn, riêng nó thì không <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="easy-only"><b><code>.config</code> là gì.</b> Là tệp ghi lại mọi lựa chọn bạn đã đặt cho nhân. Mất nó là mất hết công chỉnh <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: đó là tệp quý nhất trong thư mục.</p>
+      <p class="en-only" lang="en"><b>The <code>.config</code> file.</b> A text file at the root of the source tree recording your answer to every kernel configuration option. It is the whole identity of your kernel; everything else can be rebuilt from source, but not this <span class="cite"><a href="#ref-1">1</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">1 · lấy mã nguồn mới<br>2 · áp thay đổi lên cây cũ<br>3 · cấu hình lại từ cấu hình cũ<br>4 · dựng nhân mới&nbsp;&nbsp; (như chương 4)<br>5 · cài nhân mới&nbsp;&nbsp;&nbsp; (như chương 5)</p>
+      <p class="easy-only">1 · tải phần mới<br>2 · vá vào cây cũ<br>3 · giữ lại lựa chọn cũ<br>4 · dựng<br>5 · cài</p>
+      <p class="en-only" lang="en">1 · get the new source code<br>2 · apply the changes to the old tree<br>3 · reconfigure from the previous config<br>4 · build the new kernel&nbsp; (as in ch. 4)<br>5 · install it&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (as in ch. 5)</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">five simple steps</span>
+      <h3>
+        <span class="standard-copy">Năm bước — và chỉ ba bước là mới</span>
+        <span class="easy-only">Năm bước, ba bước phải học</span>
+        <span class="en-only" lang="en">Five steps — only three of them are new</span>
+      </h3>
+      <p class="standard-copy">Ông liệt kê đúng năm bước: lấy mã nguồn mới; áp các thay đổi lên cây mã cũ để đưa nó lên mức mới; cấu hình lại nhân dựa trên cấu hình trước đó; dựng nhân mới; cài nhân mới <span class="cite"><a href="#ref-1">1</a></span>. Rồi ông cắt gọn phạm vi: hai bước cuối hoạt động y như đã mô tả trước đó, nên chương này chỉ bàn ba bước đầu <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <p class="easy-only">Năm bước: tải mã mới, vá vào cây cũ, giữ lại cấu hình cũ, dựng, rồi cài <span class="cite"><a href="#ref-1">1</a></span>. Hai bước cuối giống hệt các chương trước nên chương này chỉ nói ba bước đầu <span class="cite"><a href="#ref-1">1</a></span>. Nhớ nhé: bạn chỉ phải học thêm ba việc thôi.</p>
+      <p class="en-only" lang="en">He lists exactly five: get the new source code; apply the changes to the old source tree to bring it up to the newer level; reconfigure the kernel based on the previous configuration; build the new kernel; install it <span class="cite"><a href="#ref-1">1</a></span>. Then he trims the scope: the last two work the same as described before, so the chapter discusses only the first three <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Cấu trúc này còn nguyên trong hướng dẫn dựng nhân hiện hành của kernel.org: mục “vòng sau” của tài liệu cũng chỉ gồm lấy mã mới, chỉnh cấu hình cũ cho khớp, rồi dựng và cài như lần đầu <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Hướng dẫn mới của kernel.org cũng chia y hệt: lấy mã mới, chỉnh cấu hình cũ, rồi dựng và cài <span class="cite"><a href="#ref-9">9</a></span>. Nhớ nhé: hai mươi năm sau, nhịp làm việc vẫn thế.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The shape survives in today's kernel.org build guide: its “another round later” section is likewise just get the new code, adjust the existing configuration, then build and install as before <span class="cite"><a href="#ref-9">9</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ví dụ xuyên suốt chương</h4>
+          <p>Sách giả định bạn đã dựng thành công bản 2.6.17.9 và muốn lên bản 2.6.17.11 <span class="cite"><a href="#ref-1">1</a></span>. Con số cụ thể thuộc về năm 2006, nhưng hình dạng bài toán — nhảy hai bậc trong cùng một dòng <span lang="en">stable</span> — thì không đổi theo thời gian.</p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao bước 3 mới là mấu chốt</h4>
+          <p>Bước 1 và 2 chỉ là chuyển mã. Bước 3 mới là chỗ cấu hình của bạn có sống sót hay không. Toàn bộ lời hứa “không mất công sức” của chương nằm ở một lệnh duy nhất ở bước đó, và ta sẽ gặp nó ở cụm khái niệm 04.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">back up first</span>
+      <h3>
+        <span class="standard-copy">Sao lưu — quy tắc rẻ nhất trong cả cuốn sách</span>
+        <span class="easy-only">Chép dự phòng — việc rẻ mà đáng</span>
+        <span class="en-only" lang="en">Back up — the cheapest rule in the book</span>
+      </h3>
+      <p class="standard-copy">Lý lẽ của ông không phải lý lẽ kỹ thuật mà là lý lẽ kinh tế: tệp ấy tốn thời gian và công sức để tạo ra, nên phải được giữ lại <span class="cite"><a href="#ref-1">1</a></span>. Một lệnh <code>cp</code> mất chưa tới một giây; dựng lại cấu hình từ trí nhớ có thể mất cả buổi tối.</p>
+      <p class="easy-only">Lý do rất đời thường: tệp đó tốn công làm ra nên phải giữ <span class="cite"><a href="#ref-1">1</a></span>. Chép nó mất một giây, làm lại từ đầu mất cả buổi. Nhớ nhé: việc rẻ mà cứu được nhiều thì cứ làm.</p>
+      <p class="en-only" lang="en">His argument is economic rather than technical: the file took time and effort to create, so it should be saved <span class="cite"><a href="#ref-1">1</a></span>. One <code>cp</code> costs under a second; reconstructing a configuration from memory can cost an evening.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Chính cây mã nhân cũng giữ thói quen này: khi bạn chạy lại một lệnh cấu hình, tệp cũ được lưu thành <code>.config.old</code>, và tài liệu Kconfig hiện hành dùng nó để so sánh bằng <code>scripts/diffconfig .config.old .config</code> <span class="cite"><a href="#ref-12">12</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Bản thân nhân cũng tự giữ bản cũ tên <code>.config.old</code> để bạn đem ra so <span class="cite"><a href="#ref-12">12</a></span>. Nhớ nhé: đến máy cũng biết chép dự phòng.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The kernel tree keeps the same habit: re-running a configuration target saves the previous file as <code>.config.old</code>, and current Kconfig documentation uses it for comparison via <code>scripts/diffconfig .config.old .config</code> <span class="cite"><a href="#ref-12">12</a></span>.</p>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Bản sao đã an toàn, năm bước đã rõ. Bước 1 đặt ra một câu hỏi mà người mới hay bỏ qua: tải cái gì? Câu trả lời của các nhà phát triển nhân là một tệp nhỏ tên là <em>bản vá</em>.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Đã chép dự phòng xong. Giờ đến câu hỏi: tải cái gì về? Nhớ nhé: không tải cả bộ, chỉ tải miếng vá.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> The backup is safe and the five steps are clear. Step 1 raises a question beginners skip: download <em>what</em>? The kernel developers' answer is a small file called a <em>patch</em>.</p>
+  </aside>
+</section>
+
+<section class="section" id="tai-ban-va" aria-labelledby="tai-ban-va-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 02 · “Download the New Source”</span><span class="en-only" lang="en">Concept cluster 02 · “Download the New Source”</span></p>
+    <h2 id="tai-ban-va-title">
+      <span class="standard-copy">Tải bản vá đúng, không tải lại cả cây mã</span>
+      <span class="easy-only">Tải đúng miếng vá, đừng tải lại cả bộ</span>
+      <span class="en-only" lang="en">Download the right patch, not the whole tree</span>
+    </h2>
+    <p class="standard-copy">Ông đặt vấn đề từ phía người dùng: các nhà phát triển nhân hiểu rằng người dùng không muốn tải toàn bộ mã nguồn cho mỗi lần cập nhật, vì đó là lãng phí băng thông và thời gian; nên họ cung cấp một <em>bản vá</em> có thể nâng một bản nhân cũ lên bản mới <span class="cite"><a href="#ref-2">2</a></span>. Trên kernel.org, nhấp vào chữ <span lang="en">F</span> sẽ tải toàn bộ mã nguồn; nhấp vào chính tên bản phát hành thì tải về tệp vá <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    <p class="easy-only">Tải lại cả bộ mã cho mỗi lần cập nhật thì phí mạng và phí thời gian, nên người ta làm sẵn “miếng vá” để nâng bản cũ lên bản mới <span class="cite"><a href="#ref-2">2</a></span>. Trên trang kernel.org, bấm vào chữ <span lang="en">F</span> là tải cả bộ; bấm vào tên bản phát hành là tải miếng vá <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: bấm nhầm chỗ là tải nhầm thứ.</p>
+    <p class="en-only" lang="en">He frames it from the user's side: the kernel developers realise users do not wish to download the entire source for every update — that would waste bandwidth and time — so they offer a <em>patch</em> that upgrades an older release to a newer one <span class="cite"><a href="#ref-2">2</a></span>. On kernel.org, the <span lang="en">F</span> link downloads the full source; clicking the name of the release downloads a patch file instead <span class="cite"><a href="#ref-2">2</a></span>.</p>
+    <p class="deep-only">Chú thích của ông giải thích luôn cái tên: chương trình gọi là <code>patch</code> vì nó nhận tệp ấy và áp lên cây mã gốc để tạo ra cây mã mới; tệp vá chứa một biểu diễn của những thay đổi cần thiết để dựng lại các tệp mới từ các tệp cũ, và nó <em>đọc được bằng mắt</em> — gồm danh sách các dòng bị bỏ đi, các dòng được thêm vào, kèm một ít ngữ cảnh chỉ ra chỗ cần sửa <span class="cite"><a href="#ref-2">2</a></span>. Chi tiết “đọc được” không phải chuyện vặt: nó có nghĩa bạn luôn có thể mở tệp vá ra xem mình sắp áp cái gì lên máy mình.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Bản vá (<span lang="en">patch</span>).</b> Một tệp văn bản mô tả chênh lệch giữa hai phiên bản mã nguồn. Điểm mấu chốt trong sách: một tệp vá nhân chỉ nâng mã nguồn từ <em>đúng một</em> bản phát hành cụ thể lên <em>đúng một</em> bản khác <span class="cite"><a href="#ref-2">2</a></span> — nó không phải cái chìa vạn năng.</p>
+      <p class="easy-only"><b>Bản vá là gì.</b> Là tệp ghi phần khác nhau giữa hai phiên bản. Quan trọng: mỗi miếng vá chỉ hợp với đúng một cặp phiên bản <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: vá của bản này không dán được lên bản kia.</p>
+      <p class="en-only" lang="en"><b>Patch.</b> A text file describing the difference between two versions of the source. The key point in the book: a kernel patch file upgrades the source from only <em>one</em> specific release to <em>one</em> other specific release <span class="cite"><a href="#ref-2">2</a></span> — it is not a universal key.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">vá stable&nbsp;&nbsp;&nbsp;&nbsp; : 2.6.17.10 → chỉ áp lên 2.6.17<br>vá base&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; : 2.6.18&nbsp;&nbsp;&nbsp; → chỉ áp lên 2.6.17<br>vá incremental: 2.6.17.9 → 2.6.17.10<br>→ ưu tiên dùng vá incremental</p>
+      <p class="easy-only">vá stable → dán lên bản gốc 2.6.17<br>vá base → dán lên bản gốc trước đó<br>vá incremental → nhảy từng bậc một<br>→ nên chọn loại nhảy từng bậc</p>
+      <p class="en-only" lang="en">stable patch&nbsp;&nbsp; : 2.6.17.10 → applies to 2.6.17 only<br>base patch&nbsp;&nbsp;&nbsp;&nbsp; : 2.6.18&nbsp;&nbsp;&nbsp; → applies to 2.6.17 only<br>incremental&nbsp;&nbsp;&nbsp;&nbsp;: 2.6.17.9 → 2.6.17.10<br>→ prefer the incremental patches</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">which patch applies</span>
+      <h3>
+        <span class="standard-copy">Ba loại vá, ba luật áp dụng khác nhau</span>
+        <span class="easy-only">Ba loại vá, ba cách dùng</span>
+        <span class="en-only" lang="en">Three kinds of patch, three rules</span>
+      </h3>
+      <p class="standard-copy">Sách nêu ba luật rành mạch. Vá <span lang="en">stable</span> áp lên <em>bản nền</em>: bản vá 2.6.17.10 chỉ áp được lên bản 2.6.17, không áp được lên 2.6.17.9 hay bất kỳ bản nào khác <span class="cite"><a href="#ref-2">2</a></span>. Vá bản nền chỉ áp lên bản nền trước đó: vá 2.6.18 chỉ áp lên 2.6.17, không áp lên bản 2.6.17.y cuối cùng <span class="cite"><a href="#ref-2">2</a></span>. Vá <span lang="en">incremental</span> nâng từ một bản cụ thể lên bản kế tiếp, để nhà phát triển không phải hạ cấp rồi nâng lại chỉ để nhảy từ bản stable này sang bản stable sau <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <p class="easy-only">Có ba loại. Vá stable dán lên bản gốc, ví dụ vá 2.6.17.10 chỉ dán được lên 2.6.17 <span class="cite"><a href="#ref-2">2</a></span>. Vá bản nền dán lên bản nền trước, ví dụ vá 2.6.18 dán lên 2.6.17 <span class="cite"><a href="#ref-2">2</a></span>. Vá incremental nhảy từ bản này sang đúng bản kế tiếp <span class="cite"><a href="#ref-2">2</a></span>. Nhớ nhé: nhìn tên tệp là biết nó dán được lên đâu.</p>
+      <p class="en-only" lang="en">The book gives three crisp rules. Stable kernel patches apply to the <em>base</em> version: the 2.6.17.10 patch applies only to 2.6.17, not to 2.6.17.9 or any other release <span class="cite"><a href="#ref-2">2</a></span>. Base kernel patches apply only to the previous base version: the 2.6.18 patch applies only to 2.6.17, not to the last 2.6.17.y release <span class="cite"><a href="#ref-2">2</a></span>. Incremental patches upgrade from one specific release to the next, so developers need not downgrade and then upgrade just to move from the latest stable release to the following one <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Tài liệu nhân hiện hành phát biểu đúng luật ấy bằng phiên bản của thời nay: vá stable thường xếp chồng lên bản 5.x chứ không lên bản stable trước đó, còn vá incremental thì “được áp lên bản stable trước (5.x.y-1)” <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Tài liệu nhân ngày nay vẫn nói y như vậy, chỉ đổi số phiên bản <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: luật cũ vẫn đúng.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Current kernel documentation states the same rules in modern numbers: normal stable patches stack on the base 5.x release rather than the prior stable one, while incremental patches are “applied on top of previous stable kernel (5.x.y-1)” <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao vá stable lại áp lên bản nền</h4>
+          <p>Vì đội stable sinh ra bản vá bằng cách so bản nền với bản stable mới nhất. Hệ quả thực tế: nếu đang ở 5.7.2 và muốn lên 5.7.3 bằng vá stable thường, bạn phải <em>gỡ</em> vá 5.7.2 ra trước rồi mới áp 5.7.3 <span class="cite"><a href="#ref-7">7</a></span>. Vá incremental tồn tại chính là để bạn khỏi làm việc đó.</p>
+        </div>
+        <div class="info-block">
+          <h4>Khuyến nghị của sách</h4>
+          <p>Ông viết rõ: bất cứ khi nào có thể, nên dùng vá incremental để cuộc sống dễ hơn <span class="cite"><a href="#ref-2">2</a></span>. Đây là một trong số ít chỗ trong sách ông đưa ra khuyến nghị dứt khoát thay vì chỉ liệt kê lựa chọn.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">finding the patch</span>
+      <h3>
+        <span class="standard-copy">Tìm tệp vá: thư mục <code>incr</code> ở tầng dưới</span>
+        <span class="easy-only">Miếng vá nằm ở thư mục nào</span>
+        <span class="en-only" lang="en">Finding the patch: the <code>incr</code> subdirectory</span>
+      </h3>
+      <p class="standard-copy">Muốn đi từ 2.6.17.9 lên 2.6.17.11, cần <em>hai</em> tệp vá: một từ .9 lên .10, một từ .10 lên .11 <span class="cite"><a href="#ref-3">3</a></span>. Vá stable và vá bản nền nằm cùng cấu trúc thư mục với các cây mã chính; riêng vá incremental nằm thấp hơn một tầng, trong thư mục con <code>incr</code> — cụ thể là <code>/pub/linux/kernel/v2.6/incr</code> <span class="cite"><a href="#ref-3">3</a></span>. Sách dùng chương trình <code>lftp</code> để tải, và nói rõ dùng trình FTP nào hay trình duyệt nào cũng được; điều quan trọng chỉ là biết tệp nằm ở đâu <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <p class="easy-only">Đi từ bản .9 lên bản .11 thì cần hai miếng vá chứ không phải một <span class="cite"><a href="#ref-3">3</a></span>. Miếng vá loại incremental nằm trong thư mục con tên <code>incr</code> <span class="cite"><a href="#ref-3">3</a></span>. Sách tải bằng <code>lftp</code>, nhưng dùng trình duyệt cũng được <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: biết chỗ để tìm mới là điều cần học.</p>
+      <p class="en-only" lang="en">Going from 2.6.17.9 to 2.6.17.11 needs <em>two</em> patches: one from .9 to .10, another from .10 to .11 <span class="cite"><a href="#ref-3">3</a></span>. Stable and base patches live in the same directory structure as the main source trees, while incremental ones sit one level lower in the <code>incr</code> subdirectory — here <code>/pub/linux/kernel/v2.6/incr</code> <span class="cite"><a href="#ref-3">3</a></span>. The book downloads them with <code>lftp</code>, noting that any FTP program or a web browser will do; the important thing is knowing where the files are <span class="cite"><a href="#ref-3">3</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Thư mục <code>incr/</code> vẫn còn và vẫn được cập nhật cho dòng 6.x hôm nay: kho kernel.org liệt kê các tệp dạng <code>patch-6.19.9-10.xz</code> ngay trong <code>/pub/linux/kernel/v6.x/incr/</code> <span class="cite"><a href="#ref-8">8</a></span>. Chỉ định dạng nén đổi từ <code>.bz2</code> sang <code>.xz</code>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Thư mục <code>incr/</code> hôm nay vẫn còn, chỉ khác là tệp nén kiểu mới <span class="cite"><a href="#ref-8">8</a></span>. Nhớ nhé: chỗ để vá không đổi, chỉ đuôi tệp đổi.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The <code>incr/</code> directory still exists and is still current for today's 6.x series: kernel.org lists files such as <code>patch-6.19.9-10.xz</code> under <code>/pub/linux/kernel/v6.x/incr/</code> <span class="cite"><a href="#ref-8">8</a></span>. Only the compression changed, from <code>.bz2</code> to <code>.xz</code>.</p>
+      </div>
+      <p class="result standard-copy"><span class="vi-only">Trong phiên tải của sách, hai tệp chỉ nặng 2.872 và 7.901 byte <span class="cite"><a href="#ref-3">3</a></span> — nhỏ hơn cây mã đầy đủ nhiều bậc độ lớn.</span></p>
+      <p class="result en-only" lang="en">In the book's download session the two files weigh just 2,872 and 7,901 bytes <span class="cite"><a href="#ref-3">3</a></span> — orders of magnitude smaller than the full tree.</p>
+    </li>
+    <li>
+      <span class="english-term">jumping many versions</span>
+      <h3>
+        <span class="standard-copy">Nhảy nhiều bậc: đi lùi rồi đi tới</span>
+        <span class="easy-only">Nhảy xa thì lùi một bước rồi tiến</span>
+        <span class="en-only" lang="en">Jumping many versions: go backward, then forward</span>
+      </h3>
+      <p class="standard-copy">Chú thích của ông giải một bài toán thực tế: nếu cần nâng qua hơn hai phiên bản, cách tiết kiệm bước là <em>đi lùi rồi đi tới</em> — trong ví dụ này là lùi từ 2.6.17.9 về 2.6.17 rồi tiến thẳng từ 2.6.17 lên 2.6.17.11 <span class="cite"><a href="#ref-3">3</a></span>. Hai lệnh thay vì nhiều lệnh, vì đã về tới bản nền thì một tệp vá stable duy nhất đưa bạn tới đích.</p>
+      <p class="easy-only">Nếu phải nhảy qua nhiều bản, cách gọn là lùi về bản gốc rồi tiến một phát lên bản đích <span class="cite"><a href="#ref-3">3</a></span>. Nhớ nhé: đôi khi lùi một bước lại nhanh hơn.</p>
+      <p class="en-only" lang="en">His footnote solves a practical problem: if you need to upgrade more than two versions, the step-saving route is to <em>go backward and then upgrade forward</em> — here, back from 2.6.17.9 to 2.6.17, then forward from 2.6.17 to 2.6.17.11 <span class="cite"><a href="#ref-3">3</a></span>. Two commands instead of many, because once you are at the base release a single stable patch carries you to the target.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Đi lùi chính là áp ngược một bản vá; tài liệu nhân ghi cú pháp là <code>patch -R -p1 &lt; ../patch-x.y.z</code> <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Lùi lại nghĩa là gỡ miếng vá ra, thêm chữ <code>-R</code> vào lệnh <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: vá dán được thì cũng gỡ được.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Going backward is simply reversing a patch; the kernel documentation gives the syntax as <code>patch -R -p1 &lt; ../patch-x.y.z</code> <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Tệp vá đã nằm trên đĩa và còn đang nén. Phần tiếp theo là ba động tác cơ khí: giải nén, áp, và — quan trọng không kém — kiểm chứng rằng nó đã áp đúng.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Có miếng vá rồi. Giờ là giải nén, dán vào, rồi kiểm tra lại. Nhớ nhé: dán xong phải kiểm.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> The patch file is on disk and still compressed. What follows is three mechanical moves: uncompress, apply, and — no less important — verify that it applied correctly.</p>
+  </aside>
+</section>
+
+<section class="section" id="ap-ban-va" aria-labelledby="ap-ban-va-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 03 · “Applying the Patch”</span><span class="en-only" lang="en">Concept cluster 03 · “Applying the Patch”</span></p>
+    <h2 id="ap-ban-va-title">
+      <span class="standard-copy">Áp bản vá — và kiểm chứng bằng <code>Makefile</code></span>
+      <span class="easy-only">Dán miếng vá, rồi mở ra xem đúng chưa</span>
+      <span class="en-only" lang="en">Applying the patch — and verifying via the <code>Makefile</code></span>
+    </h2>
+    <p class="standard-copy">Trình tự trong sách gọn tới mức có thể học thuộc: giải nén hai tệp vá bằng <code>bzip2 -dv</code>, vào thư mục mã nguồn, rồi chạy <code>patch -p1 &lt; ../patch-2.6.17.9-10</code> <span class="cite"><a href="#ref-4">4</a></span>. Chương trình in ra từng tệp nó đang vá — <code>Makefile</code>, <code>block/elevator.c</code>, <code>fs/udf/super.c</code> và tiếp tục <span class="cite"><a href="#ref-4">4</a></span>. Sau đó lặp lại đúng như vậy với tệp vá thứ hai để lên mức 2.6.17.11 <span class="cite"><a href="#ref-4">4</a></span>.</p>
+    <p class="easy-only">Làm theo thứ tự: giải nén hai tệp vá, vào thư mục mã nguồn, chạy lệnh <code>patch -p1</code> với tệp vá thứ nhất <span class="cite"><a href="#ref-4">4</a></span>. Máy sẽ in ra tên từng tệp nó đang sửa <span class="cite"><a href="#ref-4">4</a></span>. Rồi làm y hệt với tệp vá thứ hai <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: vá từng bậc một, đúng thứ tự.</p>
+    <p class="en-only" lang="en">The book's sequence is short enough to memorise: uncompress both patches with <code>bzip2 -dv</code>, change into the source directory, then run <code>patch -p1 &lt; ../patch-2.6.17.9-10</code> <span class="cite"><a href="#ref-4">4</a></span>. The program prints each file it patches — <code>Makefile</code>, <code>block/elevator.c</code>, <code>fs/udf/super.c</code> and on down the list <span class="cite"><a href="#ref-4">4</a></span>. Then you repeat the identical move with the second patch to reach 2.6.17.11 <span class="cite"><a href="#ref-4">4</a></span>.</p>
+    <p class="deep-only">Cái hay của mục này không nằm ở lệnh mà ở <em>vòng kiểm chứng</em> ông cài vào giữa hai lần vá. Sau mỗi lần áp, ông yêu cầu hai việc: xác nhận đầu ra của <code>patch</code> không có lỗi hay cảnh báo nào, rồi mở <code>Makefile</code> ra đọc <span class="cite"><a href="#ref-4">4</a></span>. Đây là thói quen của người từng bị vá hỏng: không tin vào việc lệnh chạy xong mà không kêu, chỉ tin vào bằng chứng.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b><code>patch -p1</code>.</b> Tùy chọn <code>-p1</code> bảo chương trình bỏ đi thành phần đầu tiên trong đường dẫn ghi trong tệp vá. Tệp vá nhân được sinh ra ở thư mục <em>trên</em> cây mã nguồn, nên tên tệp trong đó mang sẵn một cấp thư mục không khớp với máy bạn; <code>-p1</code> gỡ đúng cấp ấy ra <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      <p class="easy-only"><b><code>-p1</code> nghĩa là gì.</b> Trong tệp vá, mỗi đường dẫn có thừa một cấp thư mục ở đầu. <code>-p1</code> bảo máy cắt bỏ cấp đó đi cho khớp với máy bạn <span class="cite"><a href="#ref-7">7</a></span>. Nhớ nhé: quên <code>-p1</code> là máy sẽ hỏi “vá tệp nào?”.</p>
+      <p class="en-only" lang="en"><b><code>patch -p1</code>.</b> The <code>-p1</code> flag tells the program to strip the first element of the path from filenames in the patch file. Kernel patches are generated relative to the directory <em>above</em> the source tree, so their filenames carry a leading directory component that will not match your setup; <code>-p1</code> removes exactly that <span class="cite"><a href="#ref-7">7</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">$ bzip2 -dv patch-2.6.17.9-10.bz2<br>$ cd linux-2.6.17.9<br>$ patch -p1 &lt; ../patch-2.6.17.9-10<br>$ head -n 5 Makefile&nbsp;&nbsp; # EXTRAVERSION = .10<br>$ cd .. &amp;&amp; mv linux-2.6.17.9 linux-2.6.17.11</p>
+      <p class="easy-only">giải nén miếng vá<br>vào thư mục mã nguồn<br>chạy lệnh vá<br>mở Makefile xem số phiên bản<br>đổi tên thư mục cho khớp</p>
+      <p class="en-only" lang="en">$ bzip2 -dv patch-2.6.17.9-10.bz2<br>$ cd linux-2.6.17.9<br>$ patch -p1 &lt; ../patch-2.6.17.9-10<br>$ head -n 5 Makefile&nbsp;&nbsp; # EXTRAVERSION = .10<br>$ cd .. &amp;&amp; mv linux-2.6.17.9 linux-2.6.17.11</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">verify, don't assume</span>
+      <h3>
+        <span class="standard-copy">Kiểm chứng: đọc năm dòng đầu của <code>Makefile</code></span>
+        <span class="easy-only">Mở <code>Makefile</code> xem số phiên bản</span>
+        <span class="en-only" lang="en">Verify: read the first five lines of the <code>Makefile</code></span>
+      </h3>
+      <p class="standard-copy">Ông đưa ra một phép thử mà ai cũng làm được: chạy <code>head -n 5 Makefile</code> và đọc bốn biến ở đầu tệp. Sau lần vá thứ nhất, kết quả phải là <code>VERSION = 2</code>, <code>PATCHLEVEL = 6</code>, <code>SUBLEVEL = 17</code>, <code>EXTRAVERSION = .10</code> <span class="cite"><a href="#ref-4">4</a></span>. Sau lần vá thứ hai, dòng cuối phải đổi thành <code>EXTRAVERSION = .11</code> <span class="cite"><a href="#ref-4">4</a></span>. Một dòng thay đổi là bằng chứng rằng cây mã đã thực sự ở mức bạn nghĩ.</p>
+      <p class="easy-only">Cách kiểm rất dễ: mở năm dòng đầu của tệp <code>Makefile</code>. Vá xong lần một thì thấy <code>EXTRAVERSION = .10</code>, vá xong lần hai thì thấy <code>.11</code> <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: nhìn thấy con số đúng mới tin là vá xong.</p>
+      <p class="en-only" lang="en">He offers a test anyone can run: <code>head -n 5 Makefile</code> and read the four variables at the top. After the first patch they must read <code>VERSION = 2</code>, <code>PATCHLEVEL = 6</code>, <code>SUBLEVEL = 17</code>, <code>EXTRAVERSION = .10</code> <span class="cite"><a href="#ref-4">4</a></span>. After the second, the last line must become <code>EXTRAVERSION = .11</code> <span class="cite"><a href="#ref-4">4</a></span>. One changed line is the evidence that the tree really is at the level you think.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Dòng thứ năm trong ví dụ của sách là <code>NAME=Crazed Snow-Weasel</code> <span class="cite"><a href="#ref-4">4</a></span> — cái tên đùa mà mỗi bản nhân tự đặt cho mình. Nó vô hại, nhưng nhắc bạn rằng <code>Makefile</code> chính là nơi cây mã tự khai báo danh tính.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Dòng thứ năm là một cái tên vui, trong sách là “Crazed Snow-Weasel” <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: mỗi bản nhân đều có biệt danh riêng.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The fifth line in the book's output is <code>NAME=Crazed Snow-Weasel</code> <span class="cite"><a href="#ref-4">4</a></span> — the joke name each kernel release gives itself. Harmless, but a reminder that the <code>Makefile</code> is where the tree declares its own identity.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Khi vá không sạch</h4>
+          <p>Sách chỉ yêu cầu “không có lỗi hay cảnh báo” <span class="cite"><a href="#ref-4">4</a></span>. Tài liệu nhân nói rõ hơn hai dấu hiệu cần biết: đoạn vá phải dịch chỗ mới áp được thì bị báo là áp với <span lang="en">fuzz</span>, còn đoạn không áp được sẽ sinh ra tệp <code>.rej</code> (và <code>.orig</code>); với mã nguồn kernel.org nguyên bản, áp đúng thứ tự thì không thứ nào được phép xuất hiện <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Lỗi phổ biến nhất</h4>
+          <p>Nếu <code>patch</code> hỏi lại “<span lang="en">File to patch:</span>”, nguyên nhân gần như luôn là quên mất <code>-p1</code> hoặc đang đứng sai thư mục — một số ít bản vá thì lại cần <code>-p0</code> <span class="cite"><a href="#ref-7">7</a></span>. Gặp câu hỏi đó, hãy dừng lại thay vì gõ bừa một tên tệp.</p>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">rename the directory</span>
+      <h3>
+        <span class="standard-copy">Đổi tên thư mục — vệ sinh chống nhầm lẫn</span>
+        <span class="easy-only">Đổi tên thư mục cho khỏi nhầm</span>
+        <span class="en-only" lang="en">Rename the directory — hygiene against confusion</span>
+      </h3>
+      <p class="standard-copy">Sau khi vá xong, thư mục vẫn mang tên <code>linux-2.6.17.9</code> trong khi bên trong đã là 2.6.17.11. Ông khuyên quay ra ngoài và đổi tên thư mục theo đúng số phiên bản để tránh nhầm lẫn về sau: <code>mv linux-2.6.17.9 linux-2.6.17.11</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <p class="easy-only">Vá xong rồi mà tên thư mục vẫn là số cũ thì dễ nhầm. Ông bảo đổi tên nó theo số mới <span class="cite"><a href="#ref-4">4</a></span>. Nhớ nhé: tên phải nói đúng sự thật bên trong.</p>
+      <p class="en-only" lang="en">After patching, the directory is still named <code>linux-2.6.17.9</code> while its contents are 2.6.17.11. He advises stepping back out and renaming it to the kernel version number to avoid confusion at a later time: <code>mv linux-2.6.17.9 linux-2.6.17.11</code> <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Đây là cùng một nguyên tắc với việc chương 5 đặt tên tệp ảnh nhân theo phiên bản: trong một thư mục có nhiều cây mã, cái tên là thứ duy nhất bạn đọc trước khi gõ <code>cd</code>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Cũng giống việc đặt tên tệp nhân theo phiên bản khi cài. Nhớ nhé: đặt tên rõ ràng là cách tự cứu mình sau này.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> It is the same principle as naming kernel images by version in Chapter 5: in a directory holding several trees, the name is the only thing you read before typing <code>cd</code>.</p>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Cây mã giờ đã ở phiên bản mới, và tệp <code>.config</code> cũ vẫn nằm nguyên trong đó. Câu hỏi cuối cùng — và là câu hỏi cả chương xoay quanh — là: cấu hình cũ có còn dùng được với mã mới không?</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Mã đã mới, tệp cấu hình vẫn là cái cũ. Câu hỏi: nó còn dùng được không? Nhớ nhé: câu trả lời nằm ở một lệnh duy nhất.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> The tree is now at the new version and your old <code>.config</code> is still sitting inside it. The last question — the one the whole chapter turns on — is whether that old configuration still works against new code.</p>
+  </aside>
+</section>
+
+<section class="section" id="cau-hinh-lai" aria-labelledby="cau-hinh-lai-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 04 · “Reconfigure the Kernel”</span><span class="en-only" lang="en">Concept cluster 04 · “Reconfigure the Kernel”</span></p>
+    <h2 id="cau-hinh-lai-title">
+      <span class="standard-copy">Cấu hình lại: <code>make oldconfig</code> giữ lại mọi câu trả lời cũ</span>
+      <span class="easy-only">Giữ lại lựa chọn cũ, chỉ hỏi cái mới</span>
+      <span class="en-only" lang="en">Reconfiguring: <code>make oldconfig</code> keeps every old answer</span>
+    </h2>
+    <p class="standard-copy">Đây là chỗ lời hứa của chương được thực hiện. Trước đây bạn dùng <code>make menuconfig</code>, <code>gconfig</code> hay <code>xconfig</code> để đổi từng tùy chọn; nhưng khi đã có một cấu hình chạy được, việc duy nhất còn cần làm là cập nhật nó với những tùy chọn mới xuất hiện kể từ bản trước — và đó là việc của <code>make oldconfig</code> hoặc <code>make silentoldconfig</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+    <p class="easy-only">Đây là phần quan trọng nhất. Trước kia bạn chỉnh từng mục bằng giao diện menu. Nhưng khi đã có cấu hình chạy tốt rồi, chỉ cần cập nhật thêm mục nào mới thôi — dùng lệnh <code>make oldconfig</code> <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: không phải chỉnh lại từ đầu.</p>
+    <p class="en-only" lang="en">This is where the chapter's promise is kept. Previously you used <code>make menuconfig</code>, <code>gconfig</code> or <code>xconfig</code> to change individual options; but once you have a working configuration, the only thing necessary is to update it with whatever options have been added since the last release — and that is the job of <code>make oldconfig</code> or <code>make silentoldconfig</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+    <p class="deep-only">Cách phát biểu của ông đáng chú ý ở chỗ nó đảo vai: cấu hình không còn là thứ bạn <em>tạo ra</em> mỗi lần nâng cấp, mà là một tài sản bạn <em>mang theo</em>. Công cụ chỉ có nhiệm vụ hòa giải tài sản ấy với một cây mã mới hơn. Đó cũng là lý do tệp <code>.config</code> đáng được sao lưu ở đầu chương: nó là thứ duy nhất trong quy trình không tái tạo được.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b><code>oldconfig</code> và <code>silentoldconfig</code>.</b> <code>make oldconfig</code> lấy cấu hình hiện có trong <code>.config</code> và cập nhật nó theo bản nhân mới: nó in ra mọi câu hỏi cấu hình và tự trả lời những câu đã có sẵn trong tệp; gặp tùy chọn mới thì dừng lại và hỏi người dùng <span class="cite"><a href="#ref-5">5</a></span>. <code>make silentoldconfig</code> làm y hệt nhưng không in gì ra màn hình, trừ khi cần hỏi về một tùy chọn mới <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      <p class="easy-only"><b>Hai lệnh này làm gì.</b> <code>make oldconfig</code> đọc lựa chọn cũ của bạn, tự trả lời những câu đã biết, chỉ dừng lại hỏi khi gặp mục mới <span class="cite"><a href="#ref-5">5</a></span>. <code>make silentoldconfig</code> cũng vậy nhưng im lặng, chỉ lên tiếng khi cần hỏi <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: máy nhớ hộ bạn, bạn chỉ trả lời phần mới.</p>
+      <p class="en-only" lang="en"><b><code>oldconfig</code> and <code>silentoldconfig</code>.</b> <code>make oldconfig</code> takes the current configuration in <code>.config</code> and updates it for the new release: it prints every configuration question and answers those already handled by the file; when it meets a new option it stops and asks you <span class="cite"><a href="#ref-5">5</a></span>. <code>make silentoldconfig</code> works exactly the same way but prints nothing unless it needs to ask about a new option <span class="cite"><a href="#ref-5">5</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">.config cũ + mã nguồn mới<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓ make oldconfig<br>câu đã trả lời → giữ nguyên<br>câu mới (NEW)&nbsp; → hỏi bạn<br>= .config mới, không mất gì</p>
+      <p class="easy-only">cấu hình cũ + mã mới<br>→ giữ cái cũ<br>→ hỏi cái mới<br>= cấu hình mới, vẫn là của bạn</p>
+      <p class="en-only" lang="en">old .config + new source<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓ make oldconfig<br>answered options → kept<br>new options (NEW) → asked<br>= a new .config, nothing lost</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">the quiet case</span>
+      <h3>
+        <span class="standard-copy">Trường hợp im lặng — nâng cấp trong dòng stable</span>
+        <span class="easy-only">Khi máy chẳng hỏi gì cả</span>
+        <span class="en-only" lang="en">The quiet case — upgrading within a stable series</span>
+      </h3>
+      <p class="standard-copy">Ông nêu một quy luật thực nghiệm: thường thì khi nâng cấp giữa các bản <span lang="en">stable</span> khác nhau, không có tùy chọn cấu hình mới nào được thêm vào, vì đó vốn là một dòng nhân ổn định <span class="cite"><a href="#ref-5">5</a></span>. Khi ấy không có câu hỏi nào cần trả lời và chương trình chạy trót lọt mà không cần bạn can thiệp <span class="cite"><a href="#ref-5">5</a></span>. Ví dụ đi từ 2.6.17.9 lên 2.6.17.11 chỉ in ra vài dòng, trong đó có dòng cho biết nó đang dùng các giá trị mặc định tìm thấy trong <code>.config</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      <p class="easy-only">Trong cùng một dòng ổn định, thường chẳng có mục cấu hình mới nào cả <span class="cite"><a href="#ref-5">5</a></span>. Nên lệnh chạy một cái là xong, không hỏi gì <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: im lặng ở đây là dấu hiệu tốt.</p>
+      <p class="en-only" lang="en">He states an empirical rule: usually, when upgrading between different stable releases, no new configuration options are added, since this is supposed to be a stable kernel series <span class="cite"><a href="#ref-5">5</a></span>. In that case there are no new questions and the program completes without any need for user intervention <span class="cite"><a href="#ref-5">5</a></span>. Going from 2.6.17.9 to 2.6.17.11 prints only a few lines, among them a note that it is using the defaults found in <code>.config</code> <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Ranh giới ấy vẫn đúng hôm nay: kernel.org phân biệt rõ <span lang="en">mainline</span> — nơi mọi tính năng mới xuất hiện — với <span lang="en">stable</span> và <span lang="en">longterm</span>, nơi chỉ các bản sửa lỗi được đưa ngược về <span class="cite"><a href="#ref-10">10</a></span>. Tùy chọn cấu hình mới sinh ra ở nhánh đầu, không phải hai nhánh sau.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Ngày nay vẫn thế: dòng thử nghiệm mới có tính năng mới, còn dòng ổn định chỉ nhận bản sửa lỗi <span class="cite"><a href="#ref-10">10</a></span>. Nhớ nhé: dòng ổn định thì ít bất ngờ.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> The boundary still holds: kernel.org distinguishes mainline — “where all new features are introduced” — from stable and longterm, which receive backported fixes only <span class="cite"><a href="#ref-10">10</a></span>. New configuration options are born in the former, not the latter.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">(NEW)</span>
+      <h3>
+        <span class="standard-copy">Dấu <code>(NEW)</code> — chỗ duy nhất chương trình dừng lại</span>
+        <span class="easy-only">Chữ <code>(NEW)</code> là lúc máy hỏi bạn</span>
+        <span class="en-only" lang="en"><code>(NEW)</code> — the one place the program stops</span>
+      </h3>
+      <p class="standard-copy">Ví dụ thứ hai của ông cho thấy điều gì xảy ra khi một tùy chọn mới xuất hiện. Giữa một loạt câu hỏi trong mục <span lang="en">Kernel hacking</span> được tự trả lời, dòng <code>Mutex debugging, deadlock detection (DEBUG_MUTEXES) [N/y/?] (NEW)</code> hiện ra và chương trình dừng lại chờ bạn chọn <span class="cite"><a href="#ref-5">5</a></span>. Bấm <code>y</code> thì nó đi tiếp qua hết phần còn lại <span class="cite"><a href="#ref-5">5</a></span>. Toàn bộ sự can thiệp của con người trong một lần nâng cấp gói gọn ở đó.</p>
+      <p class="easy-only">Khi có mục cấu hình mới, máy sẽ dừng lại và thêm chữ <code>(NEW)</code> vào cuối dòng <span class="cite"><a href="#ref-5">5</a></span>. Bạn chọn xong là nó chạy tiếp <span class="cite"><a href="#ref-5">5</a></span>. Nhớ nhé: thấy chữ <code>(NEW)</code> là chỗ duy nhất bạn cần nghĩ.</p>
+      <p class="en-only" lang="en">His second example shows what happens when a new option appears. Amid a run of <span lang="en">Kernel hacking</span> questions being answered automatically, the line <code>Mutex debugging, deadlock detection (DEBUG_MUTEXES) [N/y/?] (NEW)</code> appears and the program stops for your choice <span class="cite"><a href="#ref-5">5</a></span>. Press <code>y</code> and it continues through the rest <span class="cite"><a href="#ref-5">5</a></span>. The entire human contribution to an upgrade fits in that one prompt.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Ngày nay có cách xem trước danh sách ấy mà không phải trả lời từng câu: tài liệu Kconfig khuyên chép cấu hình cũ vào <code>.config</code> rồi chạy <code>make listnewconfig</code>, chương trình sẽ liệt kê mọi ký hiệu mới, mỗi dòng một cái <span class="cite"><a href="#ref-12">12</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Bây giờ có lệnh <code>make listnewconfig</code> liệt kê sẵn các mục mới để bạn xem trước <span class="cite"><a href="#ref-12">12</a></span>. Nhớ nhé: xem trước rồi hãy quyết.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Today you can preview that list instead of answering question by question: Kconfig documentation suggests copying the old config over <code>.config</code> and running <code>make listnewconfig</code>, after which “the config program will list any new symbols, one per line” <span class="cite"><a href="#ref-12">12</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cảnh báo về tên lệnh — tình trạng 2026</h4>
+          <p><code>make silentoldconfig</code> trong sách không còn là lệnh dành cho người dùng nữa. Năm 2018 nó được đổi tên thành <code>syncconfig</code> vì đã trở thành “chi tiết cài đặt nội bộ”; bản vá giữ lại một bí danh in ra cảnh báo — “thứ bạn muốn có lẽ là <code>oldconfig</code>” — và báo rằng <code>silentoldconfig</code> sẽ bị gỡ sau Linux 4.19 <span class="cite"><a href="#ref-11">11</a></span>. <code>make oldconfig</code> thì vẫn còn nguyên vẹn <span class="cite"><a href="#ref-12">12</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Một cảnh báo sòng phẳng</h4>
+          <p>Tài liệu Kconfig hiện hành nói thẳng điều sách không nói: dùng một tệp <code>.config</code> từng chạy tốt rồi chạy <code>make oldconfig</code> “không nhất thiết tạo ra một nhân chạy được” cho bạn <span class="cite"><a href="#ref-12">12</a></span>. Nâng cấp trong cùng dòng stable thì rủi ro rất thấp; nhảy qua nhiều bản nền thì nên đọc kỹ các tùy chọn mới thay vì bấm qua.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <div class="trap-comparison deep-only">
+    <p class="eyebrow"><span class="vi-only">Ba hiểu lầm thường gặp</span><span class="en-only" lang="en">Three common misconceptions</span></p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Nâng cấp thì phải cấu hình lại từ đầu”</span><span class="en-only" lang="en">“Upgrading means reconfiguring from scratch”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> mã mới thì cấu hình cũ vứt đi. <span class="fact">Thực tế:</span> ông viết cả chương để bác bỏ điều đó — mục tiêu là cập nhật nhân từ bản cũ <em>mà vẫn giữ toàn bộ tùy chọn cấu hình của bản trước</em> <span class="cite"><a href="#ref-1">1</a></span>, và với các lệnh <code>oldconfig</code> bạn không cần dùng tới giao diện đồ họa hay giao diện văn bản cho bất kỳ lần cập nhật nào <span class="cite"><a href="#ref-5">5</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> new code means the old configuration is thrown away. <span class="fact">Fact:</span> the whole chapter exists to deny it — the goal is to update a kernel from an older version <em>while still retaining all the configuration options from the previous one</em> <span class="cite"><a href="#ref-1">1</a></span>, and with the <code>oldconfig</code> targets you do not need the graphical or text-oriented configuration programs for any new update <span class="cite"><a href="#ref-5">5</a></span>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“Bản vá nào cũng dán được lên cây mã của tôi”</span><span class="en-only" lang="en">“Any patch will apply to my tree”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> tải bản vá mới nhất rồi áp là xong. <span class="fact">Thực tế:</span> mỗi tệp vá chỉ nâng từ đúng một bản lên đúng một bản; vá 2.6.17.10 không áp được lên 2.6.17.9 <span class="cite"><a href="#ref-2">2</a></span>. Áp sai thì <code>patch</code> sẽ sinh tệp <code>.rej</code> thay vì im lặng làm hỏng <span class="cite"><a href="#ref-7">7</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> grab the newest patch and apply it. <span class="fact">Fact:</span> each patch file moves you from one specific release to one other; the 2.6.17.10 patch will not apply to 2.6.17.9 <span class="cite"><a href="#ref-2">2</a></span>. Applied to the wrong base, <code>patch</code> produces <code>.rej</code> files rather than quietly corrupting the tree <span class="cite"><a href="#ref-7">7</a></span>.</p>
+      </div>
+      <div class="comparison-card">
+        <h3><span class="standard-copy">“<code>ketchup</code> là công cụ nên dùng hôm nay”</span><span class="en-only" lang="en">“<code>ketchup</code> is the tool to use today”</span></h3>
+        <p class="standard-copy"><span class="myth">Hiểu lầm:</span> sách khuyên dùng <code>ketchup</code> nên cứ cài nó. <span class="fact">Thực tế:</span> lời khuyên ấy thuộc về năm 2006 <span class="cite"><a href="#ref-6">6</a></span>. Trang phát hành gốc dừng ở bản 0.9.8 ngày 01-05-2006 <span class="cite"><a href="#ref-13">13</a></span>, gói Debian bị gỡ khỏi <span lang="en">testing</span> cuối 2019 và khỏi <span lang="en">unstable</span> giữa 2022 <span class="cite"><a href="#ref-13">13</a></span>. Câu trả lời hiện nay là <span lang="en">git</span> <span class="cite"><a href="#ref-7">7</a></span><span class="cite"><a href="#ref-9">9</a></span>.</p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> the book recommends <code>ketchup</code>, so install it. <span class="fact">Fact:</span> that recommendation belongs to 2006 <span class="cite"><a href="#ref-6">6</a></span>. The original release page stops at version 0.9.8, dated 2006-05-01 <span class="cite"><a href="#ref-13">13</a></span>, and the Debian package was dropped from testing in late 2019 and from unstable in mid-2022 <span class="cite"><a href="#ref-13">13</a></span>. Today's answer is git <span class="cite"><a href="#ref-7">7</a></span><span class="cite"><a href="#ref-9">9</a></span>.</p>
+      </div>
+    </div>
+  </div>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Ba bước đã xong và chúng lặp đi lặp lại y hệt nhau mỗi lần có bản mới. Ông kết chương bằng đúng câu hỏi mà một người lười lành mạnh sẽ đặt ra.</p>
+    <p class="easy-only"><b>Nối sang phần sau.</b> Ba bước ấy lần nào cũng giống nhau. Nhớ nhé: việc gì lặp lại thì nên hỏi máy làm hộ được không.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> The three steps are done, and they repeat identically with every new release. He closes the chapter with exactly the question a healthily lazy person would ask.</p>
+  </aside>
+</section>
+
+<section class="section" id="tu-dong-hoa" aria-labelledby="tu-dong-hoa-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Cụm khái niệm 05 · “Can't This Be Automated?”</span><span class="en-only" lang="en">Concept cluster 05 · “Can't This Be Automated?”</span></p>
+    <h2 id="tu-dong-hoa-title">
+      <span class="standard-copy">Có tự động hóa được không? Câu trả lời 2006 và câu trả lời hôm nay</span>
+      <span class="easy-only">Máy làm hộ được không?</span>
+      <span class="en-only" lang="en">Can't this be automated? The 2006 answer and today's</span>
+    </h2>
+    <p class="standard-copy">Mục cuối chương chỉ dài một đoạn. Ông nhận xét rằng toàn bộ quy trình — tìm đúng tệp vá, giải nén, rồi áp — trông rất sẵn sàng để tự động hóa; và vì các nhà phát triển nhân vốn thuộc loại thích tự động hóa việc lặp lại, chương trình <code>ketchup</code> đã ra đời để làm tất cả những việc đó, với hướng dẫn chi tiết ở Phụ lục A <span class="cite"><a href="#ref-6">6</a></span>.</p>
+    <p class="easy-only">Phần cuối chương chỉ có một đoạn ngắn. Ông bảo: mấy bước này lặp đi lặp lại, máy làm hộ được, và đã có chương trình tên <code>ketchup</code> làm việc đó <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: đó là câu trả lời của năm 2006.</p>
+    <p class="en-only" lang="en">The chapter's last section runs to a single paragraph. He observes that the whole process — downloading the proper patch file, uncompressing it, then applying it — seems ripe for automating; and since kernel developers are the type who like to automate repetitive tasks, the <code>ketchup</code> program was created to handle all of it, with the details in Appendix A <span class="cite"><a href="#ref-6">6</a></span>.</p>
+    <p class="deep-only">Đây là một trong những đoạn <em>lỗi thời nhất</em> của cuốn sách, và đáng đọc chính vì thế. Nó cho thấy năm 2006 vấn đề “theo kịp cây mã nhân” vẫn còn được giải bằng một kịch bản gói quanh <code>wget</code> và <code>patch</code>. Chỉ ít năm sau, chính hạ tầng mà bản thân cuốn sách đã giới thiệu ở Phụ lục A — <span lang="en">git</span>, công cụ Linus Torvalds viết cho nhân và là công cụ nhân được phát triển bằng <span class="cite"><a href="#ref-14">14</a></span> — nuốt trọn bài toán ấy. Cuốn sách đứng đúng ở bản lề của quá trình chuyển đổi đó.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b><code>ketchup</code> (bối cảnh lịch sử).</b> Theo Phụ lục A, đây là công cụ dùng để cập nhật hoặc chuyển qua lại giữa các phiên bản cây mã nhân: tìm bản mới nhất, tải và giải nén, vá cây hiện có lên bất kỳ phiên bản nào khác, xử lý các nhánh phát triển và ổn định, tải các tệp vá còn thiếu, và kiểm tra chữ ký GPG của những gì đã tải <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      <p class="easy-only"><b><code>ketchup</code> là gì.</b> Là chương trình tự tìm, tự tải, tự vá để đưa cây mã của bạn sang phiên bản bất kỳ, và tự kiểm tra chữ ký của tệp tải về <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: nghe hay, nhưng nó là chuyện của ngày xưa.</p>
+      <p class="en-only" lang="en"><b><code>ketchup</code> (historical context).</b> Per Appendix A, it was a tool for updating or switching between versions of the kernel source tree: find the latest version, download and uncompress it, patch an existing tree to any other version, handle the development and stable branches, fetch whatever patches are missing, and verify the GPG signatures of what it downloaded <span class="cite"><a href="#ref-6">6</a></span>.</p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">2006 · ketchup -r 2.6&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → tự vá lên bản stable mới<br>hôm nay · git fetch origin<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; · git checkout --force --detach<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; · make olddefconfig</p>
+      <p class="easy-only">ngày xưa: một lệnh ketchup<br>bây giờ: ba lệnh git + make<br>→ cùng một kết quả</p>
+      <p class="en-only" lang="en">2006 · ketchup -r 2.6&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ auto-patch to newest stable<br>today · git fetch origin<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· git checkout --force --detach<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· make olddefconfig</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">ketchup, in its time</span>
+      <h3>
+        <span class="standard-copy"><code>ketchup</code> — đúng vào thời của nó, và chỉ thời đó</span>
+        <span class="easy-only">Công cụ của ngày xưa</span>
+        <span class="en-only" lang="en"><code>ketchup</code> — right for its time, and only then</span>
+      </h3>
+      <p class="standard-copy">Phụ lục A trình diễn hai lệnh: <code>ketchup -r 2.6.16.24</code> tải và mở cây mã ở đúng phiên bản đó rồi đổi tên thư mục theo phiên bản; sau đó <code>ketchup -r 2.6</code> tự xác định bản stable mới nhất là 2.6.17.11 và tải các tệp vá cần thiết để tới đó <span class="cite"><a href="#ref-6">6</a></span>. Ông khuyến nghị mạnh việc dùng nó khi tải bất kỳ cây mã nhân nào, vì nó lo hết phần tìm tệp vá đúng chỗ và áp đúng định dạng sau khi kiểm chữ ký <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      <p class="easy-only">Phụ lục A cho thấy chỉ cần hai lệnh: một lệnh tải đúng phiên bản, một lệnh nhảy lên bản mới nhất <span class="cite"><a href="#ref-6">6</a></span>. Ông khen nó tiện vì tự tìm, tự kiểm chữ ký, tự vá <span class="cite"><a href="#ref-6">6</a></span>. Nhớ nhé: đọc để hiểu lịch sử, đừng đi cài nó.</p>
+      <p class="en-only" lang="en">Appendix A demonstrates two commands: <code>ketchup -r 2.6.16.24</code> downloads and unpacks that exact version and renames the directory to match; then <code>ketchup -r 2.6</code> works out that the newest stable version is 2.6.17.11 and fetches the patches needed to get there <span class="cite"><a href="#ref-6">6</a></span>. He highly recommends using it for downloading any kernel source tree, since it handles finding the right patch on the server and applying it in the proper format after checking the signature <span class="cite"><a href="#ref-6">6</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Tình trạng hôm nay.</b> <code>ketchup</code> từ lâu không còn được bảo trì. Trang phát hành gốc tại selenic.com dừng ở <code>ketchup-0.9.8.tar.bz2</code> ngày 01-05-2006; gói Debian bị gỡ khỏi <span lang="en">testing</span> ngày 15-12-2019 và khỏi <span lang="en">unstable</span> ngày 21-06-2022 <span class="cite"><a href="#ref-13">13</a></span>. Hãy đọc mục này như một ghi chép lịch sử, không phải một chỉ dẫn.</p>
+        <p class="easy-only"><b>Bây giờ thì sao.</b> Công cụ này đã bỏ hoang từ lâu: bản cuối cùng từ năm 2006, và Debian đã gỡ nó khỏi kho <span class="cite"><a href="#ref-13">13</a></span>. Nhớ nhé: phần này để biết, không để làm theo.</p>
+        <p class="en-only" lang="en"><b>Status today.</b> <code>ketchup</code> has long been unmaintained. The original release page at selenic.com stops at <code>ketchup-0.9.8.tar.bz2</code>, dated 2006-05-01, and the Debian package was removed from testing on 2019-12-15 and from unstable on 2022-06-21 <span class="cite"><a href="#ref-13">13</a></span>. Read this section as history, not as instruction.</p>
+      </div>
+    </li>
+    <li>
+      <span class="english-term">git, today's answer</span>
+      <h3>
+        <span class="standard-copy"><span lang="en">git</span> — câu trả lời hiện hành cho cùng câu hỏi</span>
+        <span class="easy-only">Bây giờ người ta dùng <span lang="en">git</span></span>
+        <span class="en-only" lang="en">git — today's answer to the same question</span>
+      </h3>
+      <p class="standard-copy">Chính tài liệu về vá của nhân nay tự đánh dấu là lỗi thời và nói thẳng rằng bạn gần như chắc chắn sẽ muốn dùng <span lang="en">git</span> thay thế <span class="cite"><a href="#ref-7">7</a></span>. Hướng dẫn dựng nhân hiện hành mô tả vòng nâng cấp bằng ba động tác: <code>git fetch</code> có giới hạn độ sâu, <code>git checkout --force --detach origin/master</code>, rồi <code>make olddefconfig</code> để chỉnh tệp cấu hình đã chuẩn bị trước đó cho khớp cây mã mới <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        <p class="easy-only">Tài liệu chính thức nay nói: hãy dùng <span lang="en">git</span> thay cho cách vá thủ công <span class="cite"><a href="#ref-7">7</a></span>. Vòng nâng cấp còn ba bước: lấy mã mới, chuyển sang bản mới, rồi cập nhật cấu hình <span class="cite"><a href="#ref-9">9</a></span>. Nhớ nhé: ý tưởng y hệt, công cụ mới hơn.</p>
+      <p class="en-only" lang="en">The kernel's own patching document now marks itself obsolete and says plainly that you will almost certainly want to look at using git instead <span class="cite"><a href="#ref-7">7</a></span>. The current build guide describes the upgrade loop in three moves: a depth-bounded <code>git fetch</code>, <code>git checkout --force --detach origin/master</code>, then <code>make olddefconfig</code> to adjust the configuration file you prepared earlier to the new tree <span class="cite"><a href="#ref-9">9</a></span>.</p>
+      <div class="opportunity">
+        <p class="standard-copy"><b>Bạn thấy nó ở đâu.</b> Hai điểm cần chú ý khi dùng cách mới: <code>git checkout --force</code> sẽ <em>xóa mọi thay đổi cục bộ</em> của bạn <span class="cite"><a href="#ref-9">9</a></span>, và <code>olddefconfig</code> tự nhận giá trị mặc định cho tùy chọn mới — muốn tự quyết từng cái thì dùng <code>oldconfig</code>, đúng lệnh mà sách đã dạy <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        <p class="easy-only"><b>Gặp ở đâu.</b> Nhớ hai điều: lệnh <code>checkout --force</code> xóa sạch chỉnh sửa cục bộ <span class="cite"><a href="#ref-9">9</a></span>, và nếu muốn tự chọn từng mục mới thì vẫn dùng <code>oldconfig</code> như sách dạy <span class="cite"><a href="#ref-9">9</a></span>. Nhớ nhé: lệnh cũ trong sách vẫn còn sống.</p>
+        <p class="en-only" lang="en"><b>Where you see it.</b> Two things to watch in the modern route: <code>git checkout --force</code> “will discard any modifications you performed” <span class="cite"><a href="#ref-9">9</a></span>, and <code>olddefconfig</code> silently takes the default for new options — if you want to set them manually, use <code>oldconfig</code>, the very target the book teaches <span class="cite"><a href="#ref-9">9</a></span>.</p>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Điều gì còn nguyên giá trị</h4>
+          <p>Ba luật về loại bản vá, thao tác <code>patch -p1</code>, phép kiểm bằng <code>Makefile</code>, và lệnh <code>make oldconfig</code> đều vẫn dùng được nguyên xi. Vá vẫn là cách phân phối thay đổi trong danh sách thư của nhân, và kho <code>incr/</code> vẫn được cập nhật hằng tuần <span class="cite"><a href="#ref-8">8</a></span>.</p>
+        </div>
+        <div class="info-block">
+          <h4>Điều gì đã đổi</h4>
+          <p>Cái đã đổi là <em>lớp vận chuyển</em>: chỗ trước kia cần một chương trình đi dò máy chủ FTP để ghép chuỗi bản vá, nay chỉ còn là việc chuyển nhánh trong một kho <span lang="en">git</span> cục bộ <span class="cite"><a href="#ref-9">9</a></span>. Tài liệu còn chỉ cách thêm hẳn một nhánh stable để theo dõi, ví dụ <code>git remote set-branches --add origin linux-6.2.y</code> <span class="cite"><a href="#ref-9">9</a></span>.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><b>Cầu nối.</b> Chương 6 khép lại Phần I: bạn đã biết lấy mã, cấu hình, dựng, cài, và nay là nâng cấp. Phần II bắt đầu từ một câu hỏi khác hẳn — không phải “làm thế nào” mà là “bật cái gì cho đúng máy của tôi”.</p>
+    <p class="easy-only"><b>Nối sang chương sau.</b> Hết Phần I rồi: lấy mã, chỉnh, dựng, cài, nâng cấp. Phần II hỏi: máy bạn cần bật những gì? Nhớ nhé: từ đây là phần tùy biến.</p>
+    <p class="en-only" lang="en"><b>Bridge.</b> Chapter 6 closes Part I: you can now retrieve, configure, build, install and upgrade. Part II opens on a different question — not “how” but “what should I enable for <em>this</em> machine”.</p>
+  </aside>
+</section>
+
+<section class="section" id="tu-kiem" aria-labelledby="tu-kiem-title">
+  <div class="section-heading">
+    <p class="eyebrow"><span class="vi-only">Tự kiểm</span><span class="en-only" lang="en">Self-check</span></p>
+    <h2 id="tu-kiem-title">
+      <span class="standard-copy">Tự kiểm trước khi sang chương 7</span>
+      <span class="easy-only">Tự hỏi mình vài câu</span>
+      <span class="en-only" lang="en">Self-check before Chapter 7</span>
+    </h2>
+  </div>
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Chương này có lệnh để gõ, nên phần tự kiểm cũng cụ thể hơn. Hãy trả lời trước khi bước sang phần tùy biến.</p>
+      <p class="easy-only">Chương này có lệnh thật để gõ, nên câu hỏi cũng cụ thể hơn. Nhớ nhé: trả lời được hết thì đi tiếp.</p>
+      <p class="en-only" lang="en">This chapter has real commands in it, so the self-check is more concrete. Answer these before moving into the customization part.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>Việc đầu tiên bạn làm trước khi nâng cấp là gì, và bạn đặt bản sao ở đâu?
+        <p class="deep-only">Đáp án của sách: sao lưu <code>.config</code> ra ngoài cây mã, ví dụ <code>cp .config ../good_config</code> <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </li>
+      <li>Bạn phân biệt được vá <span lang="en">stable</span>, vá bản nền và vá <span lang="en">incremental</span>, và nói được mỗi loại áp lên đâu?
+        <p class="deep-only">Mấu chốt: vá stable và vá bản nền đều áp lên <em>bản nền</em>; chỉ vá incremental mới nối bản stable này với bản stable kế tiếp <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </li>
+      <li>Vì sao lệnh vá luôn có <code>-p1</code>, và bạn đang đứng ở thư mục nào khi gõ nó?</li>
+      <li>Sau khi vá, bạn kiểm chứng bằng cách nào mà không cần dựng thử?
+        <p class="deep-only">Đọc năm dòng đầu <code>Makefile</code> và xem <code>EXTRAVERSION</code> đã đúng chưa <span class="cite"><a href="#ref-4">4</a></span>; đồng thời xác nhận đầu ra của <code>patch</code> không có lỗi nào <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </li>
+      <li>Bạn nói được <code>make oldconfig</code> làm gì với một tùy chọn đã có và với một tùy chọn mới?</li>
+      <li>Nếu hôm nay bạn muốn tự động hóa việc này, bạn dùng gì — và vì sao không phải <code>ketchup</code>?</li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li>Trước khi nâng cấp, bạn phải chép tệp nào ra chỗ an toàn?</li>
+      <li>Vì sao không tải lại cả bộ mã nguồn mà chỉ tải miếng vá?</li>
+      <li>Đi từ bản .9 lên bản .11 thì cần mấy miếng vá?</li>
+      <li>Vá xong, bạn mở tệp nào ra để kiểm tra số phiên bản?</li>
+      <li>Lệnh nào giúp bạn giữ lại lựa chọn cũ và chỉ hỏi mục mới?</li>
+      <li>Nhớ nhé: trả lời được cả sáu câu thì sang chương 7 được rồi.</li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>What is the very first thing you do before upgrading, and where does the copy go?
+        <p class="deep-only" lang="en">The book's answer: back up <code>.config</code> outside the tree, e.g. <code>cp .config ../good_config</code> <span class="cite"><a href="#ref-1">1</a></span>.</p>
+      </li>
+      <li>Can you tell stable, base and incremental patches apart, and say what each applies to?
+        <p class="deep-only" lang="en">The key: stable and base patches both apply to the <em>base</em> release; only incremental patches link one stable release to the next <span class="cite"><a href="#ref-2">2</a></span>.</p>
+      </li>
+      <li>Why does the patch command always carry <code>-p1</code>, and which directory are you standing in when you type it?</li>
+      <li>After patching, how do you verify without building?
+        <p class="deep-only" lang="en">Read the first five lines of the <code>Makefile</code> and check <code>EXTRAVERSION</code> <span class="cite"><a href="#ref-4">4</a></span>, and confirm <code>patch</code> reported no errors <span class="cite"><a href="#ref-4">4</a></span>.</p>
+      </li>
+      <li>Can you say what <code>make oldconfig</code> does with an already-answered option, and with a new one?</li>
+      <li>If you wanted to automate this today, what would you use — and why not <code>ketchup</code>?</li>
+    </ol>
+  </div>
+</section>
+
+<section class="closing" id="dong-lai" aria-labelledby="dong-lai-title">
+  <p class="eyebrow" id="dong-lai-title"><span class="vi-only">Đọng lại</span><span class="en-only" lang="en">What remains</span></p>
+  <blockquote>
+    <p class="standard-copy">Nâng cấp một nhân tự dựng không đòi bạn trả lại công sức đã bỏ ra: <span class="closing-accent">bạn cập nhật mã nguồn, chứ không cập nhật quyết định của mình</span>. Tệp vá mang mã mới tới, <code>patch -p1</code> đặt nó vào chỗ, và <span class="closing-accent"><code>make oldconfig</code> chỉ hỏi bạn đúng những câu chưa từng hỏi</span>.</p>
+    <p class="easy-only">Lên bản mới không có nghĩa là làm lại từ đầu: <span class="closing-accent">chỉ mã nguồn đổi, lựa chọn của bạn vẫn còn</span>. Miếng vá mang phần mới đến, và <span class="closing-accent">máy chỉ hỏi bạn những mục chưa từng có</span>. Nhớ nhé: chép dự phòng trước, rồi yên tâm nâng cấp.</p>
+    <p class="en-only" lang="en">Upgrading a custom kernel does not ask you to hand back the effort you invested: <span class="closing-accent">you update the source, not your decisions</span>. The patch brings the new code, <code>patch -p1</code> puts it in place, and <span class="closing-accent"><code>make oldconfig</code> asks you only the questions it has never asked before</span>.</p>
+  </blockquote>
+</section>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-5-installing-booting.html">
+    <span class="nav-label">◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span></span>
+    <span class="nav-title"><span class="vi-only">Chương 5 · Cài đặt và khởi động</span><span class="en-only" lang="en">Chapter 5 · Installing and Booting from a Kernel</span></span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-7-customizing.html">
+    <span class="nav-label"><span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶</span>
+    <span class="nav-title"><span class="vi-only">Chương 7 · Tùy biến nhân</span><span class="en-only" lang="en">Chapter 7 · Customizing a Kernel</span></span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chương 6, “Upgrading a Kernel” (trang 35–42), cùng mục “ketchup” trong Phụ lục A (trang 166–167). Trang này là <b>người đồng hành diễn giải</b>, không phải bản dịch: nó tóm lược, sắp xếp lại và chú giải nội dung chương, không thay thế việc đọc sách gốc. Các ví dụ và phép so sánh ở mức đọc <i>Dễ hiểu</i> là minh họa do trang này thêm vào, không có trong sách. Sách xuất bản năm 2006 và viết cho dòng nhân 2.6; mọi phiên bản, đường dẫn và tên lệnh trong sách đều thuộc thời điểm đó, và mọi ghi chú về tình hình hiện nay đều được dẫn nguồn riêng.</p>
+    <p class="en-only" lang="en"><b>Primary source.</b> Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006 — Chapter 6, “Upgrading a Kernel” (pages 35–42), together with the “ketchup” entry in Appendix A (pages 166–167). This page is an <b>interpretive study companion</b>, not a translation: it summarises, rearranges and annotates the chapter, and does not replace reading the book itself. Examples and analogies at the <i>Easy</i> reading level are illustrations added here, not the author's. The book was published in 2006 and targets the 2.6 kernel series; every version number, path and target name it gives belongs to that moment, and every note about the present day carries its own citation.</p>
+
+    <p class="footer-label vi-only">Tham chiếu</p>
+    <p class="footer-label en-only" lang="en">References</p>
+    <ol class="ref-list">
+      <li id="ref-1">Greg Kroah-Hartman, <i>Linux Kernel in a Nutshell</i>, O'Reilly Media, 2006, Chapter 6 “Upgrading a Kernel”, p. 35 (tình huống mở đầu, sao lưu <code>.config</code> thành <code>../good_config</code>, năm bước nâng cấp, ví dụ 2.6.17.9 → 2.6.17.11). Bản trực tuyến miễn phí: <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-2">Sđd., Chapter 6, “Download the New Source” và khung “Which Patch Applies to Which Release?”, pp. 36–37 (lý do dùng bản vá; chú thích giải nghĩa chương trình <code>patch</code>; ba luật áp dụng cho vá stable / vá bản nền / vá incremental). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-3">Sđd., Chapter 6, “Finding the Patch”, p. 38 (cần hai tệp vá; thư mục <code>/pub/linux/kernel/v2.6/incr</code>; phiên <code>lftp</code> với 2.872 và 7.901 byte; chú thích về mẹo đi lùi rồi đi tới). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-4">Sđd., Chapter 6, “Applying the Patch”, pp. 38–40 (<code>bzip2 -dv</code>; <code>patch -p1</code>; danh sách tệp được vá; <code>head -n 5 Makefile</code> với <code>EXTRAVERSION = .10</code> rồi <code>.11</code> và <code>NAME=Crazed Snow-Weasel</code>; đổi tên thư mục). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-5">Sđd., Chapter 6, “Reconfigure the Kernel”, pp. 40–41 (<code>make oldconfig</code> và <code>make silentoldconfig</code>; trường hợp không có tùy chọn mới; ví dụ <code>DEBUG_MUTEXES</code> hiện dấu <code>(NEW)</code>). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-6">Sđd., Chapter 6, “Can't This Be Automated?”, p. 42; và Appendix A “Helpful Utilities”, mục <i>ketchup</i>, pp. 166–167 (khả năng của công cụ, hai lệnh ví dụ, khuyến nghị của tác giả — tất cả ở thời điểm 2006). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>.</li>
+      <li id="ref-7">The Linux Kernel documentation, <a href="https://docs.kernel.org/process/applying-patches.html" target="_blank" rel="noopener noreferrer">“Applying Patches To The Linux Kernel”</a>, docs.kernel.org (tự đánh dấu “This document is obsolete” và khuyên dùng git; giải thích <code>-p1</code>, <code>-R</code>, fuzz, tệp <code>.rej</code>, và vá incremental; truy cập 22-09-2026).</li>
+      <li id="ref-8">kernel.org, <a href="https://cdn.kernel.org/pub/linux/kernel/v6.x/incr/" target="_blank" rel="noopener noreferrer">chỉ mục <code>/pub/linux/kernel/v6.x/incr/</code></a> — thư mục vá incremental vẫn hoạt động cho dòng 6.x, nay dùng định dạng <code>.xz</code> (truy cập 22-09-2026).</li>
+      <li id="ref-9">The Linux Kernel documentation, <a href="https://docs.kernel.org/admin-guide/quickly-build-trimmed-linux.html" target="_blank" rel="noopener noreferrer">“Quickly build a trimmed Linux kernel”</a>, mục “Another round later” (git fetch giới hạn độ sâu, <code>git checkout --force --detach</code>, <code>make olddefconfig</code> so với <code>oldconfig</code>, <code>git remote set-branches --add</code>; truy cập 22-09-2026).</li>
+      <li id="ref-10">kernel.org, <a href="https://www.kernel.org/category/releases.html" target="_blank" rel="noopener noreferrer">“Active kernel releases”</a> — định nghĩa mainline / stable / longterm và bảng các nhánh đang được bảo trì (truy cập 22-09-2026).</li>
+      <li id="ref-11">Masahiro Yamada, <a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=911a91c39cabcb6adb2a78f4f9777abb4c032b75" target="_blank" rel="noopener noreferrer">commit 911a91c39cab “kconfig: rename silentoldconfig to syncconfig”</a>, Linux kernel git — bí danh <code>silentoldconfig</code> in cảnh báo “what you want is probably oldconfig” và bị gỡ sau Linux 4.19.</li>
+      <li id="ref-12">The Linux Kernel documentation, <a href="https://docs.kernel.org/kbuild/kconfig.html" target="_blank" rel="noopener noreferrer">“Kconfig make config”</a>, docs.kernel.org (<code>make listnewconfig</code>, <code>scripts/diffconfig .config.old .config</code>, và cảnh báo rằng một <code>.config</code> cũ qua <code>make oldconfig</code> không nhất thiết cho ra nhân chạy được; truy cập 22-09-2026).</li>
+      <li id="ref-13">Tình trạng bảo trì của <code>ketchup</code>: <a href="https://www.selenic.com/ketchup/" target="_blank" rel="noopener noreferrer">chỉ mục phát hành gốc tại selenic.com</a> dừng ở <code>ketchup-0.9.8.tar.bz2</code> (01-05-2006), và <a href="https://tracker.debian.org/pkg/ketchup" target="_blank" rel="noopener noreferrer">Debian Package Tracker</a> ghi nhận gói bị gỡ khỏi testing ngày 15-12-2019 và khỏi unstable ngày 21-06-2022 (truy cập 22-09-2026).</li>
+      <li id="ref-14">Kroah-Hartman, sđd., Appendix A “Helpful Utilities”, mục <i>git</i>, p. 165 (git do Linus Torvalds viết khi nhân Linux cần hệ quản lý mã nguồn mới; “The Linux kernel is developed using git”). <a href="http://www.kroah.com/lkn/" target="_blank" rel="noopener noreferrer">kroah.com/lkn</a>. Trang dự án hiện nay: <a href="https://git-scm.com/" target="_blank" rel="noopener noreferrer">git-scm.com</a>.</li>
+    </ol>
+
+    <p class="footer-label vi-only">Trong loạt bài</p>
+    <p class="footer-label en-only" lang="en">In this series</p>
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <p class="vi-only"><a href="index.html">Trang bìa</a> · <a href="chapter-5-installing-booting.html">Chương 5 · Cài đặt và khởi động</a> · <span>Chương 6 · Nâng cấp nhân (trang này)</span> · <a href="chapter-7-customizing.html">Chương 7 · Tùy biến nhân</a></p>
+    <p class="en-only" lang="en"><a href="index.html">Cover</a> · <a href="chapter-5-installing-booting.html">Chapter 5 · Installing and Booting from a Kernel</a> · <span>Chapter 6 · Upgrading a Kernel (this page)</span> · <a href="chapter-7-customizing.html">Chapter 7 · Customizing a Kernel</a></p>
+    <!-- NAV:END -->
+  </div>
+  <div class="edition">LKN · CH 06 · VI/EN</div>
+</footer>
+
+</main>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  function sync() {
+    var mode = root.getAttribute("data-mode") || "standard";
+    var lang = root.getAttribute("data-lang") || "vi";
+    var dark = root.getAttribute("data-theme") === "dark";
+    document.querySelectorAll("[data-set-mode]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-mode") === mode));
+    });
+    document.querySelectorAll("[data-set-lang]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-set-lang") === lang));
+    });
+    document.querySelectorAll("[data-toggle-theme]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(dark));
+    });
+    root.setAttribute("lang", lang === "en" ? "en" : "vi");
+  }
+
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button.chip");
+    if (!b) return;
+    if (b.hasAttribute("data-set-mode")) {
+      root.setAttribute("data-mode", b.getAttribute("data-set-mode"));
+      store("lkn-reading-mode", b.getAttribute("data-set-mode"));
+    } else if (b.hasAttribute("data-set-lang")) {
+      root.setAttribute("data-lang", b.getAttribute("data-set-lang"));
+      store("lkn-lang", b.getAttribute("data-set-lang"));
+    } else if (b.hasAttribute("data-toggle-theme")) {
+      var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      store("lkn-theme", next);
+    }
+    sync();
+  });
+
+  sync();
+})();
+
+/* section-index rail: built at runtime from this page's own id'd sections */
+(function () {
+  var list = document.querySelector(".section-rail__list");
+  if (!list) return;
+  var sections = Array.prototype.slice.call(document.querySelectorAll("main section[id][aria-labelledby]"));
+  if (!sections.length) { var rail = document.querySelector(".section-rail"); if (rail) rail.remove(); return; }
+
+  /* headings carry all three reading levels + both languages as sibling spans,
+     so read only the ones actually visible under the current toggles */
+  function labelFor(sec) {
+    var head = document.getElementById(sec.getAttribute("aria-labelledby"));
+    if (!head) return sec.id;
+    var parts = [];
+    Array.prototype.forEach.call(head.children, function (el) {
+      if (el.offsetParent !== null || el.getClientRects().length) parts.push(el.textContent);
+    });
+    var label = (parts.length ? parts.join(" ") : head.textContent || "").replace(/\s+/g, " ").trim();
+    return label.length > 46 ? label.slice(0, 44) + "…" : label;
+  }
+
+  var links = sections.map(function (sec) {
+    var label = labelFor(sec);
+    var li = document.createElement("li");
+    var a = document.createElement("a");
+    a.href = "#" + sec.id;
+    var span = document.createElement("span");
+    span.className = "section-rail__label";
+    span.textContent = label;
+    a.appendChild(span);
+    li.appendChild(a);
+    list.appendChild(li);
+    return a;
+  });
+
+  function mark(id) {
+    links.forEach(function (a) {
+      if (a.getAttribute("href") === "#" + id) a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    });
+  }
+
+  if ("IntersectionObserver" in window) {
+    var seen = new Map();
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { seen.set(e.target.id, e.intersectionRatio); });
+      var best = null, bestR = 0;
+      seen.forEach(function (r, id) { if (r > bestR) { bestR = r; best = id; } });
+      if (best) mark(best);
+    }, { rootMargin: "-20% 0px -60% 0px", threshold: [0, .25, .5, 1] });
+    sections.forEach(function (s) { obs.observe(s); });
+  }
+
+  /* the rail labels change with the language toggle, so relabel on click */
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest("button.chip")) return;
+    sections.forEach(function (sec, i) {
+      links[i].firstChild.textContent = labelFor(sec);
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

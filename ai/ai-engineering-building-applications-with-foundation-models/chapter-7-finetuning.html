@@ -1,0 +1,1803 @@
+<!doctype html>
+<html lang="vi" data-reading-mode="deep">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Diễn giải song ngữ Việt–Anh Chương 7 “Finetuning” trong AI Engineering của Chip Huyen: khi nào nên tinh chỉnh và khi nào nên dùng RAG, toán bộ nhớ của mô hình, lượng tử hóa, PEFT và LoRA, cùng hợp nhất mô hình.">
+<title>Chương 7 · Tinh chỉnh — AI Engineering · Chip Huyen</title>
+<link rel="icon" href="data:,">
+<script>
+  (function () {
+    const validModes = ["easy", "quick", "deep"];
+    let storedMode = "deep";
+    let storedLang = "vi";
+    try {
+      const preference = localStorage.getItem("aie-reading-mode");
+      if (validModes.includes(preference)) storedMode = preference;
+      if (localStorage.getItem("aie-lang") === "en") storedLang = "en";
+    } catch (_) {}
+    document.documentElement.dataset.readingMode = storedMode;
+    document.documentElement.dataset.lang = storedLang;
+    document.documentElement.setAttribute("lang", storedLang);
+  })();
+</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&family=Noto+Serif:wght@600;700&display=swap">
+
+<style>
+  :root {
+    --bg: #eef4ec;
+    --surface: #f5faf3;
+    --surface-strong: #ffffff;
+    --ink: #17281c;
+    --muted: #566b56;
+    --line: #cfe3c9;
+    --teal: #3f7d52;
+    --teal-soft: #d9ecdb;
+    --blue: #2f7d78;
+    --blue-soft: #d3e9e6;
+    --amber: #b0812b;
+    --amber-soft: #f0e5cb;
+    --leaf: #5aa15f;
+    --leaf-soft: #dcecd6;
+    --shadow: 0 22px 60px rgba(20, 50, 28, 0.14);
+    --display: "Noto Serif", Georgia, serif;
+    --body: "Be Vietnam Pro", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10231a;
+      --surface: #163020;
+      --surface-strong: #1d3b28;
+      --ink: #e9f5ea;
+      --muted: #9fc3a3;
+      --line: #294a35;
+      --teal: #6fce86;
+      --teal-soft: #163a24;
+      --blue: #63c3bc;
+      --blue-soft: #123833;
+      --amber: #e0b45f;
+      --amber-soft: #3a2f18;
+      --leaf: #7fd08a;
+      --leaf-soft: #163a22;
+      --shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #10231a;
+    --surface: #163020;
+    --surface-strong: #1d3b28;
+    --ink: #e9f5ea;
+    --muted: #9fc3a3;
+    --line: #294a35;
+    --teal: #6fce86;
+    --teal-soft: #163a24;
+    --blue: #63c3bc;
+    --blue-soft: #123833;
+    --amber: #e0b45f;
+    --amber-soft: #3a2f18;
+    --leaf: #7fd08a;
+    --leaf-soft: #163a22;
+    --shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(circle at 8% 4%, color-mix(in srgb, var(--teal-soft) 74%, transparent), transparent 31rem),
+      var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    line-height: 1.72;
+    overflow-x: hidden;
+  }
+
+  a { color: var(--teal); }
+
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible {
+    outline: 3px solid var(--amber);
+    outline-offset: 4px;
+  }
+
+  .page {
+    width: min(1180px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 28px 0 72px;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 10px 0 28px;
+  }
+
+  .book-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .book-label::before {
+    content: "";
+    width: 28px;
+    height: 2px;
+    background: var(--teal);
+  }
+
+  .reading-controls {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+  }
+
+  .reading-controls button {
+    min-height: 44px;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 13px;
+    background: transparent;
+    color: var(--muted);
+    font: 600 0.8rem var(--body);
+    cursor: pointer;
+  }
+
+  html[data-reading-mode="easy"] .reading-controls button[data-mode="easy"],
+  html[data-reading-mode="quick"] .reading-controls button[data-mode="quick"],
+  html[data-reading-mode="deep"] .reading-controls button[data-mode="deep"] {
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+    align-items: center;
+    gap: clamp(36px, 7vw, 92px);
+    min-height: 620px;
+    padding: 46px clamp(24px, 5vw, 64px);
+    border: 1px solid var(--line);
+    border-radius: 34px 34px 8px 34px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .hero::after {
+    content: "AI ENGINEERING / 07";
+    position: absolute;
+    right: 22px;
+    bottom: 16px;
+    color: var(--line);
+    font: 500 0.72rem var(--mono);
+    letter-spacing: 0.14em;
+  }
+
+  .eyebrow {
+    color: var(--teal);
+    font: 500 0.78rem var(--mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--display);
+    line-height: 1.13;
+    text-wrap: balance;
+  }
+
+  h1 {
+    max-width: 720px;
+    margin: 18px 0 24px;
+    font-size: clamp(3rem, 6.4vw, 6.2rem);
+    letter-spacing: -0.045em;
+  }
+
+  html[data-reading-mode="easy"] h1 {
+    font-size: clamp(2.6rem, 5.2vw, 5rem);
+  }
+
+  .hero-title-accent {
+    color: var(--teal);
+    font-style: italic;
+  }
+
+  .hero-copy > p {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: clamp(1.02rem, 1.5vw, 1.22rem);
+  }
+
+  .thesis {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    align-items: start;
+    margin-top: 34px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+  }
+
+  .thesis-mark {
+    color: var(--amber);
+    font: 700 1.5rem var(--display);
+  }
+
+  .thesis strong { display: block; margin-bottom: 4px; }
+  .thesis p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+
+  .system-map {
+    position: relative;
+    width: min(100%, 470px);
+    aspect-ratio: 1;
+    margin: auto;
+  }
+
+  .system-map::before,
+  .system-map::after {
+    content: "";
+    position: absolute;
+    inset: 14%;
+    border: 1px dashed var(--line);
+    border-radius: 50%;
+  }
+
+  .system-map::after {
+    inset: 29%;
+    border-style: solid;
+    opacity: 0.75;
+  }
+
+  .core {
+    position: absolute;
+    inset: 36%;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--surface);
+    text-align: center;
+    font: 600 0.77rem/1.35 var(--mono);
+    letter-spacing: 0.05em;
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--teal-soft) 72%, transparent);
+  }
+
+  .node {
+    position: absolute;
+    width: 132px;
+    min-height: 92px;
+    display: grid;
+    align-content: center;
+    gap: 4px;
+    padding: 15px;
+    border: 1px solid var(--line);
+    border-radius: 22px 22px 5px 22px;
+    background: var(--surface-strong);
+    box-shadow: 0 12px 30px color-mix(in srgb, var(--ink) 10%, transparent);
+  }
+
+  .node b { font-family: var(--display); font-size: 1rem; }
+  .node small { color: var(--muted); font-size: 0.7rem; line-height: 1.4; }
+  .node-resilience { top: 2%; left: 50%; transform: translateX(-50%); }
+  .node-organization { left: 2%; bottom: 8%; }
+  .node-hierarchy { right: 2%; bottom: 8%; }
+
+  .node-resilience b { color: var(--teal); }
+  .node-organization b { color: var(--blue); }
+  .node-hierarchy b { color: var(--amber); }
+
+  .pulse {
+    position: absolute;
+    inset: 29%;
+    border-radius: 50%;
+    border: 2px solid var(--teal);
+    opacity: 0;
+    animation: pulse 4.8s ease-out infinite;
+  }
+
+  @keyframes pulse {
+    0% { transform: scale(0.6); opacity: 0; }
+    18% { opacity: 0.34; }
+    78%, 100% { transform: scale(1.9); opacity: 0; }
+  }
+
+  .section {
+    padding: clamp(74px, 10vw, 128px) clamp(4px, 3vw, 28px) 0;
+  }
+
+  .section-heading {
+    display: grid;
+    grid-template-columns: minmax(210px, 0.42fr) minmax(0, 1fr);
+    gap: clamp(28px, 7vw, 86px);
+    align-items: end;
+    margin-bottom: 44px;
+  }
+
+  .section-heading h2 {
+    margin: 8px 0 0;
+    font-size: clamp(2rem, 4vw, 3.8rem);
+    letter-spacing: -0.035em;
+  }
+
+  .section-heading p {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: 1.04rem;
+  }
+
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .overview-card {
+    display: grid;
+    gap: 18px;
+    min-height: 280px;
+    padding: 26px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .overview-card:first-child { border-radius: 28px 8px 8px 8px; }
+  .overview-card:last-child { border-radius: 8px 28px 8px 8px; }
+
+  .overview-card .term {
+    font: 500 0.7rem var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .overview-card h3 { margin: 0; font-size: 1.72rem; }
+  .overview-card p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+  .overview-card .result { align-self: end; padding-top: 14px; border-top: 1px solid var(--line); font-weight: 600; }
+  .overview-card.teal .term, .overview-card.teal .result { color: var(--teal); }
+  .overview-card.blue .term, .overview-card.blue .result { color: var(--blue); }
+  .overview-card.amber .term, .overview-card.amber .result { color: var(--amber); }
+
+  .info-block {
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface-strong);
+  }
+
+  .info-block h4 {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font: 500 0.72rem var(--mono);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .info-block p { margin: 0; font-size: 0.92rem; }
+
+  .signal {
+    padding: 18px 20px;
+    border-left: 4px solid var(--teal);
+    background: var(--teal-soft);
+    color: var(--ink);
+    font-size: 0.92rem;
+  }
+
+  .signal strong { display: block; margin-bottom: 4px; }
+
+  html:not([data-reading-mode="easy"]) .easy-only,
+  html[data-reading-mode="easy"] .standard-copy,
+  html:not([data-reading-mode="deep"]) .deep-only {
+    display: none !important;
+  }
+
+  /* Bilingual: EN shows the single standard translation; VN keeps 3 modes.
+     .vi-only marks Vietnamese text outside the reading-mode system. */
+  html:not([data-lang="en"]) .en-only { display: none !important; }
+  html[data-lang="en"] .standard-copy,
+  html[data-lang="en"] .easy-only,
+  html[data-lang="en"] .deep-only,
+  html[data-lang="en"] .vi-only,
+  html[data-lang="en"] .reading-controls { display: none !important; }
+
+  .lang-controls {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+  }
+
+  .lang-controls button {
+    min-height: 44px;
+    min-width: 48px;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 13px;
+    background: transparent;
+    color: var(--muted);
+    font: 600 0.8rem var(--body);
+    cursor: pointer;
+  }
+
+  html:not([data-lang="en"]) .lang-controls button[data-lang-option="vi"],
+  html[data-lang="en"] .lang-controls button[data-lang-option="en"] {
+    background: var(--teal);
+    color: var(--surface);
+  }
+
+  .topbar-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .synthesis {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  .loop-diagram,
+  .synthesis-copy {
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .loop-diagram {
+    min-height: 500px;
+    position: relative;
+    display: grid;
+    place-items: center;
+    padding: 38px;
+    border-radius: 34px 8px 8px 8px;
+    overflow: hidden;
+  }
+
+  .loop-diagram::before {
+    content: "";
+    width: 65%;
+    aspect-ratio: 1;
+    border: 2px solid var(--line);
+    border-radius: 50%;
+  }
+
+  .loop-center {
+    position: absolute;
+    width: 150px;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--surface);
+    text-align: center;
+    font: 600 0.9rem/1.45 var(--body);
+  }
+
+  .loop-label {
+    position: absolute;
+    width: 150px;
+    padding: 13px 15px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-strong);
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .loop-label.top { top: 11%; color: var(--teal); }
+  .loop-label.left { left: 7%; bottom: 14%; color: var(--blue); }
+  .loop-label.right { right: 7%; bottom: 14%; color: var(--amber); }
+
+  .synthesis-copy {
+    display: grid;
+    align-content: center;
+    gap: 24px;
+    padding: clamp(28px, 5vw, 54px);
+    border-radius: 8px 34px 34px 8px;
+  }
+
+  .synthesis-copy h3 { margin: 0; font-size: clamp(2rem, 3.4vw, 3rem); }
+  .synthesis-copy > p { margin: 0; color: var(--muted); }
+
+  .equation {
+    display: grid;
+    gap: 10px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    background: var(--surface-strong);
+  }
+
+  .equation-row {
+    display: grid;
+    grid-template-columns: minmax(110px, 0.65fr) 1fr;
+    gap: 16px;
+    align-items: baseline;
+    font-size: 0.9rem;
+  }
+
+  .equation-row b { font-family: var(--display); font-size: 1.05rem; }
+  .equation-row span { color: var(--muted); }
+
+  .surprise-lead {
+    display: grid;
+    grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
+    gap: clamp(28px, 6vw, 72px);
+    align-items: center;
+    margin-bottom: 22px;
+    padding: clamp(28px, 5vw, 52px);
+    border: 1px solid var(--line);
+    border-radius: 34px 8px 34px 8px;
+    background: var(--surface);
+  }
+
+  .surprise-lead-copy {
+    display: grid;
+    gap: 18px;
+  }
+
+  .surprise-lead-copy p { margin: 0; }
+  .surprise-lead-copy .deep-only { color: var(--muted); font-size: 0.94rem; }
+
+  .definition {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--display);
+    font-size: clamp(1.25rem, 2vw, 1.62rem);
+    line-height: 1.5;
+  }
+
+  .english-term { color: var(--muted); font: 500 0.75rem var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+
+  .surprise-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .surprise-mechanism {
+    --mechanism-accent: var(--teal);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 18px;
+    align-content: start;
+    padding: 26px;
+    border: 1px solid var(--line);
+    border-top: 4px solid var(--mechanism-accent);
+    border-radius: 8px 24px 8px 24px;
+    background: var(--surface);
+  }
+
+  .surprise-number {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--mechanism-accent);
+    color: var(--surface);
+    font: 500 0.76rem var(--mono);
+  }
+
+  .surprise-content {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .surprise-content h3 {
+    margin: 0;
+    font-size: clamp(1.35rem, 2.3vw, 1.85rem);
+  }
+
+  .surprise-content > p { margin: 0; color: var(--muted); }
+  .surprise-content .info-block { margin-top: 2px; }
+  .surprise-connection { margin-top: 22px; }
+
+  .mechanics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .chapter-path {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 18px 0 0;
+  }
+
+  .chapter-path a {
+    display: grid;
+    gap: 5px;
+    min-height: 82px;
+    align-content: center;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .chapter-path a:first-child { border-radius: 20px 5px 5px 5px; }
+  .chapter-path a:last-child { border-radius: 5px 20px 5px 5px; }
+  .chapter-path a:hover { border-color: var(--teal); background: var(--surface-strong); }
+  .chapter-path b { font-family: var(--display); }
+  .chapter-path span { color: var(--muted); font: 500 0.7rem var(--mono); letter-spacing: 0.05em; text-transform: uppercase; }
+
+  .trap-lead { border-top: 4px solid var(--leaf); }
+  .trap-grid { margin-top: 22px; }
+  .trap-card { --mechanism-accent: var(--leaf); }
+  .trap-card:nth-child(4n + 2) { --mechanism-accent: var(--teal); }
+  .trap-card:nth-child(4n + 3) { --mechanism-accent: var(--blue); }
+  .trap-card:nth-child(4n) { --mechanism-accent: var(--amber); }
+  .trap-card .english-term { overflow-wrap: anywhere; }
+
+  .opportunity {
+    margin-top: 2px;
+    padding: 18px 20px;
+    border-left: 4px solid var(--leaf);
+    background: var(--leaf-soft);
+    color: var(--ink);
+    font-size: 0.92rem;
+  }
+
+  .opportunity strong { display: block; margin-bottom: 4px; color: var(--leaf); }
+
+  .trap-comparison {
+    display: grid;
+    gap: 18px;
+    margin-top: 24px;
+    padding: clamp(26px, 5vw, 46px);
+    border: 1px solid var(--line);
+    border-radius: 28px 8px 28px 8px;
+    background: var(--surface);
+  }
+
+  .trap-comparison h3 { margin: 0; font-size: clamp(1.65rem, 3vw, 2.35rem); }
+
+  .comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .comparison-card {
+    display: grid;
+    gap: 10px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--leaf);
+    background: var(--surface-strong);
+  }
+
+  .comparison-card h4 { margin: 0; font: 700 1rem var(--body); }
+  .comparison-card p { margin: 0; color: var(--muted); font-size: 0.88rem; }
+
+  .myths {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .myth {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 16px;
+    padding: 23px;
+    border-top: 1px solid var(--line);
+  }
+
+  .myth-mark {
+    color: var(--amber);
+    font: 700 1.4rem var(--display);
+  }
+
+  .myth h3 { margin: 0 0 6px; font: 700 1.08rem var(--body); }
+  .myth p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+  .diagnostic {
+    display: grid;
+    grid-template-columns: 0.72fr 1.28fr;
+    gap: clamp(28px, 7vw, 84px);
+    padding: clamp(34px, 6vw, 64px);
+    border-radius: 34px 8px 34px 8px;
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .diagnostic h2 { margin: 10px 0 18px; font-size: clamp(2.3rem, 4.5vw, 4rem); }
+  .diagnostic .eyebrow { color: var(--surface); }
+  .diagnostic-intro p { margin: 0; color: color-mix(in srgb, var(--surface) 70%, transparent); }
+
+  .question-list {
+    display: grid;
+    gap: 0;
+    counter-reset: question;
+  }
+
+  .question {
+    counter-increment: question;
+    display: grid;
+    grid-template-columns: 38px 1fr;
+    gap: 14px;
+    padding: 18px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--surface) 22%, transparent);
+  }
+
+  .question::before {
+    content: counter(question, decimal-leading-zero);
+    color: var(--teal);
+    font: 500 0.74rem var(--mono);
+  }
+
+  .question strong { display: block; margin-bottom: 5px; }
+  .question span { color: color-mix(in srgb, var(--surface) 70%, transparent); font-size: 0.88rem; }
+
+  .closing {
+    display: grid;
+    grid-template-columns: 0.45fr 1.55fr;
+    gap: clamp(28px, 8vw, 100px);
+    align-items: start;
+    padding: clamp(74px, 10vw, 128px) clamp(4px, 3vw, 28px) 40px;
+  }
+
+  .closing .eyebrow { padding-top: 12px; }
+  .closing blockquote {
+    margin: 0;
+    font: 600 clamp(1.7rem, 3.6vw, 3.25rem)/1.35 var(--display);
+    letter-spacing: -0.025em;
+  }
+
+  .closing-accent { color: var(--teal); }
+
+  .chapter-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: clamp(24px, 3.5vw, 40px);
+    padding-top: clamp(24px, 3.5vw, 40px);
+    border-top: 1px solid var(--line);
+  }
+
+  .chapter-nav .nav-cell {
+    display: grid;
+    gap: 5px;
+    align-content: start;
+    padding: 18px 22px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .chapter-nav a.nav-cell:hover {
+    border-color: var(--teal);
+    background: var(--surface-strong);
+  }
+
+  .chapter-nav .nav-next { text-align: right; }
+
+  .chapter-nav .nav-cell.disabled { opacity: 0.55; }
+
+  .chapter-nav .nav-label {
+    color: var(--muted);
+    font: 500 0.7rem var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .chapter-nav .nav-title {
+    font-family: var(--display);
+    font-size: clamp(1.05rem, 1.8vw, 1.28rem);
+    line-height: 1.25;
+  }
+
+  @media (max-width: 620px) {
+    .chapter-nav { grid-template-columns: 1fr; }
+    .chapter-nav .nav-next { text-align: left; }
+  }
+
+  .cite { font: 500 0.82em var(--mono); white-space: nowrap; }
+  .cite a { color: var(--amber); text-decoration: none; }
+  .cite a:hover { text-decoration: underline; }
+  .cite a::before { content: "["; }
+  .cite a::after { content: "]"; }
+
+  .footer-main { display: grid; gap: 10px; }
+
+  .ref-list { margin: 2px 0 0; padding-left: 1.4em; display: grid; gap: 4px; }
+  .ref-list li { font-size: 0.78rem; }
+  .ref-list li:target { color: var(--ink); font-weight: 600; }
+
+  footer {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    margin-top: clamp(24px, 3.5vw, 40px);
+    padding: clamp(24px, 3.5vw, 40px) clamp(4px, 3vw, 28px) 0;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+
+  footer p { max-width: 80ch; margin: 0; }
+  footer .edition { font-family: var(--mono); white-space: nowrap; }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; min-height: auto; }
+    .system-map { width: min(100%, 420px); }
+    .section-heading,
+    .synthesis,
+    .surprise-lead,
+    .surprise-grid,
+    .comparison-grid,
+    .diagnostic,
+    .closing { grid-template-columns: 1fr; }
+    .chapter-path { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .overview-grid { grid-template-columns: 1fr; }
+    .overview-card { min-height: auto; border-radius: 18px !important; }
+    .loop-diagram { min-height: 440px; }
+  }
+
+  @media (max-width: 620px) {
+    .page { width: min(100% - 20px, 1180px); padding-top: 12px; }
+    .topbar { flex-direction: column; align-items: stretch; gap: 14px; }
+    .book-label { max-width: none; }
+    .reading-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+    .reading-controls button { width: 100%; padding: 8px 6px; font-size: 0.78rem; white-space: nowrap; }
+    .hero { padding: 34px 20px 54px; border-radius: 24px 24px 6px 24px; }
+    h1 { font-size: clamp(2.7rem, 14vw, 4rem); }
+    .system-map { aspect-ratio: auto; display: grid; gap: 10px; }
+    .system-map::before,
+    .system-map::after,
+    .core,
+    .pulse { display: none; }
+    .node { position: static; transform: none; width: 100%; min-height: auto; }
+    .mechanics, .myths { grid-template-columns: 1fr; }
+    .chapter-path { grid-template-columns: 1fr; }
+    .chapter-path a { min-height: auto; border-radius: 12px !important; }
+    .surprise-lead { padding: 28px 20px; }
+    .surprise-mechanism { grid-template-columns: 1fr; padding: 22px 20px; }
+    .trap-comparison { padding: 24px 20px; }
+    .equation-row { grid-template-columns: 1fr; gap: 3px; }
+    .loop-diagram { min-height: 390px; padding: 20px; }
+    .loop-label { width: 122px; padding: 10px; font-size: 0.7rem; }
+    .loop-label.left { left: 2%; }
+    .loop-label.right { right: 2%; }
+    .diagnostic { padding: 32px 22px; }
+    footer { grid-template-columns: 1fr; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .pulse { animation: none; }
+  }
+
+  /* SECTION-RAIL:START — on-page section index (scroll-spy); markup injected by the bottom script */
+  .section-rail {
+    position: fixed;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 50;
+    padding: 10px;
+    pointer-events: none;
+  }
+  .section-rail::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--surface-strong);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    transform: translateX(-6px);
+    transform-origin: left center;
+    transition: opacity 0.18s ease, transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+  }
+  .section-rail::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 42px;
+    pointer-events: auto;
+  }
+  .section-rail:hover::before,
+  .section-rail:focus-within::before {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .section-rail__list {
+    position: relative;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .section-rail__list::before {
+    content: "";
+    position: absolute;
+    left: 13px;
+    top: 16px;
+    bottom: 16px;
+    width: 2px;
+    transform: translateX(-50%);
+    background: var(--line);
+    border-radius: 2px;
+  }
+  .section-rail__link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--muted);
+    pointer-events: none;
+    transition: background-color 0.16s ease, color 0.16s ease;
+  }
+  .section-rail:hover .section-rail__link,
+  .section-rail:focus-within .section-rail__link { pointer-events: auto; }
+  .section-rail__tick {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: 0 0 0 2px var(--line);
+    transition: transform 0.2s cubic-bezier(0.34, 1.28, 0.64, 1), background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .section-rail__label {
+    white-space: nowrap;
+    font: 500 0.78rem/1.35 var(--body);
+    letter-spacing: -0.005em;
+    opacity: 0;
+    transition: opacity 0.16s ease;
+  }
+  .section-rail:hover .section-rail__label,
+  .section-rail:focus-within .section-rail__label { opacity: 1; }
+  .section-rail__link:hover { background: var(--teal-soft); color: var(--ink); }
+  .section-rail__link:hover .section-rail__tick { box-shadow: 0 0 0 2px var(--teal); }
+  .section-rail__item.is-active .section-rail__link { color: var(--ink); }
+  .section-rail__item.is-active .section-rail__tick {
+    background: var(--teal);
+    box-shadow: 0 0 0 3px var(--teal-soft);
+    transform: scale(1.5);
+  }
+  @media (max-width: 1279px) { .section-rail { display: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .section-rail::before,
+    .section-rail__tick,
+    .section-rail__label,
+    .section-rail__link { transition: none; }
+  }
+  /* SECTION-RAIL:END */
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="topbar">
+    <div class="book-label"><span class="standard-copy">AI Engineering · Chip Huyen · Chương 7</span><span class="easy-only">AI Engineering · Chip Huyen · Chương 7</span><span class="en-only" lang="en">AI Engineering · Chip Huyen · Chapter 7</span></div>
+    <div class="topbar-controls">
+      <div class="lang-controls" role="group" aria-label="Ngôn ngữ / Language">
+        <button type="button" data-lang-option="vi" aria-pressed="true">VI</button>
+        <button type="button" data-lang-option="en" aria-pressed="false">EN</button>
+      </div>
+      <div class="reading-controls" role="group" aria-label="Chế độ đọc">
+        <button type="button" data-mode="easy" aria-label="Dễ hiểu: giải thích bằng ví dụ cho người mới và trẻ nhỏ" aria-pressed="false">Dễ hiểu</button>
+        <button type="button" data-mode="quick" aria-pressed="false">Tóm tắt</button>
+        <button type="button" data-mode="deep" aria-pressed="true">Đầy đủ</button>
+      </div>
+    </div>
+  </header>
+  <section class="hero" aria-labelledby="page-title">
+    <div class="hero-copy">
+      <div class="eyebrow"><span class="standard-copy">Chương 7 · Tinh chỉnh</span><span class="easy-only">Chương 7 · Tinh chỉnh</span><span class="en-only" lang="en">Chapter 7 · Finetuning</span></div>
+      <h1 id="page-title"><span class="standard-copy">Sửa <span class="hero-title-accent">trọng số</span>, không sửa lời dặn</span><span class="easy-only">Dạy lại máy bằng cách <span class="hero-title-accent">sửa chính nó</span></span><span class="en-only" lang="en">Change the <span class="hero-title-accent">weights</span>, not the prompt</span></h1>
+      <p class="standard-copy">Tinh chỉnh là quá trình thích ứng một mô hình cho một tác vụ cụ thể bằng cách huấn luyện tiếp toàn bộ hoặc một phần của nó. Chương 5 và 6 thích ứng mô hình bằng chỉ dẫn, ngữ cảnh và công cụ; chương này thích ứng nó bằng cách chỉnh trọng số.<span class="cite"><a href="#ref-1">1</a></span> Huyen viết rằng đây là chương khó viết nhất của bà — không vì khái niệm phức tạp, mà vì phạm vi quá rộng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Từ đầu tới giờ ta chỉ nói chuyện với máy: ra lệnh khéo hơn, đưa thêm tài liệu cho nó đọc. Bài này làm một việc khác hẳn — mở nắp máy ra và chỉnh lại bên trong. Việc đó mạnh hơn, nhưng cũng tốn kém hơn rất nhiều. Nhớ nhé: sửa lời dặn thì dễ, sửa chính cái máy thì khó.</p>
+      <p class="en-only" lang="en">Finetuning is the process of adapting a model to a specific task by further training the whole model or part of it. Chapters 5 and 6 adapt a model through instructions, context, and tools; this chapter adapts it by adjusting its weights.<span class="cite"><a href="#ref-1">1</a></span> Huyen notes this was the most technically challenging chapter for her to write — not because the concepts are complex, but because of their breadth.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="thesis">
+        <span class="thesis-mark" aria-hidden="true">∴</span>
+        <div>
+          <strong class="standard-copy">Luận đề của chương</strong>
+          <strong class="easy-only">Điều quan trọng nhất</strong>
+          <strong class="en-only" lang="en">The chapter’s thesis</strong>
+          <p class="standard-copy">Tinh chỉnh sửa <em>hình thức</em>, còn RAG cung cấp <em>sự thật</em> — đó là câu chốt của Huyen khi người ta hỏi nên chọn cái nào.<span class="cite"><a href="#ref-1">1</a></span> Và vì tinh chỉnh ở quy mô mô hình nền tảng thường cần nhiều bộ nhớ hơn một GPU đơn lẻ có, gần như toàn bộ lịch sử kỹ thuật tinh chỉnh hiện đại là một cuộc chiến chống lại đúng một ràng buộc: bộ nhớ.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Nếu máy trả lời sai vì <em>không biết</em>, hãy đưa tài liệu cho nó đọc. Nếu máy biết nhưng trả lời <em>lộn xộn, sai định dạng</em>, hãy dạy lại nó. Nhớ nhé: tinh chỉnh dạy cách nói, chứ không dạy sự thật mới.</p>
+          <p class="en-only" lang="en">Finetuning is for form, and RAG is for facts — that is Huyen’s answer to the question she says she is asked most often.<span class="cite"><a href="#ref-1">1</a></span> And because finetuning at foundation-model scale usually needs more memory than a single GPU has, nearly the whole modern history of finetuning technique is a war against one constraint: memory.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </div>
+    <div class="system-map" role="img" aria-label="Sơ đồ ba trụ của chương: quyết định có nên tinh chỉnh không, nút thắt bộ nhớ, và các kỹ thuật tiết kiệm bộ nhớ. / Diagram of the chapter’s three pillars: the decision to finetune, the memory bottleneck, and the memory-efficient techniques.">
+      <div class="pulse" aria-hidden="true"></div>
+      <div class="core"><span class="vi-only">TINH<br>CHỈNH</span><span class="en-only" lang="en">FINE<br>TUNING</span></div>
+      <div class="node node-resilience">
+        <b><span class="vi-only">Quyết định</span><span class="en-only" lang="en">The decision</span></b>
+        <small class="standard-copy">Lỗi thông tin hay lỗi hành vi?</small>
+        <small class="easy-only">Máy không biết, hay máy nói sai kiểu?</small>
+        <small class="en-only" lang="en">Information failure or behavior failure?</small>
+      </div>
+      <div class="node node-organization">
+        <b><span class="vi-only">Nút thắt</span><span class="en-only" lang="en">The bottleneck</span></b>
+        <small class="standard-copy">Trọng số, kích hoạt, gradient, trạng thái tối ưu</small>
+        <small class="easy-only">Máy cần rất nhiều chỗ nhớ để học.</small>
+        <small class="en-only" lang="en">Weights, activations, gradients, optimizer states</small>
+      </div>
+      <div class="node node-hierarchy">
+        <b><span class="vi-only">Lối thoát</span><span class="en-only" lang="en">The way out</span></b>
+        <small class="standard-copy">PEFT, LoRA, lượng tử hóa, hợp nhất mô hình</small>
+        <small class="easy-only">Chỉ sửa một góc nhỏ thay vì cả máy.</small>
+        <small class="en-only" lang="en">PEFT, LoRA, quantization, model merging</small>
+      </div>
+    </div>
+  </section>
+
+  <nav class="chapter-path" aria-label="Các phần của chương">
+    <a href="#when-to-finetune">
+      <span><span class="vi-only">Phần một</span><span class="en-only" lang="en">Part one</span></span>
+      <b><span class="standard-copy">Khi nào nên — và không nên</span><span class="easy-only">Có nên dạy lại không</span><span class="en-only" lang="en">When to, and when not to</span></b>
+    </a>
+    <a href="#memory-math">
+      <span><span class="vi-only">Phần hai</span><span class="en-only" lang="en">Part two</span></span>
+      <b><span class="standard-copy">Toán bộ nhớ</span><span class="easy-only">Máy cần bao nhiêu chỗ</span><span class="en-only" lang="en">The memory math</span></b>
+    </a>
+    <a href="#techniques">
+      <span><span class="vi-only">Phần ba</span><span class="en-only" lang="en">Part three</span></span>
+      <b><span class="standard-copy">PEFT, LoRA và hợp nhất</span><span class="easy-only">Cách sửa ít mà được nhiều</span><span class="en-only" lang="en">PEFT, LoRA, merging</span></b>
+    </a>
+    <a href="#diagnostic">
+      <span><span class="vi-only">Tự kiểm</span><span class="en-only" lang="en">Self-check</span></span>
+      <b><span class="standard-copy">Bốn câu trước khi tinh chỉnh</span><span class="easy-only">Bốn câu hỏi cho bạn</span><span class="en-only" lang="en">Four questions first</span></b>
+    </a>
+  </nav>
+
+  <section class="section" id="when-to-finetune" aria-labelledby="when-to-finetune-title">
+    <div class="section-heading">
+      <div class="eyebrow"><span class="standard-copy">Phần một · Quyết định</span><span class="easy-only">Phần một · Quyết định</span><span class="en-only" lang="en">Part one · The decision</span></div>
+      <h2 id="when-to-finetune-title"><span class="standard-copy">Tinh chỉnh sửa hình thức, RAG cung cấp sự thật</span><span class="easy-only">Khi nào thì nên dạy lại máy</span><span class="en-only" lang="en">Finetuning is for form, RAG is for facts</span></h2>
+      <p class="standard-copy">Trước khi bàn kỹ thuật, Huyen đặt câu hỏi đứng trước tất cả: bạn có thật sự cần tinh chỉnh không. So với các phương pháp dựa trên prompt, tinh chỉnh đòi hỏi nhiều tài nguyên hơn hẳn — không chỉ dữ liệu và phần cứng, mà cả nhân lực có chuyên môn học máy. Vì vậy nó thường chỉ được thử sau khi đã thí nghiệm kỹ với prompt.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Trước khi học cách dạy lại máy, hãy hỏi: có cần không đã? Dạy lại tốn tiền, tốn máy móc, tốn người biết việc. Nhớ nhé: thử nói chuyện cho khéo trước, dạy lại sau.</p>
+      <p class="en-only" lang="en">Before any technique, Huyen asks the question that comes first: do you actually need to finetune? Compared to prompt-based methods, finetuning requires significantly more resources — not just data and hardware, but ML talent. It is therefore generally attempted only after extensive prompt experiments.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Nếu mô hình sai vì <strong>thiếu thông tin</strong>, hãy dùng RAG. Nếu nó sai vì <strong>hành vi</strong> — đúng sự thật nhưng lạc đề, sai định dạng, sai văn phong — hãy tinh chỉnh.</p>
+        <p class="definition easy-only">Máy sai vì <strong>không biết</strong> thì cho nó tài liệu. Máy sai vì <strong>nói không đúng kiểu</strong> thì dạy lại nó.</p>
+        <p class="definition en-only" lang="en">If the model fails because it <strong>lacks information</strong>, use RAG. If it fails on <strong>behavior</strong> — factually right but irrelevant, malformatted, off-style — finetune.</p>
+        <p class="deep-only">Huyen nói thêm: nếu mô hình mắc cả hai loại lỗi, hãy bắt đầu bằng RAG, vì RAG thường dễ hơn — bạn không phải lo chuẩn bị dữ liệu huấn luyện hay tự vận hành mô hình đã tinh chỉnh. Và khi bắt đầu RAG, hãy dùng giải pháp dựa trên từ khóa như BM25 trước, đừng nhảy ngay vào cơ sở dữ liệu vector.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="equation">
+        <div class="equation-row"><b><span class="vi-only">Lỗi thông tin</span><span class="en-only" lang="en">Information failure</span></b><span class="standard-copy">Câu trả lời sai sự thật hoặc lỗi thời → RAG</span><span class="easy-only">Máy không biết → cho nó đọc thêm</span><span class="en-only" lang="en">Outputs factually wrong or outdated → RAG</span></div>
+        <div class="equation-row"><b><span class="vi-only">Lỗi hành vi</span><span class="en-only" lang="en">Behavior failure</span></b><span class="standard-copy">Đúng nhưng lạc đề, sai cú pháp, sai văn phong → tinh chỉnh</span><span class="easy-only">Máy nói sai kiểu → dạy lại</span><span class="en-only" lang="en">Right but irrelevant or malformatted → finetune</span></div>
+        <div class="equation-row"><b><span class="vi-only">Cả hai</span><span class="en-only" lang="en">Both</span></b><span class="standard-copy">Bắt đầu bằng RAG, rồi mới tính tới tinh chỉnh</span><span class="easy-only">Cho đọc tài liệu trước, dạy lại sau</span><span class="en-only" lang="en">Start with RAG, then consider finetuning</span></div>
+        <div class="equation-row"><b><span class="vi-only">Thứ tự chuẩn</span><span class="en-only" lang="en">The default order</span></b><span class="standard-copy">Prompt → thêm ví dụ → RAG đơn giản → RAG nâng cao hoặc tinh chỉnh</span><span class="easy-only">Nói khéo → cho ví dụ → cho tài liệu → dạy lại</span><span class="en-only" lang="en">Prompt → add examples → simple RAG → advanced RAG or finetuning</span></div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number" aria-hidden="true">01</div>
+        <div class="surprise-content">
+          <div class="english-term">Transfer learning · Sample efficiency</div>
+          <h3><span class="standard-copy">Học chuyển giao — vì sao vài trăm ví dụ là đủ</span><span class="easy-only">Máy đã biết sẵn rất nhiều rồi</span><span class="en-only" lang="en">Transfer learning — why a few hundred examples suffice</span></h3>
+          <p class="standard-copy">Tinh chỉnh là một dạng học chuyển giao, khái niệm được Bozinovski và Fulgosi giới thiệu từ năm 1976: chuyển tri thức học được từ một tác vụ sang một tác vụ mới có liên quan.<span class="cite"><a href="#ref-1">1</a></span> Lợi ích thực dụng của nó là hiệu quả mẫu: Huyen viết rằng huấn luyện từ đầu cho hỏi đáp pháp lý có thể cần hàng triệu ví dụ, nhưng tinh chỉnh một mô hình nền tốt có khi chỉ cần vài trăm.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Giống như ai đã biết chơi piano thì học đàn khác nhanh hơn. Mô hình nền đã đọc cả núi sách rồi, nên để nó làm việc mới, ta chỉ cần đưa vài trăm ví dụ chứ không phải hàng triệu. Nhớ nhé: dạy người đã biết nhiều thì nhanh hơn dạy người chưa biết gì.</p>
+          <p class="en-only" lang="en">Finetuning is a form of transfer learning, a concept first introduced by Bozinovski and Fulgosi in 1976: transferring knowledge gained on one task to a new, related one.<span class="cite"><a href="#ref-1">1</a></span> Its practical payoff is sample efficiency — Huyen writes that training from scratch for legal question answering may need millions of examples, while finetuning a good base model might require only a few hundred.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Grammarly cho biết các mô hình Flan-T5 đã tinh chỉnh của họ vượt một biến thể GPT-3 chuyên biên tập văn bản trên nhiều tác vụ trợ lý viết, dù nhỏ hơn 60 lần — với chỉ 82.000 cặp (chỉ dẫn, đầu ra).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span></span>
+            <span class="easy-only">Một mô hình nhỏ được dạy kỹ có thể thắng một mô hình to gấp 60 lần, nếu chỉ xét đúng việc của nó.</span>
+            <span class="en-only" lang="en">Grammarly found their finetuned Flan-T5 models outperformed a GPT-3 variant specialized in text editing across a wide range of writing-assistant tasks despite being 60 times smaller — using only 82,000 (instruction, output) pairs.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-15">15</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Tinh chỉnh tự giám sát</h4>
+              <p>Trước khi dùng dữ liệu chú thích đắt tiền, có thể tinh chỉnh tiếp bằng dữ liệu thô liên quan tới lĩnh vực — ví dụ tài liệu pháp lý chưa chú thích. Cách này gọi là tiền huấn luyện tiếp tục.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Mở khóa, không phải thêm mới</h4>
+              <p>Bài báo InstructGPT của OpenAI (2022) đề nghị xem tinh chỉnh như việc mở khóa những năng lực mô hình đã có sẵn nhưng người dùng khó gọi ra bằng prompt.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number" aria-hidden="true">02</div>
+        <div class="surprise-content">
+          <div class="english-term">Finetuning versus RAG</div>
+          <h3><span class="standard-copy">Tinh chỉnh so với RAG — bằng chứng thực nghiệm</span><span class="easy-only">Cho đọc tài liệu thường ăn đứt dạy lại</span><span class="en-only" lang="en">Finetuning versus RAG — the evidence</span></h3>
+          <p class="standard-copy">Bài báo “Fine-Tuning or Retrieval?” của Ovadia và cộng sự (2024) cho thấy với các tác vụ cần thông tin cập nhật, RAG vượt các mô hình đã tinh chỉnh — và RAG trên mô hình gốc còn vượt cả RAG trên mô hình đã tinh chỉnh.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Với Mistral-7B trên bộ câu hỏi về sự kiện thời sự, mô hình gốc đạt 0,481; cộng RAG lên 0,875; còn hai cách tinh chỉnh chỉ đạt 0,504 và 0,588.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+          <p class="easy-only">Có người thử cả hai cách trên cùng một bài kiểm tra về tin tức mới. Cho máy đọc tài liệu giúp điểm nhảy vọt; dạy lại máy thì gần như không giúp gì. Nhớ nhé: chuyện mới xảy ra thì phải cho máy đọc, dạy lại không thay được.</p>
+          <p class="en-only" lang="en">“Fine-Tuning or Retrieval?” by Ovadia et al. (2024) showed that for tasks requiring up-to-date information, RAG outperformed finetuned models — and RAG on the base model even outperformed RAG on finetuned ones.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> On their current-events QA set, Mistral-7B scored 0.481 as the base model, 0.875 with RAG, but only 0.504 and 0.588 under two finetuning regimes.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Hai cách không loại trừ nhau: cùng thí nghiệm đó cho thấy cộng RAG lên một mô hình đã tinh chỉnh cải thiện kết quả MMLU trong 43% số trường hợp — nghĩa là 57% còn lại, chỉ dùng RAG là đủ hoặc tốt hơn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span>
+            <span class="easy-only">Đôi khi làm cả hai cùng lúc thì tốt hơn, nhưng không phải lúc nào cũng vậy.</span>
+            <span class="en-only" lang="en">The two aren’t mutually exclusive: the same experiment showed adding RAG on top of a finetuned model boosted MMLU performance 43% of the time — meaning that for the other 57%, RAG alone was as good or better.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number" aria-hidden="true">03</div>
+        <div class="surprise-content">
+          <div class="english-term">Regression on other tasks</div>
+          <h3><span class="standard-copy">Cái giá ẩn — giỏi việc này, dở việc kia</span><span class="easy-only">Dạy giỏi một việc, quên mất việc khác</span><span class="en-only" lang="en">The hidden cost — better here, worse there</span></h3>
+          <p class="standard-copy">Lý do đầu tiên để <em>không</em> tinh chỉnh, theo Huyen: tinh chỉnh cho một tác vụ có thể làm giảm hiệu năng ở các tác vụ khác.<span class="cite"><a href="#ref-1">1</a></span> Ví dụ của bà: một mô hình xử lý tốt gợi ý sản phẩm và phản hồi chung nhưng kém ở việc đổi đơn hàng; tinh chỉnh riêng cho đổi đơn hàng có thể khiến hai việc kia tệ đi.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Giống như luyện mãi một môn thể thao thì các môn khác kém dần. Máy cũng vậy: dạy nó thật giỏi một việc, nó có thể quên bớt những việc cũ. Nhớ nhé: dạy thêm cũng là làm quên bớt.</p>
+          <p class="en-only" lang="en">The first reason <em>not</em> to finetune, per Huyen: finetuning for one task can degrade performance on others.<span class="cite"><a href="#ref-1">1</a></span> Her example: a model that handles product recommendations and general feedback well but fails at order changes; finetuning it on order-change data may indeed fix that query type while making the other two worse.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Cách xử lý: tinh chỉnh trên tất cả các loại truy vấn bạn quan tâm, hoặc dùng mô hình riêng cho từng tác vụ rồi hợp nhất chúng lại — chủ đề của phần ba.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Cách chữa: dạy nó cả ba việc cùng lúc, hoặc nuôi ba máy nhỏ rồi ghép lại.</span>
+            <span class="en-only" lang="en">The fix: finetune on all the query types you care about, or keep separate models per task and merge them — the subject of part three.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Chi phí duy trì</h4>
+              <p>Huyen nhấn mạnh gánh nặng sau khi tinh chỉnh: bạn cần chính sách và ngân sách để theo dõi, bảo trì, cập nhật mô hình — trong khi các mô hình nền mới ra đời nhanh hơn tốc độ bạn cải thiện mô hình riêng của mình.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Prompt bị bỏ dở</h4>
+              <p>Bà kể một mô-típ quen thuộc: ai đó than prompt không hiệu quả và đòi tinh chỉnh; kiểm tra lại thì thí nghiệm prompt rất sơ sài — chỉ dẫn mơ hồ, ví dụ không giống dữ liệu thật, chỉ số đo kém định nghĩa. Sau khi làm lại quy trình prompt cho tử tế, chất lượng đủ dùng.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number" aria-hidden="true">04</div>
+        <div class="surprise-content">
+          <div class="english-term">Domain-specific models</div>
+          <h3><span class="standard-copy">Huyền thoại mô hình chuyên ngành</span><span class="easy-only">Máy “chuyên ngành” chưa chắc đã hơn</span><span class="en-only" lang="en">The domain-specific model myth</span></h3>
+          <p class="standard-copy">Huyen cảnh báo lập luận rằng mô hình tổng quát không làm tốt tác vụ chuyên ngành nên buộc phải tự huấn luyện. BloombergGPT ra mắt tháng 3 năm 2023 với 50 tỉ tham số, tốn 1,3 triệu giờ GPU A100, chi phí tính toán ước tính từ 1,3 đến 2,6 triệu đô la, chưa kể chi phí dữ liệu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> Cùng tháng đó OpenAI phát hành GPT-4-0314.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Một công ty tài chính bỏ ra hàng triệu đô để tự dạy một cái máy riêng cho ngành của mình. Ngay tháng đó, một máy tổng quát ra mắt và làm tốt hơn. Nhớ nhé: máy tổng quát ngày càng giỏi, đừng vội tự làm máy riêng.</p>
+          <p class="en-only" lang="en">Huyen warns against the argument that general-purpose models don’t work for domain-specific tasks. BloombergGPT launched in March 2023 with 50 billion parameters, required 1.3 million A100 GPU hours, and cost an estimated $1.3–2.6 million in compute alone, excluding data.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> That same month, OpenAI released GPT-4-0314.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Nghiên cứu của Li và cộng sự (2023) cho thấy GPT-4-0314 ở chế độ không ví dụ vượt BloombergGPT trên các thước đo tài chính: 87,15 so với 75,07 ở phân tích cảm xúc FiQA, và 76,48 so với 43,41 ở ConvFinQA.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span>
+            <span class="easy-only">Máy tổng quát được 87 điểm, máy chuyên ngành được 75 điểm — ở đúng bài kiểm tra chuyên ngành.</span>
+            <span class="en-only" lang="en">Li et al. (2023) showed zero-shot GPT-4-0314 significantly outperformed BloombergGPT on financial benchmarks: 87.15 versus 75.07 on FiQA sentiment analysis, and 76.48 versus 43.41 on ConvFinQA.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Công bằng với Bloomberg</h4>
+              <p>Huyen ghi chú rằng vì các thước đo chuẩn không nắm hết hiệu năng thực tế, BloombergGPT vẫn có thể hoạt động tốt cho chính các ca sử dụng của Bloomberg — và đội ngũ ấy thu được kinh nghiệm vô giá khi tự huấn luyện.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Bối cảnh đã đổi</h4>
+              <p>Từ đó tới nay đã có nhiều mô hình cỡ trung với hiệu năng sánh GPT-4, trong đó Llama 3-70B-Instruct và Qwen2-72B-Instruct là mô hình mở trọng số, tự vận hành được — điều Bloomberg không có khi bắt đầu.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Cầu nối sang phần hai</strong>
+      <strong class="easy-only">Nối sang phần sau</strong>
+      <strong class="en-only" lang="en">Bridge to part two</strong>
+      <p class="standard-copy">Giả sử bạn đã cân nhắc hết và vẫn quyết định tinh chỉnh. Ngay lập tức bạn đụng thứ Huyen gọi là thách thức số một của tinh chỉnh: nút thắt bộ nhớ.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Giả sử bạn đã quyết định dạy lại máy. Vấn đề đầu tiên gặp phải là: máy tính của bạn không đủ chỗ nhớ. Nhớ nhé: muốn dạy máy, trước hết phải có chỗ cho nó học.</p>
+      <p class="en-only" lang="en">Suppose you have weighed everything and still decide to finetune. You immediately hit what Huyen calls finetuning’s number one challenge: its memory bottleneck.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </aside>
+  </section>
+
+  <section class="section" id="memory-math" aria-labelledby="memory-math-title">
+    <div class="section-heading">
+      <div class="eyebrow"><span class="standard-copy">Phần hai · Nút thắt</span><span class="easy-only">Phần hai · Nút thắt</span><span class="en-only" lang="en">Part two · The bottleneck</span></div>
+      <h2 id="memory-math-title"><span class="standard-copy">Toán bộ nhớ: bốn thứ phải nhét vừa một con chip</span><span class="easy-only">Máy cần bao nhiêu chỗ để học</span><span class="en-only" lang="en">The memory math: four things that must fit on one chip</span></h2>
+      <p class="standard-copy">Huyen dành hẳn một mục cho các công thức tính nhẩm bộ nhớ, vì chúng giúp bạn ước lượng cần phần cứng nào để vận hành hoặc tinh chỉnh một mô hình. Ba yếu tố chính quyết định dấu chân bộ nhớ khi tinh chỉnh: số tham số, số tham số khả huấn, và cách biểu diễn số.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Phần này là toán, nhưng là toán rất dễ: nhân vài con số để biết máy của bạn có đủ chỗ hay không. Nhớ nhé: cứ nhân số tham số với số byte mỗi tham số là ra.</p>
+      <p class="en-only" lang="en">Huyen devotes a section to back-of-the-napkin memory formulas, because they let you estimate what hardware you need to serve or finetune a model. Three factors dominate the finetuning memory footprint: the parameter count, the number of trainable parameters, and the numerical representation.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy"><strong>Bộ nhớ huấn luyện</strong> = trọng số mô hình + giá trị kích hoạt + gradient + trạng thái bộ tối ưu. Suy luận chỉ cần hai thứ đầu; chính hai thứ sau khiến tinh chỉnh đắt hơn nhiều.</p>
+        <p class="definition easy-only"><strong>Chỗ nhớ để học</strong> = chỗ chứa cái máy + chỗ ghi nháp + chỗ ghi “sai bao nhiêu” + chỗ ghi “lần trước đã sửa thế nào”.</p>
+        <p class="definition en-only" lang="en"><strong>Training memory</strong> = model weights + activations + gradients + optimizer states. Inference needs only the first two; it is the last two that make finetuning so much more expensive.</p>
+        <p class="deep-only">Huyen lưu ý rằng công thức trên giả định bộ nhớ cho kích hoạt nhỏ hơn bộ nhớ cho trọng số, nhưng trong thực tế kích hoạt có thể lấn át hẳn trọng số nếu được lưu lại để tính gradient — như bài báo “Reducing Activation Recomputation in Large Transformer Models” của Korthikanti và cộng sự (2022) cho thấy với các mô hình Megatron.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-14">14</a></span> Một cách giảm là không lưu mà tính lại khi cần — kỹ thuật gradient checkpointing, đánh đổi bộ nhớ lấy thời gian huấn luyện.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="equation">
+        <div class="equation-row"><b>N × M</b><span class="standard-copy">Bộ nhớ nạp trọng số: số tham số nhân bộ nhớ mỗi tham số</span><span class="easy-only">Số tham số nhân số byte mỗi tham số</span><span class="en-only" lang="en">Weights: parameter count × memory per parameter</span></div>
+        <div class="equation-row"><b>N × M × 1,2</b><span class="standard-copy">Suy luận: cộng khoảng 20% cho kích hoạt và vector khóa–giá trị</span><span class="easy-only">Chạy thôi thì cộng thêm khoảng 20%</span><span class="en-only" lang="en">Inference: add roughly 20% for activations and key-value vectors</span></div>
+        <div class="equation-row"><b>13B × 2 B = 26 GB</b><span class="standard-copy">Mô hình 13 tỉ tham số ở 2 byte mỗi tham số; tổng suy luận 31,2 GB</span><span class="easy-only">Máy 13 tỉ tham số cần 26 GB, chạy thật thì 31,2 GB</span><span class="en-only" lang="en">A 13B model at 2 bytes per parameter; 31.2 GB total for inference</span></div>
+        <div class="equation-row"><b>13B × 3 × 2 B = 78 GB</b><span class="standard-copy">Gradient và trạng thái Adam khi toàn bộ 13 tỉ tham số đều khả huấn</span><span class="easy-only">Nếu dạy lại toàn bộ máy, cần thêm 78 GB nữa</span><span class="en-only" lang="en">Gradients and Adam states when all 13B parameters are trainable</span></div>
+        <div class="equation-row"><b>1B × 3 × 2 B = 6 GB</b><span class="standard-copy">Cũng mô hình ấy, nhưng chỉ 1 tỉ tham số khả huấn — đây chính là lý do PEFT tồn tại</span><span class="easy-only">Nếu chỉ dạy một góc nhỏ, chỉ cần 6 GB</span><span class="en-only" lang="en">Same model, only 1B trainable parameters — this is exactly why PEFT exists</span></div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number" aria-hidden="true">05</div>
+        <div class="surprise-content">
+          <div class="english-term">Trainable parameters · Backpropagation</div>
+          <h3><span class="standard-copy">Tham số khả huấn — nguồn gốc của mọi chi phí</span><span class="easy-only">Mỗi chỗ được sửa đều tốn thêm chỗ nhớ</span><span class="en-only" lang="en">Trainable parameters — the source of every cost</span></h3>
+          <p class="standard-copy">Tham số khả huấn là tham số được cập nhật trong lúc tinh chỉnh; những tham số giữ nguyên gọi là tham số đóng băng. Khi tiền huấn luyện, mọi tham số đều được cập nhật; khi suy luận, không tham số nào được cập nhật; khi tinh chỉnh, một phần hoặc toàn bộ.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Trong máy có hàng tỉ cái núm vặn. Chạy bình thường thì không vặn núm nào. Dạy lại thì vặn một số núm — và mỗi núm được phép vặn lại cần thêm giấy nháp riêng. Nhớ nhé: càng vặn nhiều núm, càng tốn chỗ.</p>
+          <p class="en-only" lang="en">A trainable parameter is one that can be updated during finetuning; parameters kept unchanged are frozen. During pre-training all parameters are updated, during inference none are, and during finetuning some or all may be.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Mỗi tham số khả huấn cần một giá trị gradient cộng thêm từ không tới hai giá trị trạng thái bộ tối ưu: SGD thuần không có trạng thái, bộ tối ưu quán tính lưu một giá trị, còn Adam lưu hai. Với mô hình transformer, Adam là lựa chọn phổ biến nhất — nên con số nhân ba là mặc định thực tế.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Mỗi núm được vặn cần tới ba ô giấy nháp, chứ không phải một.</span>
+            <span class="en-only" lang="en">Each trainable parameter needs one gradient value plus zero to two optimizer-state values: vanilla SGD has no state, a momentum optimizer stores one, and Adam stores two. For transformer models Adam is by far the most widely used — so the ×3 factor is the practical default.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Lượt truyền tiến và lùi</h4>
+              <p>Lượt tiến tính đầu ra từ đầu vào; lượt lùi so đầu ra với đáp án để có <em lang="en">loss</em>, rồi tính gradient — đạo hàm của loss theo từng tham số khả huấn — và giao cho bộ tối ưu quyết định mức điều chỉnh.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Tham số đóng băng thì rẻ</h4>
+              <p>Nếu một tham số không khả huấn thì không cần cập nhật, nên cũng không cần tính gradient cho nó — đó chính là cánh cửa mà mọi kỹ thuật ở phần ba đi qua.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number" aria-hidden="true">06</div>
+        <div class="surprise-content">
+          <div class="english-term">Numerical representations</div>
+          <h3><span class="standard-copy">Định dạng số — dải giá trị đổi lấy độ chính xác</span><span class="easy-only">Ghi số càng ngắn càng tốn ít chỗ</span><span class="en-only" lang="en">Numerical formats — range traded against precision</span></h3>
+          <p class="standard-copy">FP32 dùng 32 bit (4 byte), FP16 dùng 16 bit (2 byte), FP64 dùng 64 bit. Ngoài họ FP còn có BF16 do Google thiết kế cho TPU và TF32 do NVIDIA thiết kế cho GPU, cùng các định dạng số nguyên INT8 và INT4.<span class="cite"><a href="#ref-1">1</a></span> Mỗi định dạng dành một bit cho dấu, phần còn lại chia giữa <em>dải giá trị</em> và <em>độ chính xác</em>.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Giống như ghi giá tiền: ghi đủ mọi chữ số thì chính xác nhưng dài, làm tròn thì ngắn mà hơi sai. Máy cũng chọn giữa ghi dài chính xác và ghi ngắn tiết kiệm. Nhớ nhé: ghi ngắn tiết kiệm chỗ, nhưng mỗi lần làm tròn là một lần sai một chút.</p>
+          <p class="en-only" lang="en">FP32 uses 32 bits (4 bytes), FP16 uses 16 bits (2 bytes), FP64 uses 64. Beyond the FP family there is BF16, designed by Google for TPUs, and TF32, designed by NVIDIA for GPUs, plus the integer formats INT8 and INT4.<span class="cite"><a href="#ref-1">1</a></span> Each format spends one bit on sign and splits the rest between <em>range</em> and <em>precision</em>.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Huyen kể rằng Llama 2 được phát hành với trọng số ở BF16, nhưng nhiều đội nạp nhầm sang FP16 rồi thất vọng vì chất lượng kém hẳn so với quảng cáo. Hãy luôn nạp mô hình đúng định dạng mà nó được thiết kế.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Từng có chuyện cả loạt người dùng sai kiểu ghi số rồi tưởng máy dở — trong khi lỗi là ở họ.</span>
+            <span class="en-only" lang="en">Huyen recounts that Llama 2 shipped with BF16 weights, yet many teams loaded it in FP16 and were frustrated to find quality far below what was advertised. Always load a model in the format it was intended for.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>BF16 so với FP16</h4>
+              <p>Cùng 16 bit, nhưng BF16 dành nhiều bit hơn cho dải giá trị và ít hơn cho độ chính xác. Trong bảng của Huyen, 1234,56789 thành 1235,0 ở FP16 (lệch 0,035%) nhưng thành 1232,0 ở BF16 (lệch 0,208%) — đổi lại BF16 biểu diễn được những giá trị lớn mà FP16 tràn thành vô cực.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Vì sao gọi là TF32</h4>
+              <p>Huyen ghi chú vui rằng tên định dạng thường cho biết số bit, nhưng TF32 thật ra có 19 bit chứ không phải 32 — bà đoán nó được đặt tên vậy để gợi tính tương thích chức năng với FP32.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number" aria-hidden="true">07</div>
+        <div class="surprise-content">
+          <div class="english-term">Quantization</div>
+          <h3><span class="standard-copy">Lượng tử hóa — cách rẻ nhất để giảm một nửa</span><span class="easy-only">Ghi số ngắn lại, tốn một nửa chỗ</span><span class="en-only" lang="en">Quantization — the cheapest way to halve everything</span></h3>
+          <p class="standard-copy">Huyen mô tả giảm độ chính xác là cách rẻ và cực kỳ hiệu quả để giảm dấu chân bộ nhớ: dễ làm và khái quát được qua nhiều tác vụ lẫn kiến trúc.<span class="cite"><a href="#ref-1">1</a></span> Với mô hình 13 tỉ tham số, FP32 nghĩa là 4 byte mỗi trọng số, tức 52 GB cho toàn bộ trọng số; giảm xuống 2 byte thì còn 26 GB.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Thay vì ghi 3,14159265 thì ghi 3,14 — vẫn dùng được mà tốn ít chỗ hơn nhiều. Máy làm đúng như vậy với hàng tỉ con số của nó. Nhớ nhé: cắt một nửa số chữ số là tiết kiệm một nửa chỗ.</p>
+          <p class="en-only" lang="en">Huyen calls reduced precision a cheap and extremely effective way to shrink a model’s memory footprint: straightforward to do and general across tasks and architectures.<span class="cite"><a href="#ref-1">1</a></span> For a 13B-parameter model, FP32 means 4 bytes per weight, or 52 GB for the whole weights; at 2 bytes per value that drops to 26 GB.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Suy luận thường dùng càng ít bit càng tốt — 16, 8, thậm chí 4 bit. Apple (2024) dùng một lược đồ trộn 2 bit và 4 bit, trung bình 3,5 bit mỗi trọng số, để chạy mô hình ngay trên thiết bị; cùng năm NVIDIA công bố kiến trúc Blackwell hỗ trợ suy luận ở số thực 4 bit.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Điện thoại của bạn chạy AI được là nhờ mẹo này: ghi số thật ngắn.</span>
+            <span class="en-only" lang="en">Inference is typically done in as few bits as possible — 16, 8, even 4. Apple (2024) used a scheme mixing 2-bit and 4-bit formats, averaging 3.5 bits per weight, to serve models on-device; the same year NVIDIA announced its Blackwell architecture supporting 4-bit float inference.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Huấn luyện nhạy cảm hơn</h4>
+              <p>Huấn luyện khó hạ độ chính xác hơn suy luận vì lan truyền ngược nhạy cảm với sai số: các thay đổi làm tròn nhỏ tích lũy qua nhiều bước, và loss cần tính chính xác để không chỉ sai hướng cập nhật. Vì thế huấn luyện thường ở độ chính xác hỗn hợp.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Giới hạn dưới</h4>
+              <p>Không thể ít hơn 1 bit mỗi giá trị. Năm 2024, nhóm Microsoft (Ma và cộng sự) giới thiệu BitNet b1.58, chỉ cần 1,58 bit mỗi tham số và có hiệu năng sánh Llama 2 ở 16 bit cho tới quy mô 3,9 tỉ tham số — tên bài báo tuyên bố “kỷ nguyên LLM 1 bit”, nhưng con số thực trong bảng là 1,58 bit, một khác biệt đáng ghi nhớ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number" aria-hidden="true">08</div>
+        <div class="surprise-content">
+          <div class="english-term">Post-training quantization · QAT</div>
+          <h3><span class="standard-copy">Lượng tử hóa lúc nào — sau huấn luyện hay trong khi huấn luyện</span><span class="easy-only">Rút gọn lúc nào cho đúng</span><span class="en-only" lang="en">When to quantize — after training or during</span></h3>
+          <p class="standard-copy">Có hai câu hỏi: lượng tử hóa <em>cái gì</em> và <em>khi nào</em>. Trọng số được lượng tử hóa phổ biến hơn kích hoạt, vì tác động lên hiệu năng ổn định hơn và mất mát độ chính xác ít hơn. Về thời điểm, lượng tử hóa sau huấn luyện là cách phổ biến nhất, và cũng liên quan nhất tới người phát triển ứng dụng — những người thường không tự huấn luyện mô hình.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Có thể rút gọn sau khi dạy xong, hoặc rút gọn ngay trong lúc dạy. Cách thứ nhất dễ hơn và hầu hết mọi người dùng cách đó. Nhớ nhé: dạy xong rồi rút gọn là cách thông thường.</p>
+          <p class="en-only" lang="en">There are two questions: <em>what</em> to quantize and <em>when</em>. Weight quantization is more common than activation quantization, since it has a more stable impact on performance with less accuracy loss. As for timing, post-training quantization (PTQ) is by far the most common — and the most relevant to application developers, who usually don’t train models.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Các khung chính — PyTorch, TensorFlow, thư viện <span lang="en">transformers</span> của Hugging Face — đều cung cấp lượng tử hóa sau huấn luyện miễn phí với vài dòng mã.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Các bộ công cụ phổ biến đều làm sẵn việc này cho bạn, chỉ vài dòng lệnh.</span>
+            <span class="en-only" lang="en">Major frameworks — PyTorch, TensorFlow, Hugging Face’s <span lang="en">transformers</span> — all offer PTQ for free in a few lines of code.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Hai mục tiêu khác nhau</h4>
+              <p>Lượng tử hóa khi huấn luyện có hai mục tiêu tách biệt: tạo ra mô hình chạy tốt ở độ chính xác thấp khi suy luận, và giảm chính thời gian cùng chi phí huấn luyện. QAT nhắm mục tiêu thứ nhất nhưng không rút ngắn thời gian huấn luyện — thậm chí kéo dài thêm vì phải mô phỏng hành vi độ chính xác thấp.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Huấn luyện thẳng ở INT8</h4>
+              <p>Character.AI (2024) chia sẻ họ huấn luyện toàn bộ mô hình ở INT8, nhờ đó xóa được sự lệch pha giữa độ chính xác lúc huấn luyện và lúc phục vụ, đồng thời cải thiện đáng kể hiệu suất huấn luyện.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Cầu nối sang phần ba</strong>
+      <strong class="easy-only">Nối sang phần sau</strong>
+      <strong class="en-only" lang="en">Bridge to part three</strong>
+      <p class="standard-copy">Hai đòn bẩy đã lộ rõ từ công thức: giảm số <em>bit</em> mỗi giá trị, hoặc giảm số <em>tham số khả huấn</em>. Lượng tử hóa lo đòn bẩy thứ nhất. Đòn bẩy thứ hai sinh ra cả một họ kỹ thuật mang tên PEFT.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Có hai cách tiết kiệm: ghi số ngắn lại, hoặc vặn ít núm hơn. Phần sau nói về cách thứ hai. Nhớ nhé: vặn ít núm mà vẫn dạy được là cả một nghệ thuật.</p>
+      <p class="en-only" lang="en">The formula exposes two levers: reduce the <em>bits</em> per value, or reduce the number of <em>trainable parameters</em>. Quantization handles the first. The second spawned an entire family of techniques called PEFT.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </aside>
+  </section>
+
+  <section class="section" id="techniques" aria-labelledby="techniques-title">
+    <div class="section-heading">
+      <div class="eyebrow"><span class="standard-copy">Phần ba · Kỹ thuật</span><span class="easy-only">Phần ba · Kỹ thuật</span><span class="en-only" lang="en">Part three · Techniques</span></div>
+      <h2 id="techniques-title"><span class="standard-copy">PEFT, LoRA, và nghệ thuật hợp nhất mô hình</span><span class="easy-only">Sửa một góc nhỏ, được cả cỗ máy</span><span class="en-only" lang="en">PEFT, LoRA, and the art of merging models</span></h2>
+      <p class="standard-copy">Huyen viết rằng tinh chỉnh càng tốn bộ nhớ thì càng ít người đủ sức làm; các kỹ thuật giảm dấu chân bộ nhớ vì thế mở rộng số người có thể thích ứng mô hình cho ứng dụng của mình.<span class="cite"><a href="#ref-1">1</a></span> Phần này đi qua PEFT, LoRA, LoRA lượng tử hóa, và một hướng mà bà gọi là thú vị nhưng còn thực nghiệm: hợp nhất mô hình.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nếu dạy lại cả cỗ máy thì quá tốn, hãy chỉ dạy lại một góc rất nhỏ — mà kết quả vẫn gần như tốt bằng. Nhớ nhé: mẹo hay nhất trong bài này là sửa ít mà được nhiều.</p>
+      <p class="en-only" lang="en">Huyen writes that the more memory finetuning requires, the fewer people can afford it; techniques that shrink the footprint therefore widen the circle of people who can adapt models to their applications.<span class="cite"><a href="#ref-1">1</a></span> This part walks through PEFT, LoRA, quantized LoRA, and a direction she calls exciting but experimental: model merging.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+
+    <div class="surprise-lead trap-lead">
+      <div class="surprise-lead-copy">
+        <p class="definition standard-copy">Một kỹ thuật được coi là <strong>hiệu quả tham số</strong> nếu nó đạt hiệu năng gần bằng tinh chỉnh toàn phần trong khi dùng ít hơn vài bậc độ lớn số tham số khả huấn.</p>
+        <p class="definition easy-only">Một mẹo được coi là <strong>giỏi</strong> nếu nó chỉ vặn một phần rất nhỏ số núm mà máy vẫn học được gần như y hệt.</p>
+        <p class="definition en-only" lang="en">A technique counts as <strong>parameter-efficient</strong> if it achieves performance close to full finetuning while using several orders of magnitude fewer trainable parameters.</p>
+        <p class="deep-only">Huyen lưu ý không có ngưỡng rõ ràng nào để một phương pháp được gọi là hiệu quả tham số — đây là mô tả tương đối, không phải định nghĩa chính xác.<span class="cite"><a href="#ref-1">1</a></span> Bà cũng phân PEFT thành hai nhóm: phương pháp dựa trên bộ điều hợp (thêm mô-đun vào trọng số, nên còn gọi là phương pháp cộng thêm) và phương pháp dựa trên prompt mềm (thêm các token khả huấn không đọc được, được tối ưu qua lan truyền ngược).<span class="cite"><a href="#ref-1">1</a></span> Để ước lượng phương pháp nào thật sự được dùng, Huyen phân tích hơn 1.000 issue mở trên kho <span lang="en">huggingface/peft</span> vào tháng 10 năm 2024 và thấy LoRA áp đảo; prompt mềm ít gặp hơn nhưng có dấu hiệu được quan tâm dần.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-13">13</a></span></p>
+      </div>
+      <div class="equation">
+        <div class="equation-row"><b><span class="vi-only">7B toàn phần</span><span class="en-only" lang="en">7B, full</span></b><span class="standard-copy">14 GB trọng số + 42 GB gradient và trạng thái Adam = 56 GB, vượt hầu hết GPU tiêu dùng (12–24 GB)</span><span class="easy-only">Dạy lại toàn bộ máy 7 tỉ tham số cần 56 GB — máy để bàn không kham nổi</span><span class="en-only" lang="en">14 GB of weights + 42 GB of gradients and Adam states = 56 GB, beyond most consumer GPUs (12–24 GB)</span></div>
+        <div class="equation-row"><b>W′ = W + (α/r)·W<sub>AB</sub></b><span class="standard-copy">LoRA: chỉ A và B được cập nhật, W giữ nguyên; α quyết định mức đóng góp</span><span class="easy-only">Chỉ sửa hai bảng nhỏ, bảng lớn giữ nguyên</span><span class="en-only" lang="en">LoRA: only A and B are updated, W stays intact; α sets how much they contribute</span></div>
+        <div class="equation-row"><b>1,68B → 23,3M</b><span class="standard-copy">100 khách hàng, ma trận 4096 × 4096, rank 8: giữ adapter tách rời thay vì 100 bản đầy đủ</span><span class="easy-only">Thay vì 100 bản sao cả máy, chỉ cần 1 bản gốc và 100 miếng vá nhỏ</span><span class="en-only" lang="en">100 customers, a 4096 × 4096 matrix, rank 8: separate adapters instead of 100 full copies</span></div>
+        <div class="equation-row"><b><span class="vi-only">QLoRA</span><span class="en-only" lang="en">QLoRA</span></b><span class="standard-copy">Trọng số lưu ở 4 bit NF4, giải lượng tử về BF16 khi tính — đủ để tinh chỉnh mô hình 65 tỉ tham số trên một GPU 48 GB</span><span class="easy-only">Nén trọng số xuống 4 bit, dạy máy khổng lồ trên đúng một card</span><span class="en-only" lang="en">Weights stored in 4-bit NF4, dequantized to BF16 for computation — enough to finetune a 65B model on a single 48 GB GPU</span></div>
+      </div>
+    </div>
+
+    <ol class="surprise-grid trap-grid">
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number" aria-hidden="true">09</div>
+        <div class="surprise-content">
+          <div class="english-term">Full · Partial · Parameter-efficient</div>
+          <h3><span class="standard-copy">Từ toàn phần tới hiệu quả tham số</span><span class="easy-only">Ba mức dạy lại: cả máy, một phần, một góc</span><span class="en-only" lang="en">From full finetuning to parameter efficiency</span></h3>
+          <p class="standard-copy">Tinh chỉnh toàn phần cập nhật mọi tham số — về kỹ thuật giống hệt huấn luyện, chỉ khác là khởi đầu từ trọng số đã học thay vì trọng số ngẫu nhiên.<span class="cite"><a href="#ref-1">1</a></span> Tinh chỉnh một phần đóng băng phần lớn các lớp và chỉ cập nhật vài lớp cuối; nó giảm bộ nhớ nhưng, theo Huyen, không hiệu quả về tham số.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Có ba mức: vặn hết mọi núm, vặn vài núm cuối, hoặc gắn thêm mấy cái núm mới rất nhỏ rồi chỉ vặn chúng. Cách thứ ba là cách khôn nhất. Nhớ nhé: không phải cứ vặn nhiều là học giỏi hơn.</p>
+          <p class="en-only" lang="en">Full finetuning updates every parameter — technically identical to training, except it starts from learned weights rather than random ones.<span class="cite"><a href="#ref-1">1</a></span> Partial finetuning freezes most layers and updates only the last few; it lowers memory but, in Huyen’s framing, is parameter-inefficient.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Nghiên cứu của Houlsby và cộng sự (2019) cho thấy với BERT large, tinh chỉnh một phần cần cập nhật khoảng 25% số tham số mới đạt hiệu năng sánh tinh chỉnh toàn phần trên thước đo GLUE. Ngược lại, chèn hai mô-đun bộ điều hợp vào mỗi khối transformer đạt hiệu năng chênh 0,4% so với toàn phần với chỉ 3% số tham số khả huấn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span>
+            <span class="easy-only">Vặn 25% số núm mới bằng vặn hết. Nhưng gắn thêm núm mới rồi chỉ vặn 3% thì gần như bằng luôn.</span>
+            <span class="en-only" lang="en">Houlsby et al. (2019) showed that with BERT large, partial finetuning needs roughly 25% of parameters updated to match full finetuning on GLUE. By contrast, inserting two adapter modules into each transformer block reached within 0.4% of full finetuning using only 3% of the trainable parameters.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Cái giá của bộ điều hợp đời đầu</h4>
+              <p>Nhược điểm của phương pháp Houlsby là tăng độ trễ suy luận: các bộ điều hợp thêm lớp mới, tức thêm bước tính trong lượt truyền tiến. Chính vấn đề này là thứ LoRA giải quyết.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Hiệu quả mẫu đi kèm</h4>
+              <p>Huyen ghi nhận các phương pháp PEFT không chỉ hiệu quả tham số mà còn hiệu quả mẫu: tinh chỉnh toàn phần có thể cần hàng chục nghìn tới hàng triệu ví dụ, trong khi một số phương pháp PEFT cho kết quả tốt với vài nghìn ví dụ.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number" aria-hidden="true">10</div>
+        <div class="surprise-content">
+          <div class="english-term">LoRA · Low-Rank Adaptation</div>
+          <h3><span class="standard-copy">LoRA — tách một ma trận lớn thành hai ma trận nhỏ</span><span class="easy-only">Chẻ bảng to thành hai bảng nhỏ</span><span class="en-only" lang="en">LoRA — split one big matrix into two small ones</span></h3>
+          <p class="standard-copy">Cho ma trận trọng số W kích thước n × m, LoRA chọn một giá trị r rồi dựng hai ma trận A (n × r) và B (r × m). Tích của chúng, W<sub>AB</sub>, cùng kích thước với W và được cộng vào W. Trong lúc tinh chỉnh chỉ A và B được cập nhật; W giữ nguyên.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+          <p class="easy-only">Thay vì sửa cả một bảng khổng lồ, ta dựng hai bảng bé xíu, nhân chúng với nhau rồi cộng kết quả vào bảng lớn. Chỉ hai bảng bé được sửa. Nhớ nhé: bảng gốc không hề bị đụng vào, nên sửa sai cũng quay lại được.</p>
+          <p class="en-only" lang="en">Given a weight matrix W of dimension n × m, LoRA picks a value r and constructs two matrices A (n × r) and B (r × m). Their product W<sub>AB</sub> has the same dimension as W and is added to it. During finetuning only A and B are updated; W is kept intact.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Bài báo LoRA cho thấy với GPT-3, phương pháp này đạt hiệu năng sánh bằng hoặc tốt hơn tinh chỉnh toàn phần trên một số tác vụ, chỉ với khoảng 4,7 triệu tham số khả huấn — tức 0,0027% so với tinh chỉnh toàn phần.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+            <span class="easy-only">Chỉ vặn 0,0027% số núm mà kết quả vẫn ngang bằng vặn hết.</span>
+            <span class="en-only" lang="en">The LoRA paper showed that for GPT-3 the method matched or beat full finetuning on several tasks using only about 4.7M trainable parameters — 0.0027% of full finetuning.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Áp vào ma trận nào</h4>
+              <p>LoRA thường được áp cho bốn ma trận trong mô-đun chú ý: truy vấn, khóa, giá trị và chiếu đầu ra. Với ngân sách 18 triệu tham số khả huấn trên GPT-3 175B, Hu và cộng sự thấy áp cho cả bốn ma trận ở rank 2 cho kết quả tốt nhất — 73,7 trên WikiSQL và 91,7 trên MultiNLI; nếu chỉ chọn được hai, họ khuyên chọn truy vấn và giá trị.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Vì sao nó chạy được</h4>
+              <p>Nhiều bài báo lập luận rằng LLM tuy nhiều tham số nhưng có <em lang="en">intrinsic dimension</em> rất thấp, và tiền huấn luyện ngầm làm giảm chiều nội tại ấy — mô hình được huấn luyện càng tốt thì càng dễ tinh chỉnh bằng ít tham số và ít dữ liệu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-16">16</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number" aria-hidden="true">11</div>
+        <div class="surprise-content">
+          <div class="english-term">Multi-LoRA serving · QLoRA</div>
+          <h3><span class="standard-copy">Tính mô-đun — một mô hình gốc, trăm miếng vá</span><span class="easy-only">Một cỗ máy, trăm miếng vá nhỏ</span><span class="en-only" lang="en">Modularity — one base model, a hundred patches</span></h3>
+          <p class="standard-copy">Có hai cách phục vụ mô hình đã tinh chỉnh bằng LoRA: hợp nhất A và B vào W trước khi phục vụ (không thêm độ trễ), hoặc giữ W, A, B tách rời và hợp nhất lúc suy luận (thêm độ trễ nhưng giảm mạnh dung lượng lưu trữ).<span class="cite"><a href="#ref-1">1</a></span> Cách thứ hai còn giúp chuyển giữa các tác vụ nhanh hơn: chỉ cần nạp bộ điều hợp mới thay vì cả ma trận đầy đủ.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Hãy tưởng tượng một chiếc áo và nhiều miếng vá khác nhau. Muốn đổi kiểu, chỉ cần gỡ miếng vá này gắn miếng vá kia, không cần may áo mới. Nhớ nhé: giữ miếng vá riêng thì đổi việc rất nhanh.</p>
+          <p class="en-only" lang="en">There are two ways to serve a LoRA-finetuned model: merge A and B into W before serving (no added latency), or keep W, A, and B separate and merge at inference time (extra latency, far less storage).<span class="cite"><a href="#ref-1">1</a></span> The second also makes task switching faster: you load only the new adapter instead of a full weight matrix.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Apple (2024) dùng nhiều bộ điều hợp LoRA để thích ứng cùng một mô hình nền 3 tỉ tham số cho các tính năng iPhone khác nhau, kết hợp lượng tử hóa để chạy tất cả ngay trên thiết bị.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Điện thoại chỉ chứa một cỗ máy, nhưng làm được nhiều việc nhờ đổi miếng vá.</span>
+            <span class="en-only" lang="en">Apple (2024) used multiple LoRA adapters to adapt the same 3B-parameter base model to different iPhone features, combining quantization so all of them fit on-device.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>QLoRA</h4>
+              <p>QLoRA (Dettmers và cộng sự, 2023) lưu trọng số ở 4 bit theo định dạng NF4 — dựa trên nhận xét rằng trọng số đã tiền huấn luyện thường phân phối chuẩn quanh trung vị bằng không — rồi giải lượng tử về BF16 khi tính lượt tiến và lượt lùi. Cộng với bộ tối ưu phân trang, kỹ thuật này cho phép tinh chỉnh mô hình 65 tỉ tham số trên một GPU 48 GB.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Guanaco và cái giá của NF4</h4>
+              <p>Họ mô hình Guanaco sinh ra từ QLoRA đạt Elo 1022 theo đánh giá của GPT-4 tháng 5 năm 2023, so với 966 của ChatGPT và 1348 của GPT-4.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> Hạn chế chính: lượng tử hóa NF4 tốn kém, nên QLoRA giảm bộ nhớ nhưng có thể kéo dài thời gian huấn luyện.<span class="cite"><a href="#ref-1">1</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+
+      <li class="surprise-mechanism trap-card">
+        <div class="surprise-number" aria-hidden="true">12</div>
+        <div class="surprise-content">
+          <div class="english-term">Model merging</div>
+          <h3><span class="standard-copy">Hợp nhất mô hình — cộng, xếp chồng, nối</span><span class="easy-only">Ghép nhiều máy thành một</span><span class="en-only" lang="en">Model merging — summing, stacking, concatenating</span></h3>
+          <p class="standard-copy">Nếu tinh chỉnh tạo mô hình riêng bằng cách sửa một mô hình, hợp nhất tạo mô hình riêng bằng cách kết hợp nhiều mô hình. Không bắt buộc phải tinh chỉnh thêm sau khi hợp nhất, nên hợp nhất có thể làm mà không cần GPU — điều khiến nó hấp dẫn với các nhà phát triển độc lập ít tài nguyên tính toán.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <p class="easy-only">Thay vì dạy lại một máy, ta lấy hai máy đã giỏi hai việc khác nhau rồi trộn chúng thành một. Cái hay là trộn thì không cần máy tính mạnh. Nhớ nhé: đôi khi ghép lại còn rẻ hơn dạy lại.</p>
+          <p class="en-only" lang="en">If finetuning creates a custom model by altering one model, merging creates one by combining several. You don’t have to finetune the merged model afterwards, so merging can be done without GPUs — which makes it attractive to indie developers without much compute.<span class="cite"><a href="#ref-1">1</a></span></p>
+          <div class="opportunity">
+            <strong><span class="vi-only">Thấy ở đâu</span><span class="en-only" lang="en">Where you see it</span></strong>
+            <span class="standard-copy">Hợp nhất là một cách làm tinh chỉnh đa tác vụ mà không vấp phải quên thảm họa: thay vì huấn luyện tuần tự tác vụ A rồi tác vụ B — khiến mô hình quên A — ta tinh chỉnh song song rồi hợp nhất kết quả.<span class="cite"><a href="#ref-1">1</a></span></span>
+            <span class="easy-only">Dạy hai việc một lúc thì máy hay quên việc cũ. Dạy riêng rồi ghép lại thì không.</span>
+            <span class="en-only" lang="en">Merging is a way to do multi-task finetuning without catastrophic forgetting: instead of training sequentially on task A then task B — where the model forgets A — you finetune in parallel and merge the results.<span class="cite"><a href="#ref-1">1</a></span></span>
+          </div>
+          <div class="mechanics deep-only">
+            <div class="info-block">
+              <h4>Cộng và cắt tỉa</h4>
+              <p>Cách cộng gồm tổ hợp tuyến tính (trung bình có trọng số) và nội suy tuyến tính cầu SLERP. Trong bài “TIES-Merging”, Yadav và cộng sự (2023) cho thấy giữ lại 20% tham số vector tác vụ hàng đầu cho hiệu năng sánh với giữ 100% — và cắt tỉa trước khi hợp nhất giúp cải thiện đáng kể chất lượng mô hình cuối.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+            </div>
+            <div class="info-block">
+              <h4>Xếp chồng lớp và nối</h4>
+              <p>Xếp chồng lấy các lớp từ nhiều mô hình chồng lên nhau; Goliath-120B ghép hai mô hình Llama 2-70B đã tinh chỉnh, lấy 72 trong 80 lớp từ mỗi mô hình. Kim và cộng sự (2023) dùng mở rộng theo chiều sâu để tạo SOLAR 10.7B từ một mô hình 7 tỉ tham số 32 lớp: nhân đôi rồi cộng 16 lớp, còn lại 32 × 2 − 16 = 48 lớp. Nối thì Huyen không khuyến nghị, vì nó không giảm dấu chân bộ nhớ so với phục vụ riêng từng mô hình.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+            </div>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <aside class="signal surprise-connection">
+      <strong class="standard-copy">Chiến thuật thực hành</strong>
+      <strong class="easy-only">Mẹo khi bắt tay làm</strong>
+      <strong class="en-only" lang="en">Practical tactics</strong>
+      <p class="standard-copy">Huyen khép chương bằng phần chiến thuật: nếu mới bắt đầu, hãy thử LoRA trước rồi tính tinh chỉnh toàn phần sau; nếu dữ liệu chỉ vài trăm ví dụ, tinh chỉnh toàn phần có thể còn không bằng LoRA.<span class="cite"><a href="#ref-1">1</a></span> Về siêu tham số, tốc độ học thường nằm trong khoảng 1e-7 tới 1e-3; tập dữ liệu hàng triệu ví dụ có khi chỉ cần 1–2 epoch, còn tập vài nghìn ví dụ vẫn cải thiện tới 4–10 epoch; trọng số loss cho prompt thường mặc định 10%.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mới bắt đầu thì dùng cách nhẹ nhất trước. Dữ liệu ít thì cách nhẹ còn tốt hơn cách nặng. Nhớ nhé: đi từ nhỏ tới lớn, đừng làm ngược.</p>
+      <p class="en-only" lang="en">Huyen closes the chapter with tactics: if you’re starting out, try LoRA first and attempt full finetuning later; with only a few hundred examples, full finetuning might not even outperform LoRA.<span class="cite"><a href="#ref-1">1</a></span> On hyperparameters, learning rates typically fall between 1e-7 and 1e-3; a dataset of millions of examples may need only 1–2 epochs while one of thousands can still improve at 4–10; and prompt loss weight is typically set to 10% by default.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </aside>
+
+    <div class="trap-comparison deep-only">
+      <h3><span class="standard-copy">Ba ngộ nhận thường gặp</span><span class="en-only" lang="en">Three common misconceptions</span></h3>
+      <p class="standard-copy">Ba niềm tin sai lầm mà người đọc lần đầu hay mắc — và điều chương này thật sự nói.</p>
+      <p class="en-only" lang="en">Three beliefs a first-time reader tends to pick up — and what the chapter actually says.</p>
+      <div class="comparison-grid">
+        <div class="comparison-card">
+          <h4><span class="standard-copy">“Tinh chỉnh sẽ dạy mô hình kiến thức mới”</span><span class="en-only" lang="en">“Finetuning teaches the model new facts”</span></h4>
+          <p class="standard-copy">Với các câu hỏi cần thông tin cập nhật, RAG vượt tinh chỉnh trong thí nghiệm của Ovadia và cộng sự — và tinh chỉnh có thể làm tệ đi ảo giác nếu dữ liệu kém chất lượng. Tinh chỉnh sửa hình thức; RAG cung cấp sự thật.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+          <p class="en-only" lang="en">For questions needing up-to-date information, RAG beat finetuning in Ovadia et al.’s experiments — and finetuning can worsen hallucinations if the data is low quality. Finetuning is for form; RAG is for facts.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+        </div>
+        <div class="comparison-card">
+          <h4><span class="standard-copy">“Tác vụ chuyên ngành cần mô hình chuyên ngành”</span><span class="en-only" lang="en">“Domain tasks need domain models”</span></h4>
+          <p class="standard-copy">BloombergGPT tốn 1,3 triệu giờ GPU A100 và ước tính 1,3–2,6 triệu đô la, nhưng GPT-4-0314 ở chế độ không ví dụ vượt nó trên các thước đo tài chính. Mô hình tổng quát càng mạnh thì càng giỏi cả việc chuyên ngành.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+          <p class="en-only" lang="en">BloombergGPT cost 1.3 million A100 GPU hours and an estimated $1.3–2.6 million, yet zero-shot GPT-4-0314 outperformed it on financial benchmarks. As general-purpose models get stronger, they get better at domain tasks too.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+        </div>
+        <div class="comparison-card">
+          <h4><span class="standard-copy">“Rank LoRA càng cao càng tốt”</span><span class="en-only" lang="en">“Higher LoRA rank is better”</span></h4>
+          <p class="standard-copy">Chính các tác giả LoRA ngạc nhiên khi thấy tăng r không làm tăng hiệu năng tinh chỉnh; một r nhỏ, khoảng 4 tới 64, thường là đủ, và r quá lớn có thể dẫn tới quá khớp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+          <p class="en-only" lang="en">The LoRA authors were themselves surprised that increasing r does not increase finetuning performance; a small r, roughly 4 to 64, is usually sufficient, and too large an r can lead to overfitting.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+      </div>
+      <p class="deep-only"><strong>Một điểm các nguồn không thống nhất.</strong> Về giá trị rank nên chọn, chương này dẫn hai hướng ngược nhau và không gộp chúng lại: Huyen theo quan sát của nhóm LoRA và báo cáo của Databricks rằng tăng r quá một ngưỡng nào đó không cho cải thiện rõ rệt về chất lượng đầu ra, nhưng bà cũng dẫn Raschka (2023), người thấy r = 256 cho kết quả tốt nhất trên các tác vụ của ông. Bà còn ghi chú rằng một số khung như Fireworks giới hạn rank tối đa ở 32, và ngờ rằng đó là ràng buộc phần cứng chứ không phải ràng buộc hiệu năng. Kết luận thực hành của chương: phải thí nghiệm để tìm cặp (r, α) hợp với ca sử dụng của bạn, với tỉ lệ α:r thường nằm giữa 1:8 và 8:1.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+    </div>
+  </section>
+
+  <section class="section" id="diagnostic" aria-labelledby="diagnostic-title">
+    <div class="diagnostic">
+      <div class="diagnostic-intro">
+        <div class="eyebrow"><span class="standard-copy">Tự kiểm</span><span class="easy-only">Tự kiểm</span><span class="en-only" lang="en">Self-check</span></div>
+        <h2 id="diagnostic-title"><span class="standard-copy">Bốn câu trước khi tinh chỉnh</span><span class="easy-only">Bốn câu hỏi cho bạn</span><span class="en-only" lang="en">Four questions before you finetune</span></h2>
+        <p class="standard-copy">Không phải để chấm điểm, mà để xác định bạn đang ở đâu trên lộ trình thích ứng mô hình mà chương này vạch ra.</p>
+        <p class="easy-only">Không phải bài kiểm tra đâu. Chỉ là bốn câu giúp bạn biết mình nên làm gì tiếp theo. Nhớ nhé: trả lời được bốn câu này là bạn đã biết bước kế tiếp.</p>
+        <p class="en-only" lang="en">Not a test — a way to locate yourself on the adaptation path this chapter lays out.</p>
+      </div>
+      <div class="question-list standard-copy">
+        <div class="question">
+          <div>
+            <strong>Lỗi của bạn là lỗi thông tin hay lỗi hành vi?</strong>
+            <span>Hãy lấy hai mươi câu trả lời sai gần nhất và phân loại: sai vì mô hình không biết, hay sai vì mô hình biết nhưng nói lạc đề và sai định dạng? Nhóm thứ nhất thuộc về RAG, nhóm thứ hai thuộc về tinh chỉnh.</span>
+            <span class="deep-only">Huyen nhấn mạnh nếu có cả hai, hãy bắt đầu bằng RAG vì nó dễ hơn — và bắt đầu RAG bằng tìm kiếm theo từ khóa trước khi đụng tới cơ sở dữ liệu vector.</span>
+          </div>
+        </div>
+        <div class="question">
+          <div>
+            <strong>Bạn đã thí nghiệm prompt đến đâu?</strong>
+            <span>Chỉ dẫn đã đủ rõ chưa, ví dụ đã giống dữ liệu thật chưa, chỉ số đo đã được định nghĩa tử tế chưa? Nếu chưa, chi phí tinh chỉnh có thể chỉ đang mua lại thứ một prompt tốt đã cho không.</span>
+            <span class="deep-only">Bà mô tả một mô-típ lặp đi lặp lại: người ta than prompt không hiệu quả, nhưng khi kiểm tra thì thí nghiệm prompt rất sơ sài — và sau khi làm lại cho tử tế thì chất lượng đủ dùng.</span>
+          </div>
+        </div>
+        <div class="question">
+          <div>
+            <strong>Bạn có nhét vừa bộ nhớ không?</strong>
+            <span>Nhân thử: số tham số × số byte mỗi giá trị cho trọng số, rồi số tham số khả huấn × 3 × số byte cho gradient và trạng thái Adam. Nếu tổng vượt bộ nhớ của chip bạn có, câu trả lời không phải là mua chip to hơn mà là giảm số tham số khả huấn.</span>
+            <span class="deep-only">Đừng quên phần kích hoạt: công thức nhân 1,2 chỉ đúng khi kích hoạt nhỏ hơn trọng số, còn khi lưu lại để tính gradient thì kích hoạt có thể lấn át hẳn.</span>
+          </div>
+        </div>
+        <div class="question">
+          <div>
+            <strong>Bạn định phục vụ bao nhiêu mô hình?</strong>
+            <span>Nếu chỉ một, hợp nhất trọng số LoRA vào mô hình trước khi phục vụ là gọn nhất. Nếu nhiều mô hình cùng chia sẻ một mô hình nền, hãy giữ các bộ điều hợp tách rời — khác biệt về dung lượng lưu trữ là hàng chục lần.</span>
+            <span class="deep-only">Cách chọn phương pháp tinh chỉnh nên tính luôn khâu phục vụ ngay từ đầu, chứ không phải nghĩ tới sau khi đã huấn luyện xong.</span>
+          </div>
+        </div>
+      </div>
+      <div class="question-list easy-only">
+        <div class="question">
+          <div>
+            <strong>Máy sai vì không biết, hay vì nói sai kiểu?</strong>
+            <span>Không biết thì cho đọc tài liệu. Nói sai kiểu thì dạy lại.</span>
+          </div>
+        </div>
+        <div class="question">
+          <div>
+            <strong>Bạn đã thử nói chuyện cho khéo chưa?</strong>
+            <span>Nhiều khi chỉ cần dặn rõ hơn là xong, không cần dạy lại gì cả.</span>
+          </div>
+        </div>
+        <div class="question">
+          <div>
+            <strong>Máy tính của bạn có đủ chỗ không?</strong>
+            <span>Nhân số tham số với số byte là ra. Không đủ chỗ thì sửa ít núm hơn.</span>
+          </div>
+        </div>
+        <div class="question">
+          <div>
+            <strong>Bạn cần bao nhiêu phiên bản?</strong>
+            <span>Một thì may luôn vào áo. Nhiều thì giữ riêng từng miếng vá.</span>
+          </div>
+        </div>
+      </div>
+      <div class="question-list en-only" lang="en">
+        <div class="question">
+          <div>
+            <strong>Is your failure information-based or behavior-based?</strong>
+            <span>Take your last twenty wrong answers and sort them: wrong because the model didn’t know, or wrong because it knew but was irrelevant and malformatted? The first group belongs to RAG, the second to finetuning.</span>
+          </div>
+        </div>
+        <div class="question">
+          <div>
+            <strong>How far have your prompt experiments actually gone?</strong>
+            <span>Are the instructions clear, do the examples represent real data, are the metrics well defined? If not, the cost of finetuning may just be buying back what a good prompt would have given for free.</span>
+          </div>
+        </div>
+        <div class="question">
+          <div>
+            <strong>Does it fit in memory?</strong>
+            <span>Multiply: parameters × bytes per value for the weights, then trainable parameters × 3 × bytes for gradients and Adam states. If the total exceeds your chip, the answer isn’t a bigger chip — it’s fewer trainable parameters.</span>
+          </div>
+        </div>
+        <div class="question">
+          <div>
+            <strong>How many models will you serve?</strong>
+            <span>For just one, merging the LoRA weights into the model before serving is cleanest. For many sharing one base model, keep the adapters separate — the storage difference runs to tens of times.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="closing" id="closing" aria-labelledby="closing-title">
+    <div class="eyebrow" id="closing-title"><span class="standard-copy">Đọng lại</span><span class="easy-only">Đọng lại</span><span class="en-only" lang="en">What remains</span></div>
+    <blockquote>
+      <span class="standard-copy">Tinh chỉnh sửa <span class="closing-accent">hình thức</span>, RAG cung cấp <span class="closing-accent">sự thật</span>. Và mọi kỹ thuật trong chương này — PEFT, LoRA, lượng tử hóa, hợp nhất — đều là một câu trả lời cho cùng một câu hỏi: <span class="closing-accent">làm sao học được nhiều nhất trên ít bộ nhớ nhất</span>.</span>
+      <span class="easy-only">Máy không biết thì <span class="closing-accent">cho nó đọc</span>. Máy nói sai kiểu thì <span class="closing-accent">dạy lại nó</span>. Và mọi mẹo trong bài này đều để trả lời một câu: <span class="closing-accent">làm sao dạy được nhiều mà tốn ít chỗ nhớ nhất</span>.</span>
+      <span class="en-only" lang="en">Finetuning is for <span class="closing-accent">form</span>, RAG is for <span class="closing-accent">facts</span>. And every technique in this chapter — PEFT, LoRA, quantization, merging — answers the same question: <span class="closing-accent">how to learn the most on the least memory</span>.</span>
+    </blockquote>
+  </section>
+
+  <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+  <nav class="chapter-nav" aria-label="Điều hướng chương">
+    <a class="nav-cell nav-prev" href="chapter-6-rag-and-agents.html">
+      <span class="nav-label"><span aria-hidden="true">◀</span> <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span></span>
+      <span class="nav-title"><span class="vi-only">Chương 6 · RAG và tác tử</span><span class="en-only" lang="en">Chapter 6 · RAG and Agents</span></span>
+    </a>
+    <a class="nav-cell nav-next" href="chapter-8-dataset-engineering.html">
+      <span class="nav-label"><span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> <span aria-hidden="true">▶</span></span>
+      <span class="nav-title"><span class="vi-only">Chương 8 · Kỹ thuật dữ liệu</span><span class="en-only" lang="en">Chapter 8 · Dataset Engineering</span></span>
+    </a>
+  </nav>
+  <!-- NAV:END -->
+
+  <footer>
+    <div class="footer-main">
+      <p class="standard-copy"><strong>Nguồn chính:</strong> Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, ấn bản thứ nhất, tháng 12 năm 2024 (ISBN 9781098166304) — Chương 7, <em lang="en">Finetuning</em>. Trang này là bản diễn giải và tổng hợp phục vụ học tập, không phải bản dịch nguyên văn hoặc bản sao nội dung sách. Các ví dụ trong chế độ “Dễ hiểu” là minh họa do người biên soạn thêm vào.</p>
+      <p class="en-only" lang="en"><strong>Primary source:</strong> Chip Huyen, <em>AI Engineering: Building Applications with Foundation Models</em>, O’Reilly Media, first edition, December 2024 (ISBN 9781098166304) — Chapter 7, <em>Finetuning</em>. This page is an interpretive study companion, not a verbatim translation or reproduction of the book. Examples in the “Dễ hiểu” mode are added illustrations by the compiler.</p>
+      <p class="vi-only"><strong>Tham chiếu</strong></p>
+      <p class="en-only" lang="en"><strong>References</strong></p>
+      <ol class="ref-list">
+        <li id="ref-1">Chip Huyen, <em lang="en">AI Engineering: Building Applications with Foundation Models</em> — Chapter 7, “Finetuning” (O’Reilly Media, 2024). <a href="https://www.oreilly.com/library/view/ai-engineering/9781098166298/" target="_blank" rel="noopener noreferrer">oreilly.com — trang sách</a></li>
+        <li id="ref-2">Chip Huyen — <a href="https://huyenchip.com/books/" target="_blank" rel="noopener noreferrer">huyenchip.com/books — trang giới thiệu sách của tác giả</a></li>
+        <li id="ref-3">Mã nguồn và tài liệu bổ trợ chính thức của sách — <a href="https://github.com/chiphuyen/aie-book" target="_blank" rel="noopener noreferrer">github.com/chiphuyen/aie-book</a></li>
+        <li id="ref-4">Edward J. Hu et al., <em lang="en">LoRA: Low-Rank Adaptation of Large Language Models</em> (2021). <a href="https://arxiv.org/abs/2106.09685" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2106.09685</a></li>
+        <li id="ref-5">Neil Houlsby et al., <em lang="en">Parameter-Efficient Transfer Learning for NLP</em> (2019). <a href="https://arxiv.org/abs/1902.00751" target="_blank" rel="noopener noreferrer">arxiv.org/abs/1902.00751</a></li>
+        <li id="ref-6">Tim Dettmers et al., <em lang="en">QLoRA: Efficient Finetuning of Quantized LLMs</em> (2023). <a href="https://arxiv.org/abs/2305.14314" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2305.14314</a></li>
+        <li id="ref-7">Oded Ovadia et al., <em lang="en">Fine-Tuning or Retrieval? Comparing Knowledge Injection in LLMs</em> (2024). <a href="https://arxiv.org/abs/2312.05934" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2312.05934</a></li>
+        <li id="ref-8">Shijie Wu et al., <em lang="en">BloombergGPT: A Large Language Model for Finance</em> (2023). <a href="https://arxiv.org/abs/2303.17564" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2303.17564</a></li>
+        <li id="ref-9">Xianzhi Li et al., <em lang="en">Are ChatGPT and GPT-4 General-Purpose Solvers for Financial Text Analytics?</em> (2023). <a href="https://arxiv.org/abs/2305.05862" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2305.05862</a></li>
+        <li id="ref-10">Shuming Ma et al., <em lang="en">The Era of 1-bit LLMs: All Large Language Models are in 1.58 Bits</em> (2024). <a href="https://arxiv.org/abs/2402.17764" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2402.17764</a></li>
+        <li id="ref-11">Prateek Yadav et al., <em lang="en">TIES-Merging: Resolving Interference When Merging Models</em> (2023). <a href="https://arxiv.org/abs/2306.01708" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2306.01708</a></li>
+        <li id="ref-12">Dahyun Kim et al., <em lang="en">SOLAR 10.7B: Scaling Large Language Models with Simple yet Effective Depth Up-Scaling</em> (2023). <a href="https://arxiv.org/abs/2312.15166" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2312.15166</a></li>
+        <li id="ref-13">Thư viện PEFT của Hugging Face — <a href="https://github.com/huggingface/peft" target="_blank" rel="noopener noreferrer">github.com/huggingface/peft</a></li>
+        <li id="ref-14">Vijay Korthikanti et al., <em lang="en">Reducing Activation Recomputation in Large Transformer Models</em> (2022). <a href="https://arxiv.org/abs/2205.05198" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2205.05198</a></li>
+        <li id="ref-15">Vipul Raheja et al., <em lang="en">CoEdIT: Text Editing by Task-Specific Instruction Tuning</em> (2023) — công trình Flan-T5 của Grammarly. <a href="https://arxiv.org/abs/2305.09857" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2305.09857</a></li>
+        <li id="ref-16">Armen Aghajanyan et al., <em lang="en">Intrinsic Dimensionality Explains the Effectiveness of Language Model Fine-Tuning</em> (2020). <a href="https://arxiv.org/abs/2012.13255" target="_blank" rel="noopener noreferrer">arxiv.org/abs/2012.13255</a></li>
+      </ol>
+      <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+      <p class="vi-only"><strong>Trong bộ bài:</strong> <a href="index.html">Trang bìa</a> · <a href="chapter-6-rag-and-agents.html">Chương 6 · RAG và tác tử</a> · <a href="chapter-8-dataset-engineering.html">Chương 8 · Kỹ thuật dữ liệu</a></p>
+      <p class="en-only" lang="en"><strong>In this series:</strong> <a href="index.html">Cover</a> · <a href="chapter-6-rag-and-agents.html">Chapter 6 · RAG and Agents</a> · <a href="chapter-8-dataset-engineering.html">Chapter 8 · Dataset Engineering</a></p>
+      <!-- NAV:END -->
+    </div>
+    <div class="edition"><span class="standard-copy">VI · 2026</span><span class="easy-only">VI · 2026</span><span class="en-only" lang="en">EN · 2026</span></div>
+  </footer>
+</main>
+
+
+
+
+<script>
+  (function () {
+    const STORAGE_KEY = "aie-reading-mode";
+    const VALID_MODES = ["easy", "quick", "deep"];
+    const modeButtons = document.querySelectorAll(".reading-controls [data-mode]");
+
+    function setMode(requestedMode, persist) {
+      const mode = VALID_MODES.includes(requestedMode) ? requestedMode : "deep";
+      document.documentElement.dataset.readingMode = mode;
+      modeButtons.forEach(function (button) {
+        button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
+      });
+      if (persist) {
+        try { localStorage.setItem(STORAGE_KEY, mode); } catch (_) {}
+      }
+    }
+
+    setMode(document.documentElement.dataset.readingMode, false);
+    modeButtons.forEach(function (button) {
+      button.addEventListener("click", function () { setMode(button.dataset.mode, true); });
+    });
+
+    const LANG_KEY = "aie-lang";
+    const langButtons = document.querySelectorAll(".lang-controls [data-lang-option]");
+
+    function setLang(requestedLang, persist) {
+      const lang = requestedLang === "en" ? "en" : "vi";
+      document.documentElement.dataset.lang = lang;
+      document.documentElement.setAttribute("lang", lang);
+      langButtons.forEach(function (button) {
+        button.setAttribute("aria-pressed", String(button.dataset.langOption === lang));
+      });
+      if (persist) {
+        try { localStorage.setItem(LANG_KEY, lang); } catch (_) {}
+      }
+    }
+
+    setLang(document.documentElement.dataset.lang, false);
+    langButtons.forEach(function (button) {
+      button.addEventListener("click", function () { setLang(button.dataset.langOption, true); });
+    });
+  })();
+
+  /* SECTION-RAIL: on-page section index (scroll-spy). Built from the page's own id'd
+     sections; reuses each heading's vi-only/en-only + reading-mode spans so language
+     and reading mode are handled by the existing CSS. No per-page markup. */
+  (function () {
+    if (document.querySelector(".section-rail")) return;
+    var main = document.querySelector("main") || document.body;
+    var targets = Array.prototype.slice.call(
+      document.querySelectorAll("main .section[id], main .closing[id]")
+    );
+    if (targets.length < 2) return;
+
+    function labelFor(sec) {
+      var id = sec.getAttribute("aria-labelledby");
+      var el = (id && document.getElementById(id)) ||
+               sec.querySelector(".section-heading h2, h2, h3, .eyebrow");
+      return el ? el.innerHTML : sec.id;
+    }
+
+    var nav = document.createElement("nav");
+    nav.className = "section-rail";
+    nav.setAttribute("aria-label", "Mục lục trang");
+    var list = document.createElement("ol");
+    list.className = "section-rail__list";
+    var byId = {};
+
+    targets.forEach(function (sec) {
+      var li = document.createElement("li");
+      li.className = "section-rail__item";
+      var a = document.createElement("a");
+      a.className = "section-rail__link";
+      a.href = "#" + sec.id;
+      a.innerHTML =
+        '<span class="section-rail__tick" aria-hidden="true"></span>' +
+        '<span class="section-rail__label">' + labelFor(sec) + "</span>";
+      li.appendChild(a);
+      list.appendChild(li);
+      byId[sec.id] = li;
+    });
+    nav.appendChild(list);
+    main.appendChild(nav);
+
+    var activeId = null;
+    function setActive(id) {
+      if (id === activeId) return;
+      if (activeId && byId[activeId]) byId[activeId].classList.remove("is-active");
+      if (id && byId[id]) byId[id].classList.add("is-active");
+      activeId = id;
+    }
+    function update() {
+      var line = window.innerHeight * 0.3;
+      var current = targets[0].id;
+      for (var i = 0; i < targets.length; i++) {
+        if (targets[i].getBoundingClientRect().top - line <= 0) current = targets[i].id;
+      }
+      setActive(current);
+    }
+    var ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(function () { update(); ticking = false; });
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    update();
+  })();
+</script>
+</body>
+</html>
