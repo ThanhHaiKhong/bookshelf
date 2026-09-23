@@ -42,3 +42,310 @@ Cả hai phải in `ALL CHECKS PASS`.
 8. <https://sre.google/sre-book/service-level-objectives/> — Google SRE Book, SLI/SLO/SLA.
 
 **Caveat trung thực:** số Twitter (~4.6k/12k/300k req/s) là số Kleppmann trích từ bài nói 2012 của Krikorian (ref-4), **không** phải số vận hành hiện thời — footer chương ghi rõ điều này. Ví von chế độ Dễ hiểu (bánh xe dự phòng, con ốc lỏng…) là minh hoạ bổ sung, không phải ví dụ nguyên văn trong sách.
+
+---
+
+## Bản vá 2026-09-12 — section rail
+
+`book-qa` được cập nhật sau wave genesis và thêm ràng buộc **section-index rail**
+(scroll-spy), làm fail ngược cả hai trang vốn đã ghi PASS ở trên:
+
+```
+- section-index rail CSS missing (no /* SECTION-RAIL:START */ sentinel)
+- section-index rail JS missing (no section-rail__list builder)
+```
+
+**Đã vá.** Khối CSS (`SECTION-RAIL:START … END`, trước `</style>`) và IIFE
+(`section-rail__list`, trước `</script>` cuối) được trích **byte-identical** từ
+scaffold canonical `~/Documents/secrets-of-a-super-memory` — bản cover và bản chapter
+ở đó giống hệt nhau nên chỉ có một khối duy nhất. Không sửa prose, style khác, hay
+nav fence.
+
+| Kiểm chứng | Kết quả |
+|---|---|
+| `book-qa --kind cover` + `--kind chapter` | ✅ `ALL CHECKS PASS`, exit 0 (cả hai) |
+| Khối chèn so với canonical | ✅ identical (diff rỗng, CSS + JS, cả hai trang) |
+| Cân bằng tag | ✅ `<style>` 1/1, `<script>` 2/2 mỗi trang |
+| Rail render (Chrome 1440×900) | ✅ Ch1: 4 mục → `#reliability`/`#scalability`/`#maintainability`/`#diagnostic`; bìa: 2 mục → `#parts`/`#how-to-read` |
+| Scroll-spy | ✅ 4/4 section map đúng chỉ số active |
+| Ẩn ở viewport hẹp | ✅ `display: none` tại 1100px (ngưỡng 1280px) |
+| Chín biến CSS rail phụ thuộc | ✅ đủ trong cả light lẫn dark |
+
+**Phạm vi:** đây là lần chạy lại **gate `book-qa` + kiểm chứng render**, *không* phải
+một vòng `book-fidelity-auditor` mới. Các dòng ✅ ở bảng đầu (link sweep, external
+refs, faithfulness) vẫn dựa trên lần audit genesis — nội dung trang không đổi nên
+chúng không bị bản vá này làm mất hiệu lực.
+
+---
+
+# Wave Phần I — Chương 2–4 (2026-09-12)
+
+Tác giả: ba `book-chapter-author` chạy song song. Tích hợp: `book-cover-curator`.
+Thẩm định: `book-fidelity-auditor` (read-only). Gate: `book-qa`.
+
+| Trang | book-qa | Scaffold | Faithfulness (nguồn / spot-check) | Nav state |
+|---|---|---|---|---|
+| index.html (bìa) | ✅ PASS (`--kind cover`) | ✅ | n/a — không có cite trong trang; roster "4/4" khớp thực tế trên đĩa | Ch1–4 live; Phần II/III đúng "sắp có" |
+| chapter-1-…applications.html | ✅ PASS (template = ch2) | ✅ nội dung không đổi (chỉ NAV + ghi chú ref) | 8/8 ref đúng như đã ghi: O'Reilly/CACM 403, InfoQ 405 — bot-blocked, không phải link chết | prev → Bìa; next → Ch2 (live) |
+| chapter-2-data-models-and-query-languages.html | ✅ PASS (template = ch1) | ✅ | 24/24 ref resolve; spot-check 4 đặc thù — IMS/Apollo 1968 (khớp IBM history), CODASYL suy tàn đầu 1980s, định nghĩa impedance mismatch, MongoDB khai tử map-reduce từ 5.0 | prev → Ch1; next → Ch3 |
+| chapter-3-storage-and-retrieval.html | ✅ PASS (template = ch1) | ✅ | 25/25 ref resolve; auditor tải thẳng PDF gốc O'Neil 1996 — câu trích khớp **nguyên văn**; "LSM luôn nhanh hơn B-tree" được đóng khung đúng là ngộ nhận; leveled/size-tiered có box "bối cảnh 2017", nêu cả UCS 5.0; số LevelDB/RocksDB khớp source | prev → Ch2; next → Ch4 |
+| chapter-4-encoding-and-evolution.html | ✅ PASS (template = ch1) | ✅ | 26/26 ref resolve; công thức tag/zigzag/wire-type khớp protobuf.dev nguyên văn; cặp 59/34 byte khớp blog Kleppmann 2012 **và** được đóng khung rõ là đo trên một bản ghi ví dụ, không phải tỉ lệ nén phổ quát; `required` vắng mặt trong proto3 khớp doc hiện hành; **không** có khẳng định nào về gRPC streaming | prev → Ch3; next → Ch5 disabled "sắp có" |
+| chapter-5 … chapter-12 | — | — | — | sắp có (chưa viết) |
+
+**Site-level**
+- Link/anchor/cite: ✅ 0 link nội bộ chết, 0 anchor `#id` treo, mọi cite `#ref-N` resolve đúng trang. Chuỗi nav Ch1↔Ch2↔Ch3↔Ch4 đúng hai chiều; Ch4→Ch5 đúng là span "sắp có".
+- External refs (sweep độc lập, UA Chrome thật): **76 URL duy nhất** → 71×200, 4×403 (cacm.acm.org, oreilly.com, 3× w3.org), 1×405 (infoq.com). **Zero 404/NXDOMAIN** — không có link nào thực sự chết đội lốt bot-blocked.
+- Bilingual: ✅ đủ 4 lớp, không có `.quick-only`; 0 phần tử `en-only` thiếu `lang="en"`. Kiểm bằng parser DOM thật. Ngoại lệ duy nhất: khối `trap-comparison deep-only` chỉ có standard+en — đúng thiết kế, vì nó đã bị `deep-only` che ở chế độ dễ. Script + CSS mode-switch byte-identical trên cả 5 trang. Storage key nhất quán 5/5.
+- Curator-region: ✅ không leak. Baseline `e93d8d5`. Ch1 = 2 hunk, cả hai nằm trọn trong NAV fence; `index.html` = roster/counts/intro, đúng phạm vi vai trò.
+- Faithfulness caveat: **spot-check, không phải audit toàn diện** — 4 đặc thù/trang cho Ch2–4, fetch thẳng nguồn gốc chứ không tin text ref-list; Ch1 dựa một phần vào spot-check genesis vì nội dung không đổi.
+
+**Verdict: ✅ PASS** — cho phép đánh ✅ các dòng trên.
+
+## Quy ước mới: đánh dấu bot-blocked ngay trong ref-list
+
+Ref trả 403/405 vì chặn bot giờ mang một `<em>` anh em **ngoài** thẻ `<a>`, ghi rõ host nào chặn và mã trả về. Mục đích: trang tự đứng được — người verify bấm link gặp 403 mà không có ghi chú thì không phân biệt được chặn bot với link chết, và không phải ai cũng lục lại file này.
+
+Ch2 và Ch4 tự đặt quy ước trong wave này; auditor khuyến nghị **đồng bộ Chương 1 theo quy ước mới** thay vì gỡ nó khỏi Ch2/Ch4. Đã thi hành: `ref-3` (oreilly 403), `ref-4` (infoq 405), `ref-5` (cacm 403) của Chương 1 nay có ghi chú; cả 5 trang chạy lại `book-qa` vẫn PASS. Ch2 để ghi chú **bên trong** `<a>`, khác Ch4 và Ch1 — khác biệt hình thức đã biết, không chặn PASS.
+
+**Khác biệt đã biết, chưa xử lý:** `ref-1` (trích dẫn chính cuốn sách) là text trơn ở Ch1/Ch3/Ch4 nhưng được Ch2 link tới Open Library. Không vi phạm "không bịa" — trích dẫn sách in vẫn đầy đủ tên/nhà xuất bản/năm/chương dù không có URL. Để lại cho lượt polish sau.
+
+## Tái tạo QA
+
+```
+cd designing-data-intensive-applications
+book-qa index.html chapter-2-data-models-and-query-languages.html --kind cover
+book-qa chapter-1-reliable-scalable-and-maintainable-applications.html chapter-2-data-models-and-query-languages.html --kind chapter
+for f in chapter-2-*.html chapter-3-*.html chapter-4-*.html; do
+  book-qa "$f" chapter-1-reliable-scalable-and-maintainable-applications.html --kind chapter
+done
+```
+
+⚠️ Đừng dùng chính một trang làm template cho nó — `book-qa X X` luôn sinh finding giả *"template `<title>` still present"*.
+
+---
+
+# Wave Phần II — Chương 5–9 (2026-09-12)
+
+Tác giả: năm `book-chapter-author` chạy song song (ch5–9). Tích hợp: `book-cover-curator`.
+Thẩm định: `book-fidelity-auditor` (read-only). Gate: `book-qa`.
+
+| Trang | book-qa | Scaffold | Faithfulness (nguồn / spot-check) | Nav state |
+|---|---|---|---|---|
+| index.html (bìa) | ✅ PASS (`--kind cover`) | ✅ | n/a — không cite; roster "5/5" khớp thực tế | Thẻ Phần II từ `soon` → live, 5/5 link đúng |
+| chapter-1-…applications.html | ✅ PASS | ✅ | 8/8 ref resolve; lượt `ddia-ch1-fix` thêm cite `ref-1` (0 → 56) và `ref-3` (0 → 3); không xoá cite ngoài nào | prev → Bìa; next → Ch2 |
+| chapter-2-data-models-and-query-languages.html | ✅ PASS | ✅ | 24/24 ref resolve; không đổi so với wave trước | không đổi |
+| chapter-3-storage-and-retrieval.html | ✅ PASS | ✅ | 25/25 ref resolve | NAV: chính tả "hoá"→"hóa" trong fence |
+| chapter-4-encoding-and-evolution.html | ✅ PASS | ✅ | 26/26 ref resolve | NAV: next Ch5 disabled-span → live |
+| chapter-5-replication.html | ✅ PASS | ✅ | 25/25 ref resolve; `w + r > n` đặt tên "điều kiện, không phải bảo đảm" + liệt kê 5 trường hợp công thức đúng mà dữ liệu vẫn sai; LWW đặt tên "hội tụ bằng cách vứt dữ liệu đi" | prev → Ch4; next → Ch6 |
+| chapter-6-partitioning.html | ✅ PASS | ✅ | 27/27 ref resolve; "consistent hashing" đóng khung đúng phân biệt Karger 1997 vs cách dùng lỏng trong CSDL, theo khuyến nghị gọi `hash partitioning` | prev → Ch5; next → Ch7 |
+| chapter-7-transactions.html | ✅ PASS | ✅ | 20/20 ref resolve; tên mức cô lập cite đúng doc từng vendor — PostgreSQL "repeatable read" = SI verified nguyên văn qua WebFetch; Oracle "serializable" = SI qua Hermitage; MySQL yếu hơn qua doc MySQL | prev → Ch6; next → Ch8 |
+| chapter-8-the-trouble-with-distributed-systems.html | ✅ PASS | ✅ | 22/22 ref resolve; mọi số liệu có khối "Về các con số" nêu điều kiện đo; GC 4,17s/11,45s khớp nguyên văn blog LinkedIn; sự cố GitHub verified — GitHub viết *"a minute and a half"*, nên khung "90 giây là cách đọc của Kleppmann" là chính xác | prev → Ch7; next → Ch9 |
+| chapter-9-consistency-and-consensus.html | ✅ PASS | ✅ | 31/31 ref resolve; CAP đúng phạm vi hẹp (C = chỉ khả tuyến tính hoá, mô hình một thanh ghi, lỗi duy nhất = phân vùng mạng, "2 trong 3" gọi thẳng là gây hiểu lầm); linearizability ≠ serializability tách bạch bằng ví dụ PostgreSQL SSI; FLP nêu đúng điều kiện | prev → Ch8; next → Ch10 disabled "sắp có" |
+| chapter-10 … chapter-12 | — | — | — | sắp có (chưa viết) |
+
+**Site-level**
+
+- Link/anchor/cite: ✅ 0 link nội bộ chết, 0 anchor treo, 0 cite treo trên cả 10 trang; cite-count = ref-count khớp từng trang. Chuỗi nav Ch1↔…↔Ch9 đúng hai chiều.
+- External refs: **107 URL duy nhất** trong Ch5–9 → **0 link chết thật** (404/NXDOMAIN). 97×200, 8×403 bot-blocked, 1×502, 2×429 (rate-limit của chính script kiểm, retry ra 200).
+- Bilingual: ✅ đủ 4 lớp, 0/10 trang có `.quick-only`; **0/848** phần tử `en-only` thiếu `lang="en"` (kiểm bằng parser DOM thật).
+- Script & style: hai khối `<script>` **byte-identical** trên cả 10 trang kể cả bìa; `<style>` chỉ khác watermark `DDIA / 0N`. Storage key khớp 10/10.
+- Curator-region: ✅ không leak. Baseline `b2ac565`. Diff Ch1 (112 dòng) xác nhận là lượt `ddia-ch1-fix`, không phải curator.
+- Faithfulness caveat: **spot-check, không phải audit toàn diện** — 12 đặc thù rủi ro cao được lấy mẫu trên 5 chương; 4 verified độc lập qua WebFetch tới tận nguồn gốc (doc PostgreSQL, blog LinkedIn, blog Kleppmann + báo cáo sự cố gốc của GitHub), 8 còn lại xác nhận qua đọc on-page với cite resolve được.
+
+**Verdict: ✅ PASS** — cho phép đánh ✅ các dòng trên.
+
+## Bốn việc polish sau PASS (đã xong)
+
+Auditor nêu 4 gap không chặn PASS; cả bốn đã được route về đúng agent và xử lý xong:
+
+| # | Vấn đề | Xử lý |
+|---|---|---|
+| 1 | Ch5 `ref-18` (haslab.wordpress.com, 403) thiếu ghi chú bot-block | Đã thêm `<em>` ngoài thẻ `<a>` |
+| 2 | Ch7 `ref-10` (dev.mysql.com, 403) thiếu ghi chú | Đã thêm; Ch7 nay có 4 ref bị chặn, tất cả đều có ghi chú |
+| 3 | Ch6 `ref-20` (elastic.co/blog) trả 502 | **Sự cố tạm thời, không phải link mục nát.** Body của phản hồi 502 là trang lỗi có thương hiệu của chính Elastic (`Temporary outage — We're on it!`, phục vụ tĩnh từ S3), và `elastic.co/docs` vẫn 200 — tức hỏng một phần hạ tầng, resource không biến mất. Giữ nguyên URL, thêm `<em>` nói đúng bản chất (**không** dùng câu mẫu bot-blocked). Bổ sung `ref-28` (doc `_routing` chính thức, 200) đỡ phần cơ chế, giữ `ref-21` đỡ phần coordinating node. Cả ba khẳng định Elastic nay có doc chính thức còn sống đỡ cơ chế **cộng** blog đỡ minh hoạ — chắc chắn hơn trạng thái ban đầu. Ch6: 28 ref, 127 cite |
+| 4 | Ch7 dùng "phân vùng" cho sharding trong khi canonical là "Phân mảnh" | Đổi đủ 9/9 chỗ; Ch7 nay còn 0 chữ "phân vùng". "Phân vùng **mạng**" ở Ch5/Ch8/Ch9 là khái niệm khác, giữ nguyên |
+
+## Bài học hạ tầng của wave này
+
+**Mã HTTP phụ thuộc User-Agent theo cách phản trực giác.** Kết luận "403 = chặn bot" đo bằng một UA duy nhất là không đáng tin:
+
+| Host | UA Chrome | `Mozilla/5.0` | `curl` | Chrome thật |
+|---|---|---|---|---|
+| haslab.wordpress.com | 403 | 200 | 200 | ✅ mở được |
+| dev.mysql.com | 403 | 403 | **200** | ✅ mở được |
+| w3.org | 403 | 403 | 403 | ✅ qua Cloudflare |
+| elastic.co/blog | 502 | 502 | 502 | ❌ hỏng thật |
+
+Chỉ khi mở bằng **trình duyệt thật** mới phân biệt được ba tình huống khác hẳn nhau: chặn bot mà người đọc vẫn vào được, thử thách Cloudflare, và link mục nát. Đã đưa quy trình này vào `CLAUDE.md`.
+
+**Ref trỏ blog của vendor mục nát nhanh hơn ref trỏ doc của vendor.** Ưu tiên doc chính thức khi cả hai cùng đỡ được một khẳng định.
+
+**Gặp 5xx thì đọc body, đừng chỉ đọc mã.** Một 502 có thể là link mục nát, cũng có thể
+là trang lỗi tạm thời do chính vendor phục vụ — hai thứ đòi hai cách xử lý ngược nhau
+(thay nguồn vs giữ nguyên kèm ghi chú). Trong wave này chẩn đoán "mục nát" ban đầu là
+**sai**: body cho thấy trang `Temporary outage` có thương hiệu Elastic, và `elastic.co/docs`
+vẫn 200. Gỡ một nguồn hợp lệ vì máy chủ của họ hỏng nửa tiếng là phản tác dụng.
+
+**Scratchpad dùng chung gây ghi đè chéo.** Năm agent ghi file trung gian **cùng tên** (`body1.html`…) vào **cùng một thư mục**; bản ráp đầu của Ch5 lẫn nội dung Ch7 và Ch9. `ddia-ch5` tự phát hiện, chuyển sang thư mục riêng, viết lại, và cảnh báo. Kiểm chéo sau đó (định danh chương; thuật ngữ chỉ-có-ở-một-chương; nội dung từng section khớp id; auditor đọc hiểu độc lập) xác nhận **không có nhiễm nào sống sót** — nhưng mọi gate đều xanh trong lúc file đang lẫn, nên nếu Ch5 không tự bắt thì cả wave đã hỏng âm thầm. Đã đưa luật `scratchpad/chN/` vào `CLAUDE.md`.
+
+## Mục mở
+
+**Chính tả `hoá` / `hóa` trộn lẫn toàn cuốn** — có sẵn từ wave genesis, không do wave này sinh ra. Bìa + Ch1 + Ch4 dùng `hóa` (60 chỗ); Ch2, 3, 5, 6, 7, 8, 9 dùng `hoá` (436 chỗ). Cả hai đều là tiếng Việt hợp lệ, khác nhau ở chỗ đặt dấu thanh. Tên chương canonical trên bìa và toàn bộ nav dùng `hóa`. Chưa chuẩn hoá — chờ quyết định, cần một lượt riêng.
+
+**`ref-1` thiếu link ngoài** ở 8/9 chương (chỉ Ch2 link tới Open Library). Không vi phạm "không bịa" (trích dẫn sách in đủ tên/nhà xuất bản/năm/chương). Để lượt polish sau.
+
+
+## Đính chính
+
+Commit `60a5f35` mô tả sai kết cục của việc số 3 ở trên: message ghi rằng link blog
+Elastic là link mục nát, đã bị thay bằng doc chính thức, và hai khẳng định chỉ blog mới
+có đã bị gỡ. Đó là ảnh chụp trạng thái **giữa hai vòng sửa** của `ddia-ch6`, không phải
+trạng thái được commit. Nội dung thật sự nằm trong `60a5f35` là kết quả vòng hai: URL
+blog **được giữ** kèm ghi chú outage, hai khẳng định **được khôi phục** (dựa trên văn
+bản blog mà agent đã fetch và đọc thành công sớm hơn trong phiên, trước khi outage xảy
+ra — không phải khôi phục theo trí nhớ), và `ref-28` được **bổ sung** chứ không thay thế.
+File trên đĩa khớp commit; chỉ phần mô tả là sai. Bảng ở trên đã sửa.
+
+---
+
+# Wave Phần III — Chương 10–12 · TRỌN CUỐN (2026-09-12)
+
+Tác giả: ba `book-chapter-author` chạy song song, **mỗi agent một thư mục scratchpad riêng**.
+Tích hợp: `book-cover-curator`. Thẩm định: `book-fidelity-auditor` (read-only). Gate: `book-qa`.
+
+| Trang | book-qa | Scaffold | Faithfulness | Nav |
+|---|---|---|---|---|
+| index.html (bìa) | ✅ PASS | bìa, **12/12 live**, không còn "sắp có" | n/a — không cite | OK |
+| chapter-1 | ✅ PASS | 56 cite `ref-1` / 79 tổng | spot-check trước đó (caveat Twitter lịch sử) | OK |
+| chapter-2 | ✅ PASS | 59 cite `ref-1` | ghi chú w3.org nay đúng vị trí `<em>` ngoài `</a>` | OK |
+| chapter-3 | ✅ PASS | 33 cite `ref-1` | — | OK |
+| chapter-4 | ✅ PASS | 35 cite `ref-1` | w3.org wording chuẩn | OK |
+| chapter-5 | ✅ PASS | 62 cite `ref-1` | dev.mysql.com / haslab thuộc nhóm "mở được" | OK |
+| chapter-6 | ✅ PASS | 35 cite `ref-1` | dl.acm.org chuẩn; ghi chú outage elastic.co **đã gỡ** (link về 200) | OK |
+| chapter-7 | ✅ PASS | 60 cite `ref-1` | vldb.org / dev.mysql / dl.acm.org chuẩn | OK |
+| chapter-8 | ✅ PASS | 53 cite `ref-1` | dl.acm.org + queue.acm.org chuẩn | OK |
+| chapter-9 | ✅ PASS | 33 cite `ref-1` | queue.acm.org + oreilly chuẩn | OK |
+| chapter-10-batch-processing.html | ✅ PASS | 27 ref · 58 cite `ref-1` | trích triết lý Unix **nguyên văn** khớp nguồn; số "235 lần" có link sống; caveat Hadoop/MapReduce cân bằng — tránh cả "đã chết" lẫn "vẫn mặc định" | prev → Ch9; next → Ch11 |
+| chapter-11-stream-processing.html | ✅ PASS | 27 ref · 60 cite `ref-1` | "exactly-once" đóng khung đúng là **hiệu ứng** đúng một lần nhờ luỹ đẳng + commit nguyên tử; nói thẳng câu "Kafka bảo đảm exactly-once" trống không là sai; CDC ≠ event sourcing tách bạch | prev → Ch10; next → Ch12 |
+| chapter-12-the-future-of-data-systems.html | ✅ PASS | 19 ref · 78 cite `ref-1` (ngoài dải, đã review — hợp lý, **không padding**) | mục đạo đức có disclaimer tường minh "mọi phát biểu quy chuẩn là của Kleppmann"; kiến trúc lambda giữ đúng giọng **phê phán** của tác giả | prev → Ch11; next → Bìa ("Hết cuốn") |
+
+**Site-level**
+
+- `book-qa`: **13/13 PASS**. Link/anchor/cite: 0 href nội bộ chết, 0 anchor treo, 0 cite treo, **0 ref thừa**.
+- External refs: **246 URL duy nhất** toàn site → 230×200, còn lại là các host bot-block đã biết. 0 link chết thật.
+- Bilingual: **0/1146** phần tử `en-only` thiếu `lang="en"`; không còn `.quick-only`; storage key nhất quán 13/13.
+- Curator-region: 0 dòng đổi rơi ra ngoài NAV fence / vùng bìa.
+- Faithfulness caveat: **spot-check, không phải audit toàn bộ** — 13 trang × ~100–170 cite/trang không soát từng cái.
+
+**Verdict: ✅ PASS** — cuốn DDIA **12/12 chương** đủ điều kiện đánh ✅.
+
+## Hai lượt sửa toàn site trong wave này
+
+### 1. Ghi chú bot-blocked nói đúng thứ đo được (20 chỗ)
+
+`ddia-ch12` mở `oreilly.com` bằng trình duyệt thật và phát hiện câu mẫu dùng từ wave trước — *"link trả 403 cho fetcher nhưng mở bình thường trên trình duyệt"* — **không đúng với mọi host**. Chính ghi chú sinh ra để chống bịa lại đang chứa một khẳng định chưa ai kiểm.
+
+Đo lại từng host bằng Chrome thật (`document.title`), chia ba nhóm:
+
+| Nhóm | Host | Trình duyệt thật thấy |
+|---|---|---|
+| Mở được | `dev.mysql.com`, `haslab.wordpress.com`, `vldb.org` | nội dung đúng |
+| Qua được sau xác minh | `w3.org`, `dl.acm.org` | "Just a moment…" (Cloudflare) |
+| Chặn cả headless | `oreilly.com`, `cacm.acm.org`, `queue.acm.org`, `infoq.com` | "Access Denied" (Akamai) · "Attention Required" · "Human Verification" |
+
+**Auditor FAIL lượt đầu vì lượt vá bỏ sót 5 chỗ.** Nguyên nhân: regex đòi tên host đứng **ngay đầu** `<em>(`. Năm ghi chú có hình dạng khác — Ch2 đặt `<em>` **bên trong** thẻ `<a>` không có ngoặc mở; Ch6/Ch8 chèn thông tin ấn bản (doi, số tạp chí) trước tên host. Hậu quả: cùng một host mà hai chương nói ngược nhau — Ch8 bảo `queue.acm.org` "mở bình thường" trong khi Ch9 bảo "chặn cả headless". Đã vá đủ; **mỗi host nay đúng một lời khai trên toàn site**.
+
+Nhóm "chặn cả headless" cố ý **không** khẳng định theo cả hai chiều: không hứa "mở được" (đo thấy bị chặn), cũng không tuyên bố "không mở được trên trình duyệt thường" (headless vốn bị nhận diện, trình duyệt thật của người đọc có thể qua). Ghi chú chỉ nói đúng thứ đã đo và chỉ ra rằng trích dẫn đủ thông tin để tìm nguồn bằng đường khác.
+
+Tiện thể: `<em>` của Ch2 chuyển ra ngoài `</a>` (đóng mục mở từ wave Phần I), và gỡ ghi chú outage `elastic.co` vì link đã 200 trở lại.
+
+### 2. Chuẩn hoá quy ước đặt dấu (715 chỗ)
+
+Toàn site đổi từ kiểu đặt dấu trên nguyên âm cuối sang kiểu đặt trên nguyên âm đầu: `hoá→hóa`, `khoá→khóa`, `xoá→xóa`, `huỷ→hủy`, `tuỳ→tùy`, `luỹ→lũy`, `thoả→thỏa`… — 13 nhóm từ.
+
+Phạm vi thật rộng gấp rưỡi con số ban đầu: `khoá` (331) nhiều hơn cả `hoá` (171), nên sửa mỗi `hóa` thì site vẫn lệch.
+
+**Hai cái bẫy đã phòng:**
+- Từ có **phụ âm cuối** (`toàn` 249, `quyết` 154, `thuật` 123, `khoảng`, `loại`, `chuyển`, `hoàn`, `hoạt`) **không** mập mờ — dấu vốn đã ở âm chính. Thay chuỗi thô sẽ tạo `tòan`/`hòan`/`lọai`. Đã khớp theo **ranh giới từ**; xác minh 0 lỗi phát sinh.
+- `quả`/`quá`/`quý`/`quà` **trông giống** kiểu cũ nhưng không phải: trong `qu`, chữ `u` thuộc phụ âm kép chứ không phải âm đệm. Quét bằng luật ban đầu báo động giả 383 chỗ; loại `qu-` rồi mới đúng.
+
+**Auditor FAIL lượt đầu vì sót `thoả` (11 chỗ / 6 file)** — hậu quả của việc liệt kê danh sách từ **bằng tay** thay vì rút từ luật. Lượt sau quét bằng luật, sạch.
+
+## Bài học wave này
+
+**Vá theo mẫu thì phải quét theo mẫu tổng quát, không theo hình dạng mình đoán.** Cả hai lỗi FAIL đều cùng một gốc: lượt sửa dựa trên một khuôn hẹp (regex đòi host ở đầu; danh sách từ soạn tay) rồi tưởng đã xong. Gate bắt được cả hai vì nó kiểm **tính nhất quán giữa các trang**, thứ mà phép sửa cục bộ không tự thấy.
+
+**Scratchpad riêng cho mỗi agent fan-out đã chứng minh hiệu quả** — wave này ba agent song song, 0 nhiễm chéo, so với wave trước phải phát hiện bằng tay sau khi một chương ráp nhầm nội dung của hai chương khác.
+
+## Mục mở còn lại
+
+**`ref-1` thiếu link ngoài** ở hầu hết chương (chỉ Ch2 link tới Open Library). Không vi phạm "không bịa" — trích dẫn sách in đủ tên/nhà xuất bản/năm/chương. Để lượt polish sau.
+
+**Trang mind-map chưa có.** CSS `.mindmap-banner` đã nằm sẵn trong `<style>` của bìa nhưng không có element trong body. Giờ cuốn sách đã đủ 12 chương, đây là ứng viên hợp lý cho wave tiếp theo.
+
+---
+
+# Trang mind-map — bản đồ toàn cuốn (2026-09-12)
+
+Dựng bởi **main session** (theo `CLAUDE.md`: trang không-phải-chương chưa được `book-chapter-author`
+tổng quát hoá). Banner trên bìa: `book-cover-curator`. Thẩm định: `book-fidelity-auditor`.
+
+| Trang | book-qa | Ghi chú | Faithfulness | Nav |
+|---|---|---|---|---|
+| index.html | ✅ PASS | banner `.mindmap-banner` trỏ `mind-map.html`, không mang class `soon` | không đổi nội dung khác | live |
+| chapter-1 … chapter-12 | ✅ PASS (12/12) | không trang nào bị đụng trong lượt này | đã PASS từ các lượt trước | live, không đổi |
+| **mind-map.html** | ✅ PASS (`--kind synthesis`) | 5 section, 12 thẻ chương × **47 link sâu** (đối chiếu đúng tiêu đề đích, không chỉ kiểm anchor tồn tại), 8 thẻ through-line, 4 ref, 46 cite | 8/8 sợi chỉ khớp nội dung đã audit ở các trang chương; một mệnh đề thiếu nguồn đã bị gỡ | prev → Bìa; next → Chương 1 |
+
+**Site-level:** 0 link/anchor/cite hỏng trên cả 14 trang (kiểm độc lập, không chỉ dựa `book-qa`);
+bốn lớp song ngữ cân bằng (`standard-copy` 45 / `easy-only` 45), mọi `en-only` có `lang="en"`;
+storage key nhất quán; curator-region sạch (`index.html` chỉ +11 dòng).
+
+**Verdict: ✅ PASS**
+
+## Trang này làm gì
+
+Không lặp lại mục lục của bìa. Giá trị riêng của nó là mục **`#through-lines`**: tám khái niệm
+quay lại ở nhiều chương dưới nhiều tên khác nhau — nhật ký nối đuôi (Ch3 → 5 → 11 → 12), dữ liệu
+phái sinh, đa số phán xử, đồng hồ và thứ tự, hai chiều tương thích, luỹ đẳng, phân mảnh vọng lại,
+và **"cái nhãn không phải bảo đảm"** (Ch7 tên mức cô lập → Ch9 CAP → Ch11 exactly-once). Cộng 47
+link sâu mở thẳng vào từng mục của từng chương.
+
+## Ba lỗi, và cái nào bắt được bằng gì
+
+**`book-qa` PASS ngay lần đầu, nhưng trang hỏng thật.** Ảnh chụp lộ ra nhãn link hiện **cả hai
+ngôn ngữ dính liền**: *"Đáng tin không phải là không bao giờ hỏng**Reliable doesn't mean never
+breaking**"*. Nguyên nhân không phải CSS mà là dữ liệu — hàm trích tìm `standard-copy` trong
+`<h2>`, nhưng **cả 59 `<h2>` section đều dùng `vi-only`/`en-only`**, nên rơi vào nhánh dự phòng
+`layer(...) or strip(h2)` và nối cả hai lớp. Nhánh dự phòng đó biến một lỗi lẽ ra phải ồn ào
+thành một giá trị sai im lặng. Đã bỏ fallback, thêm cảnh báo khi thiếu lớp.
+
+**Lỗi thứ hai cũng chỉ thấy bằng mắt:** 47 link hiện chữ hoa font mono vì container mang kèm class
+`chapter-path`, mà `.chapter-path span` ghi đè font đã định cho `.map-links`. Hợp với nhãn ngắn,
+không hợp 47 dòng câu dài. Đã gỡ class thừa.
+
+**Lỗi thứ ba do auditor bắt, và không phép kiểm tự động nào bắt nổi.** Thẻ "Hai chiều tương thích"
+khẳng định *"Chương 11 gặp lại khi lược đồ tiến hóa giữa dòng sự kiện đang chảy"*, cite `ref-1`.
+Auditor đọc hết 2.145 dòng của Chương 11, thử mọi biến thể từ khoá, và **không tìm thấy nội dung
+nào hỗ trợ mệnh đề đó**. Nó phân biệt rõ "chứng minh được là sai" với "không chứng minh được là
+đúng", và coi vế thứ hai là đủ để chặn — đúng tinh thần "không bịa".
+
+Chọn **cắt vế Chương 11** thay vì thêm nội dung vào Chương 11 để hợp thức hoá: phương án sau đòi
+viết vào trang thứ hai một khẳng định cũng không xác minh được, tức tự tạo nguồn cho chính mình.
+Nếu sau này ai đó đọc bản in và xác nhận, thì thêm vào Chương 11 trước (có cite trang cụ thể), rồi
+mới nối lại ở bản đồ.
+
+## Bài học
+
+**`book-qa` kiểm cấu trúc, không kiểm trang trông ra sao.** Hai trong ba lỗi của trang này qua
+được mọi cổng tự động. Trang mới phải được mở bằng trình duyệt thật và nhìn trước khi giao cho
+auditor.
+
+**Đừng viết `giá_trị or dự_phòng` trong code trích dữ liệu.** Khi lớp dữ liệu mong đợi không tồn
+tại, dự phòng trả về một giá trị *trông hợp lệ* nhưng sai — và không ai biết. Thà nổ ra ngay.
+
+## Mục mở
+
+**Link mind-map từ các trang chương.** Bản đồ hiện chỉ vào được từ bìa, trong khi nó hữu ích nhất
+lúc người đọc đang ở giữa một chương. Curator đề xuất thêm một dòng trong footer cross-link của cả
+12 chương, trỏ tới section của phần chứa chương đó (`#foundations` / `#distributed` / `#derived`)
+chứ không trỏ suông về đầu trang. Chưa làm — đụng 12 file, để một lượt riêng.
