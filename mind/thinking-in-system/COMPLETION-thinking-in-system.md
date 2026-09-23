@@ -3,6 +3,7 @@
 **Site:** `bookshelf/mind/thinking-in-system/`
 **Sách:** Donella H. Meadows, *Thinking in Systems: A Primer*, Chelsea Green Publishing, 2008
 **Audit:** 2026-09-23 · kiểm read-only bởi `book-fidelity-auditor`
+**Phạm vi PASS:** verdict được ra **trước** khi đổi đích link nguồn (xem *Nguồn* và *Ghi chú về trình tự*)
 **QA helper:** `book-qa` (cổng dùng chung, trên `$PATH`)
 
 ## Verdict
@@ -54,6 +55,27 @@ tên chương). Link trỏ tới **Internet Archive — bản mượn có kiểm
 Trước đó 117/155 trích dẫn (75%) treo vào **một** bản PDF toàn văn trên server
 `research.fit.edu` — vừa là vấn đề bản quyền khi trang công khai trỏ tới bản sao đầy
 đủ của sách đang bán, vừa là điểm chết đơn lẻ. Đã thay toàn bộ.
+
+### Ghi chú về trình tự — đọc kỹ chỗ này
+
+Auditor chạy và ra verdict PASS **khi trang còn trỏ vào bản PDF `research.fit.edu`**.
+Việc đổi đích link sang Internet Archive + Chelsea Green diễn ra **sau đó**, nên
+auditor **chưa từng nhìn thấy** các link hiện có trên trang.
+
+Điều này **không** làm PASS mất hiệu lực, vì thứ auditor kiểm là *nội dung*: nó mở
+văn bản sách thật và đối chiếu từng khẳng định với đúng chương. Nội dung, số hiệu
+`[N]`, và ánh xạ khẳng định → chương đều **không đổi** trong lần thay link; chỉ URL
+đích đổi, và vẫn là cùng một cuốn sách.
+
+Phần **chưa** qua mắt auditor và do main session tự kiểm:
+- `archive.org/details/thinkinginsystem0000mead` → HTTP 200, xác nhận đúng cuốn
+  (Meadows, Donella H.)
+- `chelseagreen.com` → 403 + trang thử thách Cloudflare "Just a moment…" kể cả với
+  UA trình duyệt thật; DNS phân giải bình thường → chặn bot, không phải link chết
+- Toàn bộ link ngoài còn lại của cuốn → 200
+- `book-qa` 5/5 PASS; 155 marker / 18 ref, 0 mồ côi, 0 gãy — sau khi thay link
+
+Muốn PASS phủ luôn bộ link hiện tại thì cần một lượt audit nữa.
 
 Nguồn bổ trợ: Hardin 1968 (*Science*, qua math.uchicago.edu), Stanford Encyclopedia
 of Philosophy (bounded rationality), hai bài luận gốc trên donellameadows.org,
