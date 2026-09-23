@@ -1,13 +1,14 @@
 # COMPLETION — Linux Kernel in a Nutshell (bilingual VI/EN companion)
 
 **Verdict: PASS** — issued by `book-fidelity-auditor` (read-only), 2026-09-22.
+**Re-audit 2026-09-23: ✅ PASS** — sau khi thêm `mind-map.html` + banner trên bìa.
 Gate: `book-qa` at `/Users/thanhhaikhong/.config/bin/book-qa`.
 Source: Greg Kroah-Hartman, *Linux Kernel in a Nutshell*, O'Reilly, 2006 (kernel 2.6 era).
 Free edition: <http://www.kroah.com/lkn/> (CC BY-SA 2.5).
 
 ## Site
 
-12 pages · ~1.45 MB · `index.html` + `chapter-1` … `chapter-11`.
+13 pages · `index.html` + `chapter-1` … `chapter-11` + `mind-map.html`.
 Part I (ch 1–6) Building the Kernel · Part II (ch 7–8) Major Customizations ·
 Part III (ch 9–11) Kernel Reference · Part IV (Appendices A & B) deliberately NOT
 authored, shown on the cover as "sắp có".
@@ -97,3 +98,56 @@ A mechanical match treated as evidence without reading its surroundings failed i
 - **Time-bound facts dated, not modernised** — GRUB Legacy named as such alongside
   GRUB 2; ketchup stated unmaintained with dated evidence; ten `CONFIG_*` symbol
   histories cited individually; `SCSI_SATA` noted as gone before the book shipped.
+
+## Bổ sung 2026-09-23 — bản đồ toàn cuốn
+
+`mind-map.html` (105 KB, tự dựng, **không CDN**) và banner dẫn vào nó trên bìa.
+
+| Trang | kind | book-qa | Link/anchor | Cites/refs | Ghi chú |
+|---|---|---|---|---|---|
+| `mind-map.html` | map | ✅ | **128/128** link nội bộ, gồm **42/42** anchor sâu `chapter-N.html#section` kiểm tới `id` thật ở file đích; 8/8 anchor cùng trang | 140 inline / 14 ref · 0 mồ côi · 0 gãy | auditor **tự phân tích lại**, không tin `book-qa` lẫn lời trang tự khai |
+| `index.html` | cover | ✅ | banner resolve; NAV fence **không đụng** | không đổi | 33 dòng thêm, 0 xoá, toàn selector CSS mới |
+| ch1–ch11 | chapter | ✅ 11/11 | không đổi | không đổi | không sửa (git xác nhận) |
+
+### Sách 2006 — phần "then/now" bị soi kỹ nhất
+
+Auditor đối chiếu **từng khẳng định về hiện tại** với nguồn sống hôm nay:
+
+| Khẳng định trên trang | Đối chiếu |
+|---|---|
+| kernel.org: stable **7.2.7**, mainline **7.3-rc4** | `releases.json` → 7.2.7 (21-09-2026), 7.3-rc4 (20-09-2026) — **khớp chính xác** |
+| Kroah-Hartman còn là longterm maintainer | bảng "Active kernel releases" → Greg KH & Sasha Levin cho 6.18, 6.12, 6.6, 6.1, 5.15 — **khớp** |
+| Chu kỳ mainline ~9–10 tuần | **khớp** |
+| Linux 3.0 ra 21-07-2011, đổi lược đồ đánh số | KernelNewbies — **khớp** |
+| `menuconfig`/`xconfig`/`nconfig`/`oldconfig` còn dùng | docs.kernel.org Kconfig — **khớp** |
+| `localmodconfig` → `olddefconfig` là luồng khuyến nghị | `quickly-build-trimmed-linux.html` + `makehelp.txt` — **khớp** |
+| `grub-mkconfig` sinh `grub.cfg` | GNU GRUB manual — **khớp** |
+| `kernel-install(8)` | systemd doc — **khớp nguyên văn** |
+| CC BY-SA 2.5, phát hành tự do từng chương | creativecommons.org + kroah.com/lkn — **khớp** |
+
+**10/14 nguồn ngoài được fetch trực tiếp.** ref-3 (O'Reilly) 403 đúng như chính mục ref
+đã ghi.
+
+**Gắn mốc thời gian:** 8 mục ref mang "(truy cập 23-09-2026)", và thẻ số phiên bản dùng
+"Tại thời điểm viết trang này / As this page is written" ngay cạnh con số dễ cũ.
+
+**Kiềm chế được giữ:** trang **không** khẳng định `localmodconfig` vắng mặt trong Bảng
+10-3 của sách (điều không kiểm chứng được) — chỉ nói điều đang đúng hôm nay, có trích
+kernel.org.
+
+**Không có chi tiết 2006 nào bị trình bày như sự thật hôm nay.**
+
+### Banner trên bìa
+Mọi token nó dùng (`--teal`, `--surface-2`, `--ink`, `--ink-soft`, `--ink-faint`,
+`--line`, `--shadow`) đều định nghĩa sẵn trong `:root`; không biến mới, không màu cứng.
+Nền banner `--surface-2` **khác** nền body `--surface` ở **cả hai theme**
+(`#ffffff`/`#fbfaf7` sáng, `#171f27`/`#11171d` tối) — banner hiện rõ, không tàng hình.
+
+### Tồn đọng (không chặn PASS)
+- ref-10 (`makehelp.txt`) và ref-13 (GRUB manual) **thiếu ngày truy cập**. Chúng chống
+  lưng cho sự kiện ổn định/định nghĩa chứ không phải số liệu thời điểm, nên auditor xếp
+  là nhỏ. Đáng thêm ở lần sau cho đồng đều.
+- ref-1/ref-2 trỏ `http://kroah.com/lkn` (không phải https) — đúng như site gốc phục vụ.
+- Faithfulness là **spot-check**: lượt này kiểm toàn bộ số liệu dễ cũ của bản đồ, không
+  kiểm lại trích dẫn của 11 trang chương — phần đó đứng trên PASS lượt trước, và git
+  xác nhận chúng không đổi.
