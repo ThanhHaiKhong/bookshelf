@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 5 · Tối ưu hiệu năng chương trình — Computer Systems: A Programmer's Perspective</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 5 “Optimizing Program Performance” trong Computer Systems: A Programmer's Perspective (Bryant & O'Hallaron, Pearson, 3rd ed., 2016): các bộ chắn tối ưu (trùng lặp bộ nhớ, lời gọi hàm), chỉ số chu kỳ mỗi phần tử (CPE), bộ xử lý ngoài thứ tự và giới hạn độ trễ/thông lượng, mở vòng lặp, nhiều biến tích luỹ, tái kết hợp, SIMD, và dùng trình phân tích hiệu năng để tìm nút cổ chai.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('csapp-reading-mode'),
+l=localStorage.getItem('csapp-lang'),
+t=localStorage.getItem('csapp-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"CS:APP / 05";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    Computer Systems: A Programmer's Perspective
+    <span>Chương 5 · Optimizing Program Performance</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 5 · Tối ưu hiệu năng chương trình</span>
+      <span class="en-only" lang="en">Chapter 5 · Optimizing Program Performance</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Viết mã mà trình biên dịch tối ưu được — rồi hiểu bộ xử lý đủ sâu để đi xa hơn</span>
+      <span class="easy-only">Làm chương trình chạy nhanh hơn, từng bước một</span>
+      <span class="en-only" lang="en">Write code the compiler can optimize — then understand the processor well enough to go further</span>
+    </h1>
+
+    <p class="standard-copy">Mục tiêu đầu tiên khi viết chương trình luôn là làm cho nó <i>đúng</i>; một chương trình chạy nhanh mà cho kết quả sai thì vô dụng.<span class="cite"><a href="#ref-1">1</a></span> Nhưng có rất nhiều lúc tốc độ cũng quan trọng — xử lý khung hình video hay gói tin thời gian thực, hay một tác vụ tính toán nặng mất nhiều ngày. Bryant và O'Hallaron chỉ cho ta thấy: chỉ bằng mã C thường và một trình biên dịch chuẩn, người lập trình có thể tăng tốc một thủ tục gộp vector lên <b>10–20 lần</b>, và thêm <b>4–8 lần</b> nữa nếu dùng lệnh vector SIMD.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Khi viết chương trình, điều quan trọng nhất là nó phải chạy <i>đúng</i>. Một chương trình nhanh mà sai thì chẳng để làm gì. Nhưng nhiều khi tốc độ cũng rất cần — ví dụ xử lý video hay chơi game mượt. Chương này cho thấy chỉ cần viết mã khéo hơn một chút, cùng một việc có thể chạy nhanh gấp cả chục, thậm chí cả trăm lần. <b>Nhớ nhé: đúng trước đã, rồi mới tới nhanh.</b></p>
+    <p class="en-only" lang="en">The first objective in writing a program is always to make it <i>correct</i>; a program that runs fast but gives wrong results is useless.<span class="cite"><a href="#ref-1">1</a></span> But speed matters on many occasions — processing video frames or network packets in real time, or a heavy computation that takes days. Bryant and O'Hallaron show that, using only ordinary C and a standard compiler, a programmer can speed a vector-combining routine up by <b>10–20×</b>, with a further <b>4–8×</b> from SIMD vector instructions.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Lộ trình của chương là một chuỗi biến đổi trên một ví dụ chạy xuyên suốt — hàm gộp các phần tử của một vector. Hiệu năng được đo bằng <i>chu kỳ mỗi phần tử</i> (cycles per element, CPE). Phiên bản ngây thơ <code>combine1</code> tốn khoảng 10–11 CPE sau khi bật <code>-O1</code>; sau nhiều biến đổi, <code>combine6</code> đạt tới gần giới hạn thông lượng 0,50–1,00 CPE, và mã SIMD đẩy phép nhân số thực đơn chính xác từ 11,14 xuống 0,06 CPE — một mức tăng tốc tổng cộng hơn <b>180 lần</b>.<span class="cite"><a href="#ref-1">1</a></span> Điều mấu chốt: trình biên dịch mạnh đến đâu vẫn bị chặn bởi các <i>bộ chắn tối ưu</i> (optimization blockers) mà chỉ người lập trình mới gỡ được, và muốn vượt giới hạn độ trễ thì phải hiểu cách bộ xử lý thực thi ngoài thứ tự.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> tối ưu hiệu năng là công việc chung của người lập trình và trình biên dịch. Người lập trình phải (1) gỡ các <i>bộ chắn tối ưu</i> như trùng lặp bộ nhớ và lời gọi hàm để trình biên dịch làm được việc; (2) hiểu <i>vi kiến trúc</i> ngoài thứ tự của bộ xử lý và hai giới hạn độ trễ/thông lượng; và (3) tái cấu trúc mã để lộ ra <i>song song mức lệnh</i> — tất cả được minh hoạ bằng việc kéo một hàm gộp vector từ ~20 CPE xuống gần giới hạn thông lượng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> muốn chương trình nhanh, người lập trình và trình biên dịch phải cùng làm. Người lập trình dọn những chỗ cản trở, hiểu cái máy chạy ra sao, rồi sắp xếp mã để máy làm nhiều việc một lúc. <b>Nhớ nhé: tốc độ đến từ việc viết mã sao cho máy và trình biên dịch cùng phát huy hết sức.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> optimization is a joint effort of programmer and compiler. The programmer must (1) remove <i>optimization blockers</i> such as memory aliasing and procedure calls so the compiler can work; (2) understand the processor's out-of-order <i>microarchitecture</i> and the latency/throughput bounds; and (3) restructure code to expose <i>instruction-level parallelism</i> — all illustrated by driving a vector-combining function from ~20 CPE down toward the throughput bound.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: một ví dụ gộp vector chạy xuyên suốt, gặp ba cụm ý tưởng — gỡ bộ chắn tối ưu và lãng phí, hiểu bộ xử lý ngoài thứ tự, và khai thác song song mức lệnh. Diagram: one running vector-combining example meeting three idea clusters — removing optimization blockers and waste, understanding the out-of-order processor, and exploiting instruction-level parallelism.">
+    <div class="core">
+      <b>Chu kỳ mỗi phần tử (CPE)</b>
+      <small class="standard-copy">Thước đo xuyên suốt: từ ~20 xuống gần 0,5</small>
+      <small class="easy-only">Đo tốc độ: càng nhỏ càng nhanh</small>
+      <small class="en-only" lang="en">The thread: driving CPE from ~20 toward 0.5</small>
+    </div>
+
+    <div class="node">
+      <b>Blockers &amp; waste</b>
+      <small class="standard-copy">Trùng lặp bộ nhớ, lời gọi hàm, truy cập bộ nhớ thừa — những gì trình biên dịch không tự gỡ được</small>
+      <small class="easy-only">Những chỗ cản trở khiến trình biên dịch bó tay</small>
+      <small class="en-only" lang="en">Aliasing, procedure calls, redundant memory refs the compiler can't remove</small>
+    </div>
+
+    <div class="node">
+      <b>Modern processor</b>
+      <small class="standard-copy">Siêu vô hướng, ngoài thứ tự; giới hạn độ trễ và thông lượng; đường tới hạn</small>
+      <small class="easy-only">Máy làm nhiều lệnh một lúc, không theo đúng thứ tự viết</small>
+      <small class="en-only" lang="en">Superscalar, out-of-order; latency and throughput bounds; the critical path</small>
+    </div>
+
+    <div class="node">
+      <b>Parallelism &amp; profiling</b>
+      <small class="standard-copy">Mở vòng lặp, nhiều biến tích luỹ, tái kết hợp, SIMD; và trình phân tích hiệu năng</small>
+      <small class="easy-only">Chia việc ra làm song song; đo xem chỗ nào chậm</small>
+      <small class="en-only" lang="en">Unrolling, multiple accumulators, reassociation, SIMD; and profilers</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#loai-bo-lang-phi">
+    <span>01</span>
+    <b class="standard-copy">Bộ chắn tối ưu và việc loại bỏ lãng phí</b>
+    <b class="easy-only">Dọn những chỗ cản trở và việc thừa</b>
+    <b class="en-only" lang="en">Optimization blockers and eliminating waste</b>
+  </a>
+  <a href="#hieu-bo-xu-ly">
+    <span>02</span>
+    <b class="standard-copy">Hiểu bộ xử lý hiện đại: hai giới hạn hiệu năng</b>
+    <b class="easy-only">Cái máy chạy lệnh ra sao, và nhanh tới đâu</b>
+    <b class="en-only" lang="en">Understanding the modern processor: two bounds</b>
+  </a>
+  <a href="#khai-thac-song-song">
+    <span>03</span>
+    <b class="standard-copy">Khai thác song song mức lệnh và tìm nút cổ chai</b>
+    <b class="easy-only">Làm nhiều việc một lúc, và tìm chỗ chậm</b>
+    <b class="en-only" lang="en">Exploiting parallelism and finding bottlenecks</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>04</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="loai-bo-lang-phi" aria-labelledby="loai-bo-lang-phi-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="loai-bo-lang-phi-title">
+      <span class="standard-copy">Giúp trình biên dịch làm việc: gỡ bộ chắn tối ưu, dọn mọi lãng phí</span>
+      <span class="easy-only">Trước hết, dọn những chỗ khiến máy phải làm việc thừa</span>
+      <span class="en-only" lang="en">Help the compiler: remove optimization blockers and all waste</span>
+    </h2>
+    <p class="standard-copy">Trình biên dịch hiện đại dùng thuật toán tinh vi để đơn giản hoá biểu thức và giảm số lần tính một giá trị, nhưng chúng chỉ được phép làm các biến đổi <i>an toàn</i> — tức cho ra kết quả giống hệt bản chưa tối ưu trong mọi trường hợp.<span class="cite"><a href="#ref-1">1</a></span> Ràng buộc đó, cộng với những đặc điểm của C như con trỏ và ép kiểu, tạo ra các <b>bộ chắn tối ưu</b> (optimization blockers) mà chỉ người lập trình mới gỡ nổi. Bước đầu tiên của tối ưu là loại bỏ công việc không cần thiết: bớt lời gọi hàm, bớt kiểm tra điều kiện, bớt truy cập bộ nhớ.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Trình biên dịch là chương trình dịch mã của bạn sang mã máy, và nó cố làm cho mã chạy nhanh. Nhưng nó rất thận trọng: chỉ dám đổi khi chắc chắn kết quả không sai đi. Vì vậy nhiều khi nó đành để nguyên những chỗ chậm. Người lập trình phải tự dọn những chỗ đó. <b>Nhớ nhé: trình biên dịch chỉ dám sửa khi chắc không làm sai — phần còn lại là việc của bạn.</b></p>
+    <p class="en-only" lang="en">Modern compilers use sophisticated algorithms to simplify expressions and reduce how often a value is computed, but they may apply only <i>safe</i> transformations — ones giving exactly the same result as the unoptimized version in every case.<span class="cite"><a href="#ref-1">1</a></span> That constraint, plus C features like pointers and casting, creates <b>optimization blockers</b> that only the programmer can remove. The first step of optimization is eliminating unnecessary work: fewer function calls, conditional tests, and memory references.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Chu kỳ mỗi phần tử</i> (cycles per element, CPE) là thước đo hiệu năng cho các chương trình lặp qua một tập phần tử. Thời gian của một vòng lặp xấp xỉ một hằng số cộng một hệ số tỉ lệ với số phần tử; hệ số đó chính là CPE. Ví dụ, hai hàm tính tổng tiền tố có thời gian xấp xỉ <code>368 + 9,0n</code> và <code>368 + 6,0n</code> chu kỳ, tức CPE bằng 9,0 và 6,0.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> CPE là “số nhịp máy tốn cho mỗi phần tử”. Số này càng nhỏ thì vòng lặp càng nhanh. <b>Nhớ nhé: CPE nhỏ = nhanh.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <i>Cycles per element</i> (CPE) is a performance metric for programs that loop over a set of elements. A loop's time is roughly a constant plus a factor proportional to the number of elements; that factor is the CPE. For example, two prefix-sum functions run in about <code>368 + 9.0n</code> and <code>368 + 6.0n</code> cycles — CPEs of 9.0 and 6.0.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">combine1 (-O1): 10,12 | 10,12 | 10,17 | 11,14<br>combine2 (code motion): 7,02 | 9,03 | 9,02 | 11,03<br>combine3 (truy cập trực tiếp): 7,17 | 9,02 | 9,02 | 11,03<br>combine4 (biến tích luỹ): 1,27 | 3,01 | 3,01 | 5,01<br>[int+ | int* | fp+ | fp*]</p>
+      <p class="easy-only">combine1 → combine4<br>&nbsp;&nbsp;~10 CPE → ~1–5 CPE<br>&nbsp;&nbsp;(càng nhỏ càng nhanh)</p>
+      <p class="en-only" lang="en">combine1 (-O1): 10.12 | 10.12 | 10.17 | 11.14<br>combine2 (code motion): 7.02 | 9.03 | 9.02 | 11.03<br>combine3 (direct access): 7.17 | 9.02 | 9.02 | 11.03<br>combine4 (accumulator): 1.27 | 3.01 | 3.01 | 5.01<br>[int+ | int* | fp+ | fp*]</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">memory aliasing</span>
+      <h3>
+        <span class="standard-copy">Trùng lặp bộ nhớ — vì sao trình biên dịch phải dè chừng</span>
+        <span class="easy-only">Hai con trỏ chỉ cùng một chỗ — máy phải cẩn thận</span>
+        <span class="en-only" lang="en">Memory aliasing — why the compiler must be cautious</span>
+      </h3>
+      <p class="standard-copy">Xét hai hàm cùng cộng hai lần <code>*yp</code> vào <code>*xp</code>: <code>twiddle1</code> đọc/ghi bộ nhớ sáu lần, còn <code>twiddle2</code> chỉ ba lần. Trình biên dịch <i>không</i> được phép thay hàm chậm bằng hàm nhanh, vì nếu <code>xp</code> và <code>yp</code> trỏ cùng một ô, hai hàm cho kết quả khác nhau (nhân 4 so với nhân 3).<span class="cite"><a href="#ref-1">1</a></span> Trường hợp hai con trỏ chỉ cùng một địa chỉ gọi là <b>trùng lặp bộ nhớ</b> (memory aliasing) — một bộ chắn tối ưu lớn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Tưởng tượng hai cái nhãn cùng dán lên một hộp. Nếu máy không biết chắc hai nhãn có cùng hộp hay không, nó phải làm từng bước cẩn thận, không dám gộp lại cho nhanh. <b>Nhớ nhé: khi hai con trỏ có thể trỏ cùng chỗ, trình biên dịch buộc phải chạy đường an toàn mà chậm.</b></p>
+      <p class="en-only" lang="en">Consider two functions that each add <code>*yp</code> to <code>*xp</code> twice: <code>twiddle1</code> reads/writes memory six times, <code>twiddle2</code> only three. The compiler may <i>not</i> replace the slow one with the fast one, because if <code>xp</code> and <code>yp</code> point to the same cell, the two give different results (×4 versus ×3).<span class="cite"><a href="#ref-1">1</a></span> Two pointers designating the same address is <b>memory aliasing</b> — a major optimization blocker.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi gộp giá trị, <code>combine4</code> dùng một biến tích luỹ nên có thể khác <code>combine3</code> nếu đích ghi trùng phần tử cuối của vector: với <code>[2,3,5]</code>, một bên cho 36, bên kia cho 30.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi kết quả ghi đè lên chính dữ liệu đang đọc, hai cách viết có thể ra số khác nhau.</span>
+        <span class="en-only" lang="en">When combining, <code>combine4</code>'s accumulator can differ from <code>combine3</code> if the destination aliases the last vector element: for <code>[2,3,5]</code>, one yields 36, the other 30.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hệ quả cho người lập trình</h4>
+          <p>Vì không đoán được ý định của người gọi, trình biên dịch chọn cách bảo thủ: giữ nguyên các lần đọc–ghi bộ nhớ. Muốn nhanh, người lập trình phải tự giới thiệu biến tạm để gom tích luỹ.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một bộ chắn khác: con trỏ</h4>
+          <p>Với hai con trỏ <code>p</code> và <code>q</code>, giá trị đọc lại phụ thuộc chúng có trùng nhau hay không; nếu không xác định được, trình biên dịch phải giả định cả hai khả năng, thu hẹp tập tối ưu.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">function calls &amp; code motion</span>
+      <h3>
+        <span class="standard-copy">Lời gọi hàm và di chuyển mã — bớt việc lặp lại vô ích</span>
+        <span class="easy-only">Đừng gọi đi gọi lại một việc không đổi</span>
+        <span class="en-only" lang="en">Procedure calls &amp; code motion — stop repeating constant work</span>
+      </h3>
+      <p class="standard-copy">Lời gọi hàm là bộ chắn tối ưu thứ hai: trình biên dịch không dám gộp bốn lần gọi <code>f()</code> thành <code>4*f()</code> vì <code>f</code> có thể có <i>tác dụng phụ</i> (thay đổi trạng thái toàn cục).<span class="cite"><a href="#ref-1">1</a></span> Ví dụ kinh điển là <code>combine1</code> gọi <code>vec_length</code> trong điều kiện vòng lặp mỗi lần lặp, dù độ dài không đổi. Đưa lời gọi ra ngoài vòng lặp — gọi là <b>di chuyển mã</b> (code motion) — tạo ra <code>combine2</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nếu mỗi vòng lặp bạn đều đi hỏi lại một thứ không bao giờ đổi, thì bạn phí công. Hãy hỏi một lần rồi nhớ lấy. Đó là ý của “di chuyển mã”: dời việc không đổi ra khỏi vòng lặp. <b>Nhớ nhé: thứ gì không đổi trong vòng lặp thì tính một lần thôi.</b></p>
+      <p class="en-only" lang="en">Procedure calls are the second blocker: the compiler won't fold four calls to <code>f()</code> into <code>4*f()</code> because <code>f</code> may have a <i>side effect</i> (changing global state).<span class="cite"><a href="#ref-1">1</a></span> The classic example is <code>combine1</code> calling <code>vec_length</code> in the loop test every iteration, though the length never changes. Hoisting the call out of the loop — <b>code motion</b> — gives <code>combine2</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Hàm <code>lower1</code> gọi <code>strlen</code> trong điều kiện vòng lặp khiến thời gian chạy thành bậc hai: với chuỗi 1.048.576 ký tự nó cần hơn 17 phút, còn <code>lower2</code> (đưa <code>strlen</code> ra ngoài) chỉ 2,0 mili-giây — nhanh hơn 500.000 lần.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Một hàm đổi chữ hoa thành chữ thường, nếu viết vụng, có thể mất 17 phút thay vì vài mili-giây.</span>
+        <span class="en-only" lang="en"><code>lower1</code> calls <code>strlen</code> in the loop test, making its run time quadratic: for a 1,048,576-character string it needs over 17 minutes, while <code>lower2</code> (strlen hoisted out) takes 2.0 ms — over 500,000× faster.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao trình biên dịch không tự làm</h4>
+          <p>Nó không chắc hàm có tác dụng phụ hay không, nên giả định có và để nguyên lời gọi. Với <code>lower1</code>, phân tích rằng <code>strlen</code> luôn trả về cùng giá trị nằm ngoài khả năng của cả những trình biên dịch tinh vi nhất.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Nội tuyến (inlining)</h4>
+          <p>gcc có thể thay lời gọi bằng thân hàm (<i>inline substitution</i>) ở mức <code>-O1</code> trở lên, nhưng chỉ trong cùng một tệp — nên thường không áp dụng được cho hàm thư viện ở tệp khác.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">eliminate memory refs</span>
+      <h3>
+        <span class="standard-copy">Loại bỏ truy cập bộ nhớ thừa — tích luỹ trong thanh ghi</span>
+        <span class="easy-only">Giữ kết quả tạm trong tay, đừng chạy về kho mỗi lần</span>
+        <span class="en-only" lang="en">Eliminate needless memory refs — accumulate in a register</span>
+      </h3>
+      <p class="standard-copy"><code>combine3</code> gộp giá trị ngay tại ô nhớ <code>dest</code>, nên mỗi vòng lặp phải đọc rồi ghi lại bộ nhớ — một sự lãng phí, vì giá trị đọc ra đầu vòng chính là giá trị vừa ghi cuối vòng trước. <code>combine4</code> đưa một biến tạm <code>acc</code> vào để gom kết quả, chỉ ghi ra <code>dest</code> sau khi vòng lặp xong.<span class="cite"><a href="#ref-1">1</a></span> Số thao tác bộ nhớ mỗi vòng giảm từ hai đọc một ghi xuống chỉ một đọc.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Thay vì mỗi lần cộng xong lại chạy ra kho cất rồi lại chạy vào lấy, hãy giữ con số tạm trong tay cho tới khi xong hẳn mới cất. Đi lại ít thì nhanh hơn nhiều. <b>Nhớ nhé: giữ kết quả tạm trong thanh ghi, chỉ ghi ra bộ nhớ một lần ở cuối.</b></p>
+      <p class="en-only" lang="en"><code>combine3</code> accumulates directly at memory location <code>dest</code>, so each iteration reads then writes memory — wasteful, since the value read at the start is the one written at the end of the previous iteration. <code>combine4</code> introduces a temporary <code>acc</code> to gather the result, storing to <code>dest</code> only after the loop finishes.<span class="cite"><a href="#ref-1">1</a></span> Memory operations per iteration drop from two reads and a write to a single read.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Biến đổi này cho mức cải thiện từ 2,2× đến 5,7×; trường hợp cộng số nguyên rơi xuống chỉ 1,27 CPE.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Chỉ một thay đổi nhỏ này khiến vòng lặp nhanh lên gấp vài lần.</span>
+        <span class="en-only" lang="en">This transformation yields improvements of 2.2× to 5.7×; integer addition drops to just 1.27 CPE.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao trình biên dịch dè dặt</h4>
+          <p>Lại là trùng lặp bộ nhớ: <code>combine3</code> và <code>combine4</code> có thể khác nhau nếu <code>dest</code> trùng một phần tử của vector, nên trình biên dịch mặc định giữ cách đọc–ghi bộ nhớ mỗi vòng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Khi -O2 bắt kịp</h4>
+          <p>Với <code>-O2</code>, gcc sinh một biến thể của <code>combine3</code> giữ tích luỹ trong thanh ghi <code>%xmm0</code> và chỉ ghi ra sau mỗi vòng, đạt CPE gần bằng <code>combine4</code> cho hầu hết các trường hợp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Với <code>combine4</code>, ta đã xuống còn 1,25–5 chu kỳ mỗi phần tử — một cải thiện lớn so với 9–11 chu kỳ ban đầu. Nhưng vì sao vẫn dừng ở đó? Để đi tiếp, ta phải thôi coi bộ xử lý như cỗ máy thực thi tuần tự từng lệnh một, và nhìn vào vi kiến trúc thật của nó.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Tới đây mã đã nhanh hơn nhiều. Muốn nhanh nữa, ta phải hiểu cái máy bên trong chạy lệnh thế nào — nó không chạy từng lệnh một như ta tưởng đâu.</p>
+    <p class="en-only" lang="en">With <code>combine4</code> we are down to 1.25–5 cycles per element — a big gain over the original 9–11. But why stop there? To go further, we must stop viewing the processor as executing one instruction at a time and look at its real microarchitecture.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="hieu-bo-xu-ly" aria-labelledby="hieu-bo-xu-ly-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="hieu-bo-xu-ly-title">
+      <span class="standard-copy">Hiểu bộ xử lý hiện đại: ngoài thứ tự, và hai giới hạn hiệu năng</span>
+      <span class="easy-only">Cái máy làm nhiều lệnh một lúc — và nhanh tới đâu là có giới hạn</span>
+      <span class="en-only" lang="en">Understanding the modern processor: out-of-order, and two bounds</span>
+    </h2>
+    <p class="standard-copy">Nhìn ở mức mã máy, có vẻ các lệnh được chạy tuần tự từng cái một. Nhưng bên trong, bộ xử lý hiện đại đánh giá nhiều lệnh <i>đồng thời</i> — hiện tượng gọi là <b>song song mức lệnh</b> (instruction-level parallelism); có thiết kế giữ tới hơn 100 lệnh “đang bay”.<span class="cite"><a href="#ref-1">1</a></span> Để tận dụng điều này, ta cần một mô hình của máy: nó <i>siêu vô hướng</i> (superscalar, làm nhiều thao tác mỗi chu kỳ) và <i>thực thi ngoài thứ tự</i> (out-of-order), với các đơn vị chức năng chuyên biệt.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    <p class="easy-only">Nhìn từ ngoài, máy có vẻ làm từng lệnh một, theo đúng thứ tự. Thật ra bên trong nó khôn hơn nhiều: nó làm nhiều lệnh cùng lúc, và còn làm không đúng thứ tự viết, miễn kết quả vẫn đúng. <b>Nhớ nhé: máy làm nhiều lệnh một lúc, nên nếu các lệnh không phụ thuộc nhau thì chạy nhanh hơn.</b></p>
+    <p class="en-only" lang="en">At the machine-code level, instructions appear to execute one at a time. But inside, a modern processor evaluates many instructions <i>simultaneously</i> — <b>instruction-level parallelism</b>; some designs keep over 100 instructions "in flight."<span class="cite"><a href="#ref-1">1</a></span> To exploit this we need a model of the machine: it is <i>superscalar</i> (multiple operations per cycle) and <i>out-of-order</i>, with specialized functional units.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Hai cận dưới đặc trưng cho hiệu năng. <i>Giới hạn độ trễ</i> (latency bound) xuất hiện khi các thao tác phải theo đúng chuỗi, vì kết quả của cái này cần cho cái kế tiếp. <i>Giới hạn thông lượng</i> (throughput bound) đặc trưng sức tính thô của các đơn vị chức năng — là trần cuối cùng của hiệu năng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Có hai kiểu “chặn tốc độ”: một là khi phải làm nối đuôi nhau (phải xong cái trước mới tới cái sau); hai là khi máy đã dồn hết công suất mà vẫn chỉ làm được bấy nhiêu. <b>Nhớ nhé: tốc độ bị chặn hoặc do phải xếp hàng, hoặc do hết công suất máy.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Two lower bounds characterize performance. The <i>latency bound</i> arises when operations must run in strict sequence, because one result is needed before the next can start. The <i>throughput bound</i> characterizes the raw computing capacity of the functional units — the ultimate limit.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">Độ trễ (Haswell): int+ =1, int* =3, fp+ =3, fp* =5<br>Giới hạn [độ trễ | thông lượng]:<br>&nbsp;&nbsp;int+ : 1,00 | 0,50<br>&nbsp;&nbsp;int* : 3,00 | 1,00<br>&nbsp;&nbsp;fp+ : 3,00 | 1,00<br>&nbsp;&nbsp;fp* : 5,00 | 0,50<br>Đường tới hạn ≈ L·n</p>
+      <p class="easy-only">nối đuôi nhau → chậm (L·n)<br>làm song song → nhanh<br>(tới trần công suất máy)</p>
+      <p class="en-only" lang="en">Latency (Haswell): int+ =1, int* =3, fp+ =3, fp* =5<br>Bounds [latency | throughput]:<br>&nbsp;&nbsp;int+ : 1.00 | 0.50<br>&nbsp;&nbsp;int* : 3.00 | 1.00<br>&nbsp;&nbsp;fp+ : 3.00 | 1.00<br>&nbsp;&nbsp;fp* : 5.00 | 0.50<br>Critical path ≈ L·n</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">out-of-order superscalar</span>
+      <h3>
+        <span class="standard-copy">Siêu vô hướng, ngoài thứ tự — ICU dự đoán, EU thực thi</span>
+        <span class="easy-only">Máy đoán trước và làm sẵn nhiều việc một lúc</span>
+        <span class="en-only" lang="en">Out-of-order superscalar — the ICU predicts, the EU executes</span>
+      </h3>
+      <p class="standard-copy">Bộ xử lý chia làm hai phần: <i>đơn vị điều khiển lệnh</i> (instruction control unit, ICU) đọc lệnh và sinh ra các thao tác nguyên thuỷ, và <i>đơn vị thực thi</i> (execution unit, EU) thực hiện chúng.<span class="cite"><a href="#ref-1">1</a></span> Khi gặp rẽ nhánh, ICU dùng <i>dự đoán rẽ nhánh</i> (branch prediction) và <i>thực thi suy đoán</i> (speculative execution) để chạy trước theo hướng nó đoán; <i>đổi tên thanh ghi</i> (register renaming) cho phép chuyển tiếp kết quả thẳng giữa các thao tác.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Máy có hai bộ phận: một bộ lo đọc và sắp xếp lệnh, một bộ lo tính toán. Khi tới chỗ rẽ (“nếu… thì…”), máy đoán sẽ rẽ hướng nào và làm trước; đoán đúng thì nhanh, đoán sai thì phải làm lại. <b>Nhớ nhé: máy đoán trước để khỏi chờ, nhưng đoán sai thì tốn công làm lại.</b></p>
+      <p class="en-only" lang="en">The processor has two parts: the <i>instruction control unit</i> (ICU) reads instructions and generates primitive operations, and the <i>execution unit</i> (EU) performs them.<span class="cite"><a href="#ref-1">1</a></span> At a branch, the ICU uses <i>branch prediction</i> and <i>speculative execution</i> to run ahead down its guessed path; <i>register renaming</i> forwards results directly between operations.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Máy tham chiếu Intel Core i7 Haswell có tám đơn vị chức năng (đánh số 0–7): bốn làm số nguyên, hai nạp (load), hai nhân số thực — quyết định bao nhiêu thao tác cùng loại chạy được một lúc.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span>
+        <span class="easy-only">Máy có nhiều “bàn tay” chuyên việc; càng nhiều tay cùng loại thì càng làm được nhiều việc đó một lúc.</span>
+        <span class="en-only" lang="en">The Intel Core i7 Haswell reference machine has eight functional units (0–7): four do integer work, two load, two do floating-point multiplication — setting how many same-type operations run at once.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Lịch sử ngoài thứ tự</h4>
+          <p>Thực thi ngoài thứ tự có từ máy CDC 6600 năm 1964 và IBM 360/91 năm 1966; Intel đưa nó vào dòng PentiumPro năm 1995, với vi kiến trúc gần giống máy tham chiếu của sách.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Nối với Chương 4</h4>
+          <p>Chương 4 nghiên cứu một ống dẫn (pipeline) trong-thứ-tự đơn giản; bộ xử lý ngoài thứ tự cần phần cứng phức tạp hơn nhiều nhưng đạt mức song song mức lệnh cao hơn.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">latency vs throughput</span>
+      <h3>
+        <span class="standard-copy">Giới hạn độ trễ và thông lượng — hai trần của hiệu năng</span>
+        <span class="easy-only">Hai kiểu giới hạn tốc độ: xếp hàng và hết công suất</span>
+        <span class="en-only" lang="en">Latency vs throughput bounds — two ceilings on performance</span>
+      </h3>
+      <p class="standard-copy">Mỗi phép tính có <i>độ trễ</i> (latency — tổng số chu kỳ để làm xong), <i>thời gian phát</i> (issue time — khoảng cách tối thiểu giữa hai thao tác độc lập), và <i>dung lượng</i> (capacity — số đơn vị làm được phép đó). Trên Haswell, cộng số nguyên có độ trễ 1, nhân số nguyên 3, cộng số thực 3, nhân số thực 5.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Thông lượng tối đa của một đơn vị bằng C/I; vì có hai đơn vị nạp, CPE không thể xuống dưới 0,50 khi mỗi phần tử cần đọc một giá trị.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mỗi phép tính tốn một số nhịp để xong (độ trễ), và máy chỉ có vài “bàn tay” làm phép đó. Phép càng khó thì độ trễ càng lớn: nhân số thực tốn 5 nhịp, cộng số nguyên chỉ 1. <b>Nhớ nhé: phép khó tốn nhiều nhịp hơn, và số bàn tay có hạn.</b></p>
+      <p class="en-only" lang="en">Each operation has a <i>latency</i> (total cycles to finish), an <i>issue time</i> (minimum gap between two independent operations), and a <i>capacity</i> (how many units can do it). On Haswell, integer addition has latency 1, integer multiplication 3, FP addition 3, FP multiplication 5.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> A unit's maximum throughput is C/I; with two load units, the CPE cannot go below 0.50 when each element requires one memory read.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Các đơn vị cộng/nhân đều có thời gian phát bằng 1 nhờ <i>ống dẫn</i> (pipelining): dù một phép nhân số thực mất 5 chu kỳ mới xong, máy vẫn bắt đầu một phép mới mỗi chu kỳ — nếu có đủ thao tác độc lập.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Giống dây chuyền: một món mất 5 phút, nhưng mỗi phút vẫn cho một món mới ra lò, miễn là các món không phải chờ nhau.</span>
+        <span class="en-only" lang="en">The add/multiply units have issue time 1 thanks to <i>pipelining</i>: even though an FP multiply takes 5 cycles to finish, the machine can start a new one every cycle — if there are enough independent operations.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Phép chia là ngoại lệ</h4>
+          <p>Bộ chia không dùng ống dẫn: độ trễ bằng thời gian phát (3–30 chu kỳ với số nguyên, 3–15 với số thực), nên chia là phép đắt đỏ cần tránh trong vòng trong.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Nguồn con số</h4>
+          <p>Các độ trễ, thời gian phát và dung lượng này được sách xác định bằng đo đạc thực tế đối chiếu với tài liệu Intel; chúng thay đổi giữa các thế hệ bộ xử lý.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">critical path</span>
+      <h3>
+        <span class="standard-copy">Đường tới hạn — chuỗi phụ thuộc dữ liệu định đoạt tốc độ</span>
+        <span class="easy-only">Chuỗi việc phải nối đuôi nhau là chỗ quyết định tốc độ</span>
+        <span class="en-only" lang="en">The critical path — the data-dependency chain sets the speed</span>
+      </h3>
+      <p class="standard-copy">Dùng biểu diễn <i>luồng dữ liệu</i> (data-flow), ta vẽ cách các phụ thuộc dữ liệu ràng buộc thứ tự thực thi. Chuỗi dài nhất của các phụ thuộc này là <b>đường tới hạn</b> (critical path), đặt cận dưới cho số chu kỳ. Với <code>combine4</code>, mỗi giá trị <code>acc</code> mới phải chờ giá trị trước, tạo một đường tới hạn dài <code>L·n</code> — nên CPE bằng đúng độ trễ <code>L</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Hãy hình dung một dây chuyền mà mỗi bước phải chờ bước trước xong mới làm được. Dây chuyền đó dài bao nhiêu thì cả việc chậm bấy nhiêu, dù máy rảnh rỗi. Chuỗi phải-chờ đó gọi là “đường tới hạn”. <b>Nhớ nhé: chuỗi việc phải nối đuôi nhau quyết định tốc độ, không phải sức máy.</b></p>
+      <p class="en-only" lang="en">Using a <i>data-flow</i> representation, we draw how data dependencies constrain execution order. The longest such chain is the <b>critical path</b>, setting a lower bound on cycles. In <code>combine4</code>, each new <code>acc</code> must wait for the previous one, forming a critical path of length <code>L·n</code> — so the CPE equals the latency <code>L</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đo được cho thấy <code>combine4</code> khớp giới hạn độ trễ ở mọi trường hợp trừ cộng số nguyên (1,27 thay vì 1,00) — đường tới hạn chỉ là <i>cận dưới</i>, còn các yếu tố khác cũng góp phần.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi một vòng lặp chậm đúng bằng độ dài chuỗi phải-chờ của nó, không nhanh hơn được.</span>
+        <span class="en-only" lang="en">Measurements show <code>combine4</code> matches the latency bound in every case except integer addition (1.27 instead of 1.00) — the critical path is only a <i>lower</i> bound; other factors also contribute.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bốn loại thanh ghi của vòng lặp</h4>
+          <p>Sách phân loại thanh ghi trong vòng lặp thành chỉ-đọc, chỉ-ghi, cục bộ, và <i>vòng lặp</i> (loop). Chỉ các thanh ghi loại loop — mang giá trị từ vòng này sang vòng khác — mới tạo nên phụ thuộc giới hạn hiệu năng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hướng đi tiếp theo</h4>
+          <p>Nếu đường tới hạn do việc cập nhật <code>acc</code> theo chuỗi, thì cách thoát là <i>phá vỡ chuỗi</i> đó — mục tiêu của cụm tiếp theo, đưa CPE về gần giới hạn thông lượng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Giới hạn độ trễ tưởng như là trần cuối cùng. Nhưng vì các đơn vị cộng và nhân đều dùng ống dẫn đầy đủ, phần cứng có thể làm nhanh hơn nhiều — nếu mã của ta chịu cung cấp các thao tác <i>độc lập</i>. Nhiệm vụ tiếp theo: phá vỡ chuỗi phụ thuộc tuần tự để chạm tới giới hạn thông lượng.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Chuỗi phải-chờ tưởng là giới hạn cuối, nhưng không phải. Nếu ta sắp xếp để máy có nhiều việc không phụ thuộc nhau, nó sẽ làm song song và nhanh hơn hẳn. Đó là nội dung phần sau.</p>
+    <p class="en-only" lang="en">The latency bound seems like the final ceiling. But since the add and multiply units are fully pipelined, the hardware can go much faster — if our code supplies <i>independent</i> operations. The next task: break the sequential dependency chain to reach the throughput bound.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="khai-thac-song-song" aria-labelledby="khai-thac-song-song-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="khai-thac-song-song-title">
+      <span class="standard-copy">Khai thác song song mức lệnh — và dùng trình phân tích để tìm nút cổ chai</span>
+      <span class="easy-only">Chia việc ra làm song song, rồi đo xem chỗ nào còn chậm</span>
+      <span class="en-only" lang="en">Exploit instruction-level parallelism — and profile to find bottlenecks</span>
+    </h2>
+    <p class="standard-copy">Để vượt giới hạn độ trễ, ta phải phá vỡ chuỗi phụ thuộc đơn nhất quanh biến <code>acc</code>. Hai kỹ thuật cốt lõi là <i>nhiều biến tích luỹ</i> (multiple accumulators) và <i>tái kết hợp</i> (reassociation), thường kết hợp với <i>mở vòng lặp</i> (loop unrolling).<span class="cite"><a href="#ref-1">1</a></span> Khi đã tối ưu xong các vòng lặp nhỏ, câu hỏi với chương trình lớn là: <i>tối ưu chỗ nào?</i> — và đó là lúc cần đến <b>trình phân tích hiệu năng</b> (profiler).<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Muốn nhanh hơn nữa, ta chia công việc ra thành vài phần làm song song, thay vì một chuỗi nối đuôi. Và với chương trình lớn, trước khi tối ưu, hãy đo xem phần nào ngốn nhiều thời gian nhất — đừng đoán mò. <b>Nhớ nhé: chia việc ra làm song song, và luôn đo trước khi tối ưu.</b></p>
+    <p class="en-only" lang="en">To beat the latency bound we must break the single dependency chain around <code>acc</code>. The two core techniques are <i>multiple accumulators</i> and <i>reassociation</i>, usually combined with <i>loop unrolling</i>.<span class="cite"><a href="#ref-1">1</a></span> Once the small loops are optimized, the question for a large program is: <i>what to optimize?</i> — and that is when you need a <b>profiler</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Mở vòng lặp k×1</i> gộp <code>k</code> phần tử mỗi vòng để giảm thao tác điều khiển vòng lặp. <i>Mở vòng lặp k×k</i> còn giữ <code>k</code> biến tích luỹ song song. Muốn đạt giới hạn thông lượng, cần hệ số mở <code>k ≥ C·L</code> (dung lượng nhân độ trễ) — ví dụ nhân số thực có C=2, L=5 nên cần k≥10.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> “Mở vòng lặp” là làm nhiều phần tử trong một vòng thay vì một. Thêm nhiều “ô nhớ tạm” chạy song song thì máy mới làm hết công suất. <b>Nhớ nhé: nhiều ô tích luỹ song song mới lấp đầy được dây chuyền.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <i>k×1 loop unrolling</i> combines <code>k</code> elements per iteration to cut loop-control operations. <i>k×k unrolling</i> also keeps <code>k</code> parallel accumulators. To reach the throughput bound you need unrolling factor <code>k ≥ C·L</code> (capacity times latency) — e.g. FP multiply has C=2, L=5, so k≥10.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">combine4: 1,27 | 3,01 | 3,01 | 5,01<br>combine5 (2×1): 1,01 | 3,01 | 3,01 | 5,01<br>combine6 (2×2): 0,81 | 1,51 | 1,51 | 2,51<br>combine7 (2×1a): 1,01 | 1,51 | 1,51 | 2,51<br>SIMD fp* đơn: 11,14 → 0,06 (&gt;180×)</p>
+      <p class="easy-only">một ô tích luỹ → chậm<br>nhiều ô song song → nhanh<br>SIMD → nhanh hơn nữa</p>
+      <p class="en-only" lang="en">combine4: 1.27 | 3.01 | 3.01 | 5.01<br>combine5 (2×1): 1.01 | 3.01 | 3.01 | 5.01<br>combine6 (2×2): 0.81 | 1.51 | 1.51 | 2.51<br>combine7 (2×1a): 1.01 | 1.51 | 1.51 | 2.51<br>SIMD single fp*: 11.14 → 0.06 (&gt;180×)</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">loop unrolling</span>
+      <h3>
+        <span class="standard-copy">Mở vòng lặp — giảm chi phí điều khiển, nhưng chưa phá chuỗi</span>
+        <span class="easy-only">Làm nhiều phần tử một vòng để bớt việc lặt vặt</span>
+        <span class="en-only" lang="en">Loop unrolling — cuts overhead, but doesn't break the chain</span>
+      </h3>
+      <p class="standard-copy"><b>Mở vòng lặp</b> (loop unrolling) giảm số vòng lặp bằng cách xử lý nhiều phần tử mỗi vòng, qua đó bớt các thao tác không trực tiếp tạo kết quả như đánh chỉ số và rẽ nhánh. <code>combine5</code> áp dụng “mở 2×1”. Kết quả: cộng số nguyên cải thiện xuống 1,01 CPE (chạm giới hạn độ trễ), nhưng ba trường hợp còn lại không đổi — vì đường tới hạn vẫn gồm <code>n</code> phép toán nối đuôi nhau.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Thay vì mỗi vòng làm một phần tử, ta làm hai, ba phần tử một vòng. Nhờ đó bớt được các việc lặt vặt của vòng lặp. Nhưng riêng việc này chưa đủ phá chuỗi phải-chờ. <b>Nhớ nhé: mở vòng lặp bớt việc thừa, nhưng chưa làm máy chạy song song.</b></p>
+      <p class="en-only" lang="en"><b>Loop unrolling</b> reduces iterations by handling several elements per iteration, cutting operations that don't directly produce results such as indexing and branching. <code>combine5</code> applies "2×1 unrolling." Result: integer addition improves to 1.01 CPE (reaching the latency bound), but the other three are unchanged — the critical path still has <code>n</code> operations in sequence.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi tăng hệ số mở lên tới k=10, không trường hợp nào xuống dưới giới hạn độ trễ của nó — bằng chứng rằng mở vòng lặp đơn thuần không phá được chuỗi phụ thuộc.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mở nhiều hơn nữa cũng không giúp, nếu các phép vẫn phải nối đuôi nhau.</span>
+        <span class="en-only" lang="en">Increasing the factor up to k=10, no case goes below its latency bound — evidence that plain unrolling cannot break the dependency chain.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Xử lý phần dư</h4>
+          <p>Vì độ dài vector thường không chia hết cho <code>k</code>, mã đặt cận trên là <code>n−k+1</code> và thêm một vòng phụ xử lý nốt vài phần tử cuối, chạy từ 0 đến <code>k−1</code> lần.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Trình biên dịch cũng làm được</h4>
+          <p>gcc tự mở vòng lặp ở mức <code>-O3</code> trở lên; nhưng ví dụ của sách cố tình dùng <code>-O1</code> để cho thấy người lập trình có thể giúp gì.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">multiple accumulators</span>
+      <h3>
+        <span class="standard-copy">Nhiều biến tích luỹ và tái kết hợp — phá vỡ giới hạn độ trễ</span>
+        <span class="easy-only">Dùng nhiều ô tạm song song để máy chạy hết sức</span>
+        <span class="en-only" lang="en">Multiple accumulators &amp; reassociation — break the latency bound</span>
+      </h3>
+      <p class="standard-copy">Với phép kết hợp vừa <i>giao hoán</i> vừa <i>kết hợp</i>, ta chia tập phần tử thành nhiều phần và gộp riêng. <code>combine6</code> dùng “2×2”: tích luỹ phần tử chỉ số chẵn vào <code>acc0</code>, chỉ số lẻ vào <code>acc1</code>, tạo <i>hai</i> đường tới hạn mỗi đường n/2 phép — CPE giảm còn ~một nửa (fp* xuống 2,51).<span class="cite"><a href="#ref-1">1</a></span> <code>combine7</code> dùng <i>tái kết hợp</i> (reassociation): chỉ đổi vị trí dấu ngoặc <code>acc OP (data[i] OP data[i+1])</code> mà cũng đạt kết quả tương đương.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Thay vì một ô tạm, ta dùng hai ô tạm chạy song song: một ô lo phần tử chẵn, một ô lo phần tử lẻ, cuối cùng gộp lại. Thế là hai dây chuyền chạy cùng lúc, nhanh gấp đôi. <b>Nhớ nhé: nhiều ô tạm song song thì phá được chuỗi phải-chờ.</b></p>
+      <p class="en-only" lang="en">For an operation that is both <i>commutative</i> and <i>associative</i>, we split the elements into parts and combine separately. <code>combine6</code> uses "2×2": even-indexed elements into <code>acc0</code>, odd into <code>acc1</code>, forming <i>two</i> critical paths of n/2 each — CPE roughly halves (fp* down to 2.51).<span class="cite"><a href="#ref-1">1</a></span> <code>combine7</code> uses <i>reassociation</i>: merely moving parentheses to <code>acc OP (data[i] OP data[i+1])</code> achieves an equivalent gain.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Với mở k×k đủ lớn, cộng số nguyên đạt 0,54 CPE (k=7), nhân số thực đạt 0,51 (k=10) — gần sát giới hạn thông lượng 0,50.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Dùng đủ nhiều ô tạm, chương trình chạy gần hết công suất máy.</span>
+        <span class="en-only" lang="en">With large enough k×k unrolling, integer addition reaches 0.54 CPE (k=7) and FP multiply 0.51 (k=10) — close to the throughput bound of 0.50.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cảnh báo về số thực</h4>
+          <p>Cộng và nhân số thực <b>không</b> có tính kết hợp, nên <code>combine6</code>/<code>combine7</code> có thể cho kết quả khác do làm tròn hay tràn số. Sách theo khung của chính nó — coi khác biệt là không đáng kể với hầu hết ứng dụng — nhưng khuyên người phát triển phải kiểm với người dùng. Vì lẽ đó, đa số trình biên dịch không tự tái kết hợp mã số thực.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Điều kiện đạt thông lượng</h4>
+          <p>Để lấp đầy ống dẫn của mọi đơn vị làm phép đó, cần hệ số mở <code>k ≥ C·L</code>. Số nguyên có tính kết hợp (kể cả khi tràn), nên trình biên dịch có thể tự biến đổi; với số thực thì không.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">SIMD, spilling, profiling</span>
+      <h3>
+        <span class="standard-copy">SIMD, các yếu tố giới hạn, và trình phân tích hiệu năng</span>
+        <span class="easy-only">Làm cả bó số một lệnh; biết khi nào hết lợi; và đo chỗ chậm</span>
+        <span class="en-only" lang="en">SIMD, limiting factors, and the profiler</span>
+      </h3>
+      <p class="standard-copy">Lệnh <i>SIMD</i> (single instruction, multiple data) của AVX dùng thanh ghi vector 32 byte, xử lý cùng lúc tám số 32 bit hay bốn số 64 bit. Kết hợp SIMD với mở vòng lặp và nhiều biến tích luỹ, nhân số thực đơn chính xác tụt từ 11,14 xuống 0,06 CPE — tổng cộng hơn 180 lần.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Nhưng song song có giới hạn: nếu số biến vượt quá 16 thanh ghi, trình biên dịch phải <i>tràn thanh ghi</i> (register spilling) ra ngăn xếp và mất hết lợi thế.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Có loại lệnh đặc biệt làm cả một bó số cùng lúc (SIMD), nhanh gấp bội. Nhưng không thể thêm ô tạm mãi: máy chỉ có 16 thanh ghi, vượt quá là chậm lại. Và với chương trình lớn, hãy dùng công cụ đo (profiler) để biết chỗ nào thật sự chậm. <b>Nhớ nhé: tối ưu phần tốn nhiều thời gian nhất — hãy đo, đừng đoán.</b></p>
+      <p class="en-only" lang="en">AVX <i>SIMD</i> (single instruction, multiple data) instructions use 32-byte vector registers, processing eight 32-bit or four 64-bit numbers at once. Combining SIMD with unrolling and multiple accumulators, single-precision FP multiply drops from 11.14 to 0.06 CPE — over 180× overall.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> But parallelism has limits: if variables exceed the 16 registers, the compiler must <i>spill</i> to the stack and lose the advantage.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trình phân tích <code>gprof</code> giúp kéo một chương trình đếm bigram từ 3,5 phút xuống 0,2 giây — tăng tốc khoảng 1.000 lần — bằng cách chỉ ra nút cổ chai thật sự: sắp xếp, duyệt danh sách, rồi hàm băm.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span>
+        <span class="easy-only">Nhờ công cụ đo, một chương trình chậm 3,5 phút rút còn 0,2 giây.</span>
+        <span class="en-only" lang="en">The <code>gprof</code> profiler helped cut a bigram-counting program from 3.5 minutes to 0.2 seconds — about 1,000× — by exposing the real bottlenecks: sorting, list scanning, then the hash function.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Rẽ nhánh và nước đi có điều kiện</h4>
+          <p>Rẽ nhánh đoán sai tốn khoảng 19 chu kỳ trên máy tham chiếu. Viết theo lối “hàm” để trình biên dịch sinh <i>lệnh di chuyển có điều kiện</i> (conditional move) giúp tránh phạt: <code>minmax2</code> đạt 4,0 CPE bất kể dữ liệu, còn <code>minmax1</code> lên tới 13,5 với dữ liệu ngẫu nhiên.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hiệu năng bộ nhớ</h4>
+          <p>Máy tham chiếu có hai đơn vị nạp và một đơn vị lưu. Hàm <code>list_len</code> đạt CPE 4,00 — đúng bằng độ trễ truy cập cache L1. Một <i>phụ thuộc ghi/đọc</i> (write/read dependency) khi địa chỉ trùng nhau có thể làm chậm thêm khoảng 6 chu kỳ.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Định luật Amdahl (Mục 1.9.1) soi sáng vì sao nhắm đúng nút cổ chai lại hiệu quả đến thế: trong ví dụ bigram, thay sắp xếp chèn bằng quicksort cho α=0,974 phần thời gian được tăng tốc, dẫn tới mức tăng tốc dự đoán 39,0× — sát với 38,5× đo được.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> Nhưng diệt xong một nút cổ chai, một nút khác lại nổi lên; tối ưu là việc lặp đi lặp lại.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Muốn cả chương trình nhanh hẳn, phải nhắm vào phần chiếm nhiều thời gian nhất (định luật Amdahl). Và sửa xong chỗ chậm này thì chỗ chậm khác lại lộ ra — nên tối ưu là việc làm đi làm lại. Giờ hãy dọn vài hiểu lầm hay gặp.</p>
+    <p class="en-only" lang="en">Amdahl's law (Section 1.9.1) explains why targeting the right bottleneck is so effective: in the bigram example, replacing insertion sort with quicksort gave α=0.974 of the time subject to speedup, predicting a 39.0× speedup — close to the measured 38.5×.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> But eliminate one bottleneck and another emerges; optimization is iterative.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+    <p class="eyebrow" id="ngo-nhan-title">
+      <span class="vi-only">Ba ngộ nhận thường gặp</span>
+      <span class="en-only" lang="en">Three common misconceptions</span>
+    </p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Cứ bật -O3 là trình biên dịch lo hết”</span>
+          <span class="en-only" lang="en">“Just enable -O3 and the compiler handles everything”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> tối ưu là việc của trình biên dịch.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> trình biên dịch chỉ làm biến đổi an toàn và bị chặn bởi trùng lặp bộ nhớ và lời gọi hàm; người lập trình phải tự gỡ các bộ chắn này.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> optimization is the compiler's job.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> the compiler makes only safe transformations and is blocked by memory aliasing and procedure calls; the programmer must remove those blockers.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Mở vòng lặp là đủ để chạy nhanh”</span>
+          <span class="en-only" lang="en">“Loop unrolling alone makes code fast”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> cứ mở vòng lặp thật nhiều là CPE giảm.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> mở k×1 đơn thuần chỉ giúp cộng số nguyên; muốn phá giới hạn độ trễ phải dùng nhiều biến tích luỹ hoặc tái kết hợp để tạo nhiều đường tới hạn.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> unroll a lot and the CPE drops.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> plain k×1 unrolling helps only integer addition; breaking the latency bound needs multiple accumulators or reassociation to form several critical paths.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Nhanh thì phải tối ưu mọi dòng mã”</span>
+          <span class="en-only" lang="en">“Fast means optimizing every line”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> tối ưu khắp nơi là cách để nhanh.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> định luật Amdahl cho thấy chỉ phần được tăng tốc mới có lợi; hãy đo bằng trình phân tích rồi nhắm vào nút cổ chai thật sự.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> optimizing everywhere is how you get fast.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> Amdahl's law shows only the sped-up fraction helps; measure with a profiler, then target the real bottleneck.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm nghệ thuật tối ưu</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped optimization</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã theo trọn hành trình kéo một hàm gộp vector từ ~20 CPE xuống gần giới hạn thông lượng.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you followed the whole journey of driving a vector-combining function from ~20 CPE toward the throughput bound.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Hai bộ chắn tối ưu lớn là gì, và vì sao chúng ngăn trình biên dịch sinh mã nhanh hơn?</p>
+        <p class="deep-only">Gợi ý sâu hơn: với <code>[2,3,5]</code>, vì sao <code>combine3</code> và <code>combine4</code> cho 36 và 30 khi đích ghi trùng phần tử cuối?</p>
+      </li>
+      <li>
+        <p>CPE là gì, và nó khác gì với “số chu kỳ mỗi vòng lặp”? Vì sao ta đo theo phần tử?</p>
+        <p class="deep-only">Gợi ý sâu hơn: hai hàm tổng tiền tố cho CPE 9,0 và 6,0 được rút ra từ các phương trình nào?</p>
+      </li>
+      <li>
+        <p>Phân biệt giới hạn độ trễ và giới hạn thông lượng. Vì sao <code>combine4</code> khớp giới hạn độ trễ?</p>
+        <p class="deep-only">Gợi ý sâu hơn: đường tới hạn dài <code>L·n</code> hình thành từ chuỗi phụ thuộc nào quanh biến <code>acc</code>?</p>
+      </li>
+      <li>
+        <p>Vì sao mở vòng lặp đơn thuần không phá được giới hạn độ trễ, còn nhiều biến tích luỹ thì có?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao tái kết hợp mã số thực lại cần cân nhắc, trong khi với số nguyên thì không?</p>
+      </li>
+      <li>
+        <p>Trình phân tích hiệu năng giúp gì, và định luật Amdahl nói gì về việc chọn chỗ để tối ưu?</p>
+        <p class="deep-only">Gợi ý sâu hơn: với α=0,974, vì sao mức tăng tốc dự đoán là 39,0× và đo được 38,5×?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Vì sao đôi khi trình biên dịch không dám làm mã nhanh hơn? Kể một lý do.</p></li>
+      <li><p>CPE là gì? Số này nhỏ thì tốt hay xấu?</p></li>
+      <li><p>Có hai kiểu giới hạn tốc độ. Kể tên và giải thích ngắn gọn.</p></li>
+      <li><p>Vì sao dùng nhiều “ô nhớ tạm” song song lại làm vòng lặp nhanh hơn?</p></li>
+      <li><p>Trước khi tối ưu một chương trình lớn, nên làm gì đầu tiên? Vì sao?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>What are the two major optimization blockers, and why do they stop the compiler from generating faster code?</p></li>
+      <li><p>What is CPE, and how does it differ from "cycles per iteration"? Why measure per element?</p></li>
+      <li><p>Distinguish the latency bound from the throughput bound. Why does <code>combine4</code> match the latency bound?</p></li>
+      <li><p>Why can't plain loop unrolling break the latency bound, while multiple accumulators can?</p></li>
+      <li><p>What does a profiler help with, and what does Amdahl's law say about where to optimize?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Tối ưu bắt đầu bằng việc <span class="closing-accent">gỡ các bộ chắn để trình biên dịch làm được việc</span>, rồi đòi hỏi ta <span class="closing-accent">hiểu bộ xử lý đủ để lộ ra song song mức lệnh</span>. Chỉ bằng mã C thường, một hàm gộp vector đi từ ~20 xuống gần 0,5 CPE — và bài học lớn nhất: hãy đo trước khi tối ưu.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Muốn nhanh, trước hết <span class="closing-accent">dọn những chỗ cản trở trình biên dịch</span>, rồi <span class="closing-accent">sắp xếp mã để máy làm nhiều việc một lúc</span>. Và luôn đo xem chỗ nào thật sự chậm. <b>Nhớ nhé: đúng trước, rồi đo, rồi mới tối ưu đúng chỗ.</b></p>
+    <p class="en-only" lang="en">Optimization begins by <span class="closing-accent">removing blockers so the compiler can work</span>, then demands that we <span class="closing-accent">understand the processor enough to expose instruction-level parallelism</span>. Using only ordinary C, a vector-combining function goes from ~20 down toward 0.5 CPE — and the biggest lesson: measure before you optimize.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-4-processor-architecture.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 4 · Kiến trúc bộ xử lý</span>
+    <span class="nav-title en-only" lang="en">Chapter 4 · Processor Architecture</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-6-the-memory-hierarchy.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 6 · Phân cấp bộ nhớ</span>
+    <span class="nav-title en-only" lang="en">Chapter 6 · The Memory Hierarchy</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, tái bản lần thứ 3, Global Edition, Pearson, 2016 (ISBN 978-1-292-10176-7) — Chương 5, “Optimizing Program Performance”, trang 531–605.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, 3rd edition, Global Edition, Pearson, 2016 (ISBN 978-1-292-10176-7) — Chapter 5, “Optimizing Program Performance”, pp. 531–605.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the authors and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the authors' words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, 3rd ed. (Global Edition), Pearson, 2016, ch. 5 “Optimizing Program Performance”, pp. 531–605. — <a href="http://csapp.cs.cmu.edu/" target="_blank" rel="noopener noreferrer">csapp.cs.cmu.edu</a></li>
+      <li id="ref-2">“Options That Control Optimization” (optimization levels -Og/-O1/-O2/-O3, inlining, loop unrolling), GCC online documentation, GNU Project. <a href="https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html" target="_blank" rel="noopener noreferrer">gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html</a></li>
+      <li id="ref-3">“Intel 64 and IA-32 Architectures Optimization Reference Manual” (functional units, instruction latency and throughput, AVX/SIMD), Intel Corporation. <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html" target="_blank" rel="noopener noreferrer">intel.com — Intel architectures software developer manuals</a></li>
+      <li id="ref-4">Agner Fog, “Instruction tables: latencies, throughputs and micro-operation breakdowns” and “The microarchitecture of Intel, AMD and VIA CPUs” (Haswell timings), Technical University of Denmark. <a href="https://www.agner.org/optimize/" target="_blank" rel="noopener noreferrer">agner.org/optimize</a></li>
+      <li id="ref-5">“GNU gprof — the GNU Profiler” (program profiling with -pg, call graphs), GNU binutils documentation. <a href="https://sourceware.org/binutils/docs/gprof/" target="_blank" rel="noopener noreferrer">sourceware.org/binutils/docs/gprof</a></li>
+      <li id="ref-6">Gene M. Amdahl, “Validity of the single processor approach to achieving large scale computing capabilities”, AFIPS Conference Proceedings, 1967. <a href="https://doi.org/10.1145/1465482.1465560" target="_blank" rel="noopener noreferrer">doi.org/10.1145/1465482.1465560</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-4-processor-architecture.html">chapter 4</a>
+      <a href="chapter-6-the-memory-hierarchy.html">chapter 6</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('csapp-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('csapp-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('csapp-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

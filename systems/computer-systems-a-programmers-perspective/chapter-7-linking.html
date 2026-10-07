@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 7 · Liên kết — Computer Systems: A Programmer's Perspective</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 7 “Linking” trong Computer Systems: A Programmer's Perspective (Bryant & O'Hallaron, Pearson, 3rd ed., 2016): trình điều khiển biên dịch và liên kết tĩnh, tệp đối tượng ELF, ký hiệu và bảng ký hiệu, phân giải ký hiệu với ký hiệu mạnh/yếu, định vị lại, nạp tệp chạy được, liên kết động với thư viện chia sẻ, mã độc lập vị trí (PIC), xen phủ thư viện và các công cụ thao tác tệp đối tượng.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('csapp-reading-mode'),
+l=localStorage.getItem('csapp-lang'),
+t=localStorage.getItem('csapp-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"CS:APP / 07";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    Computer Systems: A Programmer's Perspective
+    <span>Chương 7 · Linking</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 7 · Liên kết</span>
+      <span class="en-only" lang="en">Chapter 7 · Linking</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Các mảnh mã rời được gom lại thành một chương trình chạy được như thế nào</span>
+      <span class="easy-only">Nhiều mảnh mã được ghép lại thành một chương trình chạy được</span>
+      <span class="en-only" lang="en">How separate pieces of code become one runnable program</span>
+    </h1>
+
+    <p class="standard-copy"><b>Liên kết (linking)</b> là quá trình thu thập và kết hợp nhiều mảnh mã và dữ liệu thành một tệp duy nhất có thể được nạp vào bộ nhớ và chạy. Bryant và O'Hallaron nhấn mạnh rằng việc này có thể xảy ra ở thời điểm biên dịch, thời điểm nạp, và thậm chí ngay trong thời điểm chạy; trên hệ thống hiện đại nó được thực hiện tự động bởi các chương trình gọi là <i>trình liên kết (linker)</i>.<span class="cite"><a href="#ref-1">1</a></span> Hiểu nó cho phép xây dựng chương trình lớn, tránh những lỗi lập trình nguy hiểm và âm thầm, hiểu cách luật phạm vi (scoping) được hiện thực, và khai thác được thư viện chia sẻ.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Khi bạn viết một chương trình lớn, bạn chia nó thành nhiều tệp nhỏ cho dễ quản lý. Nhưng máy cần một tệp chạy được duy nhất. “Liên kết” chính là bước ghép các mảnh ấy lại: nối mã, nối dữ liệu, và điền đúng địa chỉ cho từng chỗ gọi hàm hay dùng biến. <b>Nhớ nhé: liên kết là bước khâu các mảnh mã rời thành một chương trình hoàn chỉnh.</b></p>
+    <p class="en-only" lang="en"><b>Linking</b> is the process of collecting and combining various pieces of code and data into a single file that can be loaded into memory and executed. Bryant and O'Hallaron stress that it can happen at compile time, at load time, and even at run time; on modern systems it is performed automatically by programs called <i>linkers</i>.<span class="cite"><a href="#ref-1">1</a></span> Understanding it lets you build large programs, avoid dangerous and silent programming errors, understand how scoping rules are implemented, and exploit shared libraries.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Điểm tinh tế: trình liên kết “hiểu rất ít” về máy đích — phần lớn công việc đã do trình biên dịch và trình hợp dịch làm xong. Nhiệm vụ của nó gói gọn trong hai việc: <i>phân giải ký hiệu (symbol resolution)</i>, gắn mỗi tham chiếu ký hiệu với đúng một định nghĩa; và <i>định vị lại (relocation)</i>, gán địa chỉ bộ nhớ thực cho các phần mã–dữ liệu rồi sửa mọi tham chiếu trỏ về đúng chỗ.<span class="cite"><a href="#ref-1">1</a></span> Cả chương dùng một ví dụ chạy xuyên suốt — hai tệp nguồn <code>main.c</code> và <code>sum.c</code> trên hệ x86-64 chạy Linux với định dạng tệp đối tượng ELF-64 — để làm mọi khái niệm trở nên cụ thể.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> liên kết không phải một bước phụ tầm thường, mà là một quá trình tinh vi gồm hai nhiệm vụ cốt lõi — phân giải ký hiệu và định vị lại — chi phối cả tính đúng đắn lẫn cấu trúc của chương trình; nắm được nó mở ra việc lập trình với tệp đối tượng, thư viện tĩnh và thư viện chia sẻ, mã độc lập vị trí, và xen phủ thư viện.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> liên kết là bước ghép các mảnh mã rời thành một chương trình chạy được, làm hai việc chính — tìm đúng định nghĩa cho mỗi cái tên, và điền đúng địa chỉ cho mỗi tham chiếu. <b>Nhớ nhé: hiểu liên kết thì bạn gỡ được những lỗi “khó hiểu” nhất và dùng được thư viện chia sẻ.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> linking is not a trivial afterthought but a sophisticated process of two core tasks — symbol resolution and relocation — that governs both the correctness and the structure of programs; mastering it opens up object files, static and shared libraries, position-independent code, and library interpositioning.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: trình liên kết nằm giữa, gom ba cụm ý tưởng — trình điều khiển biên dịch tạo các tệp đối tượng, phân giải ký hiệu gắn tham chiếu với định nghĩa, và định vị lại cùng liên kết động đưa mã vào bộ nhớ. Diagram: the linker at the centre, gathering three idea clusters — the compiler driver produces object files, symbol resolution binds references to definitions, and relocation plus dynamic linking place code in memory.">
+    <div class="core">
+      <b>Trình liên kết (linker)</b>
+      <small class="standard-copy">Gom các tệp đối tượng rời thành một chương trình chạy được</small>
+      <small class="easy-only">Ghép các mảnh mã thành một chương trình</small>
+      <small class="en-only" lang="en">Gathers separate object files into one runnable program</small>
+    </div>
+
+    <div class="node">
+      <b>Compile &amp; object files</b>
+      <small class="standard-copy">Trình điều khiển biên dịch gọi cpp, cc1, as, ld; sinh ra tệp đối tượng ELF</small>
+      <small class="easy-only">Một lệnh gcc gọi bốn chương trình để tạo tệp chạy được</small>
+      <small class="en-only" lang="en">The compiler driver runs cpp, cc1, as, ld; produces ELF object files</small>
+    </div>
+
+    <div class="node">
+      <b>Symbols &amp; resolution</b>
+      <small class="standard-copy">Bảng ký hiệu; ký hiệu mạnh/yếu; thư viện tĩnh quét trái→phải</small>
+      <small class="easy-only">Mỗi cái tên được gắn với đúng một định nghĩa</small>
+      <small class="en-only" lang="en">Symbol tables; strong/weak symbols; static libraries scanned left→right</small>
+    </div>
+
+    <div class="node">
+      <b>Relocation &amp; dynamic</b>
+      <small class="standard-copy">Gán địa chỉ, sửa tham chiếu; nạp; liên kết động với thư viện chia sẻ, PIC</small>
+      <small class="easy-only">Điền đúng địa chỉ, nạp vào bộ nhớ, dùng thư viện chia sẻ</small>
+      <small class="en-only" lang="en">Assign addresses, fix references; loading; dynamic linking, shared libraries, PIC</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#bien-dich-lien-ket">
+    <span>01</span>
+    <b class="standard-copy">Từ nguồn tới tệp chạy được: trình điều khiển biên dịch và tệp đối tượng</b>
+    <b class="easy-only">Từ chữ tới chương trình chạy; các dạng tệp đối tượng</b>
+    <b class="en-only" lang="en">From source to executable: the compiler driver and object files</b>
+  </a>
+  <a href="#ky-hieu">
+    <span>02</span>
+    <b class="standard-copy">Ký hiệu, bảng ký hiệu và phân giải ký hiệu</b>
+    <b class="easy-only">Những cái tên trong chương trình được gắn với định nghĩa ra sao</b>
+    <b class="en-only" lang="en">Symbols, symbol tables, and symbol resolution</b>
+  </a>
+  <a href="#dinh-vi-nap-dong">
+    <span>03</span>
+    <b class="standard-copy">Định vị lại, nạp, và liên kết động</b>
+    <b class="easy-only">Điền địa chỉ, nạp chương trình, và thư viện chia sẻ</b>
+    <b class="en-only" lang="en">Relocation, loading, and dynamic linking</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>04</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="bien-dich-lien-ket" aria-labelledby="bien-dich-lien-ket-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="bien-dich-lien-ket-title">
+      <span class="standard-copy">Trình điều khiển biên dịch, liên kết tĩnh, và các dạng tệp đối tượng</span>
+      <span class="easy-only">Một lệnh gcc, bốn chương trình, và các loại tệp đối tượng</span>
+      <span class="en-only" lang="en">The compiler driver, static linking, and the forms of object files</span>
+    </h2>
+    <p class="standard-copy">Phần lớn hệ thống biên dịch cung cấp một <i>trình điều khiển biên dịch (compiler driver)</i> thay người dùng gọi lần lượt tiền xử lý, trình biên dịch, trình hợp dịch và trình liên kết. Với ví dụ của sách gồm <code>main.c</code> và <code>sum.c</code>, lệnh <code>gcc -Og -o prog main.c sum.c</code> lần lượt chạy <code>cpp</code> (sinh <code>main.i</code>), <code>cc1</code> (sinh <code>main.s</code>), <code>as</code> (sinh <code>main.o</code>), rồi <code>ld</code> ghép các tệp đối tượng cùng các tệp đối tượng hệ thống thành tệp chạy được <code>prog</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Khi bạn gõ <code>gcc -o prog main.c sum.c</code>, thật ra một “người điều phối” âm thầm gọi bốn chương trình: một cái dọn dẹp mã, một cái dịch sang hợp ngữ, một cái đổi thành mã máy, và cuối cùng trình liên kết ghép tất cả thành tệp chạy được. <b>Nhớ nhé: một lệnh gcc che giấu cả một dây chuyền bốn bước.</b></p>
+    <p class="en-only" lang="en">Most compilation systems provide a <i>compiler driver</i> that invokes the preprocessor, compiler, assembler, and linker on the user's behalf. For the book's example of <code>main.c</code> and <code>sum.c</code>, the command <code>gcc -Og -o prog main.c sum.c</code> runs <code>cpp</code> (producing <code>main.i</code>), <code>cc1</code> (producing <code>main.s</code>), <code>as</code> (producing <code>main.o</code>), then <code>ld</code>, which combines the object files with system object files into the executable <code>prog</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Để dựng tệp chạy được, trình liên kết làm đúng hai việc. <i>Phân giải ký hiệu</i>: tệp đối tượng định nghĩa và tham chiếu các <i>ký hiệu (symbol)</i> — mỗi ký hiệu ứng với một hàm, một biến toàn cục, hoặc một biến <code>static</code>; mục đích là gắn mỗi <i>tham chiếu</i> với đúng một <i>định nghĩa</i>. <i>Định vị lại</i>: trình liên kết đổi các phần bắt đầu ở địa chỉ 0 thành các địa chỉ bộ nhớ thực và sửa mọi tham chiếu.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Trình liên kết làm hai việc: tìm đúng “chủ nhân” cho mỗi cái tên được gọi, và điền đúng địa chỉ cho mỗi chỗ dùng tên đó. <b>Nhớ nhé: gắn tên với định nghĩa, rồi điền địa chỉ — hai việc, thế thôi.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> To build the executable, the linker performs exactly two tasks. <i>Symbol resolution</i>: object files define and reference <i>symbols</i> — each a function, a global variable, or a <code>static</code> variable; the goal is to associate every <i>reference</i> with exactly one <i>definition</i>. <i>Relocation</i>: the linker turns sections that start at address 0 into real memory addresses and modifies all references accordingly.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">main.c --[cpp]--&gt; main.i<br>&nbsp;&nbsp;--[cc1]--&gt; main.s<br>&nbsp;&nbsp;--[as]--&gt; main.o<br>&nbsp;&nbsp;--[ld + sum.o]--&gt; prog</p>
+      <p class="easy-only">nguồn --&gt; (cpp, cc1, as)<br>&nbsp;&nbsp;--&gt; .o --[ld]--&gt; prog</p>
+      <p class="en-only" lang="en">main.c --[cpp]--&gt; main.i<br>&nbsp;&nbsp;--[cc1]--&gt; main.s<br>&nbsp;&nbsp;--[as]--&gt; main.o<br>&nbsp;&nbsp;--[ld + sum.o]--&gt; prog</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">compiler driver</span>
+      <h3>
+        <span class="standard-copy">Trình điều khiển biên dịch — một lệnh, cả dây chuyền</span>
+        <span class="easy-only">Trình điều khiển biên dịch — một lệnh gọi bốn chương trình</span>
+        <span class="en-only" lang="en">The compiler driver — one command, a whole pipeline</span>
+      </h3>
+      <p class="standard-copy">Trình điều khiển biên dịch là “mặt tiền” ẩn giấu bốn pha. Bạn chỉ gõ một lệnh <code>gcc</code>, nhưng bên dưới là tiền xử lý, biên dịch, hợp dịch và liên kết nối tiếp nhau; có thể thấy các bước này bằng cờ <code>-v</code>.<span class="cite"><a href="#ref-1">1</a></span> Trình liên kết <code>ld</code> nhận vào một tập <i>tệp đối tượng khả định vị (relocatable object files)</i> cùng đối số dòng lệnh và sinh ra tệp chạy được đã liên kết đầy đủ.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bạn gõ một lệnh ngắn, nhưng máy làm bốn việc liền mạch: dọn mã, dịch, đổi sang mã máy, rồi ghép lại. Muốn xem từng bước, thêm cờ <code>-v</code> vào lệnh gcc. <b>Nhớ nhé: một lệnh gcc = bốn chương trình chạy nối đuôi nhau.</b></p>
+      <p class="en-only" lang="en">The compiler driver is a façade hiding four phases. You type one <code>gcc</code> command, but underneath come preprocessing, compilation, assembly, and linking in sequence; you can watch them with the <code>-v</code> flag.<span class="cite"><a href="#ref-1">1</a></span> The linker <code>ld</code> takes a collection of <i>relocatable object files</i> plus command-line arguments and produces a fully linked executable.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi lần biên dịch nhiều tệp một lúc, trình điều khiển lặng lẽ sinh ra các tệp <code>.o</code> tạm rồi gọi <code>ld</code> ghép chúng lại.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi dự án của bạn có nhiều tệp mã nguồn mà vẫn chạy được như một chương trình.</span>
+        <span class="en-only" lang="en">Every time you compile several files at once, the driver quietly produces temporary <code>.o</code> files and then calls <code>ld</code> to merge them.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao tách mô-đun</h4>
+          <p>Trình liên kết cho phép <i>biên dịch riêng lẻ (separate compilation)</i>: thay vì một tệp nguồn khổng lồ, ta chia thành nhiều mô-đun dịch độc lập; sửa một mô-đun chỉ cần dịch lại nó rồi liên kết lại, không phải dịch lại tất cả.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ba thời điểm liên kết</h4>
+          <p>Liên kết có thể xảy ra ở thời điểm biên dịch (khi dịch mã nguồn), thời điểm nạp (khi loader đưa chương trình vào bộ nhớ), và thời điểm chạy (do chính ứng dụng yêu cầu).<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">two linker tasks</span>
+      <h3>
+        <span class="standard-copy">Hai nhiệm vụ của trình liên kết — phân giải và định vị</span>
+        <span class="easy-only">Hai việc của trình liên kết — gắn tên và điền địa chỉ</span>
+        <span class="en-only" lang="en">The linker's two tasks — resolve and relocate</span>
+      </h3>
+      <p class="standard-copy">Tệp đối tượng chỉ là những khối byte: một số chứa mã, một số chứa dữ liệu, một số chứa cấu trúc dữ liệu hướng dẫn trình liên kết và loader. Trình liên kết nối các khối, quyết định vị trí chạy cho chúng, rồi sửa các chỗ trong khối mã và dữ liệu. Nó hiểu rất ít về máy đích — trình biên dịch và trình hợp dịch đã làm phần lớn công việc.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Tệp đối tượng giống những mảnh ghép: có mảnh là mã, có mảnh là dữ liệu. Trình liên kết nối chúng lại, chọn chỗ đặt, rồi sửa lại các “mũi tên” sao cho trỏ đúng. <b>Nhớ nhé: trình liên kết nối mảnh, chọn chỗ, rồi chỉnh mũi tên cho đúng.</b></p>
+      <p class="en-only" lang="en">Object files are just blocks of bytes: some hold code, some hold data, some hold data structures that guide the linker and loader. The linker concatenates blocks, decides their run-time locations, and modifies locations within the code and data blocks. It has minimal understanding of the target machine — the compiler and assembler did most of the work.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi trình liên kết báo “undefined reference to …” — đó là bước phân giải ký hiệu thất bại vì không tìm thấy định nghĩa.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn thấy lỗi “undefined reference”: máy không tìm được định nghĩa cho một cái tên.</span>
+        <span class="en-only" lang="en">When the linker reports “undefined reference to …” — that is symbol resolution failing because it found no definition.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">three object-file forms</span>
+      <h3>
+        <span class="standard-copy">Ba dạng tệp đối tượng — và định dạng ELF</span>
+        <span class="easy-only">Ba loại tệp đối tượng, và chuẩn chung ELF</span>
+        <span class="en-only" lang="en">Three forms of object file — and the ELF format</span>
+      </h3>
+      <p class="standard-copy">Tệp đối tượng có ba dạng: <i>khả định vị (relocatable)</i> — kết hợp được với tệp khác lúc biên dịch; <i>chạy được (executable)</i> — chép thẳng vào bộ nhớ và chạy; và <i>đối tượng chia sẻ (shared object)</i> — một loại khả định vị đặc biệt, nạp và liên kết động lúc nạp hoặc lúc chạy. Hệ x86-64 Linux hiện đại dùng định dạng ELF (Executable and Linkable Format).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Tệp đối tượng có ba kiểu: kiểu ghép được với kiểu khác, kiểu chạy thẳng, và kiểu chia sẻ cho nhiều chương trình dùng chung. Trên Linux ngày nay, cả ba dùng một chuẩn chung tên là ELF. <b>Nhớ nhé: ba loại tệp đối tượng — ghép được, chạy được, chia sẻ — cùng một chuẩn ELF.</b></p>
+      <p class="en-only" lang="en">Object files come in three forms: <i>relocatable</i> — combinable with others at compile time; <i>executable</i> — copied straight into memory and run; and <i>shared object</i> — a special relocatable kind, loaded and linked dynamically at load or run time. Modern x86-64 Linux uses the ELF (Executable and Linkable Format).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi tệp <code>.o</code> là khả định vị, mỗi tệp <code>a.out</code>/<code>prog</code> là chạy được, mỗi tệp <code>.so</code> là đối tượng chia sẻ — bạn thấy cả ba mỗi ngày.</span>
+        <span class="easy-only">Tệp <code>.o</code>, tệp chạy được, và tệp <code>.so</code> chính là ba loại đó.</span>
+        <span class="en-only" lang="en">Each <code>.o</code> file is relocatable, each <code>a.out</code>/<code>prog</code> is executable, and each <code>.so</code> is a shared object — you meet all three daily.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Lịch sử định dạng</h4>
+          <p>Unix đời đầu ở Bell Labs dùng định dạng <code>a.out</code> (tới nay tệp chạy được vẫn hay được gọi là <code>a.out</code>). Windows dùng PE (Portable Executable), macOS dùng Mach-O. Khái niệm thì giống nhau, chỉ chi tiết khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Mô-đun đối tượng và tệp đối tượng</h4>
+          <p>Về mặt kỹ thuật, <i>mô-đun đối tượng (object module)</i> là một chuỗi byte, còn <i>tệp đối tượng (object file)</i> là mô-đun đối tượng được lưu trên đĩa; sách dùng hai thuật ngữ này thay thế cho nhau.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Nhưng trình liên kết làm sao biết <code>main.o</code> đang gọi <code>sum</code> ở đâu, hay <code>printf</code> nằm ở tệp nào? Câu trả lời nằm ở <b>ký hiệu (symbol)</b> và <b>bảng ký hiệu (symbol table)</b> — bộ danh bạ mà mỗi mô-đun mang theo.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Vậy làm sao máy biết chỗ nào gọi hàm nào? Nhờ một “danh bạ” tên gọi đi kèm mỗi tệp. Ta xem danh bạ đó ngay sau đây.</p>
+    <p class="en-only" lang="en">But how does the linker know where <code>main.o</code> calls <code>sum</code>, or which file holds <code>printf</code>? The answer is <b>symbols</b> and the <b>symbol table</b> — the directory each module carries.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="ky-hieu" aria-labelledby="ky-hieu-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="ky-hieu-title">
+      <span class="standard-copy">Ký hiệu, bảng ký hiệu, và phân giải ký hiệu</span>
+      <span class="easy-only">Những cái tên trong chương trình, và cách chúng được gắn với định nghĩa</span>
+      <span class="en-only" lang="en">Symbols, symbol tables, and symbol resolution</span>
+    </h2>
+    <p class="standard-copy">Một tệp đối tượng ELF khả định vị được chia thành các <i>phần (section)</i>: <code>.text</code> chứa mã máy, <code>.rodata</code> chứa dữ liệu chỉ đọc, <code>.data</code> chứa biến toàn cục/tĩnh <i>đã</i> khởi tạo, và <code>.bss</code> dành cho biến toàn cục/tĩnh <i>chưa</i> khởi tạo. Mỗi mô-đun còn mang một <i>bảng ký hiệu</i> ở phần <code>.symtab</code>, mô tả các ký hiệu nó định nghĩa và tham chiếu.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Một tệp đối tượng được chia thành nhiều ngăn: ngăn chứa mã, ngăn chứa dữ liệu chỉ đọc, ngăn chứa biến đã có giá trị, và ngăn dành cho biến chưa có giá trị. Kèm theo đó là một “danh bạ” tên gọi để trình liên kết tra cứu. <b>Nhớ nhé: tệp đối tượng chia thành ngăn mã, ngăn dữ liệu, và một danh bạ tên.</b></p>
+    <p class="en-only" lang="en">A relocatable ELF object file is divided into <i>sections</i>: <code>.text</code> holds machine code, <code>.rodata</code> holds read-only data, <code>.data</code> holds <i>initialized</i> global/static variables, and <code>.bss</code> is for <i>uninitialized</i> global/static variables. Each module also carries a <i>symbol table</i> in its <code>.symtab</code> section, describing the symbols it defines and references.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Phần <code>.bss</code> giữ các biến chưa khởi tạo (và biến khởi tạo bằng 0): nó <i>không chiếm chỗ thực</i> trong tệp đối tượng, chỉ là một chỗ giữ chỗ (placeholder), lúc chạy mới được cấp bộ nhớ và đặt về 0. Tên <code>.bss</code> có từ assembly IBM 704 (“block started by symbol”), và một cách nhớ vui là “Better Save Space”.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Biến chưa gán giá trị không cần lưu gì trong tệp — máy chỉ ghi chú “sẽ cần chừng này ô nhớ, đặt bằng 0 khi chạy”. Nhờ vậy tệp gọn hơn. <b>Nhớ nhé: biến chưa khởi tạo không tốn chỗ trong tệp, chỉ được ghi chú lại.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> The <code>.bss</code> section holds uninitialized variables (and variables initialized to zero): it <i>occupies no actual space</i> in the object file, being merely a placeholder, and is allocated and zeroed at run time. The name <code>.bss</code> comes from IBM 704 assembly (“block started by symbol”), and a fun mnemonic is “Better Save Space”.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">Ký hiệu mạnh (strong): hàm, biến toàn cục đã khởi tạo<br>Ký hiệu yếu (weak): biến toàn cục chưa khởi tạo<br>Luật 1: cấm nhiều ký hiệu mạnh trùng tên<br>Luật 2: mạnh thắng yếu<br>Luật 3: nhiều yếu → chọn tuỳ ý</p>
+      <p class="easy-only">tên “mạnh”: hàm, biến có giá trị<br>tên “yếu”: biến chưa có giá trị<br>mạnh thắng yếu</p>
+      <p class="en-only" lang="en">Strong: functions, initialized globals<br>Weak: uninitialized globals<br>Rule 1: no two strong with same name<br>Rule 2: strong beats weak<br>Rule 3: many weak → pick arbitrarily</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">kinds of symbols</span>
+      <h3>
+        <span class="standard-copy">Ba loại ký hiệu — toàn cục, ngoại, và cục bộ</span>
+        <span class="easy-only">Ba loại tên — dùng chung, vay mượn, và riêng tư</span>
+        <span class="en-only" lang="en">Three kinds of symbols — global, external, local</span>
+      </h3>
+      <p class="standard-copy">Với trình liên kết có ba loại ký hiệu: <i>toàn cục (global)</i> do mô-đun này định nghĩa và mô-đun khác dùng được (hàm và biến toàn cục không <code>static</code>); <i>ngoại (external)</i> được mô-đun này dùng nhưng do mô-đun khác định nghĩa; và <i>cục bộ (local)</i> chỉ hiện và dùng trong mô-đun của nó (hàm và biến khai báo <code>static</code>).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Có ba loại tên: tên dùng chung mà ai cũng gọi được, tên “vay” từ tệp khác, và tên riêng chỉ dùng trong tệp của mình. Từ khoá <code>static</code> làm một tên trở thành riêng tư. <b>Nhớ nhé: dùng chung, vay mượn, hay riêng tư — đó là ba loại tên.</b></p>
+      <p class="en-only" lang="en">For the linker there are three kinds of symbols: <i>global</i>, defined by this module and usable by others (non-<code>static</code> functions and global variables); <i>external</i>, used by this module but defined elsewhere; and <i>local</i>, visible and used only within its own module (<code>static</code> functions and variables).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bạn khai báo <code>static</code> cho một biến hay hàm để “giấu” nó khỏi các mô-đun khác — một thói quen lập trình tốt mà sách khuyến khích.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn viết <code>static</code> trước một biến để nó chỉ dùng được trong tệp hiện tại.</span>
+        <span class="en-only" lang="en">When you mark a variable or function <code>static</code> to “hide” it from other modules — a good practice the book encourages.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ký hiệu cục bộ ≠ biến cục bộ</h4>
+          <p>Bảng <code>.symtab</code> <i>không</i> chứa biến cục bộ không <code>static</code> — chúng nằm trên ngăn xếp lúc chạy, trình liên kết không quan tâm. Nhưng biến cục bộ khai báo <code>static</code> thì được cấp chỗ trong <code>.data</code>/<code>.bss</code> và có một ký hiệu cục bộ tên duy nhất (ví dụ <code>x.1</code>, <code>x.2</code>).<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Mục trong bảng ký hiệu</h4>
+          <p>Mỗi mục <code>Elf64_Symbol</code> gồm: <code>name</code> (độ dời vào bảng chuỗi), <code>type</code> (thường là data hoặc function), <code>binding</code> (cục bộ hay toàn cục), <code>section</code> (chỉ số phần), <code>value</code> (độ dời hoặc địa chỉ tuyệt đối), và <code>size</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">strong vs weak</span>
+      <h3>
+        <span class="standard-copy">Ký hiệu mạnh và yếu — ba luật dễ gây lỗi âm thầm</span>
+        <span class="easy-only">Tên “mạnh” và “yếu” — và vì sao chúng gây lỗi khó thấy</span>
+        <span class="en-only" lang="en">Strong vs weak symbols — three silently dangerous rules</span>
+      </h3>
+      <p class="standard-copy">Khi nhiều mô-đun định nghĩa ký hiệu toàn cục trùng tên, Linux xử lý bằng quy ước <i>mạnh/yếu</i>. Hàm và biến toàn cục đã khởi tạo là <i>mạnh</i>; biến toàn cục chưa khởi tạo là <i>yếu</i>. Luật 1: cấm hai ký hiệu mạnh trùng tên. Luật 2: một mạnh và nhiều yếu → chọn mạnh. Luật 3: nhiều yếu trùng tên → chọn tuỳ ý một cái.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nếu hai tệp cùng đặt một tên toàn cục, máy phải chọn. Tên đã có giá trị thì “mạnh”, tên chưa có giá trị thì “yếu”. Hai tên mạnh trùng nhau là lỗi; mạnh luôn thắng yếu; nhiều yếu thì chọn bừa. <b>Nhớ nhé: hai tên mạnh trùng là lỗi, còn mạnh luôn thắng yếu.</b></p>
+      <p class="en-only" lang="en">When several modules define global symbols with the same name, Linux uses a <i>strong/weak</i> convention. Functions and initialized globals are <i>strong</i>; uninitialized globals are <i>weak</i>. Rule 1: no two strong symbols with the same name. Rule 2: one strong and several weak → choose the strong. Rule 3: several weak with the same name → choose any.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một biến vô tình được định nghĩa là <code>int</code> ở mô-đun này và <code>double</code> ở mô-đun kia: luật 2 có thể âm thầm ghi đè, tạo lỗi hiểm hóc. Dùng cờ <code>-fno-common</code> hoặc <code>-Werror</code> để trình liên kết báo lỗi thay vì im lặng.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi hai tệp lỡ dùng chung một tên biến với kiểu khác nhau — máy có thể âm thầm làm sai mà không báo.</span>
+        <span class="en-only" lang="en">When a variable is accidentally an <code>int</code> in one module and a <code>double</code> in another: rule 2 can silently overwrite, creating insidious bugs. Use <code>-fno-common</code> or <code>-Werror</code> to make the linker complain instead of staying silent.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>COMMON và .bss</h4>
+          <p>Trình biên dịch gán biến toàn cục chưa khởi tạo vào giả-phần COMMON (vì chưa biết mô-đun nào định nghĩa thật), còn biến khởi tạo bằng 0 và biến <code>static</code> thì gán vào <code>.bss</code> — vì chúng chắc chắn là duy nhất.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Giả-phần ABS, UNDEF, COMMON</h4>
+          <p>Trường <code>section</code> có ba giá trị đặc biệt: ABS cho ký hiệu không được định vị lại, UNDEF cho ký hiệu tham chiếu nhưng định nghĩa ở nơi khác, và COMMON cho dữ liệu chưa khởi tạo chưa được cấp phát. Chúng chỉ tồn tại trong tệp khả định vị.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">static libraries</span>
+      <h3>
+        <span class="standard-copy">Thư viện tĩnh — và trật tự dòng lệnh có ý nghĩa</span>
+        <span class="easy-only">Thư viện tĩnh — và vì sao thứ tự trên dòng lệnh lại quan trọng</span>
+        <span class="en-only" lang="en">Static libraries — and command-line order matters</span>
+      </h3>
+      <p class="standard-copy"><i>Thư viện tĩnh (static library)</i> đóng gói nhiều mô-đun đối tượng liên quan vào một tệp lưu trữ (archive) đuôi <code>.a</code>, tạo bằng công cụ <code>ar</code>. Lúc liên kết, trình liên kết <i>chỉ chép những mô-đun thực sự được tham chiếu</i>. Nó quét các tệp và thư viện từ trái sang phải, duy trì ba tập: <code>E</code> (mô-đun sẽ gộp), <code>U</code> (ký hiệu chưa phân giải), <code>D</code> (ký hiệu đã định nghĩa).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Thư viện tĩnh là một “túi” nhiều hàm gộp lại. Khi liên kết, máy chỉ lấy đúng những hàm bạn cần, bỏ phần còn lại. Nó đọc dòng lệnh từ trái sang phải, nên đặt sai thứ tự có thể làm nó bỏ sót. <b>Nhớ nhé: để thư viện SAU tệp cần nó, vì máy đọc trái sang phải.</b></p>
+      <p class="en-only" lang="en">A <i>static library</i> packages related object modules into one archive file with suffix <code>.a</code>, built with the <code>ar</code> tool. At link time the linker <i>copies only the modules actually referenced</i>. It scans files and libraries left to right, keeping three sets: <code>E</code> (modules to merge), <code>U</code> (unresolved symbols), <code>D</code> (defined symbols).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi <code>gcc ./libvector.a main2.c</code> báo “undefined reference to ‘addvec’”: thư viện đặt trước tệp cần nó nên lúc quét, tập <code>U</code> rỗng và mô-đun không được lấy. Quy tắc chung: đặt thư viện ở cuối dòng lệnh.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn gặp lỗi “undefined reference” dù hàm có trong thư viện — thường chỉ vì đặt thư viện sai chỗ.</span>
+        <span class="en-only" lang="en">When <code>gcc ./libvector.a main2.c</code> reports “undefined reference to ‘addvec’”: the library came before the file needing it, so <code>U</code> was empty at the scan and the module was not pulled in. Rule of thumb: put libraries at the end of the command line.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao có thư viện</h4>
+          <p>Nếu gộp cả thư viện C chuẩn vào một mô-đun <code>libc.o</code>, mỗi tệp chạy được sẽ chứa một bản sao đầy đủ — rất lãng phí. Trên hệ của sách, <code>libc.a</code> khoảng 5 MB và <code>libm.a</code> khoảng 2 MB; thư viện tĩnh cho phép chỉ chép những mô-đun cần dùng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Thư viện phụ thuộc nhau</h4>
+          <p>Nếu các thư viện phụ thuộc lẫn nhau, phải xếp sao cho với mỗi ký hiệu, định nghĩa đứng <i>sau</i> tham chiếu; có khi phải lặp lại một thư viện trên dòng lệnh để thoả các ràng buộc phụ thuộc.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Khi mỗi tham chiếu đã được gắn với đúng một định nghĩa, trình liên kết biết kích thước chính xác của mọi phần mã và dữ liệu. Giờ nó bước sang nhiệm vụ thứ hai: gán địa chỉ chạy thực và sửa mọi tham chiếu — tức <b>định vị lại</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Khi mọi cái tên đã có chủ, máy biết chính xác cần bao nhiêu chỗ. Việc còn lại là chọn địa chỉ thật và điền vào. Đó là phần tiếp theo.</p>
+    <p class="en-only" lang="en">Once every reference is bound to exactly one definition, the linker knows the exact sizes of all code and data sections. Now it turns to the second task: assigning real run-time addresses and fixing every reference — <b>relocation</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="dinh-vi-nap-dong" aria-labelledby="dinh-vi-nap-dong-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="dinh-vi-nap-dong-title">
+      <span class="standard-copy">Định vị lại, nạp tệp chạy được, và liên kết động với thư viện chia sẻ</span>
+      <span class="easy-only">Điền địa chỉ, nạp chương trình, và dùng chung thư viện</span>
+      <span class="en-only" lang="en">Relocation, loading executables, and dynamic linking with shared libraries</span>
+    </h2>
+    <p class="standard-copy"><i>Định vị lại (relocation)</i> gồm hai bước: gộp các phần cùng loại từ mọi mô-đun thành một phần tổng rồi gán địa chỉ chạy, và sửa mọi tham chiếu trong thân mã và dữ liệu để chúng trỏ đúng địa chỉ chạy. Để làm được, trình liên kết dựa vào các <i>mục định vị lại (relocation entries)</i> mà trình hợp dịch sinh ra — đặt ở <code>.rel.text</code> cho mã và <code>.rel.data</code> cho dữ liệu.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Định vị lại là bước điền địa chỉ: máy gom các mảnh cùng loại lại, chọn chỗ đặt trong bộ nhớ, rồi sửa từng “mũi tên” trong mã cho trỏ đúng. Nó biết chỗ nào cần sửa nhờ một danh sách ghi chú sẵn. <b>Nhớ nhé: định vị lại = gom mảnh, chọn địa chỉ, rồi sửa mọi mũi tên.</b></p>
+    <p class="en-only" lang="en"><i>Relocation</i> has two steps: merge same-type sections from all modules into one aggregate section and assign run-time addresses, then modify every reference in the code and data bodies so they point to the right run-time address. To do this, the linker relies on <i>relocation entries</i> the assembler generates — placed in <code>.rel.text</code> for code and <code>.rel.data</code> for data.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> ELF định nghĩa 32 kiểu định vị lại; sách chỉ bàn hai kiểu cơ bản nhất. <code>R_X86_64_PC32</code> định vị một tham chiếu dùng địa chỉ tương đối-PC 32 bit (ví dụ đích của lệnh <code>call</code>). <code>R_X86_64_32</code> định vị một tham chiếu dùng địa chỉ tuyệt đối 32 bit. Hai kiểu này phục vụ <i>mô hình mã nhỏ (small code model)</i> của x86-64, giả định tổng mã và dữ liệu nhỏ hơn 2 GB.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Có hai cách ghi địa chỉ: “cách chỗ hiện tại bao xa” (tương đối) và “địa chỉ chính xác” (tuyệt đối). Mỗi chỗ cần sửa được ghi chú là thuộc kiểu nào. <b>Nhớ nhé: địa chỉ có thể tính theo khoảng cách, hoặc ghi thẳng con số.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> ELF defines 32 relocation types; the book discusses only the two most basic. <code>R_X86_64_PC32</code> relocates a reference using a 32-bit PC-relative address (e.g. the target of a <code>call</code>). <code>R_X86_64_32</code> relocates a reference using a 32-bit absolute address. These serve the x86-64 <i>small code model</i>, which assumes total code and data under 2 GB.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">Mục định vị lại (Elf64_Rela):<br>&nbsp;&nbsp;offset, type, symbol, addend<br>PC-tương đối:<br>&nbsp;&nbsp;*refptr = ADDR(sym) + addend − refaddr<br>Tuyệt đối:<br>&nbsp;&nbsp;*refptr = ADDR(sym) + addend</p>
+      <p class="easy-only">mỗi chỗ cần sửa ghi:<br>&nbsp;&nbsp;vị trí · kiểu · tên · phần bù</p>
+      <p class="en-only" lang="en">Relocation entry (Elf64_Rela):<br>&nbsp;&nbsp;offset, type, symbol, addend<br>PC-relative:<br>&nbsp;&nbsp;*refptr = ADDR(sym) + addend − refaddr<br>Absolute:<br>&nbsp;&nbsp;*refptr = ADDR(sym) + addend</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">relocation</span>
+      <h3>
+        <span class="standard-copy">Định vị lại — gán địa chỉ và sửa từng tham chiếu</span>
+        <span class="easy-only">Định vị lại — điền địa chỉ đúng cho mỗi chỗ gọi</span>
+        <span class="en-only" lang="en">Relocation — assign addresses and fix each reference</span>
+      </h3>
+      <p class="standard-copy">Khi trình hợp dịch gặp một tham chiếu tới đối tượng mà vị trí cuối cùng chưa biết, nó sinh một <i>mục định vị lại</i> mô tả cách sửa tham chiếu khi gộp tệp vào tệp chạy được. Mục ELF gồm bốn trường: <code>offset</code> (vị trí cần sửa), <code>symbol</code> (ký hiệu đích), <code>type</code> (kiểu định vị), và <code>addend</code> (hằng số bù). Trình liên kết lặp qua từng phần và từng mục để tính địa chỉ mới.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Khi dịch mã, máy chưa biết hàm hay biến sẽ nằm ở đâu, nên nó để lại một chỗ trống kèm ghi chú “sửa chỗ này sau”. Lúc liên kết, trình liên kết đọc ghi chú và điền địa chỉ thật vào. <b>Nhớ nhé: chỗ trống cộng ghi chú, sửa sau — đó là định vị lại.</b></p>
+      <p class="en-only" lang="en">When the assembler meets a reference to an object whose final location is unknown, it generates a <i>relocation entry</i> describing how to fix the reference when the file is merged into an executable. The ELF entry has four fields: <code>offset</code> (the spot to fix), <code>symbol</code> (the target symbol), <code>type</code> (the relocation kind), and <code>addend</code> (a bias constant). The linker iterates over each section and each entry to compute the new address.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi <code>objdump -dx</code> hiện một dòng như <code>R_X86_64_PC32 sum-0x4</code> cạnh một lệnh <code>call</code> — đó chính là mục định vị lại cho lời gọi <code>sum</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn xem mã máy bằng công cụ và thấy những dòng ghi chú “sửa chỗ này” kèm tên hàm.</span>
+        <span class="en-only" lang="en">When <code>objdump -dx</code> shows a line like <code>R_X86_64_PC32 sum-0x4</code> beside a <code>call</code> instruction — that is the relocation entry for the call to <code>sum</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Một ví dụ cụ thể</h4>
+          <p>Trong ví dụ của sách, lời gọi <code>sum</code> có mục <code>r.offset=0xf, r.symbol=sum, r.type=R_X86_64_PC32, r.addend=-4</code>. Với <code>ADDR(.text)=0x4004d0</code> và <code>ADDR(sum)=0x4004e8</code>, trình liên kết tính <code>refaddr=0x4004df</code> rồi <code>*refptr = 0x4004e8 + (-4) - 0x4004df = 0x5</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hai bước của định vị lại</h4>
+          <p>Bước 1 gộp mọi phần cùng loại (ví dụ các <code>.data</code>) thành một phần tổng và gán địa chỉ chạy. Bước 2 sửa từng tham chiếu trong thân mã–dữ liệu để trỏ đúng địa chỉ đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">executable &amp; loading</span>
+      <h3>
+        <span class="standard-copy">Tệp chạy được và nạp — từ đĩa vào bộ nhớ</span>
+        <span class="easy-only">Tệp chạy được và bước nạp — đưa chương trình vào bộ nhớ</span>
+        <span class="en-only" lang="en">Executable &amp; loading — from disk into memory</span>
+      </h3>
+      <p class="standard-copy">Tệp chạy được ELF đã liên kết đầy đủ nên không còn phần <code>.rel</code>. ELF header chứa <i>điểm vào (entry point)</i> — địa chỉ lệnh đầu tiên khi chạy. Một <i>bảng tiêu đề chương trình (program header table)</i> ánh xạ các khối liền kề của tệp thành các <i>phân đoạn (segment)</i> bộ nhớ: phân đoạn mã chỉ-đọc ở <code>0x400000</code>, phân đoạn dữ liệu đọc–ghi ngay sau đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Tệp chạy được là tệp đã sẵn sàng: mọi địa chỉ đã điền xong. Nó có một “mục lục” cho biết đưa phần nào vào vùng nhớ nào, và một điểm bắt đầu để máy chạy từ đó. <b>Nhớ nhé: tệp chạy được đã điền đủ địa chỉ và chỉ chờ được nạp vào bộ nhớ.</b></p>
+      <p class="en-only" lang="en">A fully linked ELF executable no longer needs <code>.rel</code> sections. The ELF header holds the <i>entry point</i> — the address of the first instruction to run. A <i>program header table</i> maps contiguous chunks of the file to memory <i>segments</i>: a read-only code segment at <code>0x400000</code>, a read/write data segment just after.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bạn gõ <code>./prog</code>, shell gọi <i>loader</i> qua <code>execve</code>; loader chép mã và dữ liệu vào bộ nhớ rồi nhảy tới điểm vào, luôn là hàm <code>_start</code> trong <code>crt1.o</code>, cuối cùng gọi <code>__libc_start_main</code> rồi <code>main</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn chạy <code>./prog</code>, một “người bốc xếp” chép chương trình vào bộ nhớ rồi khởi động nó.</span>
+        <span class="en-only" lang="en">When you type <code>./prog</code>, the shell invokes the <i>loader</i> via <code>execve</code>; the loader copies code and data into memory and jumps to the entry point, always the <code>_start</code> function in <code>crt1.o</code>, which eventually calls <code>__libc_start_main</code> and then <code>main</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ảnh bộ nhớ lúc chạy</h4>
+          <p>Trên Linux x86-64, phân đoạn mã bắt đầu ở <code>0x400000</code>, rồi tới phân đoạn dữ liệu, heap (do <code>malloc</code> mở rộng lên), vùng cho thư viện chia sẻ, ngăn xếp người dùng bắt đầu ngay dưới <code>2^48 − 1</code>, và vùng nhân ở trên <code>2^48</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Nạp thực chất là ánh xạ</h4>
+          <p>Mô tả “chép từ đĩa” chỉ đúng về khái niệm: thực tế loader ánh xạ (map) các trang của tệp vào không gian địa chỉ ảo, và việc chép dữ liệu bị hoãn tới khi CPU chạm vào trang — cơ chế phân trang của bộ nhớ ảo (Chương 9).<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">dynamic linking + PIC</span>
+      <h3>
+        <span class="standard-copy">Liên kết động, thư viện chia sẻ, và mã độc lập vị trí</span>
+        <span class="easy-only">Thư viện chia sẻ — một bản dùng chung cho nhiều chương trình</span>
+        <span class="en-only" lang="en">Dynamic linking, shared libraries, and position-independent code</span>
+      </h3>
+      <p class="standard-copy"><i>Thư viện chia sẻ (shared library)</i> — tệp <code>.so</code> trên Linux, DLL trên Windows — là mô-đun có thể nạp ở một địa chỉ bất kỳ và liên kết với chương trình lúc nạp hoặc lúc chạy, do một <i>trình liên kết động (dynamic linker)</i> như <code>ld-linux.so</code> thực hiện. Trong hệ tệp chỉ có một bản <code>.so</code> cho mỗi thư viện, và một bản <code>.text</code> trong bộ nhớ có thể được nhiều tiến trình dùng chung.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only">Thay vì chép cả thư viện vào từng chương trình, Linux giữ một bản chung tên đuôi <code>.so</code> và cho nhiều chương trình dùng lại. Nhờ vậy tiết kiệm bộ nhớ và dễ cập nhật. <b>Nhớ nhé: thư viện chia sẻ là một bản dùng chung, không chép vào mỗi chương trình.</b></p>
+      <p class="en-only" lang="en">A <i>shared library</i> — a <code>.so</code> file on Linux, a DLL on Windows — is a module that can be loaded at an arbitrary address and linked with a program at load or run time by a <i>dynamic linker</i> such as <code>ld-linux.so</code>. The file system holds just one <code>.so</code> per library, and a single copy of its <code>.text</code> in memory can be shared by many processes.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Để chia sẻ được, mã phải là <i>mã độc lập vị trí (position-independent code, PIC)</i>, dịch bằng cờ <code>-fpic</code>; tham chiếu biến toàn cục đi qua <i>bảng độ dời toàn cục (global offset table, GOT)</i>, còn lời gọi hàm ngoài đi qua <i>bảng liên kết thủ tục (procedure linkage table, PLT)</i> với kỹ thuật liên kết trễ (lazy binding).<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Ứng dụng còn có thể tự nạp thư viện lúc đang chạy bằng <code>dlopen</code>, rồi lấy hàm bằng <code>dlsym</code> — như máy chủ web nạp thêm chức năng mà không cần dừng.</span>
+        <span class="en-only" lang="en">To be shareable, code must be <i>position-independent code (PIC)</i>, compiled with <code>-fpic</code>; global-variable references go through the <i>global offset table (GOT)</i>, and external function calls go through the <i>procedure linkage table (PLT)</i> using lazy binding.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>GOT và PLT</h4>
+          <p>GOT nằm đầu phân đoạn dữ liệu, mỗi mục 8 byte cho một đối tượng toàn cục; PLT là mảng các mục mã 16 byte. Hai bảng phối hợp theo kiểu liên kết trễ: lần đầu gọi một hàm ngoài mới tốn công phân giải địa chỉ, các lần sau chỉ còn một lệnh nhảy gián tiếp qua GOT.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Xen phủ thư viện và công cụ</h4>
+          <p><i>Xen phủ thư viện (library interpositioning)</i> cho phép chặn lời gọi hàm thư viện và chạy mã riêng: ở thời điểm biên dịch (macro + <code>-I</code>), thời điểm liên kết (cờ <code>--wrap</code> với <code>__wrap_f</code>/<code>__real_f</code>), hoặc thời điểm chạy (biến môi trường <code>LD_PRELOAD</code>). Bộ công cụ GNU binutils gồm <code>ar</code>, <code>strings</code>, <code>strip</code>, <code>nm</code>, <code>size</code>, <code>readelf</code>, <code>objdump</code>, và <code>ldd</code> để liệt kê thư viện chia sẻ mà một tệp chạy được cần.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Sợi chỉ chung của cả ba cụm là: trình liên kết biến nhiều mảnh độc lập, mỗi mảnh “ngây thơ” bắt đầu ở địa chỉ 0, thành một chương trình thống nhất trong không gian địa chỉ thực — ở thời điểm biên dịch, thời điểm nạp, hay thời điểm chạy.<span class="cite"><a href="#ref-1">1</a></span> Trước khi khép lại, hãy dọn vài ngộ nhận hay gặp.</p>
+    <p class="easy-only">Tóm lại: trình liên kết lấy nhiều mảnh rời, mỗi mảnh tưởng mình bắt đầu từ số 0, rồi xếp chúng vào đúng chỗ trong bộ nhớ thật. Giờ hãy dọn vài hiểu lầm.</p>
+    <p class="en-only" lang="en">The common thread across all three clusters: the linker turns many independent pieces, each naively starting at address 0, into one unified program in the real address space — at compile time, load time, or run time.<span class="cite"><a href="#ref-1">1</a></span> Before closing, let us clear up a few common misconceptions.</p>
+  </aside>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+    <p class="eyebrow" id="ngo-nhan-title">
+      <span class="vi-only">Ba ngộ nhận thường gặp</span>
+      <span class="en-only" lang="en">Three common misconceptions</span>
+    </p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Liên kết chỉ là bước cuối không quan trọng”</span>
+          <span class="en-only" lang="en">“Linking is just an unimportant final step”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> liên kết diễn ra lặng lẽ, học làm gì.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> các quyết định phân giải ký hiệu có thể âm thầm ảnh hưởng tính đúng đắn, và hiểu liên kết là chìa khoá để dùng thư viện chia sẻ và hiểu loading, bộ nhớ ảo, ánh xạ bộ nhớ.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> linking happens quietly, why learn it.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> symbol-resolution decisions can silently affect correctness, and understanding linking is the key to shared libraries and to grasping loading, virtual memory, and memory mapping.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Biến chưa khởi tạo vẫn chiếm chỗ trong tệp”</span>
+          <span class="en-only" lang="en">“Uninitialized variables still take space in the file”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> mọi biến toàn cục đều tốn byte trên đĩa.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> biến chưa khởi tạo nằm ở <code>.bss</code>, <i>không chiếm chỗ thực</i> trong tệp đối tượng — chỉ là chỗ giữ chỗ, lúc chạy mới được cấp và đặt về 0.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> every global variable costs bytes on disk.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> uninitialized variables live in <code>.bss</code>, which <i>occupies no actual space</i> in the object file — it is a placeholder, allocated and zeroed only at run time.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Thứ tự thư viện trên dòng lệnh không quan trọng”</span>
+          <span class="en-only" lang="en">“Library order on the command line doesn't matter”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> đặt thư viện ở đâu cũng được.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> trình liên kết quét trái→phải; nếu thư viện đứng trước tệp cần nó, tập ký hiệu chưa phân giải còn rỗng và mô-đun bị bỏ qua, gây lỗi “undefined reference”. Quy tắc: thư viện đặt ở cuối.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> put libraries anywhere.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> the linker scans left→right; if a library precedes the file needing it, the unresolved-symbol set is still empty and the module is skipped, causing “undefined reference”. Rule: put libraries at the end.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm quá trình liên kết</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped linking</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã theo trọn hành trình từ nhiều tệp nguồn rời tới một chương trình chạy được, qua phân giải ký hiệu, định vị lại và liên kết động.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you followed the whole journey from separate source files to a runnable program, through symbol resolution, relocation, and dynamic linking.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Trình điều khiển biên dịch gọi những chương trình nào theo thứ tự, và hai nhiệm vụ cốt lõi của trình liên kết là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: nhiệm vụ nào thất bại thì sinh ra lỗi “undefined reference”?</p>
+      </li>
+      <li>
+        <p>Kể ba loại ký hiệu với trình liên kết, và cho biết từ khoá <code>static</code> làm một ký hiệu thành loại nào.</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao <code>.symtab</code> không chứa biến cục bộ không <code>static</code>?</p>
+      </li>
+      <li>
+        <p>Ký hiệu mạnh và yếu khác nhau ra sao, và ba luật phân giải ký hiệu trùng tên là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: cờ nào giúp biến lỗi im lặng do luật 2 thành lỗi báo ra?</p>
+      </li>
+      <li>
+        <p>Vì sao <code>.bss</code> không chiếm chỗ trong tệp đối tượng, và trật tự thư viện trên dòng lệnh quan trọng thế nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: ba tập <code>E</code>, <code>U</code>, <code>D</code> thay đổi ra sao khi quét một thư viện tĩnh?</p>
+      </li>
+      <li>
+        <p>Thư viện chia sẻ khác thư viện tĩnh ở đâu, và GOT với PLT phục vụ việc gì trong mã độc lập vị trí?</p>
+        <p class="deep-only">Gợi ý sâu hơn: liên kết trễ (lazy binding) tiết kiệm công sức ở điểm nào?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Khi bạn gõ một lệnh gcc, máy âm thầm chạy mấy chương trình? Trình liên kết làm gì ở cuối?</p></li>
+      <li><p>Từ khoá <code>static</code> làm một cái tên trở nên thế nào — dùng chung hay riêng tư?</p></li>
+      <li><p>Nếu hai tệp cùng đặt một tên toàn cục, máy chọn ra sao?</p></li>
+      <li><p>Vì sao đặt thư viện sai chỗ trên dòng lệnh lại gây lỗi “undefined reference”?</p></li>
+      <li><p>Thư viện chia sẻ giúp tiết kiệm gì so với chép thư viện vào mỗi chương trình?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>Which programs does the compiler driver invoke, in order, and what are the linker's two core tasks?</p></li>
+      <li><p>Name the three kinds of linker symbols, and say which kind <code>static</code> makes a symbol.</p></li>
+      <li><p>How do strong and weak symbols differ, and what are the three rules for duplicate names?</p></li>
+      <li><p>Why does <code>.bss</code> take no space in the object file, and why does library order on the command line matter?</p></li>
+      <li><p>How do shared libraries differ from static ones, and what do the GOT and PLT do in position-independent code?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Liên kết <span class="closing-accent">không phải một bước phụ lặng lẽ</span>, mà là quá trình tinh vi gắn mỗi tham chiếu với đúng một định nghĩa rồi <span class="closing-accent">đặt mọi mảnh vào đúng địa chỉ thật</span>. Nắm được phân giải ký hiệu và định vị lại, bạn gỡ được những lỗi khó hiểu nhất và mở khoá cả thế giới thư viện chia sẻ.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Liên kết <span class="closing-accent">không chỉ là bước cuối cho có</span>; nó ghép các mảnh mã rời và <span class="closing-accent">điền đúng địa chỉ cho từng chỗ</span>. Hiểu nó là bạn gỡ được lỗi khó và dùng được thư viện chia sẻ. <b>Nhớ nhé: khâu đúng các mảnh và điền đúng địa chỉ — đó là cả nghề liên kết.</b></p>
+    <p class="en-only" lang="en">Linking is <span class="closing-accent">not a quiet afterthought</span> but a sophisticated process that binds each reference to exactly one definition and then <span class="closing-accent">places every piece at its real address</span>. Master symbol resolution and relocation, and you can debug the most baffling errors and unlock the whole world of shared libraries.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-6-the-memory-hierarchy.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 6 · Phân cấp bộ nhớ</span>
+    <span class="nav-title en-only" lang="en">Chapter 6 · The Memory Hierarchy</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-8-exceptional-control-flow.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 8 · Luồng điều khiển ngoại lệ</span>
+    <span class="nav-title en-only" lang="en">Chapter 8 · Exceptional Control Flow</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, tái bản lần thứ 3, Global Edition, Pearson, 2016 (ISBN 978-1-292-10176-7) — Chương 7, “Linking”, trang 705–752.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, 3rd edition, Global Edition, Pearson, 2016 (ISBN 978-1-292-10176-7) — Chapter 7, “Linking”, pp. 705–752.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the authors and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the authors' words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, 3rd ed. (Global Edition), Pearson, 2016, ch. 7 “Linking”, pp. 705–752. — <a href="http://csapp.cs.cmu.edu/" target="_blank" rel="noopener noreferrer">csapp.cs.cmu.edu</a></li>
+      <li id="ref-2">“elf — format of Executable and Linking Format (ELF) files”, Linux manual page section 5. <a href="https://man7.org/linux/man-pages/man5/elf.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/elf.5.html</a></li>
+      <li id="ref-3">“ld — the GNU linker” and GNU binutils documentation, GNU Project / Sourceware. <a href="https://sourceware.org/binutils/docs/ld/" target="_blank" rel="noopener noreferrer">sourceware.org/binutils/docs/ld</a></li>
+      <li id="ref-4">“dlopen, dlsym, dlclose, dlerror — programming interface to the dynamic linker”, Linux manual page section 3. <a href="https://man7.org/linux/man-pages/man3/dlopen.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/dlopen.3.html</a></li>
+      <li id="ref-5">“ld.so, ld-linux.so — dynamic linker/loader” (covering LD_PRELOAD and shared-library resolution), Linux manual page section 8. <a href="https://man7.org/linux/man-pages/man8/ld.so.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/ld.so.8.html</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-6-the-memory-hierarchy.html">chapter 6</a>
+      <a href="chapter-8-exceptional-control-flow.html">chapter 8</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('csapp-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('csapp-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('csapp-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

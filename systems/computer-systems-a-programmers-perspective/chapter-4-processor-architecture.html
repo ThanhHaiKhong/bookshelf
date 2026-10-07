@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 4 · Kiến trúc bộ xử lý — Computer Systems: A Programmer's Perspective</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 4 “Processor Architecture” trong Computer Systems: A Programmer's Perspective (Bryant & O'Hallaron, Pearson, 3rd ed., 2016): tập lệnh Y86-64, thiết kế logic và HCL, bộ xử lý tuần tự SEQ, các nguyên lý đường ống, và bộ xử lý đường ống PIPE với chuyển tiếp dữ liệu và xử lý nguy cơ.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('csapp-reading-mode'),
+l=localStorage.getItem('csapp-lang'),
+t=localStorage.getItem('csapp-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"CS:APP / 04";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    Computer Systems: A Programmer's Perspective
+    <span>Chương 4 · Processor Architecture</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 4 · Kiến trúc bộ xử lý</span>
+      <span class="en-only" lang="en">Chapter 4 · Processor Architecture</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Tự tay dựng một bộ xử lý: từ tập lệnh Y86-64 tới một đường ống năm tầng</span>
+      <span class="easy-only">Ta cùng “chế” một con chip chạy lệnh — từng bước một</span>
+      <span class="en-only" lang="en">Building a processor by hand: from the Y86-64 ISA to a five-stage pipeline</span>
+    </h1>
+
+    <p class="standard-copy">Bryant và O'Hallaron dành cả chương để trả lời một câu hỏi: phần cứng bên dưới <i>thực thi</i> các lệnh máy như thế nào? Hai ông định nghĩa một tập lệnh (ISA) tên là <b>Y86-64</b> — một phiên bản đơn giản hơn của x86-64 — rồi thiết kế hai bộ xử lý chạy được nó: <b>SEQ</b>, chạy tuần tự trọn một lệnh mỗi chu kỳ đồng hồ, và <b>PIPE</b>, một bộ xử lý đường ống (pipeline) năm tầng nhanh hơn nhiều.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Chương này giống như một lớp học “tự chế CPU”. Trước hết các tác giả bịa ra một bộ lệnh nhỏ gọn tên là Y86-64 cho dễ học. Rồi họ dựng hai con chip giả tưởng chạy nó: một con làm xong hẳn một lệnh rồi mới làm lệnh sau (chậm mà chắc), và một con làm nhiều lệnh gối đầu nhau như dây chuyền nhà máy (nhanh hơn nhiều). <b>Nhớ nhé: muốn hiểu CPU, cách tốt nhất là thử tự dựng một cái.</b></p>
+    <p class="en-only" lang="en">Bryant and O'Hallaron devote the chapter to one question: how does the hardware underneath actually <i>execute</i> machine instructions? They define an instruction set (ISA) called <b>Y86-64</b> — a simplified cousin of x86-64 — and then design two processors that run it: <b>SEQ</b>, which executes a full instruction every clock cycle in sequence, and <b>PIPE</b>, a much faster five-stage pipelined processor.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Phương pháp của chương là <i>biến đổi dần</i> (refinement). Thay vì trình bày một bộ xử lý phức tạp ngay lập tức, các tác giả bắt đầu từ SEQ — một thiết kế đúng về chức năng nhưng chậm — rồi áp một loạt phép biến đổi để chèn các <b>thanh ghi đường ống</b> (pipeline register), tạo ra PIPE. Mỗi phép biến đổi lại làm lộ ra một vấn đề mới (phụ thuộc dữ liệu, phụ thuộc điều khiển) buộc ta phải xử lý, nên người đọc thấy rõ <i>vì sao</i> mỗi cơ chế của CPU hiện đại — chuyển tiếp dữ liệu, dự đoán nhánh, chèn bong bóng — lại cần thiết.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> một bộ xử lý thật ra chỉ là phần cứng thực hiện trung thành một tập lệnh; bằng cách tổ chức mọi lệnh thành một dòng chảy đồng nhất qua vài tầng rồi để nhiều lệnh gối đầu nhau trong một <b>đường ống</b>, ta tăng mạnh thông lượng (throughput) — nhưng phải xử lý các <b>nguy cơ</b> (hazard) sinh ra khi lệnh này phụ thuộc lệnh kia, sao cho kết quả vẫn khớp đúng với mô hình ISA.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> CPU là phần cứng làm theo đúng một bộ lệnh đã thoả thuận. Cho các lệnh chạy gối đầu như dây chuyền thì nhanh hơn, nhưng phải khéo xử lý lúc lệnh sau cần kết quả của lệnh trước. <b>Nhớ nhé: chạy gối đầu thì nhanh, miễn là đừng để lệnh sau “vượt đèn” kết quả chưa có của lệnh trước.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> a processor is just hardware faithfully implementing an instruction set; by organizing every instruction into a uniform flow through a few stages and letting several instructions overlap in a <b>pipeline</b>, we greatly raise throughput — but we must handle the <b>hazards</b> that arise when one instruction depends on another, so the result still matches the ISA model.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: xây một bộ xử lý Y86-64 qua ba chặng — định nghĩa tập lệnh và logic HCL, dựng bộ xử lý tuần tự SEQ, rồi biến nó thành đường ống PIPE. Diagram: building a Y86-64 processor in three moves — define the ISA and HCL logic, build the sequential SEQ, then transform it into the PIPE pipeline.">
+    <div class="core">
+      <b>Bộ xử lý Y86-64</b>
+      <small class="standard-copy">Phần cứng thực hiện trung thành một tập lệnh</small>
+      <small class="easy-only">Con chip chạy đúng bộ lệnh đã định</small>
+      <small class="en-only" lang="en">Hardware that faithfully implements an ISA</small>
+    </div>
+
+    <div class="node">
+      <b>ISA + HCL</b>
+      <small class="standard-copy">Tập lệnh Y86-64 và ngôn ngữ mô tả logic HCL dựng nên các cổng và mạch</small>
+      <small class="easy-only">Bộ lệnh nhỏ gọn, và cách tả mạch bằng chữ</small>
+      <small class="en-only" lang="en">The Y86-64 instruction set and the HCL language for logic and circuits</small>
+    </div>
+
+    <div class="node">
+      <b>SEQ (tuần tự)</b>
+      <small class="standard-copy">Sáu tầng xử lý trọn một lệnh mỗi chu kỳ — đúng nhưng chậm</small>
+      <small class="easy-only">Làm xong hẳn một lệnh rồi mới sang lệnh sau</small>
+      <small class="en-only" lang="en">Six stages process one full instruction per cycle — correct but slow</small>
+    </div>
+
+    <div class="node">
+      <b>PIPE (đường ống)</b>
+      <small class="standard-copy">Năm tầng gối đầu; cần chuyển tiếp dữ liệu và dự đoán nhánh</small>
+      <small class="easy-only">Nhiều lệnh chạy gối đầu như dây chuyền nhà máy</small>
+      <small class="en-only" lang="en">Five overlapping stages; needs forwarding and branch prediction</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#isa">
+    <span>01</span>
+    <b class="standard-copy">Tập lệnh Y86-64 và thiết kế logic với HCL</b>
+    <b class="easy-only">Bộ lệnh nhỏ gọn, và cách tả mạch bằng chữ</b>
+    <b class="en-only" lang="en">The Y86-64 ISA and logic design with HCL</b>
+  </a>
+  <a href="#seq">
+    <span>02</span>
+    <b class="standard-copy">SEQ — bộ xử lý tuần tự với sáu tầng</b>
+    <b class="easy-only">Con chip làm xong hẳn từng lệnh một</b>
+    <b class="en-only" lang="en">SEQ — the sequential processor in six stages</b>
+  </a>
+  <a href="#pipeline">
+    <span>03</span>
+    <b class="standard-copy">Đường ống, PIPE, và cách xử lý nguy cơ</b>
+    <b class="easy-only">Chạy gối đầu như dây chuyền, và cách tránh rối</b>
+    <b class="en-only" lang="en">Pipelining, PIPE, and handling hazards</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>04</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="isa" aria-labelledby="isa-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="isa-title">
+      <span class="standard-copy">Tập lệnh (ISA) Y86-64 và ngôn ngữ mô tả logic HCL</span>
+      <span class="easy-only">Một bộ lệnh nhỏ gọn, và cách tả mạch điện bằng chữ</span>
+      <span class="en-only" lang="en">The Y86-64 instruction set and the HCL logic language</span>
+    </h2>
+    <p class="standard-copy">Một tập lệnh (instruction set architecture, ISA) định nghĩa <i>trạng thái lập trình viên thấy được</i> (programmer-visible state), tập các lệnh cùng cách mã hoá, quy ước lập trình, và cách xử lý ngoại lệ. Y86-64 mượn cảm hứng từ x86-64 nhưng ít kiểu dữ liệu, ít lệnh và ít chế độ địa chỉ hơn, lại có cách mã hoá byte đơn giản — nhờ vậy việc thiết kế logic giải mã (decode) của CPU dễ hơn hẳn.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">“Tập lệnh” là bản hợp đồng giữa phần mềm và phần cứng: nó liệt kê những việc CPU biết làm và cách viết chúng ra thành byte. Y86-64 là một bộ lệnh thu nhỏ, cố tình làm cho gọn để người học tự dựng được CPU. Muốn mô tả các mạch điện bên trong, sách dùng một ngôn ngữ nhỏ tên là HCL. <b>Nhớ nhé: tập lệnh là bản hợp đồng; làm nó gọn thì dựng phần cứng mới dễ.</b></p>
+    <p class="en-only" lang="en">An instruction set architecture (ISA) defines the <i>programmer-visible state</i>, the set of instructions and their encodings, the programming conventions, and the handling of exceptions. Y86-64 is inspired by x86-64 but has fewer data types, instructions, and addressing modes, plus a simple byte-level encoding — which makes the CPU's decoding logic far easier to design.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Trạng thái lập trình viên thấy được của Y86-64 gồm <b>15 thanh ghi</b> chương trình (giống x86-64 nhưng lược bỏ <code>%r15</code> cho gọn mã hoá), mỗi thanh ghi giữ một word 64-bit; <b>ba</b> mã điều kiện (condition code) một bit là <code>ZF</code>, <code>SF</code>, <code>OF</code>; bộ đếm chương trình <code>PC</code>; bộ nhớ; và mã trạng thái <code>Stat</code> cho biết chương trình đang chạy bình thường hay gặp ngoại lệ.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> CPU Y86-64 có 15 “ngăn nhớ cực nhanh” gọi là thanh ghi, ba lá cờ nhỏ ghi lại kết quả phép tính vừa rồi, một cái kim chỉ tới lệnh kế tiếp, và một đèn báo “ổn / hỏng”. <b>Nhớ nhé: thanh ghi là ngăn nhớ sát CPU; cờ điều kiện là mẩu ghi chú về phép tính vừa xong.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Y86-64's programmer-visible state has <b>15</b> program registers (like x86-64 but omitting <code>%r15</code> to simplify encoding), each holding a 64-bit word; <b>three</b> single-bit condition codes <code>ZF</code>, <code>SF</code>, <code>OF</code>; the program counter <code>PC</code>; the memory; and a status code <code>Stat</code> telling whether the program runs normally or hit an exception.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">// HCL: so sánh hai bit<br>bool eq = (a &amp;&amp; b) || (!a &amp;&amp; !b);<br><br>// HCL: bộ chọn (MUX)<br>bool out = (s &amp;&amp; a) || (!s &amp;&amp; b);</p>
+      <p class="easy-only">a == b  →  eq = 1<br>s chọn giữa a và b<br>&nbsp;&nbsp;→ out</p>
+      <p class="en-only" lang="en">// HCL: bit equality<br>bool eq = (a &amp;&amp; b) || (!a &amp;&amp; !b);<br><br>// HCL: multiplexor (MUX)<br>bool out = (s &amp;&amp; a) || (!s &amp;&amp; b);</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">programmer-visible state</span>
+      <h3>
+        <span class="standard-copy">Trạng thái thấy được — điều ISA hứa, chứ không phải cách hiện thực</span>
+        <span class="easy-only">Trạng thái thấy được — những gì bộ lệnh cam kết</span>
+        <span class="en-only" lang="en">Visible state — what the ISA promises, not how it is built</span>
+      </h3>
+      <p class="standard-copy">Mỗi lệnh Y86-64 đọc và sửa một phần trạng thái lập trình viên thấy được. Điểm then chốt: bộ xử lý <i>không cần</i> tổ chức trạng thái bên trong y hệt như ISA ngụ ý, miễn là chương trình máy <i>trông như</i> truy cập đúng trạng thái ấy. Đây là cánh cửa mở ra mọi mẹo tăng tốc phần cứng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bộ lệnh chỉ hứa “sau khi chạy xong, các thanh ghi và bộ nhớ sẽ ra thế này”. Còn bên trong CPU xoay xở ra sao thì tuỳ nó, miễn kết quả nhìn thấy đúng như hứa. <b>Nhớ nhé: ISA hứa kết quả cuối, không bắt buộc cách làm bên trong.</b></p>
+      <p class="en-only" lang="en">Each Y86-64 instruction reads and modifies part of the programmer-visible state. The key point: the processor need <i>not</i> organize its internal state exactly as the ISA implies, as long as machine programs <i>appear</i> to access that state. This is the doorway to every hardware speed-up trick.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Chính nguyên tắc này cho phép CPU hiện đại chạy lệnh không theo thứ tự (out-of-order) mà vẫn cho kết quả đúng — chủ đề của Chương 5.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Nhờ nó mà chip xịn có thể đổi thứ tự làm việc cho nhanh mà kết quả vẫn đúng.</span>
+        <span class="en-only" lang="en">This principle lets modern CPUs execute out of order yet still be correct — a theme of Chapter 5.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Một ví dụ bất ngờ</h4>
+          <p>Ở bản SEQ+ chuyển tiếp sang đường ống, các tác giả chỉ ra rằng <i>không có</i> thanh ghi phần cứng nào lưu PC cả — giá trị PC được tính lại động từ trạng thái của lệnh trước, một minh hoạ sống động cho việc hiện thực khác với mô hình ISA.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao điều này quan trọng</h4>
+          <p>Tách bạch “cái ISA hứa” khỏi “cách phần cứng làm” là tư duy nền để hiểu vì sao hai CPU rất khác nhau về mạch vẫn chạy đúng cùng một chương trình.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">instruction encoding</span>
+      <h3>
+        <span class="standard-copy">Mã hoá lệnh — mỗi lệnh dài 1 tới 10 byte, có nghĩa duy nhất</span>
+        <span class="easy-only">Mã hoá lệnh — mỗi lệnh là một chuỗi byte riêng biệt</span>
+        <span class="en-only" lang="en">Instruction encoding — 1 to 10 bytes, uniquely decodable</span>
+      </h3>
+      <p class="standard-copy">Mỗi lệnh Y86-64 dài từ 1 đến 10 byte. Byte đầu tách thành hai nửa 4-bit: nửa cao là <i>mã lệnh</i> (code), nửa thấp là <i>hàm</i> (function). Theo sau có thể là một byte chỉ định thanh ghi (các trường <code>rA</code>, <code>rB</code>) và một word hằng 8 byte. Mỗi lệnh có một tổ hợp code–function duy nhất, nên từ byte đầu ta suy ra ngay độ dài và ý nghĩa — byte mã hoá có cách diễn giải duy nhất.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mỗi câu lệnh được viết thành một chuỗi byte dài ngắn tuỳ loại. Byte đầu như một “mã bưu chính” cho biết đây là lệnh gì và còn phải đọc thêm mấy byte nữa. Không có hai lệnh nào trùng mã đầu, nên máy không bao giờ đọc nhầm. <b>Nhớ nhé: nhìn byte đầu là biết ngay lệnh gì, dài bao nhiêu.</b></p>
+      <p class="en-only" lang="en">Each Y86-64 instruction is 1 to 10 bytes. The first byte splits into two 4-bit halves: the high half is the <i>code</i>, the low half is the <i>function</i>. It may be followed by a register specifier byte (fields <code>rA</code>, <code>rB</code>) and an 8-byte constant word. Every instruction has a unique code–function combination, so from the first byte we know its length and meaning — the byte encoding has a unique interpretation.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Sách dựng mẫu: lệnh <code>rmmovq %rsp,0x123456789abcd(%rdx)</code> mã hoá thành chuỗi byte <code>4042cdab896745230100</code> — byte đầu <code>40</code>, byte thanh ghi <code>42</code>, rồi hằng 8 byte ở dạng đảo byte (little-endian).<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mỗi khi bạn xem mã máy dạng hex, bạn đang nhìn đúng những byte lệnh này.</span>
+        <span class="en-only" lang="en">The book works an example: <code>rmmovq %rsp,0x123456789abcd(%rdx)</code> encodes to the byte string <code>4042cdab896745230100</code> — first byte <code>40</code>, register byte <code>42</code>, then the 8-byte constant in little-endian (reversed) order.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>So với x86-64</h4>
+          <p>Mã hoá Y86-64 đơn giản hơn nhưng kém gọn: các trường thanh ghi luôn ở vị trí cố định, còn hằng số thì <i>luôn</i> chiếm 8 byte, trong khi x86-64 có thể mã hoá hằng trong 1, 2, 4 hoặc 8 byte.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao tính “giải mã duy nhất” quan trọng</h4>
+          <p>Nếu biết điểm bắt đầu của một chuỗi byte, ta luôn tách được nó thành đúng dãy lệnh. Nếu <i>không</i> biết điểm bắt đầu, việc tách trở nên mơ hồ — đây chính là bài toán đau đầu của trình dịch ngược (disassembler).<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">logic design + HCL</span>
+      <h3>
+        <span class="standard-copy">Thiết kế logic và HCL — mô tả mạch tổ hợp bằng biểu thức</span>
+        <span class="easy-only">HCL — viết mạch điện ra như viết công thức</span>
+        <span class="en-only" lang="en">Logic design and HCL — describing circuits as expressions</span>
+      </h3>
+      <p class="standard-copy">Một hệ thống số cần ba thành phần: <b>logic tổ hợp</b> (combinational logic) để tính hàm trên các bit, <b>phần tử nhớ</b> (memory element) để lưu bit, và <b>tín hiệu đồng hồ</b> (clock) điều phối việc cập nhật. Với công nghệ hiện nay, mức logic 1 ứng với điện áp cao khoảng 1,0 vôn và mức 0 ứng với khoảng 0,0 vôn. Các tác giả dùng ngôn ngữ <b>HCL</b> (hardware control language) để mô tả phần điều khiển.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only">Mạch điện của CPU ghép từ ba thứ: khối tính toán (cổng logic), ô nhớ để giữ số, và một nhịp đồng hồ để báo “giờ cập nhật”. Thay vì vẽ từng cổng, sách viết mạch ra bằng những công thức ngắn gọn gọi là HCL. <b>Nhớ nhé: mạch số = khối tính + ô nhớ + nhịp đồng hồ, và ta tả nó bằng công thức.</b></p>
+      <p class="en-only" lang="en">A digital system needs three components: <b>combinational logic</b> to compute functions on bits, <b>memory elements</b> to store bits, and a <b>clock</b> signal to regulate updates. In current technology, logic value 1 is a high voltage around 1.0 volt and value 0 is a low voltage around 0.0 volt. The authors use the <b>HCL</b> (hardware control language) to describe the control logic.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mạch so sánh bit viết trong HCL là <code>bool eq = (a &amp;&amp; b) || (!a &amp;&amp; !b)</code>; bộ chọn một bit (multiplexor) là <code>bool out = (s &amp;&amp; a) || (!s &amp;&amp; b)</code> — nền tảng để lắp mọi đường điều khiển của CPU.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi một tín hiệu “chọn” quyết định lấy giá trị A hay B, đó chính là một bộ chọn (MUX).</span>
+        <span class="en-only" lang="en">The bit-equality circuit in HCL is <code>bool eq = (a &amp;&amp; b) || (!a &amp;&amp; !b)</code>; the single-bit multiplexor is <code>bool out = (s &amp;&amp; a) || (!s &amp;&amp; b)</code> — the basis for every control path in the CPU.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Logic tổ hợp khác biểu thức C</h4>
+          <p>Cổng logic <i>luôn hoạt động</i>: đầu vào đổi thì sau một khoảng trễ nhỏ đầu ra đổi theo. Không có “tính toán ngắn mạch” như C — biểu thức <code>(a &amp;&amp; !a) &amp;&amp; func(b,c)</code> trong C bỏ qua <code>func</code>, còn mạch thì mọi cổng cứ phản ứng với đầu vào.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>HDL và tổng hợp logic</h4>
+          <p>HCL chỉ tả phần điều khiển. Trong công nghiệp, người ta mô tả toàn bộ phần cứng bằng ngôn ngữ mô tả phần cứng (HDL) như Verilog hay VHDL, rồi dùng công cụ <i>tổng hợp logic</i> (logic synthesis) sinh ra thiết kế mạch thực.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đã có tập lệnh và các khối logic, câu hỏi tiếp theo là: làm sao ghép chúng thành một bộ xử lý chạy được <i>mọi</i> lệnh Y86-64? Lời đáp đầu tiên là SEQ — sắp mọi lệnh vào một dòng chảy sáu tầng đồng nhất.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Có bộ lệnh và có mạch rồi, giờ phải lắp chúng thành một CPU hoàn chỉnh. Thiết kế đầu tiên tên là SEQ.</p>
+    <p class="en-only" lang="en">With an ISA and logic blocks in hand, the next question is: how do we assemble them into a processor that runs <i>every</i> Y86-64 instruction? The first answer is SEQ — arranging every instruction into one uniform six-stage flow.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="seq" aria-labelledby="seq-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="seq-title">
+      <span class="standard-copy">SEQ — bộ xử lý tuần tự xử lý trọn một lệnh mỗi chu kỳ</span>
+      <span class="easy-only">SEQ — con chip làm xong hẳn một lệnh rồi mới sang lệnh sau</span>
+      <span class="en-only" lang="en">SEQ — the sequential processor, one full instruction per cycle</span>
+    </h2>
+    <p class="standard-copy">SEQ (viết tắt của “sequential”) là bước đầu tiên: mỗi chu kỳ đồng hồ, nó thực hiện <i>trọn vẹn</i> mọi việc cần cho một lệnh. Bí quyết là tổ chức việc xử lý thành một chuỗi <b>tầng</b> (stage) đồng nhất, dù các lệnh rất khác nhau về hành vi. Nhờ dòng chảy chung này, cả bộ xử lý dùng chung một lượng nhỏ phần cứng — ví dụ chỉ một khối ALU được dùng theo nhiều cách tuỳ loại lệnh.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">SEQ làm việc kiểu “chậm mà chắc”: nó làm hết mọi bước của một lệnh trong một nhịp đồng hồ, xong mới bắt lệnh sau. Mẹo của nó là ép mọi lệnh đi qua cùng một dãy bước giống nhau, nhờ vậy tái dùng được rất ít phần cứng cho tất cả. <b>Nhớ nhé: mọi lệnh đi chung một con đường thì phần cứng mới gọn.</b></p>
+    <p class="en-only" lang="en">SEQ (short for "sequential") is the first step: on each clock cycle it performs <i>everything</i> a single instruction needs. The trick is to organize processing into a uniform sequence of <b>stages</b>, even though instructions differ greatly in behavior. Thanks to this shared flow, the whole processor uses a small amount of hardware — for example a single ALU used in different ways depending on the instruction.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> SEQ xử lý mỗi lệnh qua <b>sáu tầng</b> theo thứ tự: <i>Fetch</i> (nạp) đọc byte lệnh từ bộ nhớ qua PC; <i>Decode</i> (giải mã) đọc toán hạng từ tệp thanh ghi; <i>Execute</i> (thực thi) cho ALU tính toán và đặt cờ điều kiện; <i>Memory</i> (bộ nhớ) đọc hoặc ghi dữ liệu; <i>Write back</i> (ghi lại) ghi kết quả vào thanh ghi; <i>PC update</i> đặt PC tới lệnh kế tiếp.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Mỗi lệnh đi qua sáu bước: lấy lệnh về, đọc số cần dùng, tính toán, đụng vào bộ nhớ nếu cần, cất kết quả, rồi chỉ sang lệnh sau. <b>Nhớ nhé: nạp → giải mã → tính → bộ nhớ → ghi lại → sang lệnh kế.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> SEQ processes each instruction in <b>six stages</b> in order: <i>Fetch</i> reads instruction bytes from memory via the PC; <i>Decode</i> reads operands from the register file; <i>Execute</i> has the ALU compute and set condition codes; <i>Memory</i> reads or writes data; <i>Write back</i> writes results to registers; <i>PC update</i> sets the PC to the next instruction.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">Fetch&nbsp;&nbsp;&nbsp;&nbsp;→ icode:ifun, rA:rB, valC, valP<br>Decode&nbsp;&nbsp;&nbsp;→ valA, valB<br>Execute&nbsp;&nbsp;→ valE (đặt CC)<br>Memory&nbsp;&nbsp;&nbsp;→ valM<br>Write back → R[ ] ← valE / valM<br>PC update&nbsp;→ PC ← valP / valC / valM</p>
+      <p class="easy-only">6 bước, lặp mãi:<br>&nbsp;&nbsp;lấy → đọc → tính<br>&nbsp;&nbsp;→ nhớ → cất → tiếp</p>
+      <p class="en-only" lang="en">Fetch&nbsp;&nbsp;&nbsp;&nbsp;→ icode:ifun, rA:rB, valC, valP<br>Decode&nbsp;&nbsp;&nbsp;→ valA, valB<br>Execute&nbsp;&nbsp;→ valE (set CC)<br>Memory&nbsp;&nbsp;&nbsp;→ valM<br>Write back → R[ ] ← valE / valM<br>PC update&nbsp;→ PC ← valP / valC / valM</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">six stages</span>
+      <h3>
+        <span class="standard-copy">Sáu tầng — một khuôn chung cho mọi lệnh</span>
+        <span class="easy-only">Sáu bước — khuôn chung cho tất cả lệnh</span>
+        <span class="en-only" lang="en">Six stages — one common template for every instruction</span>
+      </h3>
+      <p class="standard-copy">Mỗi lệnh, dù là phép cộng, lệnh nhảy hay lệnh gọi hàm, đều được ép vào cùng sáu tầng. Ở tầng Fetch, SEQ tách byte đầu thành <code>icode</code> (mã lệnh) và <code>ifun</code> (hàm), đọc thêm byte thanh ghi và hằng <code>valC</code> nếu có, rồi tính <code>valP</code> — địa chỉ lệnh kế tiếp theo thứ tự tuần tự.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Dù là cộng, nhảy hay gọi hàm, lệnh nào cũng đi đúng sáu bước như nhau. Bước đầu tiên là “lấy lệnh về và đọc hiểu đầu byte xem đây là lệnh gì”. <b>Nhớ nhé: một khuôn sáu bước dùng chung cho mọi lệnh.</b></p>
+      <p class="en-only" lang="en">Every instruction — be it an add, a jump, or a call — is forced into the same six stages. In Fetch, SEQ splits the first byte into <code>icode</code> and <code>ifun</code>, reads a register byte and constant <code>valC</code> if present, and computes <code>valP</code> — the address of the next instruction in sequential order.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Với lệnh số học như <code>subq %rax,%rdx</code>, tầng Execute tính <code>valE ← valB OP valA</code> và đặt cờ, còn bộ nhớ không làm gì — chỉ Write back ghi <code>valE</code> vào thanh ghi đích.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Một phép trừ chỉ dùng bước “tính” và bước “cất kết quả”; bước “bộ nhớ” nghỉ.</span>
+        <span class="en-only" lang="en">For an arithmetic instruction like <code>subq %rax,%rdx</code>, Execute computes <code>valE ← valB OP valA</code> and sets the flags, while Memory does nothing — only Write back stores <code>valE</code> into the destination register.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Chọn PC kế tiếp</h4>
+          <p>Tầng PC update chọn giá trị PC mới: dùng hằng <code>valC</code> cho <code>call</code> và nhánh được lấy, dùng <code>valM</code> (giá trị lấy từ ngăn xếp) cho <code>ret</code>, còn mặc định là <code>valP</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Dễ ánh xạ xuống phần cứng</h4>
+          <p>Các bảng mô tả (Hình 4.18–4.21 trong sách) viết mỗi tầng như một dãy phép gán tín hiệu. Dạng này ánh xạ thẳng xuống các khối phần cứng, nên thiết kế logic trở nên có hệ thống.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">shared hardware</span>
+      <h3>
+        <span class="standard-copy">Dùng chung phần cứng — vì sao dòng chảy phải đồng nhất</span>
+        <span class="easy-only">Dùng chung phần cứng — nên mọi lệnh đi chung một đường</span>
+        <span class="en-only" lang="en">Shared hardware — why the flow must be uniform</span>
+      </h3>
+      <p class="standard-copy">Có một lượng xử lý đáng ngạc nhiên ẩn sau mỗi lệnh: không chỉ làm phép tính, mà còn tính địa chỉ, cập nhật con trỏ ngăn xếp, và xác định lệnh kế tiếp. Giữ dòng chảy giống nhau cho mọi lệnh là cách tối thiểu hoá phần cứng — vì nhân bản một khối logic trong phần cứng tốn kém hơn nhiều so với sao chép một đoạn mã trong phần mềm.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Một lệnh tưởng đơn giản nhưng kéo theo bao việc lặt vặt: tính địa chỉ, chỉnh con trỏ, tìm lệnh sau. Nếu mỗi loại lệnh có một mạch riêng thì tốn phần cứng khủng khiếp; ép chung một đường thì tiết kiệm. <b>Nhớ nhé: trong phần cứng, nhân bản mạch đắt hơn nhiều so với nhân bản mã.</b></p>
+      <p class="en-only" lang="en">There is a surprising amount of processing behind each instruction: not only the operation, but also address computation, stack-pointer updates, and finding the next instruction. Keeping the flow identical across instructions minimizes hardware — because duplicating a block of logic in hardware costs far more than copying a block of code in software.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Cả bộ xử lý chỉ có <i>một</i> khối ALU; lệnh số học dùng nó để tính, lệnh truy cập bộ nhớ dùng nó để tính địa chỉ, lệnh <code>push</code>/<code>pop</code> dùng nó để tăng–giảm con trỏ ngăn xếp.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Một cái máy tính số (ALU) duy nhất được tận dụng cho đủ mọi việc.</span>
+        <span class="en-only" lang="en">The whole processor has just <i>one</i> ALU; arithmetic instructions use it to compute, memory instructions use it for addresses, and <code>push</code>/<code>pop</code> use it to adjust the stack pointer.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">SEQ is too slow</span>
+      <h3>
+        <span class="standard-copy">SEQ quá chậm — lý do phải nghĩ tới đường ống</span>
+        <span class="easy-only">SEQ chậm — nên ta cần một cách nhanh hơn</span>
+        <span class="en-only" lang="en">SEQ is too slow — the reason to reach for pipelining</span>
+      </h3>
+      <p class="standard-copy">Vấn đề duy nhất của SEQ là nó quá chậm. Đồng hồ phải chạy đủ chậm để tín hiệu kịp lan qua <i>tất cả</i> các tầng trong một chu kỳ. Ví dụ với lệnh <code>ret</code>: trong một chu kỳ phải đọc lệnh, đọc con trỏ ngăn xếp, cho ALU tăng nó lên 8, rồi đọc địa chỉ trả về từ bộ nhớ — tất cả xong trước khi chu kỳ kết thúc. Mỗi khối phần cứng chỉ bận một phần nhỏ của chu kỳ.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">SEQ chắc chắn đúng nhưng phí thời gian: một nhịp đồng hồ phải dài bằng toàn bộ hành trình sáu bước. Trong lúc một khối đang làm, các khối khác ngồi chơi. Thật lãng phí. <b>Nhớ nhé: SEQ đúng nhưng chậm vì mỗi lúc chỉ một khối làm việc.</b></p>
+      <p class="en-only" lang="en">SEQ's only problem is that it is too slow. The clock must run slowly enough for signals to propagate through <i>all</i> stages in one cycle. Take <code>ret</code>: in one cycle it must read the instruction, read the stack pointer, have the ALU add 8, and read the return address from memory — all before the cycle ends. Each hardware block is busy only a fraction of the cycle.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đây đúng là động lực lịch sử của đường ống: thay vì để phần cứng rảnh rỗi phần lớn thời gian, hãy cho nhiều lệnh dùng các khối khác nhau <i>cùng lúc</i>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Ý tưởng cứu cánh: để các khối cùng bận, mỗi khối lo một lệnh khác nhau.</span>
+        <span class="en-only" lang="en">This is exactly the motivation for pipelining: rather than leaving hardware idle most of the time, let several instructions use different blocks <i>at once</i>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Nếu mỗi khối phần cứng chỉ bận một phần nhỏ chu kỳ, vậy sao không cho nhiều lệnh gối đầu nhau để các khối luôn bận? Đó chính là ý tưởng <b>đường ống</b> — và nó kéo theo cả một loạt vấn đề mới cần giải.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Nếu để các khối cùng bận với nhiều lệnh một lúc thì sao? Đó là ý tưởng đường ống — nhanh hơn nhiều nhưng cũng rắc rối hơn.</p>
+    <p class="en-only" lang="en">If each hardware block is busy only a fraction of the cycle, why not overlap instructions so the blocks stay busy? That is the idea of <b>pipelining</b> — and it brings a whole set of new problems to solve.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="pipeline" aria-labelledby="pipeline-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="pipeline-title">
+      <span class="standard-copy">Đường ống, PIPE, và cách xử lý nguy cơ</span>
+      <span class="easy-only">Chạy gối đầu như dây chuyền, và cách tránh rối</span>
+      <span class="en-only" lang="en">Pipelining, PIPE, and handling hazards</span>
+    </h2>
+    <p class="standard-copy">Đường ống (pipeline) quen thuộc với bất cứ ai từng xếp hàng ở căng-tin hay đưa xe qua trạm rửa tự động: công việc được chia thành nhiều chặng, và nhiều “khách” cùng đi qua hệ thống một lúc. Điểm mấu chốt: đường ống tăng <b>thông lượng</b> (throughput — số lệnh hoàn thành mỗi đơn vị thời gian) dù có thể hơi tăng <b>độ trễ</b> (latency — thời gian phục vụ một lệnh từ đầu tới cuối).<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hãy hình dung dây chuyền rửa xe: xe này đang được xịt nước thì xe kia đã vào kỳ cọ, xe nữa đang sấy khô — nhiều xe cùng lúc. CPU đường ống cũng vậy: trong khi lệnh này đang tính thì lệnh sau đã được nạp. Nhờ thế số lệnh xong mỗi giây tăng vọt. <b>Nhớ nhé: đường ống không làm một lệnh nhanh hơn, mà làm được nhiều lệnh hơn mỗi giây.</b></p>
+    <p class="en-only" lang="en">A pipeline is familiar to anyone who has been through a cafeteria line or an automated car wash: the work is split into stages, and several "customers" move through the system at once. The key point: pipelining raises <b>throughput</b> (instructions completed per unit time) even though it may slightly increase <b>latency</b> (the time to serve one instruction end to end).<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Với một hệ chưa đường ống gồm logic tổ hợp mất 300 picô-giây (ps) và một thanh ghi mất 20 ps, chu kỳ là 320 ps nên thông lượng chỉ khoảng <b>3,12 GIPS</b> (tỉ lệnh mỗi giây). Chia việc thành ba tầng 100 ps, chèn thanh ghi đường ống giữa các tầng, chu kỳ còn 120 ps: thông lượng lên <b>8,33 GIPS</b> — nhanh gấp 2,67 lần — dù độ trễ tăng nhẹ lên 360 ps.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Một việc dài 300 ps làm một mạch thì mỗi giây xong được chừng 3 tỉ lần. Chẻ việc thành ba chặng rồi cho chạy gối đầu, mỗi giây xong được hơn 8 tỉ lần — nhanh gần gấp ba. <b>Nhớ nhé: chẻ nhỏ công việc rồi chạy gối đầu thì làm được nhiều hơn mỗi giây.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> For a nonpipelined system with 300 picoseconds (ps) of combinational logic and a 20 ps register, the cycle is 320 ps, giving only about <b>3.12 GIPS</b> (giga-instructions per second). Splitting the work into three 100 ps stages with pipeline registers between them makes the cycle 120 ps: throughput rises to <b>8.33 GIPS</b> — a 2.67× speedup — even though latency grows slightly to 360 ps.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">Throughput = 1 / (20 + 300) ps<br>&nbsp;&nbsp;≈ 3,12 GIPS&nbsp;&nbsp;(chưa đường ống)<br><br>3 tầng: 1 / (20 + 100) ps<br>&nbsp;&nbsp;≈ 8,33 GIPS&nbsp;&nbsp;(×2,67)</p>
+      <p class="easy-only">1 mạch dài → ~3 tỉ/giây<br>3 chặng gối đầu → ~8 tỉ/giây</p>
+      <p class="en-only" lang="en">Throughput = 1 / (20 + 300) ps<br>&nbsp;&nbsp;≈ 3.12 GIPS&nbsp;&nbsp;(nonpipelined)<br><br>3 stages: 1 / (20 + 100) ps<br>&nbsp;&nbsp;≈ 8.33 GIPS&nbsp;&nbsp;(×2.67)</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">throughput vs latency</span>
+      <h3>
+        <span class="standard-copy">Thông lượng và giới hạn — đường ống sâu không miễn phí</span>
+        <span class="easy-only">Thông lượng — và vì sao chẻ mãi cũng có giới hạn</span>
+        <span class="en-only" lang="en">Throughput and its limits — deeper pipelines are not free</span>
+      </h3>
+      <p class="standard-copy">Chia càng nhiều tầng thì chu kỳ càng ngắn, nhưng lợi ích giảm dần. Chia thành sáu tầng 50 ps, chu kỳ còn 70 ps cho 14,29 GIPS — nhưng so với ba tầng chỉ nhanh hơn 1,71 lần, chứ không gấp đôi. Lý do: <i>độ trễ của thanh ghi đường ống</i> không chia nhỏ được, ở đây chiếm tới 28,6% chu kỳ. CPU hiện đại vẫn dùng đường ống rất sâu (15 tầng trở lên) để đẩy xung nhịp lên cao.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Chẻ việc thành nhiều chặng hơn thì nhanh thêm, nhưng mỗi lần chẻ phải cộng thêm chi phí “bàn giao” giữa các chặng. Chẻ quá nhỏ thì chi phí bàn giao ăn hết phần lợi. <b>Nhớ nhé: chẻ nhỏ giúp nhanh hơn, nhưng mỗi mối nối đều tốn chút phí, nên có giới hạn.</b></p>
+      <p class="en-only" lang="en">More stages mean a shorter cycle, but returns diminish. Six 50 ps stages give a 70 ps cycle and 14.29 GIPS — yet only 1.71× faster than three stages, not double. The reason: the <i>pipeline-register delay</i> cannot be subdivided and here consumes 28.6% of the cycle. Modern CPUs still use very deep pipelines (15 or more stages) to push the clock rate higher.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Phân chia không đều cũng giới hạn đường ống: nếu các tầng lệch nhau (50/150/100 ps) thì chu kỳ bị tầng chậm nhất quyết định (170 ps), chỉ đạt 5,88 GIPS.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Nếu một chặng chậm hơn hẳn thì cả dây chuyền phải chờ nó.</span>
+        <span class="en-only" lang="en">Uneven partitioning also limits a pipeline: if stages differ (50/150/100 ps), the cycle is set by the slowest stage (170 ps), reaching only 5.88 GIPS.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Năm tầng của PIPE</h4>
+          <p>Bộ xử lý đường ống PIPE chia việc thành năm tầng — Fetch, Decode, Execute, Memory, Write back — bằng cách chèn các thanh ghi đường ống <code>F</code>, <code>D</code>, <code>E</code>, <code>M</code>, <code>W</code> giữa chúng. Nó dùng gần như cùng bộ phần cứng với SEQ, chỉ thêm các thanh ghi ngăn tầng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>SEQ+ và “tái định thời”</h4>
+          <p>Trước khi chèn thanh ghi, các tác giả dời tầng PC update lên đầu chu kỳ, tạo ra SEQ+. Đây là một ví dụ của <i>tái định thời mạch</i> (circuit retiming): đổi cách bố trí phần tử trạng thái mà không đổi hành vi logic.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">data hazards + forwarding</span>
+      <h3>
+        <span class="standard-copy">Nguy cơ dữ liệu và chuyển tiếp — khi lệnh sau cần kết quả chưa ghi xong</span>
+        <span class="easy-only">Nguy cơ dữ liệu — lệnh sau cần số mà lệnh trước chưa cất xong</span>
+        <span class="en-only" lang="en">Data hazards and forwarding — when a later instruction needs a not-yet-stored result</span>
+      </h3>
+      <p class="standard-copy">Khác với xe trong trạm rửa, các lệnh có thể <i>phụ thuộc</i> nhau. <b>Nguy cơ dữ liệu</b> (data hazard) xảy ra khi một lệnh cần kết quả mà lệnh ngay trước còn chưa kịp ghi vào thanh ghi. Giải pháp là <b>chuyển tiếp dữ liệu</b> (data forwarding, hay bypassing): thay vì bắt lệnh sau chờ, phần cứng chuyển thẳng giá trị vừa tính từ một tầng sau về tầng Decode. PIPE có <b>năm nguồn</b> chuyển tiếp và <b>hai đích</b> (cho hai toán hạng).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Xe rửa thì độc lập, còn lệnh thì hay “nhờ vả” nhau: lệnh sau cần đúng con số mà lệnh trước vừa tính nhưng chưa kịp cất. Thay vì bắt nó đứng chờ, phần cứng “chuyền tay” con số đó tới ngay. <b>Nhớ nhé: thay vì bắt lệnh sau chờ, hãy chuyền thẳng kết quả vừa tính cho nó.</b></p>
+      <p class="en-only" lang="en">Unlike cars in a car wash, instructions can <i>depend</i> on each other. A <b>data hazard</b> occurs when an instruction needs a result that the immediately preceding one has not yet written to a register. The fix is <b>data forwarding</b> (bypassing): rather than making the later instruction wait, hardware passes the just-computed value directly from a later stage back to Decode. PIPE has <b>five</b> forwarding sources and <b>two</b> destinations (for the two operands).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Có một loại không chuyển tiếp hết được: <b>nguy cơ nạp/dùng</b> (load/use hazard). Khi một lệnh đọc giá trị từ bộ nhớ rồi lệnh ngay sau cần dùng, giá trị chưa có kịp — chuyển tiếp lúc này nghĩa là “gửi ngược về quá khứ”, điều bất khả. Phải chèn một <b>bong bóng</b> (bubble) dừng một chu kỳ, rồi mới chuyển tiếp.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Riêng khi lệnh trước phải lấy số từ bộ nhớ (chậm), lệnh sau đành chờ đúng một nhịp rồi mới nhận được số.</span>
+        <span class="en-only" lang="en">One kind cannot be fully forwarded: the <b>load/use hazard</b>. When one instruction reads a value from memory and the very next needs it, the value is not ready in time — forwarding would mean "sending back in time," which is impossible. A one-cycle <b>bubble</b> must be injected, then forwarding applies.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Năm nguồn chuyển tiếp</h4>
+          <p>Giá trị có thể chuyển tiếp từ: đầu ra ALU trong tầng Execute (<code>e_valE</code>), giá trị vừa đọc bộ nhớ (<code>m_valM</code>), và các giá trị đang nằm trong thanh ghi đường ống M và W (<code>M_valE</code>, <code>W_valM</code>, <code>W_valE</code>) — tổng cộng năm nguồn, hai đích là <code>valA</code> và <code>valB</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Dừng (stall) so với bong bóng</h4>
+          <p>Dừng là giữ một lệnh ở nguyên tầng; bong bóng là chèn một “lệnh rỗng” không làm gì vào tầng kế để lấp chỗ trống. PIPE kết hợp dừng một chu kỳ với chuyển tiếp để xử lý nguy cơ nạp/dùng mà tổn thất ít nhất.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">control hazards + prediction</span>
+      <h3>
+        <span class="standard-copy">Nguy cơ điều khiển và dự đoán nhánh — đoán trước lệnh kế tiếp</span>
+        <span class="easy-only">Nguy cơ điều khiển — khi chưa biết lệnh sau là lệnh nào</span>
+        <span class="en-only" lang="en">Control hazards and branch prediction — guessing the next instruction</span>
+      </h3>
+      <p class="standard-copy">Một <b>nguy cơ điều khiển</b> (control hazard) xuất hiện khi chưa biết lệnh kế tiếp nằm ở đâu — với nhánh có điều kiện, phải tới tầng Execute mới biết nhánh có được lấy hay không; với <code>ret</code>, phải tới tầng Memory. Để không bỏ trống đường ống, PIPE <b>dự đoán nhánh</b> (branch prediction): nó đoán và nạp sẵn lệnh theo hướng đoán. Thiết kế của sách dùng chiến lược “luôn lấy nhánh” (always taken).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Khi gặp một lệnh rẽ nhánh, CPU chưa biết sẽ đi hướng nào — nhưng đường ống không thể đứng chờ. Nên nó <i>đoán</i> hướng và nạp sẵn; đoán đúng thì lợi, đoán sai thì bỏ đi làm lại. <b>Nhớ nhé: tới ngã rẽ mà chưa rõ hướng, CPU cứ đoán rồi chạy tiếp cho khỏi phí thời gian.</b></p>
+      <p class="en-only" lang="en">A <b>control hazard</b> arises when the next instruction's location is unknown — for a conditional branch we only know at Execute whether it is taken; for <code>ret</code>, only at Memory. To avoid leaving the pipeline empty, PIPE uses <b>branch prediction</b>: it guesses and prefetches along the predicted direction. The book's design uses an "always taken" strategy.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi đoán sai, các lệnh đã nạp nhầm phải bị huỷ — đây là lý do Chương 3 khuyên dùng chuyển dữ liệu có điều kiện (<code>cmov</code>) thay cho rẽ nhánh khi có thể.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Đoán sai thì phí công nạp nhầm, nên tránh rẽ nhánh khó đoán là một mẹo tăng tốc.</span>
+        <span class="en-only" lang="en">Every misprediction means the wrongly-fetched instructions must be cancelled — which is why Chapter 3 advises conditional moves (<code>cmov</code>) over branches when possible.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Các chiến lược dự đoán</h4>
+          <p>Theo các nghiên cứu mà sách dẫn, “luôn lấy nhánh” đúng khoảng 60% số lần; chiến lược “nhánh lùi thì lấy, nhánh tiến thì không” (BTFNT) đạt khoảng 65%, vì vòng lặp thường đóng bằng một nhánh lùi và lặp nhiều lần.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Riêng lệnh ret</h4>
+          <p>Với <code>ret</code>, địa chỉ trả về gần như không đoán được trước, nên thiết kế của sách đơn giản là <i>tạm dừng</i> không nạp thêm lệnh cho tới khi <code>ret</code> qua tầng Write back. CPU hiệu năng cao thì dùng một ngăn xếp địa chỉ trả về trong phần cứng để đoán.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Sợi chỉ xuyên suốt cả chương là một bài học thiết kế: <b>không cần hiện thực ISA một cách trực tiếp</b>. SEQ làm đúng theo nghĩa đen nhưng chậm; PIPE tổ chức lại hoàn toàn bên trong — gối đầu, chuyển tiếp, dự đoán — mà kết quả thấy được vẫn khớp đúng mô hình ISA.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Bài học lớn: cái ISA hứa là kết quả, còn cách phần cứng đạt được thì có thể rất khác và rất khéo. Giờ hãy dọn vài hiểu lầm hay gặp.</p>
+    <p class="en-only" lang="en">The thread running through the chapter is a design lesson: <b>you need not implement the ISA directly</b>. SEQ is literal but slow; PIPE reorganizes everything inside — overlapping, forwarding, predicting — yet the visible result still matches the ISA model.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+    <p class="eyebrow" id="ngo-nhan-title">
+      <span class="vi-only">Ba ngộ nhận thường gặp</span>
+      <span class="en-only" lang="en">Three common misconceptions</span>
+    </p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Đường ống làm mỗi lệnh chạy nhanh hơn”</span>
+          <span class="en-only" lang="en">“Pipelining makes each instruction faster”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> có đường ống thì một lệnh xong nhanh hơn.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> đường ống tăng <i>thông lượng</i> (số lệnh mỗi giây), còn <i>độ trễ</i> của một lệnh thậm chí nhích lên do chi phí thanh ghi đường ống — ba tầng khiến độ trễ tăng từ 320 lên 360 ps.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> with a pipeline, one instruction finishes faster.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> pipelining raises <i>throughput</i> (instructions per second); the <i>latency</i> of one instruction even grows slightly from the register overhead — three stages push latency from 320 to 360 ps.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Cứ chẻ thật nhiều tầng là nhanh gấp bội”</span>
+          <span class="en-only" lang="en">“Just add more stages for proportional speedup”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> gấp đôi số tầng thì nhanh gấp đôi.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> gấp đôi tầng (ba lên sáu) chỉ nhanh hơn 1,71 lần vì độ trễ thanh ghi đường ống không chia nhỏ được, chiếm tới 28,6% chu kỳ.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> doubling the stages doubles the speed.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> doubling stages (three to six) gives only 1.71× because the pipeline-register delay cannot be subdivided and consumes 28.6% of the cycle.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Phần cứng phải sao chép đúng y trạng thái của ISA”</span>
+          <span class="en-only" lang="en">“Hardware must mirror the ISA's state exactly”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> CPU phải lưu trạng thái đúng như ISA mô tả.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> chỉ cần chương trình <i>trông như</i> truy cập đúng trạng thái; ở SEQ+ còn không có thanh ghi PC nào cả — PC được tính lại động.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> the CPU must store state exactly as the ISA describes.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> programs need only <i>appear</i> to access that state; in SEQ+ there is no PC register at all — the PC is recomputed dynamically.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm cách dựng một bộ xử lý</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped processor design</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã theo trọn hành trình từ tập lệnh Y86-64, qua bộ xử lý tuần tự SEQ, tới đường ống PIPE và cách nó xử lý nguy cơ.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you followed the whole path from the Y86-64 ISA, through the sequential SEQ, to the PIPE pipeline and how it handles hazards.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Trạng thái lập trình viên thấy được của Y86-64 gồm những gì? Vì sao Y86-64 chỉ có 15 thanh ghi mà không phải 16?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao phần cứng <i>không</i> buộc phải lưu trạng thái đúng như ISA mô tả?</p>
+      </li>
+      <li>
+        <p>Kể tên sáu tầng của SEQ theo thứ tự. Với lệnh số học <code>subq</code>, tầng nào tính kết quả và tầng nào ghi nó vào thanh ghi?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao giữ dòng chảy đồng nhất lại giúp tiết kiệm phần cứng?</p>
+      </li>
+      <li>
+        <p>Đường ống tăng thứ gì — thông lượng hay độ trễ? Vì sao gấp đôi số tầng lại không làm nhanh gấp đôi?</p>
+        <p class="deep-only">Gợi ý sâu hơn: con số 28,6% trong sách nói về điều gì?</p>
+      </li>
+      <li>
+        <p>Nguy cơ dữ liệu là gì, và chuyển tiếp (forwarding) giải quyết nó ra sao? Vì sao nguy cơ nạp/dùng cần thêm một bong bóng?</p>
+        <p class="deep-only">Gợi ý sâu hơn: PIPE có mấy nguồn và mấy đích chuyển tiếp?</p>
+      </li>
+      <li>
+        <p>Nguy cơ điều khiển sinh ra từ đâu, và dự đoán nhánh giúp gì? Chiến lược “luôn lấy nhánh” đúng khoảng bao nhiêu phần trăm?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao lệnh <code>ret</code> được xử lý khác với nhánh có điều kiện?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Thanh ghi là gì? CPU Y86-64 có mấy cái?</p></li>
+      <li><p>Một lệnh đi qua mấy bước trong SEQ? Kể vài bước bạn nhớ.</p></li>
+      <li><p>Vì sao cho các lệnh chạy gối đầu lại làm được nhiều việc hơn mỗi giây?</p></li>
+      <li><p>Khi lệnh sau cần số mà lệnh trước chưa cất xong, CPU làm gì để khỏi phải chờ lâu?</p></li>
+      <li><p>Gặp một ngã rẽ mà chưa biết hướng, CPU làm gì để không đứng chờ?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>What makes up Y86-64's programmer-visible state? Why does it have 15 registers, not 16?</p></li>
+      <li><p>Name SEQ's six stages in order. For an arithmetic <code>subq</code>, which stage computes the result and which writes it to a register?</p></li>
+      <li><p>Does pipelining raise throughput or latency? Why doesn't doubling the stages double the speed?</p></li>
+      <li><p>What is a data hazard, and how does forwarding resolve it? Why does a load/use hazard need an extra bubble?</p></li>
+      <li><p>Where do control hazards come from, and how does branch prediction help? How often is "always taken" correct?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Một bộ xử lý chỉ là <span class="closing-accent">phần cứng thực hiện trung thành một tập lệnh</span>; nhưng phần cứng ấy <span class="closing-accent">không cần bắt chước ISA một cách trực tiếp</span>. Bằng cách cho các lệnh gối đầu trong một đường ống rồi khéo léo xử lý các nguy cơ, ta đổi lấy thông lượng cao mà vẫn giữ đúng điều ISA đã hứa.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">CPU là phần cứng làm đúng theo một bộ lệnh; nhưng <span class="closing-accent">bên trong nó được tổ chức rất khéo</span> để chạy nhanh. Cho các lệnh chạy gối đầu như dây chuyền là bí quyết, miễn là xử lý gọn những lúc lệnh này cần lệnh kia. <b>Nhớ nhé: hiểu CPU chạy ra sao thì bạn mới hiểu vì sao mã của mình nhanh hay chậm.</b></p>
+    <p class="en-only" lang="en">A processor is just <span class="closing-accent">hardware faithfully implementing an instruction set</span>; yet that hardware <span class="closing-accent">need not mirror the ISA directly</span>. By overlapping instructions in a pipeline and carefully handling hazards, we trade for high throughput while still honoring what the ISA promised.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-3-machine-level-representation-of-programs.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 3 · Biểu diễn chương trình ở mức máy</span>
+    <span class="nav-title en-only" lang="en">Chapter 3 · Machine-Level Representation of Programs</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-5-optimizing-program-performance.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 5 · Tối ưu hiệu năng chương trình</span>
+    <span class="nav-title en-only" lang="en">Chapter 5 · Optimizing Program Performance</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, tái bản lần thứ 3, Global Edition, Pearson, 2016 (ISBN 978-1-292-10176-7) — Chương 4, “Processor Architecture”, trang 387–522.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, 3rd edition, Global Edition, Pearson, 2016 (ISBN 978-1-292-10176-7) — Chapter 4, “Processor Architecture”, pp. 387–522.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the authors and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the authors' words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, 3rd ed. (Global Edition), Pearson, 2016, ch. 4 “Processor Architecture”, pp. 387–522. — <a href="http://csapp.cs.cmu.edu/" target="_blank" rel="noopener noreferrer">csapp.cs.cmu.edu</a></li>
+      <li id="ref-2">CS:APP student site — Y86-64 processor simulators and lab materials (YIS/YAS tools). — <a href="http://csapp.cs.cmu.edu/3e/labs.html" target="_blank" rel="noopener noreferrer">csapp.cs.cmu.edu/3e/labs.html</a></li>
+      <li id="ref-3">“Verilog” (hardware description language and logic synthesis), Wikipedia. — <a href="https://en.wikipedia.org/wiki/Verilog" target="_blank" rel="noopener noreferrer">en.wikipedia.org/wiki/Verilog</a></li>
+      <li id="ref-4">James E. Smith, “A Study of Branch Prediction Strategies”, Proc. 8th Int'l Symposium on Computer Architecture (ISCA), 1981 (reprinted 1998). — <a href="https://doi.org/10.1145/285930.285980" target="_blank" rel="noopener noreferrer">doi.org/10.1145/285930.285980</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-3-machine-level-representation-of-programs.html">chapter 3</a>
+      <a href="chapter-5-optimizing-program-performance.html">chapter 5</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('csapp-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('csapp-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('csapp-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

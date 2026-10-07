@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 6 · Phân cấp bộ nhớ — Computer Systems: A Programmer's Perspective</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 6 “The Memory Hierarchy” trong Computer Systems: A Programmer's Perspective (Bryant & O'Hallaron, Pearson, 3rd ed., 2016): công nghệ lưu trữ (SRAM/DRAM/đĩa/SSD), tính cục bộ (locality), phân cấp bộ nhớ (memory hierarchy), bộ nhớ đệm (cache) với bộ ba tham số (S, E, B), mã thân thiện với cache, và ngọn núi bộ nhớ (memory mountain).">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('csapp-reading-mode'),
+l=localStorage.getItem('csapp-lang'),
+t=localStorage.getItem('csapp-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"CS:APP / 06";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    Computer Systems: A Programmer's Perspective
+    <span>Chương 6 · The Memory Hierarchy</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 6 · Phân cấp bộ nhớ</span>
+      <span class="en-only" lang="en">Chapter 6 · The Memory Hierarchy</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Bộ nhớ không phẳng: một kim tự tháp lưu trữ mà mã khéo léo biết trèo lên đỉnh</span>
+      <span class="easy-only">Bộ nhớ xếp thành nhiều tầng — và mã tốt biết cách dùng tầng nhanh</span>
+      <span class="en-only" lang="en">Memory is not flat: a pyramid of storage that clever code learns to climb</span>
+    </h1>
+
+    <p class="standard-copy">Cho tới chương này, sách vẫn dùng một mô hình đơn giản: bộ nhớ là một mảng byte tuyến tính mà CPU truy cập trong thời gian không đổi. Bryant và O'Hallaron chỉ ra mô hình đó không phản ánh cách máy thật vận hành: thực tế, hệ thống bộ nhớ là một <b>phân cấp (hierarchy)</b> các thiết bị lưu trữ với dung lượng, giá thành và thời gian truy cập rất khác nhau.<span class="cite"><a href="#ref-1">1</a></span> Nếu dữ liệu nằm trong thanh ghi CPU, nó được truy cập trong 0 chu kỳ; trong bộ nhớ đệm (cache), 4 đến 75 chu kỳ; trong bộ nhớ chính, hàng trăm chu kỳ; còn trên đĩa, hàng chục triệu chu kỳ.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Trước giờ ta cứ nghĩ bộ nhớ là một dãy ô, ô nào cũng lấy nhanh như nhau. Thật ra không phải vậy. Máy có nhiều loại chỗ chứa, xếp thành tầng: trên cùng bé xíu nhưng cực nhanh, dưới cùng rất lớn nhưng chậm. Lấy một con số từ thanh ghi gần như tức thì; lấy từ đĩa thì chậm hơn hàng chục triệu lần. <b>Nhớ nhé: bộ nhớ là một kim tự tháp, không phải một mặt bàn phẳng.</b></p>
+    <p class="en-only" lang="en">Until this chapter, the book used a simple model: memory is a linear array of bytes the CPU accesses in constant time. Bryant and O'Hallaron show that model does not reflect how real machines work: in practice, a memory system is a <b>hierarchy</b> of storage devices with widely different capacities, costs, and access times.<span class="cite"><a href="#ref-1">1</a></span> If your data are in a CPU register, they are accessed in 0 cycles; in a cache, 4 to 75 cycles; in main memory, hundreds of cycles; and on disk, tens of millions of cycles.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Điều làm cho phân cấp này <i>hoạt động được</i> không phải phần cứng mà là một tính chất của phần mềm: chương trình viết tốt có xu hướng truy cập chỗ lưu trữ ở một tầng nhiều hơn hẳn tầng ngay dưới. Nhờ vậy, tầng dưới được phép chậm hơn — và do đó lớn hơn, rẻ hơn tính trên mỗi bit. Hiệu ứng tổng thể: một kho nhớ khổng lồ có giá gần bằng thiết bị rẻ ở đáy nhưng phục vụ dữ liệu với tốc độ gần bằng thiết bị nhanh ở đỉnh.<span class="cite"><a href="#ref-1">1</a></span> Trên hệ Core i7 của tác giả, các nhân nhân ma trận cùng số phép toán nhưng khác mức cục bộ có thời gian chạy chênh nhau tới gần 40 lần.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> hệ thống bộ nhớ không phải mảng byte phẳng chi phí như nhau, mà là một phân cấp các công nghệ lưu trữ nhanh–chậm chênh nhau nhiều bậc độ lớn; vì chương trình tốt có <b>tính cục bộ (locality)</b>, mỗi tầng có thể làm <b>bộ nhớ đệm (cache)</b> cho tầng dưới, cho ta tốc độ gần đỉnh với chi phí gần đáy — và lập trình viên hiểu điều này có thể viết mã đặt dữ liệu ở tầng cao để chạy nhanh hơn hẳn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> bộ nhớ xếp tầng nhanh–chậm. Vì chương trình hay dùng đi dùng lại một nhóm dữ liệu gần nhau, máy giữ bản sao của chúng ở tầng nhanh. Viết mã biết tận dụng điều đó thì chạy nhanh hơn rất nhiều. <b>Nhớ nhé: để dữ liệu hay dùng ở tầng nhanh thì chương trình bay.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> a memory system is not a flat array of equal-cost bytes but a hierarchy of storage technologies whose speeds differ by orders of magnitude; because good programs have <b>locality</b>, each level can serve as a <b>cache</b> for the one below, giving near-top speed at near-bottom cost — and a programmer who understands this can write code that keeps data high in the hierarchy and runs far faster.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: phân cấp bộ nhớ dựa trên ba trụ cột — công nghệ lưu trữ chênh lệch tốc độ, tính cục bộ của chương trình, và bộ nhớ đệm khai thác cả hai. Diagram: the memory hierarchy rests on three pillars — storage technologies that differ in speed, program locality, and caches that exploit both.">
+    <div class="core">
+      <b>Phân cấp bộ nhớ</b>
+      <small class="standard-copy">L0 thanh ghi → L1/L2/L3 cache → bộ nhớ chính → đĩa</small>
+      <small class="easy-only">Nhiều tầng nhanh–chậm xếp chồng</small>
+      <small class="en-only" lang="en">L0 registers → L1/L2/L3 cache → main memory → disk</small>
+    </div>
+
+    <div class="node">
+      <b>Storage technologies</b>
+      <small class="standard-copy">SRAM nhanh &amp; đắt; DRAM; đĩa quay chậm &amp; rẻ; SSD ở giữa</small>
+      <small class="easy-only">Mỗi loại chỗ chứa có tốc độ và giá khác nhau</small>
+      <small class="en-only" lang="en">SRAM fast &amp; costly; DRAM; slow cheap disks; SSD in between</small>
+    </div>
+
+    <div class="node">
+      <b>Locality</b>
+      <small class="standard-copy">Cục bộ thời gian &amp; không gian — vì sao phân cấp hoạt động</small>
+      <small class="easy-only">Chương trình hay dùng lại dữ liệu ở gần nhau</small>
+      <small class="en-only" lang="en">Temporal &amp; spatial locality — why the hierarchy works</small>
+    </div>
+
+    <div class="node">
+      <b>Cache memories</b>
+      <small class="standard-copy">Bộ ba tham số (S, E, B); trúng/trượt; mã thân thiện với cache</small>
+      <small class="easy-only">Ngăn nhớ nhanh sát CPU; viết mã cho khéo</small>
+      <small class="en-only" lang="en">Parameters (S, E, B); hits/misses; cache-friendly code</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#cong-nghe-luu-tru">
+    <span>01</span>
+    <b class="standard-copy">Công nghệ lưu trữ: SRAM, DRAM, đĩa, SSD</b>
+    <b class="easy-only">Các loại chỗ chứa và vì sao chúng khác nhau</b>
+    <b class="en-only" lang="en">Storage technologies: SRAM, DRAM, disks, SSDs</b>
+  </a>
+  <a href="#tinh-cuc-bo">
+    <span>02</span>
+    <b class="standard-copy">Tính cục bộ và phân cấp bộ nhớ</b>
+    <b class="easy-only">Vì sao dữ liệu gần nhau lại giúp chạy nhanh</b>
+    <b class="en-only" lang="en">Locality and the memory hierarchy</b>
+  </a>
+  <a href="#bo-nho-dem">
+    <span>03</span>
+    <b class="standard-copy">Bộ nhớ đệm và mã thân thiện với cache</b>
+    <b class="easy-only">Cache hoạt động ra sao; viết mã cho khéo</b>
+    <b class="en-only" lang="en">Cache memories and cache-friendly code</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>04</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="cong-nghe-luu-tru" aria-labelledby="cong-nghe-luu-tru-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="cong-nghe-luu-tru-title">
+      <span class="standard-copy">Công nghệ lưu trữ: vì sao có loại nhanh mà đắt, loại chậm mà rẻ</span>
+      <span class="easy-only">Các loại chỗ chứa dữ liệu, và vì sao chúng khác nhau</span>
+      <span class="en-only" lang="en">Storage technologies: why some are fast and costly, others slow and cheap</span>
+    </h2>
+    <p class="standard-copy">Phần lớn thành công của máy tính đến từ tiến bộ về lưu trữ. Những máy đầu tiên chỉ có vài kilobyte bộ nhớ truy cập ngẫu nhiên; IBM PC-XT năm 1982 mới có đĩa 10 megabyte. Đến năm 2015, máy tiêu biểu có dung lượng đĩa gấp 300.000 lần, và cứ vài năm lại tăng gấp đôi.<span class="cite"><a href="#ref-1">1</a></span> Chương mở đầu bằng cách so sánh các công nghệ nền tảng — SRAM, DRAM, đĩa quay và đĩa thể rắn (SSD) — vì mỗi loại có một đánh đổi giá/tốc độ riêng.</p>
+    <p class="easy-only">Máy tính mạnh lên phần lớn nhờ chỗ chứa dữ liệu ngày càng tốt. Có loại nhớ cực nhanh nhưng đắt và nhỏ; có loại rất lớn, rẻ nhưng chậm. Không loại nào vừa nhanh, vừa rẻ, vừa lớn cả. <b>Nhớ nhé: nhanh thì đắt và nhỏ, rẻ thì chậm và lớn — luôn phải chọn.</b></p>
+    <p class="en-only" lang="en">Much of computing's success comes from storage progress. Early machines had a few kilobytes of RAM; the 1982 IBM PC-XT had a 10-megabyte disk. By 2015 a typical machine had 300,000 times the disk capacity, doubling every couple of years.<span class="cite"><a href="#ref-1">1</a></span> The chapter opens by contrasting the fundamental technologies — SRAM, DRAM, rotating disks, and solid state disks (SSDs) — because each carries its own price/speed trade-off.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <span lang="en">SRAM</span> (RAM tĩnh) lưu mỗi bit trong một ô nhớ hai trạng thái bền bằng mạch sáu transistor; nó giữ giá trị chừng nào còn điện. <span lang="en">DRAM</span> (RAM động) lưu mỗi bit bằng điện tích trên một tụ nhỏ (khoảng 30 femtofarad), chỉ cần một tụ và một transistor nên dày đặc hơn nhiều, nhưng phải được <i>làm tươi (refresh)</i> định kỳ.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> SRAM như một công tắc giữ nguyên trạng thái, nhanh nhưng tốn chỗ. DRAM như một cái xô nước rỉ, phải đổ đầy lại liên tục, nhưng nhỏ gọn nên chứa được nhiều. <b>Nhớ nhé: SRAM nhanh mà cồng kềnh, DRAM nhỏ gọn mà phải nạp lại hoài.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <span lang="en">SRAM</span> (static RAM) stores each bit in a bistable six-transistor cell and holds its value as long as it is powered. <span lang="en">DRAM</span> (dynamic RAM) stores each bit as charge on a tiny capacitor (about 30 femtofarads) with just one capacitor and one transistor, so it is far denser, but it must be <i>refreshed</i> periodically.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">SRAM: 6 transistor/bit · ~1× · giá ~1000×<br>DRAM: 1 transistor/bit · ~10× · giá 1×<br>Đĩa: Taccess = Tseek + Trotation + Ttransfer<br>&nbsp;&nbsp;≈ 9 + 4 + 0,02 = 13,02 ms</p>
+      <p class="easy-only">SRAM: nhanh, đắt, nhỏ<br>DRAM: vừa phải<br>Đĩa: rất lớn, rất chậm (~13 ms)</p>
+      <p class="en-only" lang="en">SRAM: 6 transistors/bit · ~1× · ~1000× cost<br>DRAM: 1 transistor/bit · ~10× · 1× cost<br>Disk: Taccess = Tseek + Trotation + Ttransfer<br>&nbsp;&nbsp;≈ 9 + 4 + 0.02 = 13.02 ms</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">SRAM vs DRAM</span>
+      <h3>
+        <span class="standard-copy">SRAM và DRAM — đánh đổi giữa tốc độ, mật độ và giá</span>
+        <span class="easy-only">SRAM và DRAM — nhanh-đắt hay nhỏ-gọn</span>
+        <span class="en-only" lang="en">SRAM vs DRAM — trading speed, density and cost</span>
+      </h3>
+      <p class="standard-copy">Bảng đặc trưng của sách tóm gọn đánh đổi: một ô SRAM dùng 6 transistor cho mỗi bit, truy cập lấy làm mốc 1×, bền chừng nào còn điện, không nhạy nhiễu — nhưng đắt khoảng 1.000× tính trên mỗi bit. Một ô DRAM chỉ dùng 1 transistor, nên rẻ bằng 1× nhưng truy cập chậm khoảng 10×, không bền và nhạy với nhiễu, ánh sáng.<span class="cite"><a href="#ref-1">1</a></span> Vì thế SRAM dùng làm cache, DRAM làm bộ nhớ chính.</p>
+      <p class="easy-only">SRAM dùng nhiều linh kiện cho một bit nên đắt và chiếm chỗ, bù lại chạy nhanh và giữ giá trị chắc. DRAM chỉ cần một tụ tí hon nên rẻ và chứa được nhiều, nhưng chậm hơn và hay quên nếu không nạp lại. <b>Nhớ nhé: SRAM làm ngăn nhanh sát CPU, DRAM làm kho lớn phía dưới.</b></p>
+      <p class="en-only" lang="en">The book's table captures the trade-off: an SRAM cell uses 6 transistors per bit, a baseline 1× access time, stays persistent while powered, and is insensitive to noise — but costs roughly 1,000× per bit. A DRAM cell uses just 1 transistor, so it costs 1× but is about 10× slower, not persistent, and sensitive to disturbances and light.<span class="cite"><a href="#ref-1">1</a></span> Hence SRAM for caches, DRAM for main memory.</p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi bạn thấy máy có vài megabyte cache nhưng hàng gigabyte RAM: cache ít vì SRAM đắt, RAM nhiều vì DRAM rẻ.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Máy có rất nhiều RAM nhưng chỉ vài megabyte cache — vì loại nhanh thì đắt.</span>
+        <span class="en-only" lang="en">Whenever a machine has a few megabytes of cache but gigabytes of RAM: little cache because SRAM is costly, lots of RAM because DRAM is cheap.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao DRAM phải làm tươi</h4>
+          <p>Dòng rò làm ô DRAM mất điện tích trong khoảng 10–100 mili-giây, nên hệ thống phải đọc ra rồi ghi lại từng bit định kỳ. Một số hệ còn mã hoá sửa lỗi: một từ 64 bit được mã bằng 72 bit để phát hiện và sửa một bit sai.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Bộ nhớ không mất (nonvolatile)</h4>
+          <p>SRAM và DRAM đều <i>mất dữ liệu khi tắt điện</i>. Các bộ nhớ không mất — gọi chung là ROM dù một số ghi lại được — gồm PROM, EPROM, EEPROM và flash; flash là nền tảng cho SSD mà ta gặp ngay sau đây.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">rotating disks</span>
+      <h3>
+        <span class="standard-copy">Đĩa quay — rất lớn, rất rẻ, nhưng thời gian truy cập bị cơ học chi phối</span>
+        <span class="easy-only">Đĩa quay — chứa nhiều, giá rẻ, nhưng chậm vì phải quay và dịch đầu đọc</span>
+        <span class="en-only" lang="en">Rotating disks — huge, cheap, but access time is dominated by mechanics</span>
+      </h3>
+      <p class="standard-copy">Đĩa chứa hàng trăm tới hàng nghìn gigabyte, nhưng đọc một thông tin mất cỡ mili-giây — chậm hơn DRAM khoảng một trăm nghìn lần và SRAM khoảng một triệu lần.<span class="cite"><a href="#ref-1">1</a></span> Thời gian truy cập một sector gồm ba phần: thời gian tìm (seek), độ trễ quay (rotational latency) và thời gian truyền (transfer). Với một đĩa 7.200 vòng/phút, Tseek 9 ms, 400 sector/rãnh, tổng thời gian ước tính là 9 + 4 + 0,02 = 13,02 ms — bị thời gian tìm và độ trễ quay chi phối gần hết.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Đĩa quay giống một cái đĩa than: có một cánh tay mang đầu đọc phải dịch tới đúng rãnh, rồi chờ chỗ cần đọc quay tới dưới đầu. Vì có bộ phận chuyển động nên nó chậm hơn bộ nhớ điện tử rất nhiều. <b>Nhớ nhé: đĩa chậm vì phải chờ cơ học quay và dịch, không phải vì thiếu dung lượng.</b></p>
+      <p class="en-only" lang="en">Disks hold hundreds to thousands of gigabytes, but reading takes on the order of milliseconds — about a hundred thousand times longer than DRAM and a million times longer than SRAM.<span class="cite"><a href="#ref-1">1</a></span> A sector's access time has three parts: seek time, rotational latency, and transfer time. For a 7,200 RPM disk with Tseek 9 ms and 400 sectors per track, the estimate is 9 + 4 + 0.02 = 13.02 ms — almost entirely seek and rotation.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Byte đầu của một sector tốn nhiều thời gian, các byte sau gần như miễn phí — vì thế đọc tuần tự luôn nhanh hơn đọc rải rác.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Đọc liền một mạch nhanh hơn nhiều so với nhảy lung tung khắp đĩa.</span>
+        <span class="en-only" lang="en">The first byte of a sector is expensive, the rest are essentially free — which is why sequential reads beat scattered ones.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đĩa so với bộ nhớ, bằng con số</h4>
+          <p>Sách ước tính: đọc một từ 64 bit mất ~4 ns từ SRAM và ~60 ns từ DRAM; đọc một khối cỡ sector 512 byte mất ~256 ns từ SRAM và ~4.000 ns từ DRAM. Thời gian truy cập đĩa ~10 ms lớn hơn SRAM khoảng 40.000 lần và DRAM khoảng 2.500 lần.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Khối logic và DMA</h4>
+          <p>Đĩa giấu hình học phức tạp sau một dãy <i>khối logic (logical block)</i> cùng kích thước. Khi đọc, bộ điều khiển đĩa chuyển dữ liệu thẳng vào bộ nhớ chính qua <i>truy cập bộ nhớ trực tiếp (DMA)</i> rồi báo CPU bằng một ngắt, để CPU làm việc khác trong lúc chờ.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">SSDs &amp; the widening gap</span>
+      <h3>
+        <span class="standard-copy">SSD và khoảng cách ngày càng rộng với CPU</span>
+        <span class="easy-only">Ổ SSD và vì sao CPU ngày càng “đợi” bộ nhớ</span>
+        <span class="en-only" lang="en">SSDs and the widening gap with the CPU</span>
+      </h3>
+      <p class="standard-copy">SSD là đĩa dựa trên flash, không có bộ phận chuyển động nên truy cập ngẫu nhiên nhanh hơn, ít tốn điện và bền hơn đĩa quay. Theo thông số chiếc Intel SSD 730 mà sách dẫn, đọc tuần tự đạt 550 MB/s và ghi 470 MB/s; ngẫu nhiên đạt 89.000 IOPS khi đọc và 74.000 IOPS khi ghi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Đọc nhanh hơn ghi, và mỗi khối flash chỉ chịu được khoảng 100.000 lần ghi trước khi hỏng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">SSD là ổ nhớ không có đĩa quay, chỉ toàn chip, nên lấy dữ liệu bất kỳ đâu cũng nhanh. Nó đọc nhanh hơn ghi, và dùng lâu quá cũng mòn. Dù vậy nó vẫn chậm hơn RAM nhiều. <b>Nhớ nhé: SSD nhanh hơn đĩa quay nhưng vẫn là tầng dưới của RAM.</b></p>
+      <p class="en-only" lang="en">An SSD is a flash-based disk with no moving parts, so it has faster random access, uses less power, and is more rugged than a rotating disk. Per the Intel SSD 730 spec the book cites, sequential reads reach 550 MB/s and writes 470 MB/s; random access reaches 89,000 read IOPS and 74,000 write IOPS.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Reads are faster than writes, and each flash block survives only about 100,000 writes before wearing out.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Xu hướng lưu trữ cho thấy vì sao phải có cache: từ 1985–2015, giá mỗi megabyte DRAM giảm 44.000 lần nhưng thời gian truy cập chỉ nhanh lên 10 lần, còn chu kỳ CPU nhanh lên 500 lần — khoảng cách CPU–bộ nhớ ngày càng rộng.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">CPU nhanh lên rất nhiều, còn bộ nhớ thì chỉ nhanh lên chút ít — nên CPU hay phải chờ.</span>
+        <span class="en-only" lang="en">Storage trends show why caches are needed: from 1985–2015, DRAM cost per megabyte fell 44,000× but access time improved only 10×, while CPU cycle time improved 500× — the processor–memory gap keeps widening.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Vì sao ghi ngẫu nhiên chậm</h4>
+          <p>Flash chỉ ghi được một trang sau khi đã xoá cả khối chứa nó, mà xoá một khối tốn cỡ 1 ms. Muốn sửa một trang đang có dữ liệu, các trang hữu ích khác trong khối phải được chép sang khối mới trước. Tầng dịch flash (flash translation layer) và logic cân bằng hao mòn (wear-leveling) cố giảm chi phí này.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Khoảng cách là độ trễ rồi thành thông lượng</h4>
+          <p>Trước khoảng 2003, khoảng cách CPU–bộ nhớ chủ yếu là vấn đề <i>độ trễ</i> (latency). Sau khi vi xử lý nhiều nhân xuất hiện, nó ngày càng là vấn đề <i>thông lượng</i> (throughput), khi nhiều nhân cùng phát yêu cầu tới DRAM và đĩa song song.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Các con số trên vẽ ra một vực thẳm tốc độ giữa CPU và các tầng chứa lớn. Vậy vì sao máy tính vẫn chạy nhanh? Câu trả lời không nằm ở phần cứng mà ở một tính chất của chính chương trình: <b>tính cục bộ (locality)</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Nếu bộ nhớ lớn thì chậm đến thế, vì sao máy vẫn nhanh? Bí mật nằm ở cách chương trình truy cập dữ liệu. Ta xem tiếp.</p>
+    <p class="en-only" lang="en">These numbers reveal a speed chasm between the CPU and the large storage levels. So why are computers still fast? The answer lies not in hardware but in a property of programs themselves: <b>locality</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="tinh-cuc-bo" aria-labelledby="tinh-cuc-bo-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="tinh-cuc-bo-title">
+      <span class="standard-copy">Tính cục bộ, và vì sao mỗi tầng có thể làm cache cho tầng dưới</span>
+      <span class="easy-only">Dữ liệu gần nhau, dùng lại nhiều — nền tảng của phân cấp</span>
+      <span class="en-only" lang="en">Locality, and why each level can cache the one below</span>
+    </h2>
+    <p class="standard-copy">Chương trình viết tốt có xu hướng tham chiếu những dữ liệu nằm gần dữ liệu vừa dùng, hoặc chính dữ liệu vừa dùng. Xu hướng này — <b>nguyên lý cục bộ (principle of locality)</b> — là một ý tưởng bền bỉ, chi phối thiết kế cả phần cứng lẫn phần mềm.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> Nói chung, chương trình có tính cục bộ tốt chạy nhanh hơn chương trình có tính cục bộ kém.</p>
+    <p class="easy-only">Chương trình tốt thường “quanh quẩn” một chỗ: vừa đọc ô này thì sắp đọc ô bên cạnh, hoặc đọc lại chính ô vừa rồi. Nhờ thế máy đoán trước được và để sẵn dữ liệu ở tầng nhanh. <b>Nhớ nhé: chương trình quanh quẩn một vùng thì máy phục vụ nhanh.</b></p>
+    <p class="en-only" lang="en">Well-written programs tend to reference data near recently referenced data, or the recently referenced data itself. This tendency — the <b>principle of locality</b> — is an enduring idea that shapes the design of both hardware and software.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> In general, programs with good locality run faster than those with poor locality.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Cục bộ thời gian (temporal locality)</i>: một ô nhớ được tham chiếu một lần thì có khả năng được tham chiếu lại nhiều lần trong tương lai gần. <i>Cục bộ không gian (spatial locality)</i>: nếu một ô được tham chiếu, các ô gần nó có khả năng được tham chiếu sắp tới.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Cục bộ thời gian là “dùng rồi sẽ dùng lại”. Cục bộ không gian là “dùng ô này thì sắp dùng ô kế bên”. <b>Nhớ nhé: dùng lại = cục bộ thời gian; dùng chỗ kế bên = cục bộ không gian.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <i>Temporal locality</i>: a location referenced once is likely to be referenced again soon. <i>Spatial locality</i>: if a location is referenced, nearby locations are likely to be referenced soon.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">Chi phí truy cập (chu kỳ):<br>L0 thanh ghi 0 · L1 ~4 · L2 ~10<br>L3 ~50 · bộ nhớ chính ~200<br>đĩa hàng chục triệu</p>
+      <p class="easy-only">càng lên cao càng nhanh:<br>thanh ghi → cache → RAM → đĩa</p>
+      <p class="en-only" lang="en">Access cost (cycles):<br>L0 registers 0 · L1 ~4 · L2 ~10<br>L3 ~50 · main memory ~200<br>disk tens of millions</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">stride-1 patterns</span>
+      <h3>
+        <span class="standard-copy">Bước nhảy 1 — nguồn cục bộ không gian quan trọng nhất</span>
+        <span class="easy-only">Đi tuần tự từng ô — cách duyệt tốt nhất cho cache</span>
+        <span class="en-only" lang="en">Stride-1 patterns — the key source of spatial locality</span>
+      </h3>
+      <p class="standard-copy">Hàm quét một vectơ lần lượt từng phần tử có <i>mẫu tham chiếu bước nhảy 1 (stride-1)</i> và cục bộ không gian tốt; quét cách k phần tử là bước nhảy k, bước càng lớn cục bộ càng kém.<span class="cite"><a href="#ref-1">1</a></span> Vì mảng trong C xếp theo <i>thứ tự hàng (row-major)</i>, duyệt theo hàng cho bước nhảy 1, còn duyệt theo cột cho bước nhảy N — và sách cho biết phiên bản duyệt theo hàng chạy nhanh hơn phiên bản theo cột tới 25 lần trên máy để bàn của tác giả.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nếu bạn đọc mảng theo đúng thứ tự nó nằm trong bộ nhớ (từng ô liền nhau), máy phục vụ rất nhanh. Nếu bạn nhảy cóc, mỗi lần lại phải lấy khối mới, chậm hẳn. Cùng một phép tính, đổi thứ tự hai vòng lặp có thể làm chương trình nhanh lên hàng chục lần. <b>Nhớ nhé: duyệt mảng theo đúng thứ tự nó nằm trong bộ nhớ.</b></p>
+      <p class="en-only" lang="en">A function scanning a vector element by element has a <i>stride-1</i> reference pattern and good spatial locality; visiting every kth element is stride-k, and larger strides mean poorer locality.<span class="cite"><a href="#ref-1">1</a></span> Because C arrays are laid out in <i>row-major</i> order, scanning by rows gives stride-1 while scanning by columns gives stride-N — and the book reports the row-wise version runs 25 times faster than the column-wise one on the authors' desktop.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi hoán đổi hai vòng lặp <code>i</code> và <code>j</code> trong phép cộng ma trận làm tốc độ đổi hẳn, dù kết quả giống nhau.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi chỉ đổi thứ tự hai vòng lặp mà chương trình nhanh hoặc chậm hẳn.</span>
+        <span class="en-only" lang="en">When swapping the <code>i</code> and <code>j</code> loops in a matrix sum changes the speed dramatically, though the result is identical.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Cục bộ của lệnh</h4>
+          <p>Mã lệnh cũng có tính cục bộ: thân một vòng lặp được nạp tuần tự (cục bộ không gian) và chạy nhiều lần (cục bộ thời gian). Thân vòng lặp càng nhỏ và số vòng càng nhiều thì cục bộ càng tốt.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Đọc code bằng mắt</h4>
+          <p>Trước khi đo đạc, chỉ cần liếc mã nguồn và ước lượng cục bộ đã là một kỹ năng quý: biến dùng lặp lại (cục bộ thời gian tốt), và bước nhảy nhỏ (cục bộ không gian tốt) là hai dấu hiệu dễ nhận.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">the hierarchy</span>
+      <h3>
+        <span class="standard-copy">Phân cấp L0–L6 — mỗi tầng là cache cho tầng ngay dưới</span>
+        <span class="easy-only">Các tầng L0–L6 — tầng trên giữ bản sao của tầng dưới</span>
+        <span class="en-only" lang="en">The L0–L6 hierarchy — each level caches the one below</span>
+      </h3>
+      <p class="standard-copy">Hai tính chất — công nghệ lưu trữ chênh lệch tốc độ và phần mềm có cục bộ — bổ trợ nhau tuyệt đẹp, gợi ra cách tổ chức gọi là <b>phân cấp bộ nhớ (memory hierarchy)</b>: thanh ghi CPU ở L0; các cache SRAM L1–L3; bộ nhớ chính DRAM ở L4; đĩa cục bộ ở L5; lưu trữ từ xa ở L6.<span class="cite"><a href="#ref-1">1</a></span> Ý trung tâm: với mỗi tầng k, thiết bị nhanh–nhỏ ở tầng k làm <i>cache</i> cho thiết bị chậm–lớn ở tầng k+1.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Các chỗ chứa dữ liệu xếp thành bậc thang: trên cùng nhỏ-nhanh, dưới cùng lớn-chậm. Mỗi bậc giữ sẵn bản sao của những thứ hay dùng từ bậc dưới. Khi cần, máy nhìn bậc trên trước; thường là có sẵn. <b>Nhớ nhé: mỗi tầng là bộ nhớ đệm cho tầng ngay dưới nó.</b></p>
+      <p class="en-only" lang="en">The two properties — storage technologies that differ in speed and software with locality — complement each other beautifully, suggesting the <b>memory hierarchy</b>: CPU registers at L0; SRAM caches L1–L3; DRAM main memory at L4; local disks at L5; remote storage at L6.<span class="cite"><a href="#ref-1">1</a></span> The central idea: for each level k, the fast, small device at level k is a <i>cache</i> for the slow, large device at level k+1.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Caching có mặt khắp nơi: trình duyệt lưu trang vừa xem trên đĩa, hệ điều hành dùng RAM làm cache cho đĩa — cùng một nguyên lý ở mọi tầng.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Trình duyệt giữ lại trang vừa xem để mở lại cho nhanh — đó cũng là caching.</span>
+        <span class="en-only" lang="en">Caching is everywhere: a browser keeps recently viewed pages on disk, the OS uses RAM as a cache for disk — the same principle at every level.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Khối và đơn vị chuyển</h4>
+          <p>Tầng k+1 được chia thành các <i>khối (block)</i> cùng kích thước; tầng k giữ bản sao một tập con các khối đó. Dữ liệu luôn được chép qua lại theo từng khối. Tầng càng xa CPU, thời gian truy cập càng lâu nên khối thường càng lớn để khấu hao chi phí.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ai quản lý cache</h4>
+          <p>Trình biên dịch quản lý tệp thanh ghi; các cache L1–L3 do phần cứng quản lý hoàn toàn; bộ nhớ ảo do hệ điều hành cùng phần cứng dịch địa chỉ; cache đĩa do firmware; cache web do trình duyệt — mỗi tầng một cơ chế.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">hits &amp; misses</span>
+      <h3>
+        <span class="standard-copy">Trúng và trượt — ba loại trượt mà lập trình viên nên biết</span>
+        <span class="easy-only">Trúng (có sẵn) và trượt (phải đi lấy)</span>
+        <span class="en-only" lang="en">Hits &amp; misses — the three kinds of miss to know</span>
+      </h3>
+      <p class="standard-copy">Khi cần một đối tượng d, nếu nó đã nằm ở tầng k thì ta có <b>trúng (hit)</b> và đọc nhanh; nếu không, ta có <b>trượt (miss)</b>: tầng k phải lấy khối chứa d từ tầng k+1, có thể phải <i>loại bỏ (evict)</i> một khối cũ theo chính sách thay thế (ví dụ LRU).<span class="cite"><a href="#ref-1">1</a></span> Sách phân biệt ba loại trượt: <i>trượt bắt buộc (cold/compulsory)</i> khi cache còn trống; <i>trượt xung đột (conflict)</i> khi nhiều khối ánh xạ vào cùng chỗ; và <i>trượt dung lượng (capacity)</i> khi tập làm việc lớn hơn cache.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">“Trúng” là thứ cần đã có sẵn ở tầng nhanh — lấy liền. “Trượt” là chưa có, phải xuống tầng dưới lấy, và có khi phải bỏ bớt thứ cũ để lấy chỗ. Có ba kiểu trượt: do mới bắt đầu, do chen chỗ, và do chứa không nổi. <b>Nhớ nhé: trúng thì nhanh, trượt thì phải đi lấy — mục tiêu là giảm trượt.</b></p>
+      <p class="en-only" lang="en">When a program needs object d, if it is already at level k we have a <b>hit</b> and read it fast; otherwise a <b>miss</b>: level k fetches the block containing d from level k+1, possibly <i>evicting</i> an old block per a replacement policy (e.g. LRU).<span class="cite"><a href="#ref-1">1</a></span> The book distinguishes three kinds of miss: <i>cold (compulsory)</i> misses on an empty cache; <i>conflict</i> misses when several blocks map to the same slot; and <i>capacity</i> misses when the working set exceeds the cache.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một chương trình đột nhiên chậm lúc kích thước dữ liệu vượt một ngưỡng nào đó — thường là lúc tập làm việc không còn lọt trong một tầng cache.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi dữ liệu to lên một chút mà chương trình chậm hẳn — cache không chứa nổi nữa.</span>
+        <span class="en-only" lang="en">When a program suddenly slows once the data grows past some size — usually when the working set no longer fits in a cache level.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Phân cấp trả lời câu hỏi “ở đâu”, nhưng chưa trả lời “làm sao”. Riêng ở các tầng sát CPU — L1, L2, L3 — phần cứng phải tìm một khối trong vài nano-giây. Cơ chế nào cho phép nó làm nhanh đến thế? Đó là tổ chức của <b>bộ nhớ đệm (cache memory)</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Ta đã biết dữ liệu nằm ở tầng nào. Giờ xem các ngăn nhớ nhanh sát CPU được tổ chức ra sao để tìm đồ chỉ trong tích tắc.</p>
+    <p class="en-only" lang="en">The hierarchy answers “where,” but not yet “how.” At the levels closest to the CPU — L1, L2, L3 — hardware must find a block in a few nanoseconds. What organization makes that possible? The structure of <b>cache memory</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="bo-nho-dem" aria-labelledby="bo-nho-dem-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="bo-nho-dem-title">
+      <span class="standard-copy">Bộ nhớ đệm: bộ ba tham số (S, E, B), và cách viết mã thân thiện với cache</span>
+      <span class="easy-only">Cache được tổ chức ra sao, và viết mã thế nào cho khéo</span>
+      <span class="en-only" lang="en">Cache memories: the (S, E, B) parameters, and writing cache-friendly code</span>
+    </h2>
+    <p class="standard-copy">Một cache được tổ chức thành một mảng gồm S = 2<sup>s</sup> <i>tập hợp (set)</i>; mỗi tập có E <i>dòng (line)</i>; mỗi dòng chứa một khối dữ liệu B = 2<sup>b</sup> byte, một bit hợp lệ (valid), và t bit thẻ (tag).<span class="cite"><a href="#ref-1">1</a></span> Tổ chức này được đặc trưng bởi bộ (S, E, B, m), với kích thước C = S × E × B. Một địa chỉ được chia thành ba phần: bit thẻ, bit chỉ số tập hợp, và bit độ lệch trong khối — đúng như một bảng băm với hàm băm cực đơn giản.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hãy hình dung cache như một tủ nhiều ngăn kéo (các “tập hợp”), mỗi ngăn giữ một hoặc vài hộp (các “dòng”), mỗi hộp chứa một khối dữ liệu liền nhau. Khi cần một ô nhớ, máy dùng vài bit của địa chỉ để biết mở ngăn nào, rồi so “nhãn” để biết hộp nào. <b>Nhớ nhé: cache là cái tủ có ngăn và hộp, địa chỉ cho biết mở ngăn nào.</b></p>
+    <p class="en-only" lang="en">A cache is organized as an array of S = 2<sup>s</sup> <i>sets</i>; each set has E <i>lines</i>; each line holds a data block of B = 2<sup>b</sup> bytes, a valid bit, and t tag bits.<span class="cite"><a href="#ref-1">1</a></span> This is characterized by the tuple (S, E, B, m), with size C = S × E × B. An address splits into three fields: tag bits, set index bits, and block offset bits — exactly like a hash table with an extremely simple hash function.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Cache phân loại theo E — số dòng mỗi tập. E = 1 là <i>ánh xạ trực tiếp (direct-mapped)</i>: mỗi tập một dòng. 1 &lt; E &lt; C/B là <i>liên kết tập hợp E chiều (E-way set-associative)</i>. E = C/B (một tập duy nhất) là <i>liên kết đầy đủ (fully associative)</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Mỗi ngăn kéo chỉ một hộp là loại “trực tiếp”, dễ làm nhưng dễ chen chỗ. Mỗi ngăn vài hộp là loại “liên kết tập hợp”, ít chen chỗ hơn. <b>Nhớ nhé: nhiều hộp mỗi ngăn thì ít đụng độ hơn.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Caches are classed by E — lines per set. E = 1 is <i>direct-mapped</i>: one line per set. 1 &lt; E &lt; C/B is <i>E-way set-associative</i>. E = C/B (a single set) is <i>fully associative</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">C = S × E × B<br>s = log₂S · b = log₂B<br>t = m − (s + b)<br>tỉ lệ trượt = #trượt / #tham chiếu</p>
+      <p class="easy-only">kích thước = số ngăn × số hộp × cỡ khối<br>tỉ lệ trượt càng thấp càng nhanh</p>
+      <p class="en-only" lang="en">C = S × E × B<br>s = log₂S · b = log₂B<br>t = m − (s + b)<br>miss rate = #misses / #references</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">direct-mapped</span>
+      <h3>
+        <span class="standard-copy">Ánh xạ trực tiếp — ba bước: chọn tập, so thẻ, lấy từ</span>
+        <span class="easy-only">Ánh xạ trực tiếp — đơn giản nhất, nhưng dễ chen chỗ</span>
+        <span class="en-only" lang="en">Direct-mapped — three steps: set select, line match, word select</span>
+      </h3>
+      <p class="standard-copy">Với cache ánh xạ trực tiếp, mỗi lần truy cập gồm ba bước: (1) dùng s bit chỉ số để chọn tập; (2) so t bit thẻ của dòng duy nhất trong tập và kiểm tra bit hợp lệ; (3) nếu khớp, dùng b bit độ lệch để lấy từ cần trong khối.<span class="cite"><a href="#ref-1">1</a></span> Vì mỗi tập chỉ một dòng, việc so khớp cực nhanh — nhưng cũng chính vì thế mà dễ sinh xung đột.</p>
+      <p class="easy-only">Máy làm ba việc rất nhanh: mở đúng ngăn, so nhãn cái hộp duy nhất trong ngăn, rồi lấy đúng byte trong hộp. Vì mỗi ngăn chỉ chứa một hộp nên làm cực nhanh, nhưng hai thứ cần cùng lúc mà “rơi” vào một ngăn thì phải tranh chỗ. <b>Nhớ nhé: một hộp mỗi ngăn thì nhanh nhưng dễ tranh chỗ.</b></p>
+      <p class="en-only" lang="en">In a direct-mapped cache each access has three steps: (1) use the s index bits to select a set; (2) compare the t tag bits of the set's single line and check the valid bit; (3) if they match, use the b offset bits to extract the requested word from the block.<span class="cite"><a href="#ref-1">1</a></span> With one line per set the match is very fast — but that is exactly what makes conflicts easy.</p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Cache dùng <i>bit giữa</i> làm chỉ số tập (không phải bit cao) để các khối liền nhau rơi vào các tập khác nhau, giúp giữ cả một vùng mảng trong cache cùng lúc.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Máy chọn ngăn bằng các bit ở giữa địa chỉ, để các ô liền nhau không dồn hết vào một ngăn.</span>
+        <span class="en-only" lang="en">Caches use the <i>middle</i> address bits as the set index (not the high bits) so adjacent blocks fall into different sets, keeping a whole array region cached at once.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Dòng, tập, khối</h4>
+          <p>Sách nhấn mạnh phân biệt: <i>khối</i> là gói dữ liệu di chuyển giữa các tầng; <i>dòng</i> là nơi chứa một khối cùng bit hợp lệ và thẻ; <i>tập</i> là nhóm một hay nhiều dòng. Ở cache trực tiếp thì dòng và tập trùng nhau, nhưng ở cache liên kết thì không.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vấn đề với ghi</h4>
+          <p>Với ghi, có <i>ghi xuyên (write-through)</i> (ghi ngay xuống tầng dưới) hoặc <i>ghi trả sau (write-back)</i> (chỉ ghi khi dòng bị loại bỏ, cần một bit “bẩn”). Sách khuyên lập trình viên cứ hình dung mô hình write-back, write-allocate.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">conflict misses</span>
+      <h3>
+        <span class="standard-copy">Xung đột và giằng co — và vì sao liên kết tập hợp cứu nguy</span>
+        <span class="easy-only">Khi hai mảng “đánh nhau” giành một chỗ trong cache</span>
+        <span class="en-only" lang="en">Conflict misses &amp; thrashing — why associativity helps</span>
+      </h3>
+      <p class="standard-copy">Trượt xung đột hay xảy ra khi chương trình truy cập các mảng có kích thước là luỹ thừa của 2. Trong ví dụ tích vô hướng của sách, nếu <code>x</code> và <code>y</code> ánh xạ vào cùng một tập, mỗi lần lặp lại nạp rồi loại bỏ đúng khối vừa dùng — hiện tượng <i>giằng co (thrashing)</i> — có thể làm chậm đi 2–3 lần dù cache đủ sức chứa.<span class="cite"><a href="#ref-1">1</a></span> Cache <b>liên kết tập hợp (set-associative)</b> cho mỗi tập nhiều dòng nên giảm hẳn xung đột; Core i7 dùng L1, L2 tám chiều và L3 mười sáu chiều.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only">Nếu hai mảng tình cờ cùng “rơi” vào một ngăn, chúng thay phiên hất nhau ra khỏi ngăn đó, nên dù cache còn trống chỗ khác, máy vẫn cứ trượt liên tục — chậm đi vài lần. Cách sửa dễ: cho mỗi ngăn chứa nhiều hộp. <b>Nhớ nhé: nhiều hộp mỗi ngăn thì hai mảng thôi tranh chỗ.</b></p>
+      <p class="en-only" lang="en">Conflict misses often strike when a program accesses arrays whose sizes are powers of 2. In the book's dot-product example, if <code>x</code> and <code>y</code> map to the same set, each iteration loads then evicts the very block just used — <i>thrashing</i> — which can slow things by a factor of 2–3 even though the cache is big enough.<span class="cite"><a href="#ref-1">1</a></span> A <b>set-associative</b> cache gives each set several lines and sharply cuts conflicts; the Core i7 uses 8-way L1 and L2 and 16-way L3.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mẹo đơn giản của sách: thêm vài phần tử đệm ở cuối một mảng (ví dụ khai báo <code>float x[12]</code> thay vì <code>x[8]</code>) để <code>x</code> và <code>y</code> rơi vào tập khác nhau, xoá bỏ giằng co.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Đôi khi chỉ cần nới mảng rộng ra một chút là hết cảnh hai mảng tranh chỗ.</span>
+        <span class="en-only" lang="en">The book's simple trick: pad an array with a few extra elements (e.g. declare <code>float x[12]</code> instead of <code>x[8]</code>) so <code>x</code> and <code>y</code> land in different sets, ending the thrashing.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Core i7 bằng con số</h4>
+          <p>Sách cho bảng đặc trưng cache Core i7: L1 i-cache và d-cache mỗi loại 32 KB, 8 chiều, khối 64 byte, 64 tập, truy cập ~4 chu kỳ; L2 hợp nhất 256 KB, 8 chiều, ~10 chu kỳ; L3 hợp nhất 8 MB dùng chung, 16 chiều, ~40–75 chu kỳ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một lưu ý về con số L3</h4>
+          <p>Sách dùng hai cách trình bày độ trễ L3: bảng khái quát (Hình 6.23) ghi gọn ~50 chu kỳ, còn bảng Core i7 thực (Hình 6.39) ghi 40–75 chu kỳ. Bài này theo khung của sách: dùng ~50 ở mức tổng quát và 40–75 cho máy Core i7 cụ thể.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">the memory mountain</span>
+      <h3>
+        <span class="standard-copy">Ngọn núi bộ nhớ — chạy trên đỉnh, đừng chạy dưới thung lũng</span>
+        <span class="easy-only">Ngọn núi bộ nhớ — bức tranh tốc độ theo cục bộ</span>
+        <span class="en-only" lang="en">The memory mountain — run on the peaks, not in the valleys</span>
+      </h3>
+      <p class="standard-copy">Nếu đo <i>thông lượng đọc (read throughput)</i> khi thay đổi kích thước tập làm việc (cục bộ thời gian) và bước nhảy (cục bộ không gian), ta được một mặt hai chiều gọi là <b>ngọn núi bộ nhớ (memory mountain)</b>. Trên hệ Core i7 Haswell, đỉnh cao nhất của sườn L1 đọc hơn 14 GB/s, còn điểm thấp nhất của sườn bộ nhớ chính chỉ 900 MB/s — chênh hơn một bậc độ lớn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Thậm chí khi tập làm việc quá lớn, bước nhảy 1 vẫn giữ thông lượng phẳng ~12 GB/s nhờ cơ chế nạp trước (prefetching) phần cứng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Người ta vẽ được một “ngọn núi”: dữ liệu càng gọn và duyệt càng tuần tự thì càng lên đỉnh (nhanh); dữ liệu càng to và nhảy càng xa thì càng xuống thung lũng (chậm). Đỉnh và đáy chênh nhau hơn mười lần. Viết mã khéo là cố chạy trên đỉnh. <b>Nhớ nhé: gọn và tuần tự thì ở đỉnh núi, to và nhảy xa thì rơi xuống đáy.</b></p>
+      <p class="en-only" lang="en">If you measure <i>read throughput</i> while varying working-set size (temporal locality) and stride (spatial locality), you get a two-dimensional surface called the <b>memory mountain</b>. On a Core i7 Haswell system, the highest peak of the L1 ridge reads over 14 GB/s, while the lowest point of the main-memory ridge is only 900 MB/s — over an order of magnitude apart.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Even when the working set is too large, stride-1 keeps throughput flat at about 12 GB/s thanks to hardware prefetching.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong phép nhân ma trận: sắp lại thứ tự vòng lặp đưa nó về lớp “BC” chỉ 0,5 lần trượt mỗi vòng, thay vì lớp “AC” tới 2,0 lần trượt — cùng số phép toán, khác hẳn tốc độ.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Cùng một phép nhân ma trận, đổi thứ tự vòng lặp cho ít trượt hơn hẳn nên nhanh hơn nhiều.</span>
+        <span class="en-only" lang="en">In matrix multiply: reordering the loops moves it to the "BC" class at just 0.5 misses per iteration instead of the "AC" class at 2.0 — same operations, very different speed.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hai quy tắc viết mã thân thiện</h4>
+          <p>Sách rút ra: (1) làm cho trường hợp phổ biến chạy nhanh — tập trung vào vòng lặp trong của các hàm lõi; (2) giảm số lần trượt trong mỗi vòng lặp trong. Hai dấu hiệu tốt: dùng lại biến cục bộ (cache vào thanh ghi) và mẫu bước nhảy 1.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Cùng phép tính, khác cục bộ</h4>
+          <p>Với cache khối 64 byte và mảng lớn hơn cache, <code>sumarrayrows</code> (theo hàng) đạt tỉ lệ trượt 1/4, còn <code>sumarraycols</code> (theo cột) gần như trượt mọi lần — chênh lệch đủ để bản theo hàng nhanh hơn 25 lần.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Toàn bộ chương quy về một thông điệp cho lập trình viên: hiệu năng bộ nhớ không gói gọn trong một con số, mà là một ngọn núi của cục bộ thời gian và không gian. Người viết mã khôn ngoan cố sắp đặt chương trình để chạy trên các đỉnh thay vì các thung lũng.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Tóm lại: muốn nhanh, hãy giúp dữ liệu hay dùng nằm ở tầng nhanh và duyệt nó theo đúng thứ tự trong bộ nhớ.</p>
+    <p class="en-only" lang="en">The whole chapter boils down to one message for programmers: memory performance is not a single number but a mountain of temporal and spatial locality. Wise programmers arrange their code to run on the peaks rather than in the valleys.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+    <p class="eyebrow" id="ngo-nhan-title">
+      <span class="vi-only">Ba ngộ nhận thường gặp</span>
+      <span class="en-only" lang="en">Three common misconceptions</span>
+    </p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Bộ nhớ là mảng phẳng, ô nào cũng nhanh như nhau”</span>
+          <span class="en-only" lang="en">“Memory is a flat array; every cell is equally fast”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> CPU truy cập mọi ô nhớ trong thời gian không đổi.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> đó chỉ là mô hình đơn giản; thật ra chi phí truy cập chênh nhau từ 0 chu kỳ (thanh ghi) tới hàng chục triệu chu kỳ (đĩa).<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> the CPU accesses every cell in constant time.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> that is only a simple model; real access cost ranges from 0 cycles (registers) to tens of millions (disk).<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Cache là việc của phần cứng, lập trình viên khỏi lo”</span>
+          <span class="en-only" lang="en">“Caching is the hardware's job, not the programmer's”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> cache chạy tự động nên cách viết mã không ảnh hưởng.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> cùng một thuật toán, mã có cục bộ tốt có thể nhanh hơn hàng chục lần (ví dụ duyệt theo hàng nhanh hơn theo cột 25 lần).<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> caches run automatically, so how you write code does not matter.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> for the same algorithm, code with good locality can be an order of magnitude faster (row-wise beats column-wise by 25×).<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Cache lớn hơn thì luôn tốt hơn”</span>
+          <span class="en-only" lang="en">“A bigger cache is always better”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> cứ làm cache thật lớn là mọi chương trình nhanh lên.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> cache lớn tăng tỉ lệ trúng nhưng khó làm nhanh, nên tăng thời gian trúng — đó là lý do L1 nhỏ hơn L2, L2 nhỏ hơn L3; mỗi tham số là một đánh đổi.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> just make the cache huge and every program speeds up.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> a bigger cache raises the hit rate but is harder to make fast, so it raises hit time — which is why L1 is smaller than L2, L2 than L3; each parameter is a trade-off.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm phân cấp bộ nhớ</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped the hierarchy</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã hiểu vì sao bộ nhớ xếp tầng, và làm sao viết mã để dữ liệu nằm ở tầng nhanh.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you understand why memory is tiered, and how to write code that keeps data in the fast levels.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Vì sao SRAM dùng làm cache còn DRAM dùng làm bộ nhớ chính? Nêu đánh đổi giữa chúng theo bảng đặc trưng của sách.</p>
+        <p class="deep-only">Gợi ý sâu hơn: con số “6 transistor/bit” và “~1000× giá” nói lên điều gì về vì sao cache phải nhỏ?</p>
+      </li>
+      <li>
+        <p>Phân biệt cục bộ thời gian và cục bộ không gian. Cho một ví dụ mã có cục bộ không gian tốt và một ví dụ kém.</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao duyệt mảng C theo cột lại cho mẫu bước nhảy N?</p>
+      </li>
+      <li>
+        <p>“Mỗi tầng là cache cho tầng dưới” nghĩa là gì? Kể các mức L0–L6 theo thứ tự.</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao tầng càng xa CPU thì khối chuyển thường càng lớn?</p>
+      </li>
+      <li>
+        <p>Một cache (S, E, B, m) có kích thước bao nhiêu? Ba trường của địa chỉ là gì và mỗi trường dùng để làm gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao cache dùng bit giữa làm chỉ số tập thay vì bit cao?</p>
+      </li>
+      <li>
+        <p>Trượt xung đột là gì, vì sao hay gặp với mảng kích thước luỹ thừa 2, và liên kết tập hợp giúp thế nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: trên ngọn núi bộ nhớ, đỉnh L1 và đáy bộ nhớ chính chênh nhau khoảng bao nhiêu?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Vì sao có loại nhớ nhanh mà đắt, loại chậm mà rẻ? Kể hai loại.</p></li>
+      <li><p>“Dùng lại” và “dùng chỗ kế bên” là hai kiểu cục bộ nào?</p></li>
+      <li><p>Vì sao để dữ liệu hay dùng ở tầng nhanh thì chương trình chạy nhanh hơn?</p></li>
+      <li><p>Cache giống cái tủ nhiều ngăn như thế nào? Máy tìm đồ ra sao?</p></li>
+      <li><p>Vì sao đổi thứ tự duyệt mảng lại làm chương trình nhanh hay chậm hẳn?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>Why is SRAM used for caches and DRAM for main memory? State the trade-off from the book's table.</p></li>
+      <li><p>Distinguish temporal and spatial locality. Give one code example with good spatial locality and one with poor.</p></li>
+      <li><p>What does "each level caches the one below" mean? List levels L0–L6 in order.</p></li>
+      <li><p>What is the size of a cache (S, E, B, m)? What are the three address fields and what is each used for?</p></li>
+      <li><p>What is a conflict miss, why is it common with power-of-2 arrays, and how does associativity help?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Bộ nhớ <span class="closing-accent">không phải mảng byte phẳng</span> mà là một phân cấp nhanh–chậm chênh nhau nhiều bậc độ lớn; vì chương trình tốt có tính cục bộ, <span class="closing-accent">mỗi tầng làm cache cho tầng dưới</span>. Hiểu điều đó, bạn viết được mã chạy trên đỉnh ngọn núi bộ nhớ thay vì dưới thung lũng.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Bộ nhớ <span class="closing-accent">xếp thành tầng nhanh–chậm</span>, và <span class="closing-accent">tầng trên giữ sẵn thứ hay dùng từ tầng dưới</span>. Giúp dữ liệu nằm ở tầng nhanh và duyệt tuần tự thì chương trình bay. <b>Nhớ nhé: gọn và tuần tự là chạy trên đỉnh.</b></p>
+    <p class="en-only" lang="en">Memory is <span class="closing-accent">not a flat array of bytes</span> but a hierarchy whose speeds differ by orders of magnitude; because good programs have locality, <span class="closing-accent">each level caches the one below</span>. Grasp that, and you write code that runs on the peaks of the memory mountain rather than in its valleys.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-5-optimizing-program-performance.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 5 · Tối ưu hiệu năng chương trình</span>
+    <span class="nav-title en-only" lang="en">Chapter 5 · Optimizing Program Performance</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-7-linking.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 7 · Liên kết</span>
+    <span class="nav-title en-only" lang="en">Chapter 7 · Linking</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, tái bản lần thứ 3, Global Edition, Pearson, 2016 (ISBN 978-1-292-10176-7) — Chương 6, “The Memory Hierarchy”, trang 615–684.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, 3rd edition, Global Edition, Pearson, 2016 (ISBN 978-1-292-10176-7) — Chapter 6, “The Memory Hierarchy”, pp. 615–684.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the authors and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the authors' words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, 3rd ed. (Global Edition), Pearson, 2016, ch. 6 “The Memory Hierarchy”, pp. 615–684. — <a href="http://csapp.cs.cmu.edu/" target="_blank" rel="noopener noreferrer">csapp.cs.cmu.edu</a></li>
+      <li id="ref-2">Intel Corporation, “Intel® Solid-State Drive 730 Series Product Specification” (December 2014) — source of the SSD throughput, IOPS and latency figures in CS:APP Figure 6.14. <a href="https://www.intel.com/content/dam/www/public/us/en/documents/product-specifications/ssd-730-series-spec.pdf" target="_blank" rel="noopener noreferrer">intel.com — ssd-730-series-spec.pdf</a></li>
+      <li id="ref-3">“Haswell — Microarchitectures — Intel” (Core i7 cache hierarchy and memory-system parameters), WikiChip. <a href="https://en.wikichip.org/wiki/intel/microarchitectures/haswell_(client)" target="_blank" rel="noopener noreferrer">en.wikichip.org — Haswell (client)</a></li>
+      <li id="ref-4">Peter J. Denning, “The Locality Principle”, <i>Communications of the ACM</i>, 48(7):19–24, 2005. <a href="https://doi.org/10.1145/1070838.1070856" target="_blank" rel="noopener noreferrer">doi.org/10.1145/1070838.1070856</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-5-optimizing-program-performance.html">chapter 5</a>
+      <a href="chapter-7-linking.html">chapter 7</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('csapp-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('csapp-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('csapp-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

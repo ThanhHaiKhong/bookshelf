@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 3 · Biểu diễn chương trình ở mức máy — CS:APP</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 3 “Machine-Level Representation of Programs” trong Computer Systems: A Programmer’s Perspective (Bryant & O’Hallaron, 3rd ed., Pearson 2016): mã máy và ISA, 16 thanh ghi x86-64, các dạng toán hạng, mov/lea, mã điều kiện, ngăn xếp và thủ tục.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('csapp-reading-mode'),
+l=localStorage.getItem('csapp-lang'),
+t=localStorage.getItem('csapp-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"CS:APP / 03";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    Computer Systems: A Programmer’s Perspective
+    <span>Chương 3 · Machine-Level Representation of Programs</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 3 · Biểu diễn chương trình ở mức máy</span>
+      <span class="en-only" lang="en">Chapter 3 · Machine-Level Representation of Programs</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Dưới chương trình C của bạn là một dãy byte mà bộ xử lý đọc tuần tự</span>
+      <span class="easy-only">Máy tính không thấy mã C của bạn — nó chỉ thấy các con số</span>
+      <span class="en-only" lang="en">Beneath your C program lies a sequence of bytes the processor reads one by one</span>
+    </h1>
+
+    <p class="standard-copy">Bryant và O’Hallaron mở chương bằng một thực tế dễ bị quên: máy tính thực thi <b>mã máy</b> (<span lang="en">machine code</span>) — những dãy byte mã hoá các thao tác cấp thấp để xử lý dữ liệu, quản lý bộ nhớ, đọc/ghi thiết bị và giao tiếp mạng.<span class="cite"><a href="#ref-1">1</a></span> Trình biên dịch C như <code>gcc</code> biến mã nguồn thành <b>mã hợp ngữ</b> (<span lang="en">assembly code</span>), rồi <span lang="en">assembler</span> và <span lang="en">linker</span> dựng thành mã máy thực thi được.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Bạn viết chương trình bằng ngôn ngữ dễ đọc như C. Nhưng máy tính không đọc được chữ — nó chỉ chạy được các con số gọi là mã máy. Có một chương trình đặc biệt (trình biên dịch) dịch từ C sang các con số đó. Chương này dạy bạn đọc ngược lại: nhìn các con số và hiểu máy đang làm gì. <b>Nhớ nhé: dưới mỗi dòng C là một dãy byte, và ta học cách đọc dãy byte đó.</b></p>
+    <p class="en-only" lang="en">Bryant and O’Hallaron open the chapter with a fact that is easy to forget: a computer executes <b>machine code</b> — sequences of bytes encoding the low-level operations that manipulate data, manage memory, read and write devices, and communicate over networks.<span class="cite"><a href="#ref-1">1</a></span> A C compiler such as <code>gcc</code> turns source into <b>assembly code</b>, and then an <span lang="en">assembler</span> and <span lang="en">linker</span> build the executable machine code.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Vì sao một lập trình viên C phải học thứ này? Các tác giả trả lời: để đọc được mã do trình biên dịch sinh ra, bạn hiểu được khả năng tối ưu của nó và các điểm kém hiệu quả còn sót lại; nhiều cách tấn công hệ thống khai thác chính cách chương trình lưu trạng thái điều khiển lúc chạy, nên hiểu biểu diễn mức máy là điều kiện để phòng thủ.<span class="cite"><a href="#ref-1">1</a></span> Đọc mã máy là một dạng <i>kỹ thuật dịch ngược</i> (<span lang="en">reverse engineering</span>): hiểu một hệ thống bằng cách nghiên cứu nó và lần ngược lại.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> ở mức máy, chương trình chỉ còn là byte lệnh thao tác lên một <b>trạng thái bộ xử lý</b> gọn gàng — bộ đếm chương trình (<span lang="en">program counter</span>), 16 thanh ghi (<span lang="en">register</span>), các cờ điều kiện (<span lang="en">condition code</span>) — và một bộ nhớ phẳng đánh địa chỉ theo byte; nắm trạng thái đó cùng tập lệnh x86-64 là đủ để đọc hiểu mọi cấu trúc C sau khi biên dịch.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> máy tính chỉ cần nhớ vài thứ — đang chạy đến lệnh nào, 16 ô nhớ siêu nhanh (thanh ghi), vài lá cờ nhỏ, và một dải bộ nhớ lớn. Hiểu mấy thứ đó là đọc được mã máy. <b>Nhớ nhé: ít thứ thôi — con trỏ lệnh, 16 thanh ghi, mấy lá cờ, và bộ nhớ.</b></p>
+      <p class="en-only" lang="en"><b>The chapter’s thesis:</b> at the machine level a program is just instruction bytes acting on a compact <b>processor state</b> — a program counter, 16 registers, a few condition codes — and a flat, byte-addressable memory; grasp that state plus the x86-64 instruction set and you can read almost any compiled C construct.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: mã máy x86-64 tác động lên trạng thái bộ xử lý (con trỏ lệnh, 16 thanh ghi, cờ điều kiện) và bộ nhớ byte. Diagram: x86-64 machine code acts on the processor state (program counter, 16 registers, condition codes) and byte memory.">
+    <div class="core">
+      <b>x86-64 machine code</b>
+      <small class="standard-copy">Byte lệnh tác động lên trạng thái máy</small>
+      <small class="easy-only">Các con số điều khiển máy</small>
+      <small class="en-only" lang="en">Instruction bytes acting on machine state</small>
+    </div>
+
+    <div class="node">
+      <b>Processor state</b>
+      <small class="standard-copy">PC <code>%rip</code>, 16 thanh ghi, cờ điều kiện, thanh ghi vector</small>
+      <small class="easy-only">Đang ở lệnh nào, 16 ô nhớ nhanh, mấy lá cờ</small>
+      <small class="en-only" lang="en">PC <code>%rip</code>, 16 registers, condition codes, vector registers</small>
+    </div>
+
+    <div class="node">
+      <b>Memory</b>
+      <small class="standard-copy">Mảng byte đánh địa chỉ ảo; chứa mã, dữ liệu, ngăn xếp</small>
+      <small class="easy-only">Dải bộ nhớ lớn, đánh số từng ô</small>
+      <small class="en-only" lang="en">A virtual byte array: code, data, the run-time stack</small>
+    </div>
+
+    <div class="node">
+      <b>Toolchain</b>
+      <small class="standard-copy">C → asm → object → executable (<span lang="en">gcc, as, ld</span>)</small>
+      <small class="easy-only">Chuỗi dịch từ C ra các con số</small>
+      <small class="en-only" lang="en">C → asm → object → executable (<span lang="en">gcc, as, ld</span>)</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#tu-c-den-ma-may">
+    <span>01</span>
+    <b class="standard-copy">Từ C đến mã máy</b>
+    <b class="easy-only">Chữ biến thành số thế nào</b>
+    <b class="en-only" lang="en">From C to machine code</b>
+  </a>
+  <a href="#thanh-ghi-toan-hang">
+    <span>02</span>
+    <b class="standard-copy">Thanh ghi, toán hạng, di chuyển dữ liệu</b>
+    <b class="easy-only">16 ô nhớ nhanh và cách lấy dữ liệu</b>
+    <b class="en-only" lang="en">Registers, operands, moving data</b>
+  </a>
+  <a href="#dieu-khien-thu-tuc">
+    <span>03</span>
+    <b class="standard-copy">Điều khiển và thủ tục</b>
+    <b class="easy-only">Rẽ nhánh và gọi hàm</b>
+    <b class="en-only" lang="en">Control and procedures</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>04</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="tu-c-den-ma-may" aria-labelledby="tu-c-den-ma-may-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="tu-c-den-ma-may-title">
+      <span class="standard-copy">Mã máy, ISA, và chuỗi biên dịch</span>
+      <span class="easy-only">Chữ của bạn biến thành số như thế nào</span>
+      <span class="en-only" lang="en">Machine code, the ISA, and the compilation chain</span>
+    </h2>
+    <p class="standard-copy">Trình bày của sách dựa trên <b>x86-64</b>, ngôn ngữ máy của hầu hết máy tính xách tay, máy để bàn và máy chủ hiện nay.<span class="cite"><a href="#ref-1">1</a></span> Dòng lệnh này tiến hoá rất lâu, bắt đầu từ bộ xử lý 16-bit đầu tiên của Intel năm 1978, mở rộng lên 32-bit rồi 64-bit; kết quả là một thiết kế khá kỳ lạ, chỉ hợp lý khi nhìn dưới góc độ lịch sử.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    <p class="easy-only">Chương này dùng một loại máy phổ biến gọi là x86-64 — loại chip bên trong gần như mọi laptop, PC và máy chủ. Nó ra đời từ năm 1978 và cứ lớn dần, nên có nhiều chỗ hơi lạ do lịch sử để lại. <b>Nhớ nhé: x86-64 là “tiếng nói” của đa số máy tính bạn đang dùng.</b></p>
+    <p class="en-only" lang="en">The book’s presentation is based on <b>x86-64</b>, the machine language of most of today’s laptops, desktops and servers.<span class="cite"><a href="#ref-1">1</a></span> It evolved over a long history, starting with Intel’s first 16-bit processor in 1978, expanding to 32 bits and then 64 bits; the result is a rather peculiar design that makes sense only in historical perspective.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Kiến trúc tập lệnh</i> (<span lang="en">instruction set architecture</span>, ISA) định nghĩa trạng thái bộ xử lý, định dạng lệnh, và tác động của mỗi lệnh lên trạng thái. Hầu hết ISA, kể cả x86-64, mô tả chương trình <i>như thể</i> mỗi lệnh chạy xong rồi mới tới lệnh sau — dù phần cứng thật sự thực thi nhiều lệnh đồng thời.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> ISA là bản hợp đồng: nó liệt kê máy có những lệnh gì và mỗi lệnh làm gì. Nhờ hợp đồng này, trình biên dịch biết phải sinh ra các con số nào. <b>Nhớ nhé: ISA là bảng “thực đơn” các lệnh của máy.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> The <i>instruction set architecture</i> (ISA) defines the processor state, the instruction format, and the effect of each instruction on the state. Most ISAs, x86-64 included, describe a program <i>as if</i> each instruction finishes before the next begins — even though the hardware really executes many at once.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">p1.c ─(gcc)→ p1.s<br>&nbsp;&nbsp;p1.s ─(as)→ p1.o<br>&nbsp;&nbsp;&nbsp;&nbsp;p1.o ─(ld)→ p<br>C → asm → object → executable</p>
+      <p class="easy-only">mã C → mã hợp ngữ<br>&nbsp;&nbsp;→ tệp đối tượng<br>&nbsp;&nbsp;&nbsp;&nbsp;→ chương trình chạy được</p>
+      <p class="en-only" lang="en">p1.c ─(gcc)→ p1.s<br>&nbsp;&nbsp;p1.s ─(as)→ p1.o<br>&nbsp;&nbsp;&nbsp;&nbsp;p1.o ─(ld)→ p<br>C → asm → object → executable</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">machine code · bytes</span>
+      <h3>
+        <span class="standard-copy">Mã máy — chương trình chỉ là một dãy byte</span>
+        <span class="easy-only">Chương trình thật ra là một dãy số</span>
+        <span class="en-only" lang="en">Machine code — a program is just bytes</span>
+      </h3>
+      <p class="standard-copy">Bài học cốt lõi: chương trình mà máy chạy chỉ đơn giản là một dãy byte mã hoá chuỗi lệnh, và máy biết rất ít về mã nguồn đã sinh ra chúng.<span class="cite"><a href="#ref-1">1</a></span> Với hàm <code>multstore</code>, các tác giả cho thấy đoạn mã đối tượng dài đúng 14 byte, với biểu diễn thập lục phân <code>53&nbsp;48&nbsp;89&nbsp;d3&nbsp;e8&nbsp;…&nbsp;5b&nbsp;c3</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Chương trình chạy được, nếu nhìn vào bên trong, chỉ là một chuỗi số. Mỗi số (byte) là một mẩu của một mệnh lệnh. Máy không giữ lại tên biến hay dòng chữ bạn viết — chỉ còn các con số. <b>Nhớ nhé: máy chạy số, không chạy chữ.</b></p>
+      <p class="en-only" lang="en">The core lesson: the program the machine runs is simply a sequence of bytes encoding a series of instructions, and the machine knows very little about the source code that produced them.<span class="cite"><a href="#ref-1">1</a></span> For the <code>multstore</code> function the authors show the object code is exactly 14 bytes long, with the hexadecimal representation <code>53&nbsp;48&nbsp;89&nbsp;d3&nbsp;e8&nbsp;…&nbsp;5b&nbsp;c3</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lệnh x86-64 dài từ 1 đến 15 byte; cách mã hoá được thiết kế sao cho lệnh phổ biến và ít toán hạng chiếm ít byte hơn.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mỗi lệnh dài ngắn khác nhau, từ 1 đến 15 byte.</span>
+        <span class="en-only" lang="en">x86-64 instructions range from 1 to 15 bytes; the encoding is designed so common instructions with fewer operands take fewer bytes.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Giải mã là duy nhất</h4>
+          <p>Định dạng lệnh được thiết kế sao cho, từ một vị trí bắt đầu cho trước, có một cách giải mã byte thành lệnh duy nhất — ví dụ chỉ lệnh <code>pushq&nbsp;%rbx</code> mới bắt đầu bằng byte <code>53</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Bộ nhớ ảo, mảng byte</h4>
+          <p>Máy xem bộ nhớ như một mảng byte rất lớn; địa chỉ là <b>địa chỉ ảo</b>. Trên x86-64 hiện nay, địa chỉ 64-bit nhưng chỉ dùng 48 bit thấp, cho không gian tới 2<sup>48</sup> byte (64 terabyte).<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">processor state</span>
+      <h3>
+        <span class="standard-copy">Trạng thái bộ xử lý — thứ C giấu khỏi bạn</span>
+        <span class="easy-only">Những thứ máy phải nhớ khi chạy</span>
+        <span class="en-only" lang="en">Processor state — what C hides from you</span>
+      </h3>
+      <p class="standard-copy">Mã máy để lộ những phần trạng thái mà C thường che giấu: <b>bộ đếm chương trình</b> (PC, gọi là <code>%rip</code>) chỉ địa chỉ lệnh kế tiếp; <b>tệp thanh ghi</b> gồm 16 ô 64-bit; các <b>cờ điều kiện</b> ghi thông tin về phép tính gần nhất để phục vụ rẽ nhánh; và một tập <b>thanh ghi vector</b> chứa dữ liệu số nguyên hoặc dấu phẩy động.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Khi chạy, máy phải nhớ bốn thứ: đang ở lệnh nào, nội dung 16 ô nhớ nhanh, vài lá cờ ghi kết quả vừa tính, và mấy ô lớn để tính toán hàng loạt. Ngôn ngữ C giấu hết mấy thứ này đi cho bạn đỡ rối. <b>Nhớ nhé: máy chỉ cần nhớ vài thứ nhỏ gọn.</b></p>
+      <p class="en-only" lang="en">Machine code exposes parts of the state that C usually hides: the <b>program counter</b> (PC, called <code>%rip</code>) giving the address of the next instruction; the <b>register file</b> of 16 64-bit locations; the <b>condition codes</b> recording information about the most recent operation for branching; and a set of <b>vector registers</b> holding integer or floating-point data.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi bạn dừng chương trình trong trình gỡ lỗi và xem thanh ghi, con trỏ lệnh và cờ, bạn đang nhìn thẳng vào trạng thái bộ xử lý này.</span>
+        <span class="easy-only">Khi bạn mở trình gỡ lỗi và thấy các giá trị thanh ghi.</span>
+        <span class="en-only" lang="en">Every time you pause a program in a debugger and inspect the registers, PC and flags, you are looking straight at this processor state.</span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">gcc · as · ld</span>
+      <h3>
+        <span class="standard-copy">Chuỗi biên dịch — bốn chặng tới tệp chạy được</span>
+        <span class="easy-only">Bốn bước dịch từ C ra chương trình</span>
+        <span class="en-only" lang="en">The toolchain — four stages to an executable</span>
+      </h3>
+      <p class="standard-copy">Lệnh <code>gcc</code> gọi cả một chuỗi chương trình: <b>tiền xử lý</b> mở rộng <code>#include</code> và macro; <b>trình biên dịch</b> sinh tệp hợp ngữ <code>.s</code>; <b>assembler</b> dịch hợp ngữ thành mã đối tượng nhị phân <code>.o</code>; và <b>linker</b> ghép các tệp đối tượng cùng mã thư viện (như <code>printf</code>) thành tệp thực thi.<span class="cite"><a href="#ref-1">1</a></span> Sách dùng tuỳ chọn tối ưu <code>-Og</code> để mã sinh ra bám sát cấu trúc mã C gốc.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Từ mã C đến chương trình chạy được có bốn bước: dọn dẹp mã, dịch sang hợp ngữ, dịch hợp ngữ sang số, rồi dán các mảnh lại với nhau. Một lệnh <code>gcc</code> làm hết cả bốn. <b>Nhớ nhé: bốn chặng — dọn, dịch, đóng gói, dán.</b></p>
+      <p class="en-only" lang="en">The <code>gcc</code> command invokes a whole chain of programs: the <b>preprocessor</b> expands <code>#include</code> and macros; the <b>compiler</b> emits an assembly file <code>.s</code>; the <b>assembler</b> turns assembly into a binary object file <code>.o</code>; and the <b>linker</b> merges the object files with library code (such as <code>printf</code>) into an executable.<span class="cite"><a href="#ref-1">1</a></span> The book uses optimization level <code>-Og</code> so the generated code follows the structure of the original C.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Tuỳ chọn <code>-S</code> dừng ở hợp ngữ để bạn đọc; tệp <code>mstore.o</code> nặng 1.368 byte dù chỉ chứa 14 byte lệnh, còn <code>prog</code> đã liên kết lên tới 8.655 byte vì gồm cả mã khởi động.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Dùng <code>gcc -S</code> để xem bước hợp ngữ.</span>
+        <span class="en-only" lang="en">The <code>-S</code> option stops at assembly for you to read; the file <code>mstore.o</code> is 1,368 bytes even though its code is 14 bytes, and the linked <code>prog</code> grows to 8,655 bytes because it includes start-up code.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Giải mã ngược: objdump</h4>
+          <p>Để xem nội dung tệp mã máy, ta dùng <b>disassembler</b> như <code>objdump -d</code>; nó dựng lại dạng gần giống hợp ngữ hoàn toàn từ dãy byte, không cần mã nguồn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hai lối viết: ATT và Intel</h4>
+          <p>Sách dùng cú pháp <b>ATT</b> (mặc định của <code>gcc</code>): có hậu tố kích thước (<code>movq</code>), tên thanh ghi mang dấu <code>%</code>, và toán hạng nguồn đứng trước đích. Cú pháp <b>Intel</b> (tài liệu Intel, Microsoft) bỏ hậu tố và dấu <code>%</code>, và liệt kê toán hạng theo thứ tự ngược lại.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đã biết mã máy là byte tác động lên trạng thái bộ xử lý, câu hỏi tiếp theo rất tự nhiên: <b>trạng thái đó trông ra sao, và lệnh chỉ ra dữ liệu ở đâu bằng cách nào?</b> Phần sau mở tệp 16 thanh ghi và các dạng toán hạng của x86-64.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Ta đã biết máy chạy số và cần nhớ vài thứ. Giờ xem kỹ 16 ô nhớ nhanh đó, và cách một lệnh chỉ ra nó muốn lấy dữ liệu ở đâu. <b>Nhớ nhé: tiếp theo là 16 thanh ghi và cách gọi dữ liệu.</b></p>
+    <p class="en-only" lang="en">Now that machine code is bytes acting on processor state, the next question follows naturally: <b>what does that state look like, and how does an instruction say where its data is?</b> The next section opens x86-64’s 16-register file and its operand forms.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="thanh-ghi-toan-hang" aria-labelledby="thanh-ghi-toan-hang-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="thanh-ghi-toan-hang-title">
+      <span class="standard-copy">Dữ liệu, thanh ghi, toán hạng và di chuyển dữ liệu</span>
+      <span class="easy-only">16 ô nhớ nhanh và cách lấy, đặt dữ liệu</span>
+      <span class="en-only" lang="en">Data, registers, operands and data movement</span>
+    </h2>
+    <p class="standard-copy">CPU x86-64 có <b>16 thanh ghi đa dụng</b> 64-bit, tên đều bắt đầu bằng <code>%r</code>.<span class="cite"><a href="#ref-1">1</a></span> Bộ 8086 nguyên thuỷ chỉ có tám thanh ghi 16-bit (<code>%ax</code>…<code>%bp</code>); IA32 mở lên 32-bit (<code>%eax</code>…), rồi x86-64 mở tám thanh ghi cũ lên 64-bit (<code>%rax</code>…<code>%rbp</code>) và thêm tám thanh ghi mới <code>%r8</code>…<code>%r15</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    <p class="easy-only">Trong máy có 16 ô nhớ cực nhanh gọi là thanh ghi, nhanh hơn bộ nhớ thường rất nhiều. Máy thích để dữ liệu đang dùng trong các ô này. Tên chúng nghe lạ như <code>%rax</code>, <code>%rsp</code>… vì lý do lịch sử. <b>Nhớ nhé: 16 ô siêu nhanh, dữ liệu nóng để ở đây.</b></p>
+    <p class="en-only" lang="en">An x86-64 CPU has <b>16 general-purpose registers</b>, each 64 bits, with names all beginning with <code>%r</code>.<span class="cite"><a href="#ref-1">1</a></span> The original 8086 had only eight 16-bit registers (<code>%ax</code>…<code>%bp</code>); IA32 widened them to 32 bits (<code>%eax</code>…), and x86-64 widened the original eight to 64 bits (<code>%rax</code>…<code>%rbp</code>) and added eight new ones, <code>%r8</code>…<code>%r15</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    <p class="deep-only"><b>Về quy ước ghi bytes phần cao.</b> Các byte thấp của mỗi thanh ghi truy cập được riêng (1, 2, 4 hay 8 byte). Khi một lệnh sinh kết quả nhỏ hơn 8 byte, có hai quy ước: lệnh tạo 1 hoặc 2 byte <i>giữ nguyên</i> các byte còn lại, còn lệnh tạo 4 byte lại <i>đặt 4 byte cao về 0</i>.<span class="cite"><a href="#ref-1">1</a></span> Đây là nguồn của nhiều nhầm lẫn và được bàn kỹ ở Phần 3.4.2.</p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Một <i>toán hạng</i> (<span lang="en">operand</span>) chỉ ra nguồn hoặc đích của một thao tác, thuộc ba loại: <b>tức thời</b> (hằng, viết <code>$Imm</code>), <b>thanh ghi</b> (nội dung một thanh ghi), và <b>bộ nhớ</b> (giá trị tại một <i>địa chỉ hiệu dụng</i>, <span lang="en">effective address</span>).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Mỗi lệnh phải nói rõ lấy dữ liệu ở đâu: một con số viết thẳng, một ô thanh ghi, hay một ô trong bộ nhớ. Chỉ ba chỗ đó thôi. <b>Nhớ nhé: dữ liệu đến từ ba nơi — số thẳng, thanh ghi, bộ nhớ.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> An <i>operand</i> names the source or destination of an operation, in three types: <b>immediate</b> (a constant, written <code>$Imm</code>), <b>register</b> (the contents of a register), and <b>memory</b> (the value at an <i>effective address</i>).<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">eff. addr = Imm + R[r<sub>b</sub>] + R[r<sub>i</sub>]·s<br>&nbsp;&nbsp;s ∈ {1, 2, 4, 8}<br>sizes: b=1 w=2 l=4 q=8 byte</p>
+      <p class="easy-only">địa chỉ = nền + chỉ số × cỡ + lệch<br>cỡ: b=1 w=2 l=4 q=8 byte</p>
+      <p class="en-only" lang="en">eff. addr = Imm + R[r<sub>b</sub>] + R[r<sub>i</sub>]·s<br>&nbsp;&nbsp;s ∈ {1, 2, 4, 8}<br>sizes: b=1 w=2 l=4 q=8 bytes</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">data formats · b/w/l/q</span>
+      <h3>
+        <span class="standard-copy">Định dạng dữ liệu — và vì sao “word” chỉ 16 bit</span>
+        <span class="easy-only">Mỗi kiểu dữ liệu chiếm mấy byte</span>
+        <span class="en-only" lang="en">Data formats — and why a “word” is 16 bits</span>
+      </h3>
+      <p class="standard-copy">Vì nguồn gốc 16-bit, Intel gọi 16-bit là “word”; do đó 32-bit là “double word” và 64-bit là “quad word”.<span class="cite"><a href="#ref-1">1</a></span> Bảng kích thước: <code>char</code> 1 byte (hậu tố <code>b</code>), <code>short</code> 2 byte (<code>w</code>), <code>int</code> 4 byte (<code>l</code>), <code>long</code> và con trỏ 8 byte (<code>q</code>), <code>float</code> 4 byte (<code>s</code>), <code>double</code> 8 byte (<code>l</code>).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mỗi kiểu dữ liệu chiếm một số byte nhất định: một ký tự 1 byte, số nguyên thường 4 byte, số nguyên lớn và con trỏ 8 byte. Chữ “word” ở đây nghĩa là 16 bit — nhỏ hơn bạn tưởng, vì lý do lịch sử. <b>Nhớ nhé: “word” của Intel chỉ 16 bit thôi.</b></p>
+      <p class="en-only" lang="en">Because of its 16-bit origins, Intel calls 16 bits a “word”; so 32 bits is a “double word” and 64 bits a “quad word.”<span class="cite"><a href="#ref-1">1</a></span> The sizes: <code>char</code> 1 byte (suffix <code>b</code>), <code>short</code> 2 bytes (<code>w</code>), <code>int</code> 4 bytes (<code>l</code>), <code>long</code> and pointers 8 bytes (<code>q</code>), <code>float</code> 4 bytes (<code>s</code>), <code>double</code> 8 bytes (<code>l</code>).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Hậu tố ở cuối tên lệnh (<code>movb/movw/movl/movq</code>) chính là kích thước toán hạng; đọc hậu tố là biết lệnh thao tác trên mấy byte.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Chữ cái cuối tên lệnh cho biết nó xử lý mấy byte.</span>
+        <span class="en-only" lang="en">The suffix on an instruction name (<code>movb/movw/movl/movq</code>) is exactly the operand size; read the suffix to know how many bytes it touches.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">register file · %rsp</span>
+      <h3>
+        <span class="standard-copy">16 thanh ghi — và một chiếc đặc biệt</span>
+        <span class="easy-only">16 ô nhớ nhanh, một ô có vai riêng</span>
+        <span class="en-only" lang="en">The 16 registers — and one special one</span>
+      </h3>
+      <p class="standard-copy">Các thao tác có thể tác động lên byte thấp của 16 thanh ghi ở nhiều kích thước: 1 byte dùng phần thấp nhất, 2 byte, 4 byte, hay cả 8 byte.<span class="cite"><a href="#ref-1">1</a></span> Đa phần thanh ghi dùng khá linh hoạt, nhưng <b><code>%rsp</code> là con trỏ ngăn xếp</b> (<span lang="en">stack pointer</span>), chỉ vị trí cuối của ngăn xếp (<span lang="en">stack</span>) lúc chạy và không nên dùng vào việc khác.<span class="cite"><a href="#ref-1">1</a></span> Phần còn lại tuân theo các <b>quy ước lập trình chuẩn</b> về việc truyền tham số và lưu giá trị tạm.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only">16 ô này dùng để giữ dữ liệu đang tính. Mỗi ô có thể dùng nguyên hoặc chỉ dùng phần thấp. Có một ô đặc biệt tên <code>%rsp</code> luôn làm nhiệm vụ riêng: nó đánh dấu đỉnh của “chồng giấy” mà máy dùng khi gọi hàm. <b>Nhớ nhé: <code>%rsp</code> là ô dành riêng, đừng đụng vào.</b></p>
+      <p class="en-only" lang="en">Operations can act on the low-order bytes of the 16 registers at several sizes: 1 byte uses the lowest portion, then 2, 4, or the full 8 bytes.<span class="cite"><a href="#ref-1">1</a></span> Most registers are fairly flexible, but <b><code>%rsp</code> is the stack pointer</b>, marking the end position of the run-time stack and should not be used otherwise.<span class="cite"><a href="#ref-1">1</a></span> The rest follow <b>standard programming conventions</b> for passing arguments and holding temporaries.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Ví dụ hàm <code>exchange</code>: tham số <code>xp</code> nằm ở <code>%rdi</code>, <code>y</code> ở <code>%rsi</code>, và giá trị trả về đặt ở <code>%rax</code> — minh hoạ vai trò quy ước của từng thanh ghi.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi gọi hàm, dữ liệu vào ra đều đi qua các ô này.</span>
+        <span class="en-only" lang="en">In the <code>exchange</code> function, parameter <code>xp</code> is in <code>%rdi</code>, <code>y</code> in <code>%rsi</code>, and the return value goes in <code>%rax</code> — illustrating each register’s conventional role.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Byte thấp có tên riêng</h4>
+          <p>Mỗi thanh ghi có tên cho phần 4 byte, 2 byte và 1 byte: ví dụ <code>%rax</code> → <code>%eax</code> → <code>%ax</code> → <code>%al</code>; tám thanh ghi mới dùng hậu tố <code>d/w/b</code>, như <code>%r8d</code>, <code>%r8w</code>, <code>%r8b</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Quy ước gọi hàm</h4>
+          <p>Sáu tham số nguyên đầu tiên đi theo thứ tự <code>%rdi</code>, <code>%rsi</code>, <code>%rdx</code>, <code>%rcx</code>, <code>%r8</code>, <code>%r9</code>; một số thanh ghi do hàm gọi giữ (<span lang="en">callee-saved</span>), số khác do hàm gọi-đi giữ (<span lang="en">caller-saved</span>). Chi tiết thuộc ABI System V.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">operand forms · effective address</span>
+      <h3>
+        <span class="standard-copy">Toán hạng bộ nhớ — một công thức địa chỉ</span>
+        <span class="easy-only">Cách chỉ ra một ô trong bộ nhớ</span>
+        <span class="en-only" lang="en">Memory operands — one address formula</span>
+      </h3>
+      <p class="standard-copy">Dạng toán hạng bộ nhớ tổng quát nhất là <code>Imm(r<sub>b</sub>,r<sub>i</sub>,s)</code>, với địa chỉ hiệu dụng tính bằng <code>Imm + R[r<sub>b</sub>] + R[r<sub>i</sub>]·s</code>: một độ lệch hằng, một thanh ghi nền, một thanh ghi chỉ số, và hệ số tỉ lệ <code>s</code> phải là 1, 2, 4 hoặc 8.<span class="cite"><a href="#ref-1">1</a></span> Các dạng khác chỉ là trường hợp đặc biệt khi bỏ bớt thành phần.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Muốn chỉ một ô trong bộ nhớ, máy dùng một công thức nhỏ: lấy một địa chỉ gốc, cộng thêm một bước nhảy nhân với cỡ phần tử, cộng một độ lệch. Công thức này rất hợp để duyệt mảng. <b>Nhớ nhé: địa chỉ = gốc + bước × cỡ + lệch.</b></p>
+      <p class="en-only" lang="en">The most general memory operand is <code>Imm(r<sub>b</sub>,r<sub>i</sub>,s)</code>, with effective address <code>Imm + R[r<sub>b</sub>] + R[r<sub>i</sub>]·s</code>: a constant displacement, a base register, an index register, and a scale factor <code>s</code> that must be 1, 2, 4, or 8.<span class="cite"><a href="#ref-1">1</a></span> The other forms are just special cases with components omitted.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Dạng tổng quát này xuất hiện liên tục khi truy cập phần tử mảng và trường cấu trúc — chủ đề của Phần 3.8 và 3.9.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Hay gặp nhất khi chương trình chạy qua từng phần tử mảng.</span>
+        <span class="en-only" lang="en">This general form shows up constantly when accessing array elements and struct fields — the subject of Sections 3.8 and 3.9.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">mov · lea</span>
+      <h3>
+        <span class="standard-copy">mov và lea — chép dữ liệu, và tính địa chỉ</span>
+        <span class="easy-only">Hai lệnh hay dùng nhất</span>
+        <span class="en-only" lang="en">mov and lea — copy data, and compute addresses</span>
+      </h3>
+      <p class="standard-copy">Lớp lệnh <code>MOV</code> (gồm <code>movb/movw/movl/movq</code>) chép dữ liệu từ nguồn sang đích mà không biến đổi; x86-64 cấm cả hai toán hạng cùng là bộ nhớ, nên chép bộ-nhớ-sang-bộ-nhớ cần hai lệnh.<span class="cite"><a href="#ref-1">1</a></span> Riêng <code>movl</code> có đích là thanh ghi sẽ đặt 4 byte cao về 0.<span class="cite"><a href="#ref-1">1</a></span> Lệnh <code>leaq</code> thì “đọc địa chỉ” chứ không đọc bộ nhớ: nó đặt vào đích chính <i>địa chỉ hiệu dụng</i> của toán hạng nguồn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Lệnh <code>mov</code> chỉ chép một giá trị từ chỗ này sang chỗ khác, không đổi gì. Lệnh <code>lea</code> lạ hơn: nó không lấy giá trị, mà tính ra một địa chỉ — và vì công thức địa chỉ có cộng và nhân, nên dân lập trình lợi dụng nó để làm toán nhanh. <b>Nhớ nhé: <code>mov</code> chép giá trị, <code>lea</code> tính địa chỉ.</b></p>
+      <p class="en-only" lang="en">The <code>MOV</code> class (<code>movb/movw/movl/movq</code>) copies data from source to destination without transformation; x86-64 forbids both operands being memory, so memory-to-memory copying takes two instructions.<span class="cite"><a href="#ref-1">1</a></span> Note that <code>movl</code> with a register destination sets the upper 4 bytes to 0.<span class="cite"><a href="#ref-1">1</a></span> The <code>leaq</code> instruction “reads an address” rather than memory: it places the <i>effective address</i> of its source operand into the destination.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+      <div class="loop-diagram" role="img" aria-label="leaq 7 ngoặc %rdx phẩy %rdx phẩy 4 đóng ngoặc, %rax đặt %rax bằng 5 nhân x cộng 7 khi %rdx bằng x. leaq 7(%rdx,%rdx,4), %rax sets %rax to 5x + 7 when %rdx holds x.">
+        <span>%rdx = x</span><em>→ leaq 7(%rdx,%rdx,4), %rax</em><span>%rax = 5x + 7</span>
+      </div>
+
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trình biên dịch dùng <code>leaq</code> để gộp cộng và nhân với hằng nhỏ: hàm <code>scale</code> tính <code>x + 4*y + 12*z</code> được dịch thành một chuỗi ba lệnh <code>leaq</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi thấy phép nhân với 2, 4, 8 biến mất khỏi mã máy.</span>
+        <span class="en-only" lang="en">The compiler uses <code>leaq</code> to fold addition and small-constant multiplication: the <code>scale</code> function computing <code>x + 4*y + 12*z</code> compiles into a sequence of three <code>leaq</code> instructions.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Mở rộng dấu và mở rộng 0</h4>
+          <p>Khi chép từ nguồn nhỏ sang đích lớn, lớp <code>MOVZ</code> điền byte còn lại bằng 0, còn lớp <code>MOVS</code> điền bằng bản sao của bit cao nhất (mở rộng dấu).<span class="cite"><a href="#ref-1">1</a></span> Lệnh <code>cltq</code> là dạng gọn của <code>movslq %eax, %rax</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>leaq không đặt cờ</h4>
+          <p>Vì sinh ra để tính địa chỉ, <code>leaq</code> không làm thay đổi cờ điều kiện; trong khi hầu hết lệnh số học trong Hình 3.10 thì có.<span class="cite"><a href="#ref-1">1</a></span> Đây là lý do nó được tái dùng cho số học mà không “làm bẩn” trạng thái so sánh.</p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Có thanh ghi, toán hạng và cách chép dữ liệu rồi, chương trình vẫn chỉ chạy thẳng một mạch. Để hiện thực <code>if</code>, <code>while</code> hay lời gọi hàm, máy cần <b>rẽ nhánh theo dữ liệu</b> và một <b>ngăn xếp</b> — nội dung của phần kế tiếp.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Tới giờ máy mới chỉ chạy một mạch từ trên xuống. Muốn có “nếu… thì…”, vòng lặp, và gọi hàm, máy cần biết cách rẽ nhánh và cần một chỗ ghi nhớ khi gọi hàm. <b>Nhớ nhé: tiếp theo là rẽ nhánh và gọi hàm.</b></p>
+    <p class="en-only" lang="en">With registers, operands and data movement in hand, a program still only runs straight through. To implement <code>if</code>, <code>while</code> or a function call, the machine needs <b>data-dependent branching</b> and a <b>stack</b> — the subject of the next section.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="dieu-khien-thu-tuc" aria-labelledby="dieu-khien-thu-tuc-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="dieu-khien-thu-tuc-title">
+      <span class="standard-copy">Điều khiển và thủ tục: cờ, rẽ nhánh, ngăn xếp, call/ret</span>
+      <span class="easy-only">Rẽ nhánh và gọi hàm hoạt động ra sao</span>
+      <span class="en-only" lang="en">Control and procedures: flags, branches, the stack, call/ret</span>
+    </h2>
+    <p class="standard-copy">Mã máy có hai cơ chế cấp thấp để hiện thực hành vi có điều kiện: nó <b>kiểm tra giá trị dữ liệu</b> rồi <b>đổi luồng điều khiển hoặc luồng dữ liệu</b> theo kết quả.<span class="cite"><a href="#ref-1">1</a></span> Thứ tự thực thi được đổi bằng lệnh <b>nhảy</b> (<span lang="en">jump</span>), có thể phụ thuộc kết quả một phép kiểm tra.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Muốn máy biết “nếu a lớn hơn b thì làm việc này”, nó làm hai bước: so sánh hai số, ghi kết quả vào mấy lá cờ nhỏ; rồi nhìn cờ mà quyết định nhảy đi đâu. <b>Nhớ nhé: so sánh trước, nhìn cờ rồi nhảy.</b></p>
+    <p class="en-only" lang="en">Machine code has two low-level mechanisms for conditional behaviour: it <b>tests data values</b> and then <b>alters the control flow or the data flow</b> based on the result.<span class="cite"><a href="#ref-1">1</a></span> Execution order is changed with a <b>jump</b> instruction, possibly contingent on the result of a test.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Ngoài thanh ghi số nguyên, CPU giữ các <i>cờ điều kiện</i> một-bit mô tả phép tính gần nhất: <b>CF</b> (nhớ ra ngoài, dùng cho tràn không dấu), <b>ZF</b> (kết quả bằng 0), <b>SF</b> (kết quả âm), <b>OF</b> (tràn số bù hai).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Sau mỗi phép tính, máy bật tắt bốn lá cờ nhỏ: kết quả có bằng 0 không, có âm không, có bị tràn không. Đó là trí nhớ ngắn hạn để quyết định rẽ nhánh. <b>Nhớ nhé: bốn lá cờ ghi lại “phép vừa rồi ra sao”.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Besides the integer registers, the CPU keeps single-bit <i>condition codes</i> describing the most recent operation: <b>CF</b> (carry out, used for unsigned overflow), <b>ZF</b> (result was zero), <b>SF</b> (result was negative), <b>OF</b> (two’s-complement overflow).<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">cmpq S1,S2 → đặt cờ theo S2−S1<br>testq S1,S2 → đặt cờ theo S1&amp;S2<br>jX / setX / cmovX → đọc cờ</p>
+      <p class="easy-only">so sánh → bật cờ<br>kiểm tra → bật cờ<br>nhảy / đặt / chép → đọc cờ</p>
+      <p class="en-only" lang="en">cmpq S1,S2 → set flags from S2−S1<br>testq S1,S2 → set flags from S1&amp;S2<br>jX / setX / cmovX → read flags</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">cmp · test · condition codes</span>
+      <h3>
+        <span class="standard-copy">So sánh mà không lưu kết quả</span>
+        <span class="easy-only">So sánh chỉ để bật cờ</span>
+        <span class="en-only" lang="en">Comparing without storing a result</span>
+      </h3>
+      <p class="standard-copy">Phần lớn lệnh số học/logic đặt cờ như một tác dụng phụ, nhưng hai lớp lệnh <b><code>CMP</code></b> và <b><code>TEST</code></b> sinh ra chỉ để đặt cờ: <code>CMP</code> đặt cờ theo hiệu <code>S2 − S1</code> như <code>SUB</code> nhưng không ghi đích; <code>TEST</code> đặt cờ theo <code>S1 &amp; S2</code> như <code>AND</code> nhưng không ghi đích.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Có những lệnh chỉ để so sánh, không lưu kết quả đi đâu cả — chúng chỉ bật mấy lá cờ. Ví dụ <code>cmp</code> ngầm làm phép trừ để xem ai lớn hơn, nhưng vứt kết quả trừ đi, chỉ giữ lại cờ. <b>Nhớ nhé: so sánh xong là quên kết quả, chỉ nhớ cờ.</b></p>
+      <p class="en-only" lang="en">Most arithmetic/logical instructions set the flags as a side effect, but the <b><code>CMP</code></b> and <b><code>TEST</code></b> classes exist only to set them: <code>CMP</code> sets flags by the difference <code>S2 − S1</code> like <code>SUB</code> but writes no destination; <code>TEST</code> sets flags by <code>S1 &amp; S2</code> like <code>AND</code> but writes no destination.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mẫu <code>testq %rax,%rax</code> rất hay gặp: lặp lại cùng một toán hạng để xem <code>%rax</code> âm, bằng 0 hay dương.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Hay thấy một thanh ghi được so với chính nó để xem có bằng 0 không.</span>
+        <span class="en-only" lang="en">The pattern <code>testq %rax,%rax</code> is common: repeating the same operand to see whether <code>%rax</code> is negative, zero, or positive.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">set · jump</span>
+      <h3>
+        <span class="standard-copy">Ba cách dùng cờ: đặt byte, nhảy, chép có điều kiện</span>
+        <span class="easy-only">Đọc cờ để làm ba việc</span>
+        <span class="en-only" lang="en">Three uses of the flags: set, jump, conditional move</span>
+      </h3>
+      <p class="standard-copy">Ta hiếm khi đọc cờ trực tiếp. Có ba cách dùng: (1) lệnh <b><code>SET</code></b> đặt một byte về 0 hoặc 1 theo tổ hợp cờ; (2) <b>nhảy có điều kiện</b> sang nơi khác; (3) <b>chuyển dữ liệu có điều kiện</b>.<span class="cite"><a href="#ref-1">1</a></span> Hậu tố của <code>SET</code>/nhảy chỉ <i>điều kiện</i> chứ không chỉ kích thước: <code>setl</code> là “set less”, không phải “set long”.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Sau khi cờ đã bật, máy có ba cách dùng: ghi 0 hoặc 1 để trả lời “đúng/sai”, nhảy sang chỗ khác, hoặc chọn một trong hai giá trị. Đây chính là cách “nếu… thì…” thành hình trong mã máy. <b>Nhớ nhé: cờ bật rồi thì đặt, nhảy, hoặc chọn.</b></p>
+      <p class="en-only" lang="en">We rarely read the flags directly. There are three uses: (1) a <b><code>SET</code></b> instruction sets a byte to 0 or 1 by a combination of flags; (2) a <b>conditional jump</b> to elsewhere; (3) a <b>conditional data transfer</b>.<span class="cite"><a href="#ref-1">1</a></span> The suffix on <code>SET</code>/jump names the <i>condition</i>, not a size: <code>setl</code> means “set less,” not “set long.”<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Để tính <code>a &lt; b</code> với <code>long</code>, trình biên dịch sinh <code>cmpq</code>, rồi <code>setl</code> đặt byte thấp, rồi <code>movzbl</code> xoá các byte cao để được 0/1 sạch.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mỗi phép so sánh trả về true/false trong C.</span>
+        <span class="en-only" lang="en">To compute <code>a &lt; b</code> for <code>long</code>, the compiler emits <code>cmpq</code>, then <code>setl</code> for the low byte, then <code>movzbl</code> to clear the upper bytes to a clean 0/1.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Có dấu và không dấu khác nhau</h4>
+          <p>Hậu tố điều kiện phân biệt số có dấu và không dấu: <code>setl</code>/<code>jl</code> (“less”, có dấu) đọc tổ hợp <code>SF ^ OF</code>, còn <code>setb</code>/<code>jb</code> (“below”, không dấu) đọc <code>CF</code>.<span class="cite"><a href="#ref-1">1</a></span> Cùng một phép <code>cmp</code>, chọn nhánh theo kiểu dữ liệu.</p>
+        </div>
+        <div class="info-block">
+          <h4>Tên đồng nghĩa</h4>
+          <p>Một số lệnh máy có nhiều tên: <code>setg</code> (“set greater”) và <code>setnle</code> (“set not less or equal”) là cùng một lệnh; trình biên dịch và disassembler chọn tên tuỳ ý.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">stack · push · pop</span>
+      <h3>
+        <span class="standard-copy">Ngăn xếp — mọc xuống địa chỉ thấp</span>
+        <span class="easy-only">Chồng giấy dùng khi gọi hàm</span>
+        <span class="en-only" lang="en">The stack — it grows toward lower addresses</span>
+      </h3>
+      <p class="standard-copy">Cơ chế gọi thủ tục dựa trên một <b>ngăn xếp</b> vào-sau-ra-trước. Trên x86-64, ngăn xếp <b>mọc về phía địa chỉ thấp</b>, và <code>%rsp</code> trỏ phần tử đỉnh (có địa chỉ nhỏ nhất).<span class="cite"><a href="#ref-1">1</a></span> Đẩy một quad word bằng <code>pushq</code> là giảm <code>%rsp</code> đi 8 rồi ghi giá trị vào đỉnh mới; lấy ra bằng <code>popq</code> thì đọc từ đỉnh rồi tăng <code>%rsp</code> thêm 8.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Khi gọi hàm, máy dùng một “chồng giấy”: đặt tờ mới lên trên, lấy đi thì lấy tờ trên cùng. Điều lạ: chồng giấy này mọc <i>xuống dưới</i> theo số địa chỉ, nên sách vẽ nó lộn ngược. Đẩy vào thì số địa chỉ giảm. <b>Nhớ nhé: ngăn xếp mọc xuống, đỉnh có số nhỏ nhất.</b></p>
+      <p class="en-only" lang="en">The procedure-calling mechanism rests on a last-in, first-out <b>stack</b>. On x86-64 the stack <b>grows toward lower addresses</b>, and <code>%rsp</code> points to the top element (the lowest address).<span class="cite"><a href="#ref-1">1</a></span> Pushing a quad word with <code>pushq</code> decrements <code>%rsp</code> by 8 and writes the value at the new top; <code>popq</code> reads from the top and increments <code>%rsp</code> by 8.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy"><code>pushq %rbp</code> tương đương cặp <code>subq $8,%rsp</code> rồi <code>movq %rbp,(%rsp)</code>, nhưng được mã hoá gọn thành một byte.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mỗi lần một hàm cần chỗ tạm để nhớ việc.</span>
+        <span class="en-only" lang="en"><code>pushq %rbp</code> is equivalent to <code>subq $8,%rsp</code> then <code>movq %rbp,(%rsp)</code>, but encoded compactly as a single byte.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">call · ret · stack frame</span>
+      <h3>
+        <span class="standard-copy">call và ret — lưu rồi khôi phục con trỏ lệnh</span>
+        <span class="easy-only">Gọi hàm rồi quay về đúng chỗ</span>
+        <span class="en-only" lang="en">call and ret — save then restore the PC</span>
+      </h3>
+      <p class="standard-copy">Truyền điều khiển từ hàm P sang hàm Q nghĩa là đặt PC về đầu Q; để Q biết quay về đâu, lệnh <code>call Q</code> <b>đẩy địa chỉ trở về</b> (địa chỉ lệnh ngay sau <code>call</code>) lên ngăn xếp rồi nhảy vào Q.<span class="cite"><a href="#ref-1">1</a></span> Lệnh <code>ret</code> lấy địa chỉ đó ra khỏi ngăn xếp và đặt PC về đó.<span class="cite"><a href="#ref-1">1</a></span> Vùng ngăn xếp của một lời gọi gọi là <b>khung ngăn xếp</b> (<span lang="en">stack frame</span>).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Khi gọi hàm, máy phải nhớ “gọi xong thì quay về dòng nào”. Lệnh <code>call</code> ghi địa chỉ quay về lên chồng giấy rồi nhảy đi; làm xong, <code>ret</code> đọc lại địa chỉ đó và quay về đúng chỗ. <b>Nhớ nhé: <code>call</code> ghi chỗ quay về, <code>ret</code> quay về đó.</b></p>
+      <p class="en-only" lang="en">Passing control from P to Q means setting the PC to the start of Q; so Q knows where to return, <code>call Q</code> <b>pushes the return address</b> (the instruction right after <code>call</code>) onto the stack and jumps into Q.<span class="cite"><a href="#ref-1">1</a></span> The <code>ret</code> instruction pops that address and sets the PC to it.<span class="cite"><a href="#ref-1">1</a></span> A call’s region of the stack is its <b>stack frame</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong ví dụ của sách, lệnh <code>call</code> ở địa chỉ <code>0x400563</code> gọi <code>multstore</code>; nó đẩy địa chỉ trở về <code>0x400568</code> lên ngăn xếp, và <code>ret</code> sau đó lấy chính giá trị ấy ra.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mỗi lần một hàm trong chương trình gọi một hàm khác.</span>
+        <span class="en-only" lang="en">In the book’s example, the <code>call</code> at address <code>0x400563</code> calls <code>multstore</code>; it pushes return address <code>0x400568</code>, and the matching <code>ret</code> later pops that very value.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hàm lá không cần khung</h4>
+          <p>Vì tốc độ và tiết kiệm, mỗi hàm chỉ cấp phần khung nó cần. Hàm giữ được mọi biến cục bộ trong thanh ghi và không gọi hàm khác — gọi là <b>hàm lá</b> (<span lang="en">leaf procedure</span>) — thậm chí không cần khung ngăn xếp.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tham số thứ bảy trở đi</h4>
+          <p>Một hàm truyền được tối đa sáu tham số nguyên qua thanh ghi; nếu cần nhiều hơn, các tham số còn lại được hàm gọi-đi đặt trong khung ngăn xếp của nó trước khi gọi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Cờ, nhảy, ngăn xếp và <code>call</code>/<code>ret</code> là đủ để dựng mọi cấu trúc điều khiển và mọi lời gọi hàm của C. Nhưng chính sự gọn nhẹ ấy — không kiểu, không tên biến, ngăn xếp lộn ngược — là mảnh đất màu mỡ cho vài ngộ nhận.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Với rẽ nhánh và gọi hàm, máy đã làm được mọi thứ C yêu cầu. Nhưng vì mọi thứ quá trần trụi, người mới học hay hiểu nhầm vài chỗ. Xem ngay. <b>Nhớ nhé: gọn thì mạnh, nhưng cũng dễ nhầm.</b></p>
+    <p class="en-only" lang="en">Flags, jumps, the stack and <code>call</code>/<code>ret</code> suffice to build every C control construct and every function call. But that very leanness — no types, no variable names, an upside-down stack — is fertile ground for a few misconceptions.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 · MISCONCEPTIONS ===================== -->
+<section class="section" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Đính chính</span>
+      <span class="en-only" lang="en">Corrections</span>
+    </p>
+    <h2 id="ngo-nhan-title">
+      <span class="standard-copy">Ba ngộ nhận mà người đọc lần đầu hay mắc</span>
+      <span class="easy-only">Ba chỗ hay hiểu nhầm</span>
+      <span class="en-only" lang="en">Three misconceptions first readers hit</span>
+    </h2>
+    <p class="standard-copy">Phần này thuộc mức đọc <b>Đầy đủ</b>: nó đối chiếu điều người đọc thường nghĩ với điều bản văn thật sự nói.</p>
+    <p class="easy-only">Phần này hơi khó, bạn có thể bỏ qua và quay lại sau. <b>Nhớ nhé: hiểu chậm mà chắc vẫn hơn.</b></p>
+    <p class="en-only" lang="en">This block belongs to the <b>Đầy đủ</b> (full) reading level: it sets what readers usually assume against what the text actually says.</p>
+  </div>
+
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Mã máy vẫn giữ kiểu và tên biến của tôi”</span>
+          <span class="en-only" lang="en">"Machine code still keeps my types and variable names"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> sau khi biên dịch, máy vẫn biết đâu là số có dấu, đâu là con trỏ, biến tên gì.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> mã máy xem bộ nhớ như một mảng byte và không phân biệt số nguyên có dấu/không dấu, các loại con trỏ, hay thậm chí con trỏ với số nguyên; mọi tên biến và kiểu dữ liệu đã bị bóc đi.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> after compilation the machine still knows which values are signed, which are pointers, and what the variables were called.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> machine code views memory as a byte array and makes no distinction between signed and unsigned integers, between kinds of pointers, or even between pointers and integers; all variable names and data types have been stripped away.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“mov luôn đặt đúng số byte vào đích”</span>
+          <span class="en-only" lang="en">"mov always touches exactly the bytes you’d expect"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> mọi lệnh <code>mov</code> chỉ chạm đúng phần đích được nêu, phần còn lại luôn nguyên vẹn.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> có hai quy ước khác nhau. Lệnh tạo 1 hoặc 2 byte giữ nguyên các byte cao; nhưng <code>movl</code> với đích thanh ghi lại đặt 4 byte cao về 0 — một ngoại lệ của x86-64.<span class="cite"><a href="#ref-1">1</a></span> Vì vậy không có lệnh <code>movzlq</code>: chỉ cần <code>movl</code> là đủ để mở rộng 0 lên 8 byte.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> every <code>mov</code> touches only the stated destination, leaving everything else intact.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> there are two different conventions. An instruction generating 1 or 2 bytes leaves the upper bytes unchanged; but <code>movl</code> with a register destination sets the upper 4 bytes to 0 — an x86-64 exception.<span class="cite"><a href="#ref-1">1</a></span> This is why there is no <code>movzlq</code>: a plain <code>movl</code> already zero-extends to 8 bytes.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Ngăn xếp mọc lên, đỉnh ở địa chỉ cao”</span>
+          <span class="en-only" lang="en">"The stack grows upward, with its top at a high address"</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> đẩy thêm dữ liệu vào ngăn xếp thì địa chỉ đỉnh tăng lên.</p>
+        <p class="standard-copy"><span class="truth">Bản văn nói:</span> trên x86-64 ngăn xếp mọc về phía địa chỉ <i>thấp</i>; đỉnh ngăn xếp có địa chỉ nhỏ nhất, nên sách vẽ ngăn xếp lộn ngược với “đỉnh” ở dưới. Đẩy vào là <i>giảm</i> <code>%rsp</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Misconception:</span> pushing more data onto the stack raises the top address.</p>
+        <p class="en-only" lang="en"><span class="truth">The text says:</span> on x86-64 the stack grows toward <i>lower</i> addresses; the top of the stack has the lowest address, which is why the book draws the stack upside down with the “top” at the bottom. A push <i>decrements</i> <code>%rsp</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="tu-kiem-tra" aria-labelledby="tu-kiem-tra-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm tra</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="tu-kiem-tra-title">
+      <span class="standard-copy">Bạn đã đọc được mức máy chưa?</span>
+      <span class="easy-only">Thử trả lời xem nào</span>
+      <span class="en-only" lang="en">Can you read the machine level yet?</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <div class="diagnostic-intro">
+      <p class="standard-copy">Trả lời bằng lời của bạn, không tra sách. Nếu một câu khiến bạn ngập ngừng, đó chính là mục bạn nên đọc lại.</p>
+      <p class="easy-only">Thử trả lời miệng thôi, không cần giở lại. Câu nào bí thì quay lại đọc phần đó nhé. <b>Nhớ nhé: chỗ bí chính là chỗ cần học.</b></p>
+      <p class="en-only" lang="en">Answer in your own words, without looking back. Whichever question makes you hesitate points at the section you should reread.</p>
+    </div>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Bốn chặng của chuỗi biên dịch là gì, và chặng nào sinh tệp hợp ngữ <code>.s</code>?</p>
+        <p class="deep-only">Gợi ý sâu hơn: công cụ nào giúp bạn đọc ngược mã máy mà không cần mã nguồn?</p>
+      </li>
+      <li>
+        <p>Bốn phần của trạng thái bộ xử lý mà mã máy để lộ là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: thanh ghi nào giữ địa chỉ lệnh kế tiếp, và thanh ghi nào là con trỏ ngăn xếp?</p>
+      </li>
+      <li>
+        <p><code>leaq</code> khác <code>movq</code> ở điểm nào, và vì sao trình biên dịch thích dùng nó cho số học?</p>
+        <p class="deep-only">Gợi ý sâu hơn: <code>leaq 7(%rdx,%rdx,4), %rax</code> đặt gì vào <code>%rax</code> nếu <code>%rdx</code> = x?</p>
+      </li>
+      <li>
+        <p>Vì sao <code>cmp</code> và <code>test</code> không ghi kết quả vào đâu — và chúng để lại cái gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: hậu tố <code>l</code> trong <code>setl</code> chỉ điều gì, có dấu hay không dấu?</p>
+      </li>
+      <li>
+        <p>Khi <code>call</code> chạy, cái gì được đẩy lên ngăn xếp, và <code>ret</code> dùng nó ra sao?</p>
+        <p class="deep-only">Gợi ý sâu hơn: ngăn xếp mọc về phía địa chỉ cao hay thấp, và <code>%rsp</code> trỏ vào đâu?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Từ mã C đến chương trình chạy được có mấy bước? Kể tên.</p></li>
+      <li><p>Khi chạy, máy cần nhớ những gì? Kể được hai thứ là tốt.</p></li>
+      <li><p>Thanh ghi là gì, và vì sao máy thích để dữ liệu ở đó?</p></li>
+      <li><p>Máy làm sao để thực hiện “nếu a lớn hơn b thì…”? </p></li>
+      <li><p>Khi gọi một hàm, máy nhớ chỗ quay về bằng cách nào?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li>
+        <p>What are the four stages of the compilation chain, and which one emits the assembly <code>.s</code> file?</p>
+      </li>
+      <li>
+        <p>What are the four parts of the processor state that machine code exposes?</p>
+      </li>
+      <li>
+        <p>How does <code>leaq</code> differ from <code>movq</code>, and why does the compiler like it for arithmetic?</p>
+      </li>
+      <li>
+        <p>Why do <code>cmp</code> and <code>test</code> store no result — and what do they leave behind?</p>
+      </li>
+      <li>
+        <p>When <code>call</code> runs, what is pushed onto the stack, and how does <code>ret</code> use it?</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Mã máy không giữ tên biến hay kiểu dữ liệu của bạn; nó chỉ là <span class="closing-accent">byte lệnh tác động lên vài thanh ghi và một mảng bộ nhớ</span>. Nhưng chính vì <span class="closing-accent">máy không giấu gì cả</span>, học đọc nó là học thấy những gì trình biên dịch và phần cứng thật sự làm.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Máy không nhớ chữ bạn viết — nó chỉ chạy <span class="closing-accent">các con số điều khiển vài ô nhớ và bộ nhớ</span>. Nhưng vì <span class="closing-accent">nó không giấu gì</span>, đọc được mã máy là thấy rõ máy đang làm gì. <b>Nhớ nhé: đọc được mã máy là nhìn thấu bên trong.</b></p>
+    <p class="en-only" lang="en">Machine code keeps none of your variable names or types; it is just <span class="closing-accent">instruction bytes acting on a few registers and an array of memory</span>. But precisely because <span class="closing-accent">the machine hides nothing</span>, learning to read it is learning to see what the compiler and the hardware actually do.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-2-representing-and-manipulating-information.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 2 · Biểu diễn và thao tác thông tin</span>
+    <span class="nav-title en-only" lang="en">Chapter 2 · Representing and Manipulating Information</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-4-processor-architecture.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 4 · Kiến trúc bộ xử lý</span>
+    <span class="nav-title en-only" lang="en">Chapter 4 · Processor Architecture</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Randal E. Bryant &amp; David R. O’Hallaron, <i>Computer Systems: A Programmer’s Perspective</i>, tái bản lần thứ 3, Bản Toàn cầu (Global Edition), Pearson, 2016 (ISBN 978-1-292-10176-7) — Chương 3, “Machine-Level Representation of Programs”, trang 199–345.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Randal E. Bryant &amp; David R. O’Hallaron, <i>Computer Systems: A Programmer’s Perspective</i>, 3rd edition, Global Edition, Pearson, 2016 (ISBN 978-1-292-10176-7) — Chapter 3, "Machine-Level Representation of Programs", pp. 199–345.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page’s own; copyright in the original text belongs to the authors and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the authors’ words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Randal E. Bryant &amp; David R. O’Hallaron, <i>Computer Systems: A Programmer’s Perspective</i>, 3rd ed., Pearson, 2016, ch. 3 “Machine-Level Representation of Programs”, pp. 199–345 (§3.1–3.7). — <a href="https://csapp.cs.cmu.edu/" target="_blank" rel="noopener noreferrer">csapp.cs.cmu.edu</a></li>
+      <li id="ref-2"><i>Intel® 64 and IA-32 Architectures Software Developer’s Manuals</i> — register set, instruction encoding, and ATT/Intel operand formats. <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html" target="_blank" rel="noopener noreferrer">intel.com · Intel SDM</a></li>
+      <li id="ref-3"><i>System V Application Binary Interface — AMD64 Architecture Processor Supplement</i> (x86-64 psABI): argument registers, callee/caller-saved registers, stack layout. <a href="https://gitlab.com/x86-psABIs/x86-64-ABI" target="_blank" rel="noopener noreferrer">gitlab.com/x86-psABIs/x86-64-ABI</a></li>
+      <li id="ref-4"><code>objdump</code> — GNU Binutils documentation (the <code>-d</code> disassembler used throughout the chapter). <a href="https://sourceware.org/binutils/docs/binutils/objdump.html" target="_blank" rel="noopener noreferrer">sourceware.org/binutils/docs/binutils/objdump.html</a></li>
+      <li id="ref-5">“x86-64” — overview of the architecture’s history and 64-bit extension, corroborating the historical perspective of §3.1. <a href="https://en.wikipedia.org/wiki/X86-64" target="_blank" rel="noopener noreferrer">en.wikipedia.org/wiki/X86-64</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-2-representing-and-manipulating-information.html">chapter 2</a>
+      <a href="chapter-4-processor-architecture.html">chapter 4</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('csapp-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('csapp-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('csapp-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

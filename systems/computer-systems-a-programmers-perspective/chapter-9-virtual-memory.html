@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 9 · Bộ nhớ ảo — Computer Systems: A Programmer's Perspective</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 9 “Virtual Memory” trong Computer Systems: A Programmer's Perspective (Bryant & O'Hallaron, Pearson, 3rd ed., 2016): địa chỉ ảo và vật lý, bộ nhớ ảo như công cụ đệm–quản lý–bảo vệ, dịch địa chỉ với TLB và bảng trang nhiều cấp, nghiên cứu hệ bộ nhớ Intel Core i7/Linux, ánh xạ bộ nhớ, cấp phát động, thu gom rác và các lỗi bộ nhớ thường gặp.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('csapp-reading-mode'),
+l=localStorage.getItem('csapp-lang'),
+t=localStorage.getItem('csapp-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"CS:APP / 09";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    Computer Systems: A Programmer's Perspective
+    <span>Chương 9 · Virtual Memory</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 9 · Bộ nhớ ảo</span>
+      <span class="en-only" lang="en">Chapter 9 · Virtual Memory</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Một lớp ảo hoá lặng lẽ cho mỗi tiến trình ảo giác được độc chiếm bộ nhớ</span>
+      <span class="easy-only">Mỗi chương trình tưởng mình có cả bộ nhớ — nhờ một trò ảo thuật</span>
+      <span class="en-only" lang="en">A quiet layer of indirection that gives each process the illusion of owning all of memory</span>
+    </h1>
+
+    <p class="standard-copy">Bryant và O'Hallaron mở đầu bằng một nghịch lý: các tiến trình phải dùng chung CPU và bộ nhớ chính, nhưng bộ nhớ dùng chung dễ cạn và dễ bị hỏng — một tiến trình ghi nhầm có thể làm tiến trình khác chết theo cách khó hiểu. Lời giải là <b>bộ nhớ ảo (virtual memory)</b>, một trừu tượng của bộ nhớ chính được dựng từ sự phối hợp của ngoại lệ phần cứng, dịch địa chỉ (address translation), bộ nhớ chính, tệp trên đĩa và phần mềm nhân.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Nhiều chương trình phải chia nhau một bộ nhớ. Nếu để chúng tự tranh nhau thì dễ hết chỗ, lại dễ giẫm chân nhau. Máy tính giải quyết bằng một trò khéo: mỗi chương trình được cho một "bản đồ bộ nhớ" riêng, tưởng như cả máy là của mình. Trò đó tên là bộ nhớ ảo. <b>Nhớ nhé: mỗi chương trình có bản đồ nhớ riêng, không giẫm lên nhau.</b></p>
+    <p class="en-only" lang="en">Bryant and O'Hallaron open with a paradox: processes must share the CPU and main memory, yet shared memory runs out and is easily corrupted — one process writing to the wrong place can kill another in bewildering ways. The answer is <b>virtual memory</b>, an abstraction of main memory built from the interaction of hardware exceptions, address translation, main memory, disk files, and kernel software.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Điều tinh tế là cách tổ chức: thay vì để chương trình chạm thẳng vào bộ nhớ vật lý, CPU sinh ra một <i>địa chỉ ảo (virtual address)</i>, và một phần cứng chuyên dụng trên chip — <i>đơn vị quản lý bộ nhớ (memory management unit, MMU)</i> — dịch nó sang <i>địa chỉ vật lý (physical address)</i> ngay khi đang chạy, dựa trên một bảng tra do hệ điều hành quản lý.<span class="cite"><a href="#ref-1">1</a></span> Nhờ một cơ chế duy nhất này, bộ nhớ ảo đồng thời làm được ba việc: dùng bộ nhớ chính như một bộ đệm (cache) cho không gian địa chỉ lưu trên đĩa, đơn giản hoá việc quản lý bộ nhớ, và bảo vệ không gian địa chỉ của mỗi tiến trình khỏi bị tiến trình khác phá.<span class="cite"><a href="#ref-1">1</a></span> Các tác giả nhấn mạnh lý do lập trình viên cần hiểu nó: bộ nhớ ảo <i>trung tâm</i> (xuyên suốt mọi tầng hệ thống), <i>mạnh mẽ</i> (cho phép ánh xạ tệp, chia sẻ bộ nhớ) và <i>nguy hiểm</i> (gốc rễ của những lỗi bộ nhớ hiểm hóc).<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> bộ nhớ ảo là một lớp gián tiếp — CPU sinh địa chỉ ảo, MMU dịch sang địa chỉ vật lý qua bảng trang (page table) — và chỉ một cơ chế ấy đủ để làm ba việc lớn: dùng bộ nhớ chính như bộ đệm cho đĩa, đơn giản hoá quản lý bộ nhớ, và bảo vệ từng tiến trình; hiểu nó là hiểu vì sao <code>malloc</code>, <code>mmap</code> hoạt động và vì sao con trỏ hỏng lại gây ra "segmentation fault".<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> máy cho mỗi chương trình một địa chỉ "ảo" rồi lặng lẽ dịch sang chỗ thật trong bộ nhớ. Một trò khéo mà làm được ba việc: tiết kiệm bộ nhớ, dễ quản lý, và giữ các chương trình không phá nhau. <b>Nhớ nhé: địa chỉ bạn thấy là ảo; máy mới biết nó nằm thật ở đâu.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> virtual memory is a layer of indirection — the CPU emits virtual addresses and the MMU translates them to physical addresses through a page table — and that single mechanism does three big jobs: it uses main memory as a cache for disk, it simplifies memory management, and it protects each process; understanding it is understanding why <code>malloc</code> and <code>mmap</code> work and why a bad pointer yields a "segmentation fault".<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: bộ nhớ ảo là một cơ chế trung tâm làm ba việc — đệm bộ nhớ, quản lý bộ nhớ, và bảo vệ bộ nhớ. Diagram: virtual memory as one central mechanism serving three roles — caching, memory management, and memory protection.">
+    <div class="core">
+      <b>Bộ nhớ ảo <span lang="en">(virtual memory)</span></b>
+      <small class="standard-copy">Một lớp dịch địa chỉ, ba vai trò</small>
+      <small class="easy-only">Một trò khéo, ba lợi ích</small>
+      <small class="en-only" lang="en">One address-translation layer, three roles</small>
+    </div>
+
+    <div class="node">
+      <b>Caching</b>
+      <small class="standard-copy">Dùng bộ nhớ chính làm bộ đệm cho không gian địa chỉ lưu trên đĩa, theo trang</small>
+      <small class="easy-only">Giữ phần hay dùng trong bộ nhớ, phần còn lại để trên đĩa</small>
+      <small class="en-only" lang="en">Main memory as a cache for an address space stored on disk, by pages</small>
+    </div>
+
+    <div class="node">
+      <b>Management</b>
+      <small class="standard-copy">Mỗi tiến trình một không gian địa chỉ đồng nhất; đơn giản hoá liên kết, nạp, chia sẻ, cấp phát</small>
+      <small class="easy-only">Mỗi chương trình một bản đồ nhớ riêng, dễ sắp xếp</small>
+      <small class="en-only" lang="en">A uniform address space per process; simpler linking, loading, sharing, allocation</small>
+    </div>
+
+    <div class="node">
+      <b>Protection</b>
+      <small class="standard-copy">Bit quyền trong mỗi mục bảng trang chặn truy cập trái phép; vi phạm sinh SIGSEGV</small>
+      <small class="easy-only">Chặn chương trình đụng vào vùng nhớ không được phép</small>
+      <small class="en-only" lang="en">Permission bits in each page-table entry block illegal access; violations raise SIGSEGV</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#ao-hoa">
+    <span>01</span>
+    <b class="standard-copy">Địa chỉ ảo, và ba vai trò của bộ nhớ ảo</b>
+    <b class="easy-only">Địa chỉ ảo, và ba việc nó làm được</b>
+    <b class="en-only" lang="en">Virtual addresses, and VM's three roles</b>
+  </a>
+  <a href="#dich-dia-chi">
+    <span>02</span>
+    <b class="standard-copy">Dịch địa chỉ: TLB, bảng trang, và hệ i7/Linux</b>
+    <b class="easy-only">Máy dịch địa chỉ ra sao; ví dụ chip Intel i7</b>
+    <b class="en-only" lang="en">Address translation: TLB, page tables, the i7/Linux system</b>
+  </a>
+  <a href="#cap-phat">
+    <span>03</span>
+    <b class="standard-copy">Ánh xạ bộ nhớ, cấp phát động, và thu gom rác</b>
+    <b class="easy-only">Ánh xạ tệp, malloc/free, và dọn rác tự động</b>
+    <b class="en-only" lang="en">Memory mapping, dynamic allocation, garbage collection</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>04</span>
+    <b class="standard-copy">Các lỗi bộ nhớ và ngộ nhận thường gặp</b>
+    <b class="easy-only">Các lỗi bộ nhớ hay mắc</b>
+    <b class="en-only" lang="en">Common memory bugs and misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="ao-hoa" aria-labelledby="ao-hoa-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="ao-hoa-title">
+      <span class="standard-copy">Địa chỉ ảo và vật lý, và ba vai trò của bộ nhớ ảo</span>
+      <span class="easy-only">Địa chỉ "ảo" là gì, và nó giúp được ba việc</span>
+      <span class="en-only" lang="en">Virtual versus physical addressing, and VM's three roles</span>
+    </h2>
+    <p class="standard-copy">Bộ nhớ chính được tổ chức như một mảng gồm <i>M</i> ô nhớ cỡ một byte liên tiếp, mỗi ô có một <b>địa chỉ vật lý (physical address, PA)</b> riêng. Cách đơn giản nhất để CPU truy cập bộ nhớ là dùng thẳng địa chỉ vật lý — gọi là <i>định địa chỉ vật lý (physical addressing)</i>; các PC đời đầu và nhiều chip xử lý tín hiệu số, vi điều khiển nhúng, siêu máy tính Cray vẫn làm vậy.<span class="cite"><a href="#ref-1">1</a></span> Nhưng bộ xử lý hiện đại dùng <b>định địa chỉ ảo (virtual addressing)</b>: CPU sinh một <b>địa chỉ ảo (virtual address, VA)</b>, và MMU dịch nó sang địa chỉ vật lý nhờ một bảng tra trong bộ nhớ do hệ điều hành quản lý.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hãy coi bộ nhớ như một dãy ô có đánh số. Số thật của ô gọi là địa chỉ vật lý. Ngày xưa chương trình gọi thẳng số thật đó. Nay thì khác: chương trình đọc theo một "số ảo", và một bộ phận nhỏ trong chip âm thầm đổi số ảo thành số thật. <b>Nhớ nhé: chương trình nói số ảo, chip dịch ra số thật.</b></p>
+    <p class="en-only" lang="en">Main memory is organized as an array of <i>M</i> contiguous byte-size cells, each with its own <b>physical address (PA)</b>. The simplest way for a CPU to access memory is to use physical addresses directly — <i>physical addressing</i>; early PCs and many digital signal processors, embedded microcontrollers, and Cray supercomputers still do.<span class="cite"><a href="#ref-1">1</a></span> But modern processors use <b>virtual addressing</b>: the CPU generates a <b>virtual address (VA)</b>, and the MMU translates it to a physical address using a lookup table in memory that the operating system manages.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Một <i>không gian địa chỉ (address space)</i> là tập có thứ tự các số nguyên không âm. Với bộ nhớ ảo, CPU sinh địa chỉ từ một <b>không gian địa chỉ ảo (virtual address space)</b> cỡ <i>N = 2<sup>n</sup></i> địa chỉ; hệ thống cũng có một <b>không gian địa chỉ vật lý (physical address space)</b> ứng với <i>M = 2<sup>m</sup></i> byte bộ nhớ thật. Khái niệm này tách bạch <i>đối tượng dữ liệu</i> (byte) khỏi <i>thuộc tính</i> của nó (địa chỉ) — nhờ đó một byte có thể có nhiều địa chỉ độc lập.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> "Không gian địa chỉ" chỉ là dãy các số dùng để đánh địa chỉ. Máy có hai dãy: dãy ảo (chương trình thấy) và dãy thật (bộ nhớ có). <b>Nhớ nhé: có hai hệ số — số ảo và số thật.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> An <i>address space</i> is an ordered set of nonnegative integers. With virtual memory the CPU generates addresses from a <b>virtual address space</b> of <i>N = 2<sup>n</sup></i> addresses; the system also has a <b>physical address space</b> of <i>M = 2<sup>m</sup></i> bytes of real memory. The idea cleanly separates a <i>data object</i> (a byte) from its <i>attribute</i> (an address) — so one byte can have several independent addresses.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">VA --[MMU]--&gt; PA<br>trang ảo (VP) ⇄ trang vật lý (PP)<br>3 trạng thái trang:<br>&nbsp;&nbsp;chưa cấp · đã đệm · chưa đệm<br>miss đệm = page fault</p>
+      <p class="easy-only">số ảo --&gt; (MMU) --&gt; số thật<br>bộ nhớ chia thành "trang"<br>thiếu trang --&gt; nạp từ đĩa</p>
+      <p class="en-only" lang="en">VA --[MMU]--&gt; PA<br>virtual page (VP) ⇄ physical page (PP)<br>3 page states:<br>&nbsp;&nbsp;unallocated · cached · uncached<br>cache miss = page fault</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">virtual addressing</span>
+      <h3>
+        <span class="standard-copy">Định địa chỉ ảo — MMU dịch địa chỉ ngay khi chạy</span>
+        <span class="easy-only">Địa chỉ ảo — chip tự đổi số ảo thành số thật</span>
+        <span class="en-only" lang="en">Virtual addressing — the MMU translates on the fly</span>
+      </h3>
+      <p class="standard-copy">Với định địa chỉ ảo, CPU truy cập bộ nhớ bằng cách sinh một địa chỉ ảo, được chuyển thành địa chỉ vật lý <i>trước khi</i> gửi tới bộ nhớ. Việc chuyển này gọi là <b>dịch địa chỉ (address translation)</b> và cần phần cứng CPU phối hợp chặt với hệ điều hành: phần cứng chuyên dụng là MMU, còn bảng tra thì nằm trong bộ nhớ chính và do hệ điều hành quản lý.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Chương trình chỉ nói "cho tôi ô số 4100". Trước khi chạm bộ nhớ thật, một bộ phận trong chip (MMU) tra bảng và đổi 4100 thành ô thật, ví dụ ô số 4. Người lập trình không thấy bước này. <b>Nhớ nhé: mọi địa chỉ đều đi qua một bước dịch trước khi chạm bộ nhớ thật.</b></p>
+      <p class="en-only" lang="en">With virtual addressing, the CPU accesses memory by generating a virtual address, which is converted to a physical address <i>before</i> it reaches memory. This conversion is <b>address translation</b> and requires CPU hardware and the OS to cooperate closely: the dedicated hardware is the MMU, while the lookup table lives in main memory and is managed by the operating system.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi lần chương trình đọc hay ghi một biến, một bước dịch địa chỉ âm thầm diễn ra trong MMU — nhanh đến mức bạn không bao giờ nhận ra.</span>
+        <span class="easy-only">Mỗi lần đọc hay ghi một biến, bước dịch âm thầm xảy ra rồi.</span>
+        <span class="en-only" lang="en">Every time a program reads or writes a variable, a translation step quietly runs inside the MMU — so fast you never notice it.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Số bit và kích cỡ không gian</h4>
+          <p>Cỡ một không gian địa chỉ tính bằng số bit cần để biểu diễn địa chỉ lớn nhất; không gian <i>N = 2<sup>n</sup></i> địa chỉ gọi là không gian <i>n</i>-bit. Hệ hiện đại thường hỗ trợ không gian địa chỉ ảo 32 bit hoặc 64 bit.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Nối với các chương khác</h4>
+          <p>Bộ nhớ ảo xuyên suốt mọi tầng: ngoại lệ phần cứng (Chương 8), trình liên kết và trình nạp (Chương 7), tệp và tiến trình (Chương 8). Hiểu nó giúp hiểu toàn hệ thống hoạt động ra sao.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">VM as caching</span>
+      <h3>
+        <span class="standard-copy">Bộ nhớ ảo như bộ đệm — trang, bảng trang, và page fault</span>
+        <span class="easy-only">Bộ nhớ ảo như bộ đệm — chia thành trang, thiếu thì nạp</span>
+        <span class="en-only" lang="en">VM as caching — pages, page tables, and page faults</span>
+      </h3>
+      <p class="standard-copy">Về mặt khái niệm, bộ nhớ ảo là một mảng lưu trên đĩa, được <i>đệm</i> trong bộ nhớ chính. Nó được chia thành các khối cố định gọi là <b>trang ảo (virtual pages, VPs)</b>, mỗi trang <i>P = 2<sup>p</sup></i> byte; bộ nhớ vật lý cũng chia thành <b>trang vật lý (physical pages, PPs)</b> cùng cỡ. Do chi phí miss khổng lồ — đọc byte đầu từ đĩa chậm hơn từ bộ nhớ khoảng 100.000 lần — nên trang thường lớn (điển hình 4 KB đến 2 MB), bộ đệm DRAM là <i>liên kết đầy đủ (fully associative)</i> và luôn ghi-lùi (write-back).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Hãy hình dung toàn bộ bộ nhớ của bạn thật ra nằm trên đĩa, còn bộ nhớ chính chỉ giữ những "trang" hay dùng. Khi cần một trang chưa có trong bộ nhớ, máy phải chạy ra đĩa lấy — việc này rất chậm, nên mỗi trang được làm to (thường vài nghìn byte). <b>Nhớ nhé: bộ nhớ chính chỉ là chỗ giữ tạm những trang hay dùng của một kho lớn hơn trên đĩa.</b></p>
+      <p class="en-only" lang="en">Conceptually, virtual memory is an array stored on disk that is <i>cached</i> in main memory. It is partitioned into fixed-size blocks called <b>virtual pages (VPs)</b> of <i>P = 2<sup>p</sup></i> bytes; physical memory is partitioned into same-size <b>physical pages (PPs)</b>. Because the miss cost is enormous — reading the first byte from disk is about 100,000 times slower than from memory — pages are large (typically 4 KB to 2 MB), the DRAM cache is <i>fully associative</i>, and it always uses write-back.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một chương trình vừa khởi động chậm (đang nạp các trang từ đĩa — <i>demand paging</i>) rồi chạy mượt dần, hoặc khi máy "giật lag" vì <i>thrashing</i> — các trang bị tống ra và nạp lại liên tục.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi một ứng dụng mở lần đầu hơi khựng rồi sau đó nhanh dần.</span>
+        <span class="en-only" lang="en">When a program starts slowly (paging in from disk — <i>demand paging</i>) then runs smoothly, or when a machine stalls from <i>thrashing</i> — pages evicted and reloaded over and over.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bảng trang và page fault</h4>
+          <p>Một <b>bảng trang (page table)</b> là mảng các <i>mục bảng trang (page table entries, PTEs)</i>, mỗi mục gồm một bit hợp lệ và một trường địa chỉ. Khi CPU chạm một trang chưa được đệm, bit hợp lệ bằng 0 khiến MMU kích hoạt một <b>page fault</b> (một lần miss của bộ đệm DRAM): trình xử lý trong nhân chọn một trang nạn nhân, ghi lùi nếu bẩn, rồi nạp trang cần thiết từ đĩa và chạy lại lệnh.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao nó chạy tốt: tính cục bộ</h4>
+          <p>Bộ nhớ ảo nghe có vẻ chậm, nhưng hiệu quả nhờ <i>tính cục bộ (locality)</i>: tại mỗi thời điểm chương trình chỉ làm việc trên một tập nhỏ trang gọi là <i>tập làm việc (working set)</i>. Nếu tập làm việc vượt bộ nhớ vật lý, xảy ra thrashing.<span class="cite"><a href="#ref-1">1</a></span> Bộ nhớ ảo được phát minh từ đầu thập niên 1960, trước cả khe hở CPU–bộ nhớ sinh ra cache SRAM.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">management + protection</span>
+      <h3>
+        <span class="standard-copy">Quản lý và bảo vệ — một không gian riêng cho mỗi tiến trình</span>
+        <span class="easy-only">Quản lý và bảo vệ — mỗi chương trình một vùng riêng, có khoá</span>
+        <span class="en-only" lang="en">Management &amp; protection — a private space per process</span>
+      </h3>
+      <p class="standard-copy">Hệ điều hành cấp cho mỗi tiến trình một bảng trang riêng, tức một không gian địa chỉ ảo riêng. Điều này đơn giản hoá bốn việc: <i>liên kết</i> (mọi tiến trình dùng cùng một bố cục bộ nhớ — mã 64-bit luôn bắt đầu ở địa chỉ ảo <code>0x400000</code>), <i>nạp</i> (ánh xạ chứ không chép dữ liệu), <i>chia sẻ</i> (nhiều trang ảo trỏ về cùng một trang vật lý), và <i>cấp phát</i> (các trang vật lý được cấp có thể nằm rải rác).<span class="cite"><a href="#ref-1">1</a></span> Thêm vài <b>bit quyền (permission bits)</b> — SUP, READ, WRITE — vào mỗi PTE là có luôn cơ chế bảo vệ bộ nhớ mức trang.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mỗi chương trình được phát một bản đồ nhớ riêng, nên chúng không đạp lên nhau và mọi chương trình đều thấy bố cục giống nhau — rất dễ cho máy sắp xếp. Mỗi ô trong bản đồ còn gắn "khoá": được đọc không, được ghi không. Phá khoá là bị chặn. <b>Nhớ nhé: bản đồ riêng + khoá từng vùng = an toàn và gọn gàng.</b></p>
+      <p class="en-only" lang="en">The OS gives each process its own page table — its own virtual address space. This simplifies four things: <i>linking</i> (every process shares one memory layout — 64-bit code always starts at virtual address <code>0x400000</code>), <i>loading</i> (mapping rather than copying data), <i>sharing</i> (several virtual pages pointing to one physical page), and <i>allocation</i> (the physical pages given out can be scattered).<span class="cite"><a href="#ref-1">1</a></span> Adding a few <b>permission bits</b> — SUP, READ, WRITE — to each PTE yields page-level memory protection for free.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một tiến trình chạy ở chế độ người dùng cố ghi vào mã chỉ-đọc hay đọc bộ nhớ của tiến trình khác, CPU sinh lỗi bảo vệ (general protection fault), nhân gửi tín hiệu SIGSEGV, và shell báo "segmentation fault".<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn thấy dòng chữ "segmentation fault" — đó là máy chặn chương trình đụng vào vùng cấm.</span>
+        <span class="en-only" lang="en">When a user-mode process tries to write read-only code or read another process's memory, the CPU raises a general protection fault, the kernel sends SIGSEGV, and the shell reports a "segmentation fault".<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Khi bộ nhớ ảo nhỏ hơn bộ nhớ thật</h4>
+          <p>Các tác giả nhắc một điểm phản trực giác: vài hệ đời đầu như DEC PDP-11/70 có không gian địa chỉ ảo <i>nhỏ hơn</i> bộ nhớ vật lý, nhưng bộ nhớ ảo vẫn hữu ích vì nó đơn giản hoá quản lý bộ nhớ và cho một cách tự nhiên để bảo vệ.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Bit SUP, READ, WRITE</h4>
+          <p>Bit SUP cho biết trang chỉ truy cập được ở chế độ nhân (supervisor); READ và WRITE kiểm soát quyền đọc/ghi. Tiến trình người dùng chỉ chạm được các trang có SUP = 0, và chỉ theo quyền đã định.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Cả ba vai trò đều dựa vào một việc: dịch một địa chỉ ảo thành địa chỉ vật lý, thật nhanh, hàng tỉ lần mỗi giây. Vậy phần cứng làm điều đó ra sao mà không biến mỗi lần truy cập bộ nhớ thành vài lần tra bảng chậm chạp?<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Ba lợi ích trên đều cần một việc: đổi số ảo sang số thật, cực nhanh, liên tục. Làm sao chip làm kịp? Phần tiếp theo sẽ mở ra.</p>
+    <p class="en-only" lang="en">All three roles rest on one thing: translating a virtual address into a physical one, very fast, billions of times a second. So how does the hardware do it without turning every memory access into a few slow table lookups?<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="dich-dia-chi" aria-labelledby="dich-dia-chi-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="dich-dia-chi-title">
+      <span class="standard-copy">Dịch địa chỉ: TLB, bảng trang nhiều cấp, và hệ Intel Core i7/Linux</span>
+      <span class="easy-only">Máy dịch địa chỉ nhanh ra sao — và một ví dụ chip thật</span>
+      <span class="en-only" lang="en">Address translation: the TLB, multi-level page tables, and the Core i7/Linux system</span>
+    </h2>
+    <p class="standard-copy">Dịch địa chỉ là một ánh xạ từ không gian địa chỉ ảo sang không gian địa chỉ vật lý. Một thanh ghi điều khiển, <b>thanh ghi gốc bảng trang (page table base register, PTBR)</b>, trỏ tới bảng trang hiện hành. Địa chỉ ảo <i>n</i> bit tách làm hai: <i>p</i> bit thấp là <b>phần bù trang ảo (virtual page offset, VPO)</b>, và <i>(n − p)</i> bit cao là <b>số trang ảo (virtual page number, VPN)</b>. MMU dùng VPN để chọn một PTE, lấy ra <b>số trang vật lý (physical page number, PPN)</b>, rồi ghép PPN với VPO (vì VPO ≡ PPO) thành địa chỉ vật lý.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Mỗi địa chỉ ảo gồm hai phần: phần "số trang" (trang nào) và phần "lệch trong trang" (ô nào trong trang). Máy chỉ cần đổi phần số trang từ ảo sang thật, còn phần lệch giữ nguyên. Giống như đổi "toà nhà" nhưng giữ nguyên "số phòng". <b>Nhớ nhé: dịch địa chỉ chỉ đổi số trang, giữ nguyên vị trí trong trang.</b></p>
+    <p class="en-only" lang="en">Address translation is a mapping from the virtual address space to the physical one. A control register, the <b>page table base register (PTBR)</b>, points to the current page table. An <i>n</i>-bit virtual address splits in two: the low <i>p</i> bits are the <b>virtual page offset (VPO)</b>, and the high <i>(n − p)</i> bits are the <b>virtual page number (VPN)</b>. The MMU uses the VPN to select a PTE, extracts the <b>physical page number (PPN)</b>, and concatenates it with the VPO (since VPO ≡ PPO) to form the physical address.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <b>Đệm dịch địa chỉ (translation lookaside buffer, TLB)</b> là một bộ đệm nhỏ, liên kết tập, nằm trong MMU, lưu các PTE hay dùng để khỏi phải ra bộ nhớ tra bảng mỗi lần. Khi TLB trúng, cả quá trình dịch diễn ra trong chip nên rất nhanh; khi TLB trượt, MMU phải lấy PTE từ cache L1.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Để khỏi tra bảng chậm mỗi lần, chip giữ sẵn vài kết quả dịch gần đây trong một ngăn nhớ tí hon tên là TLB. Trúng TLB là xong ngay. <b>Nhớ nhé: TLB là sổ tay ghi nhớ nhanh các lần dịch gần đây.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> The <b>translation lookaside buffer (TLB)</b> is a small, set-associative cache inside the MMU that holds frequently used PTEs so it need not go to memory on every access. On a TLB hit the whole translation happens on-chip and is fast; on a TLB miss the MMU must fetch the PTE from the L1 cache.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">i7: VA 48-bit (256 TB)<br>&nbsp;&nbsp;PA 52-bit (4 PB)<br>VPN 36-bit = 4 × 9-bit<br>&nbsp;&nbsp;VPO 12-bit (trang 4 KB)<br>bảng trang 4 cấp</p>
+      <p class="easy-only">địa chỉ ảo i7: 48 bit<br>số trang chia 4 khúc 9 bit<br>--&gt; 4 tầng bảng trang</p>
+      <p class="en-only" lang="en">i7: VA 48-bit (256 TB)<br>&nbsp;&nbsp;PA 52-bit (4 PB)<br>VPN 36-bit = 4 × 9-bit<br>&nbsp;&nbsp;VPO 12-bit (4 KB pages)<br>4-level page table</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">page table walk</span>
+      <h3>
+        <span class="standard-copy">Dịch bằng bảng trang — năm bước khi trang đã có</span>
+        <span class="easy-only">Dịch bằng bảng trang — các bước khi trang sẵn sàng</span>
+        <span class="en-only" lang="en">Translating with a page table — five steps on a hit</span>
+      </h3>
+      <p class="standard-copy">Khi trang đã được đệm (page hit), phần cứng làm năm bước: (1) CPU sinh địa chỉ ảo gửi MMU; (2) MMU tính địa chỉ PTE và yêu cầu nó từ cache/bộ nhớ; (3) cache/bộ nhớ trả PTE; (4) MMU dựng địa chỉ vật lý; (5) cache/bộ nhớ trả về từ dữ liệu. Khi page fault, bước 4 khác: bit hợp lệ bằng 0, MMU sinh ngoại lệ, trình xử lý trong nhân nạp trang rồi chạy lại lệnh.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nếu trang cần dùng đã có sẵn trong bộ nhớ, chip chỉ việc tra bảng, ghép địa chỉ, lấy dữ liệu — vài bước là xong. Nếu trang chưa có, máy phải tạm dừng, chạy ra đĩa nạp trang về, rồi làm lại. <b>Nhớ nhé: có sẵn thì nhanh; thiếu thì phải ra đĩa nạp, chậm hơn nhiều.</b></p>
+      <p class="en-only" lang="en">On a page hit the hardware does five steps: (1) the CPU sends a virtual address to the MMU; (2) the MMU computes the PTE address and requests it from the cache/memory; (3) the cache/memory returns the PTE; (4) the MMU builds the physical address; (5) the cache/memory returns the data word. On a page fault step 4 differs: the valid bit is 0, the MMU raises an exception, the kernel's handler pages in and reruns the instruction.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Sách dẫn một ví dụ làm tay trọn vẹn với hệ nhỏ: địa chỉ ảo 14 bit, địa chỉ vật lý 12 bit, trang 64 byte, TLB 4-way 16 mục — bạn dịch được <code>0x03d4</code> thành <code>0x354</code> chỉ bằng giấy bút.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Trong sách có một ví dụ nhỏ để bạn tự dịch địa chỉ bằng giấy bút, không cần máy.</span>
+        <span class="en-only" lang="en">The book works a full by-hand example on a tiny system: 14-bit virtual addresses, 12-bit physical, 64-byte pages, a 4-way 16-entry TLB — you translate <code>0x03d4</code> to <code>0x354</code> with pencil and paper.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">TLB + multi-level</span>
+      <h3>
+        <span class="standard-copy">TLB và bảng trang nhiều cấp — nén bảng, tăng tốc tra</span>
+        <span class="easy-only">TLB và bảng nhiều tầng — bảng gọn hơn, tra nhanh hơn</span>
+        <span class="en-only" lang="en">TLB and multi-level page tables — compact and fast</span>
+      </h3>
+      <p class="standard-copy">Một bảng trang phẳng rất tốn chỗ: với không gian 32 bit, trang 4 KB, PTE 4 byte, cần một bảng 4 MB thường trú trong bộ nhớ — và vấn đề còn tệ hơn với hệ 64 bit. Giải pháp là <b>bảng trang nhiều cấp (multi-level page tables)</b>: một cây bảng, trong đó bảng cấp 1 chỉ cần luôn ở bộ nhớ, còn các bảng cấp dưới được tạo và nạp khi cần — nếu một mục cấp trên là rỗng thì cả bảng con bên dưới không cần tồn tại.<span class="cite"><a href="#ref-1">1</a></span> Việc phải tra nhiều cấp không làm chậm đáng kể vì TLB đệm luôn các PTE ở mọi cấp.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Một bảng tra duy nhất cho cả bộ nhớ thì to khủng khiếp. Nên người ta chia bảng thành nhiều tầng, như mục lục của mục lục: tầng trên chỉ tới tầng dưới, và tầng nào không dùng thì khỏi tạo. Nhờ TLB nhớ sẵn, tra nhiều tầng vẫn nhanh. <b>Nhớ nhé: chia bảng thành tầng để khỏi phí chỗ cho phần không dùng.</b></p>
+      <p class="en-only" lang="en">A flat page table is huge: for a 32-bit space, 4 KB pages, and 4-byte PTEs it needs a 4 MB table resident in memory — and 64-bit systems are worse. The fix is <b>multi-level page tables</b>: a tree of tables where only the level-1 table must stay in memory while lower levels are created and paged in on demand — if an upper-level entry is null, the whole sub-table below it need not exist.<span class="cite"><a href="#ref-1">1</a></span> Walking several levels is not much slower because the TLB caches PTEs from every level.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi chương trình thật chỉ dùng một mẩu nhỏ của không gian địa chỉ 48-bit khổng lồ; bảng trang nhiều cấp cho phép phần còn lại "không tồn tại" mà không tốn bộ nhớ.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Chương trình thật chỉ dùng một phần nhỏ bộ nhớ; phần còn lại khỏi cần bảng tra.</span>
+        <span class="en-only" lang="en">A real program uses only a sliver of the vast 48-bit space; multi-level tables let the rest simply "not exist" at no memory cost.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Thành phần địa chỉ ảo để tra TLB</h4>
+          <p>Để tra TLB, VPN lại chia làm hai: <i>chỉ số TLB (TLB index, TLBI)</i> chọn tập, và <i>thẻ TLB (TLB tag, TLBT)</i> phân biệt các VPN cùng ánh xạ vào một tập.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Tra k cấp</h4>
+          <p>Với cây k cấp, địa chỉ ảo chia thành k số trang (VPN 1…k) và một VPO; mỗi PTE ở cấp j &lt; k trỏ tới gốc bảng cấp j+1, còn PTE ở cấp k chứa PPN. MMU phải truy cập k PTE trước khi dựng được địa chỉ vật lý.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">Core i7 / Linux</span>
+      <h3>
+        <span class="standard-copy">Nghiên cứu hệ Intel Core i7/Linux — các con số thật</span>
+        <span class="easy-only">Ví dụ chip Intel Core i7 chạy Linux — số liệu thật</span>
+        <span class="en-only" lang="en">Case study: the Intel Core i7/Linux system — real numbers</span>
+      </h3>
+      <p class="standard-copy">Core i7 (vi kiến trúc Haswell) hỗ trợ không gian địa chỉ ảo 48-bit (256 TB) và vật lý 52-bit (4 PB). Mỗi lõi có phân cấp TLB và cache riêng: L1 d-TLB 64 mục 4-way, L1 i-TLB 128 mục 4-way, L2 TLB hợp nhất 512 mục 4-way; cache L1 d/i mỗi cái 32 KB 8-way, L2 hợp nhất 256 KB 8-way, L3 hợp nhất 8 MB 16-way dùng chung cho cả bốn lõi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Trang cấu hình được 4 KB hoặc 4 MB; Linux dùng trang 4 KB. MMU dùng bảng trang bốn cấp: VPN 36-bit chia thành bốn khúc 9-bit, VPO 12-bit; thanh ghi CR3 giữ địa chỉ vật lý bảng cấp 1 và là một phần ngữ cảnh tiến trình.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Đây là số liệu từ một con chip thật: Intel Core i7. Nó cho mỗi chương trình một không gian địa chỉ cực lớn, dùng bảng tra bốn tầng, và có mấy ngăn nhớ TLB để dịch nhanh. Linux chia bộ nhớ thành trang 4 KB. <b>Nhớ nhé: lý thuyết ở trên chính là cách một con chip thật đang chạy.</b></p>
+      <p class="en-only" lang="en">The Core i7 (Haswell microarchitecture) supports a 48-bit (256 TB) virtual and 52-bit (4 PB) physical address space. Each core has its own TLB and cache hierarchy: an L1 d-TLB of 64 entries (4-way), an L1 i-TLB of 128 entries (4-way), and a unified L2 TLB of 512 entries (4-way); L1 d/i caches of 32 KB each (8-way), a unified 256 KB L2 (8-way), and a unified 8 MB L3 (16-way) shared by all four cores.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Pages can be 4 KB or 4 MB; Linux uses 4 KB. The MMU uses a four-level page table: the 36-bit VPN splits into four 9-bit chunks, with a 12-bit VPO; the CR3 register holds the physical address of the level-1 table and is part of each process context.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi PTE của i7 có bit <code>XD</code> (execute-disable, giới thiệu trên hệ 64-bit) cho phép nhân cấm thực thi lệnh từ các trang nhất định — giảm rủi ro tấn công tràn bộ đệm bằng cách chỉ cho thực thi vùng mã chỉ-đọc.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span>
+        <span class="easy-only">Chip có một "khoá" cấm chạy mã từ vùng dữ liệu — giúp chặn một kiểu tấn công phổ biến.</span>
+        <span class="en-only" lang="en">Each i7 PTE has an <code>XD</code> (execute-disable, introduced on 64-bit systems) bit letting the kernel forbid instruction fetches from certain pages — reducing buffer-overflow attack risk by restricting execution to read-only code.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Tên bốn cấp bảng của Linux</h4>
+          <p>Linux đặt tên bốn cấp: thư mục trang toàn cục (page global directory), thư mục trang trên (page upper directory), thư mục trang giữa (page middle directory), và bảng trang (page table). Mỗi mục cấp 1 phủ một vùng 512 GB, cấp 2 là 1 GB, cấp 3 là 2 MB, cấp 4 là 4 KB.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Linux tổ chức vùng nhớ</h4>
+          <p>Linux coi bộ nhớ ảo của tiến trình là tập các <i>vùng (areas)</i>. Mỗi tiến trình có một <code>task_struct</code> trỏ tới <code>mm_struct</code> (chứa <code>pgd</code> và <code>mmap</code>); danh sách <code>vm_area_struct</code> mô tả từng vùng (<code>vm_start</code>, <code>vm_end</code>, <code>vm_prot</code>, <code>vm_flags</code>). Trình xử lý page fault của Linux kiểm ba điều: địa chỉ có hợp lệ không, truy cập có được phép không, rồi mới nạp trang.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Khi đã có cơ chế bảng trang và vùng nhớ, một ý tưởng đẹp xuất hiện: nếu khởi tạo một vùng bộ nhớ bằng cách gắn nó với một đối tượng trên đĩa, thì nạp chương trình, chia sẻ thư viện, và cấp phát bộ nhớ đều quy về cùng một thao tác — <i>ánh xạ bộ nhớ</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Khi đã có bảng trang và vùng nhớ, máy có thể làm một mẹo hay: gắn một vùng nhớ với một tệp trên đĩa. Nhờ đó nạp chương trình và cấp phát bộ nhớ trở nên gọn gàng.</p>
+    <p class="en-only" lang="en">Once page tables and areas exist, a lovely idea appears: if you initialize a memory region by tying it to an object on disk, then loading programs, sharing libraries, and allocating memory all reduce to one operation — <i>memory mapping</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="cap-phat" aria-labelledby="cap-phat-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="cap-phat-title">
+      <span class="standard-copy">Ánh xạ bộ nhớ, cấp phát động, và thu gom rác</span>
+      <span class="easy-only">Ánh xạ tệp, xin–trả bộ nhớ, và dọn rác tự động</span>
+      <span class="en-only" lang="en">Memory mapping, dynamic allocation, and garbage collection</span>
+    </h2>
+    <p class="standard-copy">Linux khởi tạo nội dung một vùng bộ nhớ ảo bằng cách gắn nó với một <i>đối tượng (object)</i> trên đĩa — quá trình gọi là <b>ánh xạ bộ nhớ (memory mapping)</b>. Vùng có thể ánh xạ tới một tệp thường trong hệ tệp, hoặc một <i>tệp ẩn danh (anonymous file)</i> toàn số 0 do nhân tạo ra (trang <i>demand-zero</i>). Nhưng nhiều lúc chương trình cần thêm bộ nhớ ngay khi chạy mà chưa biết trước kích cỡ; khi đó nó dùng <b>cấp phát động (dynamic memory allocation)</b> qua heap.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Máy có thể "gắn" một vùng nhớ với một tệp trên đĩa — gọi là ánh xạ bộ nhớ. Còn khi chương trình cần thêm chỗ nhớ lúc đang chạy mà chưa biết trước cần bao nhiêu, nó xin thêm từ một kho gọi là heap — đó là cấp phát động. <b>Nhớ nhé: cần thêm nhớ lúc chạy thì xin từ heap, dùng xong nhớ trả lại.</b></p>
+    <p class="en-only" lang="en">Linux initializes the contents of a virtual memory area by tying it to an <i>object</i> on disk — a process called <b>memory mapping</b>. An area can map to a regular file in the file system, or to an <i>anonymous file</i> of all zeros created by the kernel (<i>demand-zero</i> pages). But often a program needs more memory at run time without knowing the size in advance; then it uses <b>dynamic memory allocation</b> on the heap.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Một <i>bộ cấp phát (allocator)</i> quản lý heap như một tập các khối: khối đã cấp hoặc đang rỗi. Với bộ cấp phát tường minh như gói <code>malloc</code> của C, chương trình tự xin khối bằng <code>malloc</code> và tự trả bằng <code>free</code>. Bộ cấp phát phải đáp ứng yêu cầu bất kỳ, trả lời tức thì, chỉ dùng heap, căn chỉnh khối, và không được dời khối đã cấp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Heap như một kho chung. Bạn gọi <code>malloc</code> để mượn một ô, dùng xong gọi <code>free</code> để trả. Nếu quên trả, kho đầy dần. <b>Nhớ nhé: mượn bằng malloc, trả bằng free — quên trả là rò rỉ.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> An <i>allocator</i> manages the heap as a set of blocks, each allocated or free. With an explicit allocator like C's <code>malloc</code> package, the program requests blocks with <code>malloc</code> and returns them with <code>free</code>. The allocator must handle arbitrary requests, respond immediately, use only the heap, align blocks, and never move an allocated block.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">thông lượng = số yêu cầu / giây<br>&nbsp;&nbsp;(vd 1.000 thao tác/giây)<br>tận dụng đỉnh U_k = max P_i / H_k<br>phân mảnh: trong &amp; ngoài</p>
+      <p class="easy-only">nhanh (thông lượng)<br>&nbsp;&nbsp;vs tiết kiệm (tận dụng)<br>kẻ thù: phân mảnh</p>
+      <p class="en-only" lang="en">throughput = requests / sec<br>&nbsp;&nbsp;(e.g. 1,000 ops/sec)<br>peak utilization U_k = max P_i / H_k<br>fragmentation: internal &amp; external</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">memory mapping</span>
+      <h3>
+        <span class="standard-copy">Ánh xạ bộ nhớ — một thao tác, nhiều việc</span>
+        <span class="easy-only">Ánh xạ bộ nhớ — gắn vùng nhớ với tệp trên đĩa</span>
+        <span class="en-only" lang="en">Memory mapping — one operation, many jobs</span>
+      </h3>
+      <p class="standard-copy">Ánh xạ một tập trang ảo liên tục vào một đối tượng tuỳ ý trên đĩa chính là cách Linux nạp chương trình và thư viện: trình nạp chỉ ánh xạ các trang mã và dữ liệu, chúng được nạp theo nhu cầu lần đầu được chạm — không hề chép sẵn từ đĩa. Chương trình có thể tự ánh xạ bằng lời gọi hệ thống <code>mmap</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only">Thay vì chép cả chương trình từ đĩa vào bộ nhớ, máy chỉ "gắn" chúng lại rồi nạp từng trang khi thật sự cần. Chương trình cũng có thể tự gắn một tệp vào bộ nhớ bằng lệnh <code>mmap</code> để đọc tệp như đọc một mảng. <b>Nhớ nhé: gắn trước, nạp sau — chỉ nạp phần thật sự dùng.</b></p>
+      <p class="en-only" lang="en">Mapping a set of contiguous virtual pages to an arbitrary object on disk is exactly how Linux loads programs and libraries: the loader merely maps the code and data pages, which are paged in on demand the first time they are touched — nothing is copied up front. A program can map things itself with the <code>mmap</code> system call.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi nhiều tiến trình cùng chạy <code>bash</code> hay dùng chung thư viện C chuẩn: mã chỉ-đọc đó được ánh xạ chung một bản vật lý thay vì nhân bản cho mỗi tiến trình.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi nhiều chương trình dùng chung một thư viện, máy chỉ giữ một bản trong bộ nhớ.</span>
+        <span class="en-only" lang="en">When many processes run <code>bash</code> or use the standard C library: that read-only code is mapped to one shared physical copy instead of duplicated per process.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Tệp thường và tệp ẩn danh</h4>
+          <p>Vùng ánh xạ tới tệp thường lấy nội dung từ tệp (phần dư được đệm số 0); vùng ánh xạ tới tệp ẩn danh toàn số 0 — lần đầu chạm, nhân tìm trang nạn nhân, xoá về 0 và đánh dấu thường trú, nên gọi là trang <i>demand-zero</i>. Sau khi khởi tạo, trang được hoán đổi với một <i>tệp hoán đổi (swap file)</i>; dung lượng swap chặn tổng số trang ảo có thể cấp.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Cấp phát động vì sao cần</h4>
+          <p>Thường ta không biết trước kích cỡ của vài cấu trúc dữ liệu cho tới khi chạy. Cấp phát mảng với kích cỡ cứng là ý tồi; cấp phát động cho phép kích cỡ chỉ bị giới hạn bởi lượng bộ nhớ ảo còn trống.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">malloc / free</span>
+      <h3>
+        <span class="standard-copy">Cấp phát động — phân mảnh, danh sách rỗi, và gộp khối</span>
+        <span class="easy-only">Xin–trả bộ nhớ — vì sao bộ nhớ bị vụn và cách gộp lại</span>
+        <span class="en-only" lang="en">Dynamic allocation — fragmentation, free lists, coalescing</span>
+      </h3>
+      <p class="standard-copy">Kẻ thù của tận dụng heap là <b>phân mảnh (fragmentation)</b>: <i>phân mảnh trong (internal)</i> khi khối cấp lớn hơn tải trọng (do căn chỉnh hay cỡ tối thiểu), và <i>phân mảnh ngoài (external)</i> khi tổng chỗ rỗi đủ nhưng không khối rỗi nào đủ lớn. Để theo dõi khối, bộ cấp phát dùng <i>danh sách rỗi ngầm (implicit free list)</i>: mỗi khối có một header một từ ghi kích cỡ và bit đã-cấp — vì căn chỉnh 8 byte nên 3 bit thấp luôn bằng 0 và được tận dụng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Dùng heap lâu, bộ nhớ dễ bị vụn: nhiều mảnh rỗi nhỏ rải rác, cộng lại thì đủ nhưng không mảnh nào đủ to cho yêu cầu. Để dễ quản, máy ghi chú ngay trong mỗi khối rằng nó to bao nhiêu và còn rỗi hay đã dùng. <b>Nhớ nhé: bộ nhớ dùng lâu dễ vụn; gộp các mảnh rỗi cạnh nhau sẽ đỡ vụn.</b></p>
+      <p class="en-only" lang="en">The enemy of heap utilization is <b>fragmentation</b>: <i>internal</i> (an allocated block larger than its payload, from alignment or a minimum size) and <i>external</i> (enough free space in total, but no single free block large enough). To track blocks, allocators use an <i>implicit free list</i>: each block has a one-word header recording size and an allocated bit — with 8-byte alignment the low 3 bits are always 0 and are reused for flags.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi chọn chính sách đặt khối — <i>first fit</i>, <i>next fit</i> (do Knuth đề xuất), hay <i>best fit</i> — bạn đang đánh đổi tốc độ lấy tận dụng; best fit thường tận dụng tốt hơn nhưng phải quét cả heap.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span>
+        <span class="easy-only">Chọn cách tìm chỗ trống nhanh hay chọn chỗ vừa khít nhất — luôn phải đánh đổi.</span>
+        <span class="en-only" lang="en">When choosing a placement policy — <i>first fit</i>, <i>next fit</i> (proposed by Knuth), or <i>best fit</i> — you trade speed for utilization; best fit usually utilizes better but must scan the whole heap.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Gộp khối và thẻ biên</h4>
+          <p>Khi giải phóng, các khối rỗi cạnh nhau phải được <i>gộp (coalescing)</i> để tránh "phân mảnh giả". Gộp khối kế sau thì dễ; để gộp khối trước trong thời gian hằng, Knuth nghĩ ra <b>thẻ biên (boundary tags)</b> — thêm một footer sao chép header ở cuối mỗi khối.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Danh sách rỗi phân hạng</h4>
+          <p>Bộ cấp phát chất lượng sản phẩm như gói GNU <code>malloc</code> dùng <i>segregated fits</i>: một mảng các danh sách rỗi theo lớp kích cỡ, nên một tìm kiếm first-fit trong danh sách phân hạng xấp xỉ best-fit trên cả heap mà không phải quét toàn bộ.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">garbage collection</span>
+      <h3>
+        <span class="standard-copy">Thu gom rác — tự động đòi lại bộ nhớ không còn dùng</span>
+        <span class="easy-only">Thu gom rác — máy tự dọn bộ nhớ bỏ quên</span>
+        <span class="en-only" lang="en">Garbage collection — reclaiming memory automatically</span>
+      </h3>
+      <p class="standard-copy">Một <b>bộ thu gom rác (garbage collector)</b> tự động trả lại các khối đã cấp mà chương trình không còn cần (gọi là <i>rác</i>). Nó xem bộ nhớ như một <i>đồ thị khả đạt (reachability graph)</i>: các nút gốc (thanh ghi, biến trên ngăn xếp, biến toàn cục) trỏ vào heap; nút nào không còn đường đi từ gốc tới là rác và có thể đòi lại. Thu gom rác có từ các hệ Lisp do John McCarthy phát triển đầu thập niên 1960.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <p class="easy-only">Trong vài ngôn ngữ, bạn không phải tự trả bộ nhớ — máy tự dọn giúp. Nó dò xem khối nào còn ai dùng tới không; khối nào không ai với tới được thì coi là rác và thu lại. Ý tưởng này có từ ngôn ngữ Lisp những năm 1960. <b>Nhớ nhé: khối không ai với tới được nữa là rác, máy có thể tự dọn.</b></p>
+      <p class="en-only" lang="en">A <b>garbage collector</b> automatically frees allocated blocks the program no longer needs (called <i>garbage</i>). It views memory as a <i>reachability graph</i>: root nodes (registers, stack variables, global variables) point into the heap; any node with no path from a root is garbage and can be reclaimed. Garbage collection dates back to the Lisp systems John McCarthy developed in the early 1960s.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong Java, ML, Perl bạn gọi cấp phát mà không bao giờ gọi free; với C/C++ có thể cài bộ thu gom <i>bảo thủ (conservative)</i> trên nền <code>malloc</code> — nó đánh dấu đúng mọi khối khả đạt nhưng đôi khi giữ nhầm khối thật ra là rác.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Trong Java hay Python bạn hầu như không phải tự trả bộ nhớ — máy lo việc đó.</span>
+        <span class="en-only" lang="en">In Java, ML, and Perl you allocate but never free; for C/C++ a <i>conservative</i> collector can run atop <code>malloc</code> — it marks every reachable block correctly but may keep some that are actually garbage.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Thuật toán Mark&amp;Sweep</h4>
+          <p>Bộ thu gom Mark&amp;Sweep gốc của McCarthy gồm hai pha: pha <i>mark</i> đánh dấu mọi khối đã cấp còn khả đạt từ các gốc, pha <i>sweep</i> quét toàn heap giải phóng mọi khối đã cấp mà chưa đánh dấu. Một bit thấp còn trống trong header dùng để ghi dấu.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao C phải "bảo thủ"</h4>
+          <p>C không gắn kiểu cho ô nhớ, nên một <code>int</code> có thể trông như con trỏ. Bộ thu gom không thể biết chắc một giá trị là địa chỉ hay dữ liệu, nên phải bảo thủ đánh dấu khối đó là khả đạt — đúng về an toàn, nhưng có thể để lại phân mảnh ngoài không cần thiết.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Dù có bộ cấp phát hay bộ thu gom, con trỏ trong C vẫn là con dao hai lưỡi. Chương khép lại bằng một danh mục các lỗi bộ nhớ hiểm hóc nhất — những lỗi "ra tay từ xa", biểu hiện cách xa cả về thời gian lẫn vị trí so với nguyên nhân.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Dù máy giúp quản lý bộ nhớ, viết C vẫn dễ sai với con trỏ. Phần cuối điểm mặt các lỗi bộ nhớ hay gặp nhất — thường rất khó tìm vì hậu quả hiện ra ở chỗ khác.</p>
+    <p class="en-only" lang="en">Even with an allocator or a collector, pointers in C stay a double-edged sword. The chapter closes with a catalog of the nastiest memory bugs — the "action at a distance" kind, showing up far from their cause in both time and space.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+    <p class="eyebrow" id="ngo-nhan-title">
+      <span class="vi-only">Ba lỗi bộ nhớ và ngộ nhận thường gặp</span>
+      <span class="en-only" lang="en">Three common memory bugs and misconceptions</span>
+    </p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Bộ nhớ heap mặc định đã được xoá về 0”</span>
+          <span class="en-only" lang="en">“Heap memory is initialized to zero by default”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> vùng <code>malloc</code> trả về chứa toàn số 0, như biến toàn cục.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> chỉ bộ nhớ bss (biến toàn cục chưa khởi tạo) mới được trình nạp xoá về 0; bộ nhớ heap thì không. Phải tự xoá hoặc dùng <code>calloc</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> memory from <code>malloc</code> is all zeros, like a global.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> only bss memory (uninitialized globals) is zeroed by the loader; heap memory is not. Zero it yourself or use <code>calloc</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Con trỏ cùng cỡ với thứ nó trỏ tới”</span>
+          <span class="en-only" lang="en">“A pointer is the same size as what it points to”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> viết <code>sizeof(int)</code> thay cho <code>sizeof(int *)</code> khi cấp mảng con trỏ cũng chẳng sao; vòng lặp <code>&lt;= n</code> chỉ lệch một chút.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> trên i7 con trỏ lớn hơn <code>int</code>, nên lỗi cỡ ghi đè quá mảng; lỗi lệch-một (off-by-one) ghi đè vùng kế tiếp — cả hai thường lộ ra rất muộn.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> writing <code>sizeof(int)</code> for <code>sizeof(int *)</code> when allocating a pointer array is fine; a <code>&lt;= n</code> loop is only slightly off.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> on the i7 a pointer is larger than an <code>int</code>, so the size bug writes past the array; an off-by-one bug overwrites the next region — both surface much later.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Trả xong vẫn dùng con trỏ được; quên free cũng không sao”</span>
+          <span class="en-only" lang="en">“A freed pointer still works; forgetting free is harmless”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> sau <code>free(x)</code> vẫn đọc/ghi qua <code>x</code>; không gọi <code>free</code> thì chương trình vẫn chạy.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> dùng khối đã giải phóng (dangling pointer) có thể ghi đè khối khác; quên <code>free</code> gây <i>rò rỉ bộ nhớ (memory leak)</i> — đặc biệt chết người với daemon và máy chủ chạy mãi không dừng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> after <code>free(x)</code> you can still read/write through <code>x</code>; skipping <code>free</code> is fine.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> using a freed block (a dangling pointer) can overwrite another block; forgetting <code>free</code> causes a <i>memory leak</i> — deadly for daemons and servers that never terminate.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm bộ nhớ ảo</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped virtual memory</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã theo trọn hành trình từ địa chỉ ảo tới trang vật lý, qua dịch địa chỉ, cấp phát và các lỗi bộ nhớ.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you followed the whole path from virtual address to physical page, through translation, allocation, and the memory bugs.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Phân biệt địa chỉ ảo và địa chỉ vật lý; MMU và bảng trang đóng vai trò gì khi dịch giữa chúng?</p>
+        <p class="deep-only">Gợi ý sâu hơn: VPN, VPO, PPN, PPO khớp với nhau thế nào, và vì sao VPO ≡ PPO?</p>
+      </li>
+      <li>
+        <p>Nêu ba vai trò của bộ nhớ ảo, và cho biết vai trò nào dựa vào các bit quyền trong PTE.</p>
+        <p class="deep-only">Gợi ý sâu hơn: một page fault khác một lỗi bảo vệ (protection fault) ở điểm nào?</p>
+      </li>
+      <li>
+        <p>TLB giải quyết vấn đề gì, và vì sao bảng trang nhiều cấp lại tiết kiệm bộ nhớ?</p>
+        <p class="deep-only">Gợi ý sâu hơn: trong hệ i7, VPN 36-bit được chia ra sao cho bốn cấp bảng?</p>
+      </li>
+      <li>
+        <p>Phân mảnh trong khác phân mảnh ngoài thế nào, và gộp khối với thẻ biên giúp gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao segregated fits xấp xỉ được best fit mà không phải quét cả heap?</p>
+      </li>
+      <li>
+        <p>Bộ thu gom Mark&amp;Sweep đòi lại bộ nhớ ra sao, và vì sao với C nó phải "bảo thủ"?</p>
+        <p class="deep-only">Gợi ý sâu hơn: lỗi dùng con trỏ treo (dangling) và rò rỉ bộ nhớ khác nhau ở hậu quả nào?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Địa chỉ "ảo" khác địa chỉ "thật" ở chỗ nào? Ai đổi từ ảo sang thật?</p></li>
+      <li><p>Bộ nhớ ảo giúp được những việc gì? Kể một việc.</p></li>
+      <li><p>Vì sao máy cần một "sổ tay nhớ nhanh" (TLB) khi dịch địa chỉ?</p></li>
+      <li><p>Mượn bộ nhớ bằng lệnh gì, trả bằng lệnh gì? Quên trả thì sao?</p></li>
+      <li><p>Sau khi trả bộ nhớ, còn dùng con trỏ cũ được không? Vì sao?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>How does a virtual address differ from a physical one? What role do the MMU and page table play?</p></li>
+      <li><p>Name the three roles of virtual memory, and say which relies on the PTE permission bits.</p></li>
+      <li><p>What problem does the TLB solve, and why do multi-level page tables save memory?</p></li>
+      <li><p>How do internal and external fragmentation differ, and what do boundary tags help with?</p></li>
+      <li><p>How does a Mark&amp;Sweep collector reclaim memory, and why must it be conservative for C?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Bộ nhớ ảo là <span class="closing-accent">một lớp gián tiếp</span> — CPU nói địa chỉ ảo, MMU lặng lẽ dịch sang địa chỉ vật lý qua bảng trang — và chỉ một cơ chế ấy <span class="closing-accent">vừa đệm, vừa quản lý, vừa bảo vệ bộ nhớ</span>. Hiểu nó là hiểu vì sao <code>malloc</code> và <code>mmap</code> chạy được, và vì sao con trỏ hỏng lại kết thúc bằng "segmentation fault".<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Bộ nhớ ảo là <span class="closing-accent">một trò khéo giấu phía sau</span>: bạn nói địa chỉ ảo, máy đổi ra chỗ thật. <span class="closing-accent">Một trò mà làm được ba việc</span>: tiết kiệm, gọn gàng, an toàn. <b>Nhớ nhé: hiểu bộ nhớ ảo thì con trỏ và bộ nhớ hết còn là bí ẩn.</b></p>
+    <p class="en-only" lang="en">Virtual memory is <span class="closing-accent">a layer of indirection</span> — the CPU speaks virtual addresses, the MMU quietly translates them to physical ones through a page table — and that one mechanism <span class="closing-accent">caches, manages, and protects memory at once</span>. Understanding it is understanding why <code>malloc</code> and <code>mmap</code> work, and why a bad pointer ends in a "segmentation fault".<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-8-exceptional-control-flow.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 8 · Luồng điều khiển ngoại lệ</span>
+    <span class="nav-title en-only" lang="en">Chapter 8 · Exceptional Control Flow</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-10-system-level-io.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 10 · Vào/ra mức hệ thống</span>
+    <span class="nav-title en-only" lang="en">Chapter 10 · System-Level I/O</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, tái bản lần thứ 3, Global Edition, Pearson, 2016 (ISBN 978-1-292-10176-7) — Chương 9, “Virtual Memory”, trang 838–911.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, 3rd edition, Global Edition, Pearson, 2016 (ISBN 978-1-292-10176-7) — Chapter 9, “Virtual Memory”, pp. 838–911.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the authors and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the authors' words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, 3rd ed. (Global Edition), Pearson, 2016, ch. 9 “Virtual Memory”, pp. 838–911. — <a href="http://csapp.cs.cmu.edu/" target="_blank" rel="noopener noreferrer">csapp.cs.cmu.edu</a></li>
+      <li id="ref-2">CS:APP — trang nhà của sách tại Carnegie Mellon University (tài nguyên, labs, bản mẫu chương) / the book's home page at Carnegie Mellon. <a href="https://csapp.cs.cmu.edu/3e/home.html" target="_blank" rel="noopener noreferrer">csapp.cs.cmu.edu/3e/home.html</a></li>
+      <li id="ref-3">Intel, <i>Intel 64 and IA-32 Architectures Software Developer's Manual, Volume 3A: System Programming Guide</i> (paging, 4-level page tables, the XD/execute-disable bit). <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html" target="_blank" rel="noopener noreferrer">intel.com — Intel SDM</a></li>
+      <li id="ref-4"><code>mmap(2)</code> — Linux manual page (memory mapping, anonymous mappings). <a href="https://man7.org/linux/man-pages/man2/mmap.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/mmap.2.html</a></li>
+      <li id="ref-5"><code>malloc(3)</code> — Linux manual page (<code>malloc</code>, <code>free</code>, <code>calloc</code>, alignment). <a href="https://man7.org/linux/man-pages/man3/malloc.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/malloc.3.html</a></li>
+      <li id="ref-6">John McCarthy, “Recursive Functions of Symbolic Expressions and Their Computation by Machine, Part I”, <i>Communications of the ACM</i>, 1960 — origin of garbage collection in Lisp. <a href="https://doi.org/10.1145/367177.367199" target="_blank" rel="noopener noreferrer">doi.org/10.1145/367177.367199</a></li>
+      <li id="ref-7">Donald E. Knuth, <i>The Art of Computer Programming, Volume 1: Fundamental Algorithms</i>, 3rd ed., Addison-Wesley, 1997 — dynamic storage allocation, next fit, and boundary tags. <a href="https://openlibrary.org/works/OL5846759W" target="_blank" rel="noopener noreferrer">openlibrary.org/works/OL5846759W</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-8-exceptional-control-flow.html">chapter 8</a>
+      <a href="chapter-10-system-level-io.html">chapter 10</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('csapp-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('csapp-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('csapp-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

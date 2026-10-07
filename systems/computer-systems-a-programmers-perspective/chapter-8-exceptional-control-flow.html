@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 8 · Luồng điều khiển ngoại lệ — Computer Systems: A Programmer's Perspective</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 8 “Exceptional Control Flow” trong Computer Systems: A Programmer's Perspective (Bryant & O'Hallaron, Pearson, 3rd ed., 2016): ngoại lệ và bốn lớp (ngắt, bẫy, lỗi, huỷ), bảng ngoại lệ và ngoại lệ trên Linux/x86-64, tiến trình với luồng điều khiển logic và không gian địa chỉ riêng, chuyển ngữ cảnh, xử lý lỗi lời gọi hệ thống, điều khiển tiến trình với fork/execve/waitpid, tín hiệu, và nhảy phi cục bộ.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('csapp-reading-mode'),
+l=localStorage.getItem('csapp-lang'),
+t=localStorage.getItem('csapp-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   HOW LINUX WORKS — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"CS:APP / 08";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    Computer Systems: A Programmer's Perspective
+    <span>Chương 8 · Exceptional Control Flow</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 8 · Luồng điều khiển ngoại lệ</span>
+      <span class="en-only" lang="en">Chapter 8 · Exceptional Control Flow</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Khi luồng điều khiển bẻ lái: ngoại lệ, tiến trình và tín hiệu</span>
+      <span class="easy-only">Khi chương trình bị cắt ngang: ngắt, tiến trình và tín hiệu</span>
+      <span class="en-only" lang="en">When control flow swerves: exceptions, processes, and signals</span>
+    </h1>
+
+    <p class="standard-copy">Từ lúc bật nguồn cho tới khi tắt máy, bộ đếm chương trình (program counter) chạy qua một chuỗi giá trị địa chỉ lệnh; mỗi bước nhảy trơn tru trong chuỗi ấy là <i>luồng điều khiển</i> thông thường. Bryant và O'Hallaron dành trọn chương này cho những lúc luồng ấy <b>bẻ lái đột ngột</b> — cái mà họ gọi là <b>luồng điều khiển ngoại lệ (exceptional control flow, ECF)</b> — xảy ra ở mọi tầng của hệ thống.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Bình thường máy chạy hết lệnh này tới lệnh kế, êm ru như đọc một trang sách. Nhưng đôi khi có việc gấp chen ngang: bàn phím gõ Ctrl+C, đĩa báo đã xong, hay chương trình chia cho 0. Lúc đó máy phải tạm dừng, lo việc gấp, rồi mới quay lại. Những lúc "chen ngang" đó là trọng tâm của chương. <b>Nhớ nhé: chương này nói về lúc máy bị cắt ngang và cách nó xử lý.</b></p>
+    <p class="en-only" lang="en">From the time you power on a processor until you shut it off, the program counter runs through a sequence of instruction addresses; each smooth step is ordinary <i>control flow</i>. Bryant and O'Hallaron devote this chapter to the moments that flow <b>swerves abruptly</b> — what they call <b>exceptional control flow (ECF)</b> — which occurs at every level of a system.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">ECF là một sợi chỉ hợp nhất nhiều cơ chế tưởng chừng rời rạc: ngoại lệ phần cứng (hardware exception), chuyển ngữ cảnh (context switch) của hệ điều hành, tín hiệu (signal) ở mức phần mềm, và nhảy phi cục bộ (nonlocal jump) ở mức ngôn ngữ C. Các tác giả nêu rõ lý do người lập trình ứng dụng cần hiểu ECF: nó giúp hiểu các khái niệm hệ thống quan trọng, hiểu cách ứng dụng tương tác với hệ điều hành, viết được những chương trình đồng thời hấp dẫn như shell và server, hiểu cơ chế luồng (flow) của phần mềm, và hiểu cách xử lý tín hiệu.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> ngoài luồng điều khiển trơn tru do rẽ nhánh và gọi hàm tạo ra, hệ thống còn dùng <b>luồng điều khiển ngoại lệ</b> ở mọi tầng — ngoại lệ phần cứng, tiến trình và chuyển ngữ cảnh của nhân, tín hiệu, và nhảy phi cục bộ — làm cơ chế nền tảng để cung cấp tính đồng thời và để ứng dụng tương tác an toàn với hệ điều hành.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> máy không chỉ chạy lệnh theo thứ tự. Nó còn có nhiều cách "nhảy cóc" khi có việc gấp: ngắt từ phần cứng, chia lượt giữa các chương trình, gửi tín hiệu, và nhảy vọt trong mã C. <b>Nhớ nhé: hiểu các cú nhảy cóc này là hiểu cách máy làm nhiều việc cùng lúc.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> beyond the smooth control flow produced by branches and calls, a system relies on <b>exceptional control flow</b> at every level — hardware exceptions, the kernel's processes and context switches, signals, and nonlocal jumps — as the basic mechanism for providing concurrency and letting applications interact safely with the operating system.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: luồng điều khiển ngoại lệ xuất hiện ở ba tầng — tầng phần cứng với ngoại lệ, tầng hệ điều hành với tiến trình và chuyển ngữ cảnh, tầng ứng dụng với tín hiệu và nhảy phi cục bộ. Diagram: exceptional control flow appears at three levels — the hardware level with exceptions, the OS level with processes and context switches, and the application level with signals and nonlocal jumps.">
+    <div class="core">
+      <b><span class="vi-only">Luồng điều khiển ngoại lệ (ECF)</span><span class="en-only" lang="en">Exceptional control flow (ECF)</span></b>
+      <small class="standard-copy">Một cơ chế chung, xuất hiện ở cả ba tầng</small>
+      <small class="easy-only">Cách máy "nhảy cóc" khi có việc gấp</small>
+      <small class="en-only" lang="en">One mechanism, appearing at all three levels</small>
+    </div>
+
+    <div class="node">
+      <b><span class="vi-only">Tầng phần cứng</span><span class="en-only" lang="en">Hardware level</span></b>
+      <small class="standard-copy">Ngoại lệ: ngắt, bẫy, lỗi, huỷ — qua bảng ngoại lệ</small>
+      <small class="easy-only">Ngắt đột ngột do sự kiện trong bộ xử lý</small>
+      <small class="en-only" lang="en">Exceptions: interrupts, traps, faults, aborts — via the exception table</small>
+    </div>
+
+    <div class="node">
+      <b><span class="vi-only">Tầng hệ điều hành</span><span class="en-only" lang="en">OS level</span></b>
+      <small class="standard-copy">Tiến trình, luồng điều khiển logic, chuyển ngữ cảnh</small>
+      <small class="easy-only">Chia lượt máy cho nhiều chương trình</small>
+      <small class="en-only" lang="en">Processes, logical control flows, context switches</small>
+    </div>
+
+    <div class="node">
+      <b><span class="vi-only">Tầng ứng dụng</span><span class="en-only" lang="en">Application level</span></b>
+      <small class="standard-copy">fork/execve/waitpid, tín hiệu, nhảy phi cục bộ</small>
+      <small class="easy-only">Tạo tiến trình, gửi tín hiệu, nhảy vọt trong mã C</small>
+      <small class="en-only" lang="en">fork/execve/waitpid, signals, nonlocal jumps</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#ngoai-le">
+    <span>01</span>
+    <b class="standard-copy">Ngoại lệ: bốn lớp và bảng ngoại lệ</b>
+    <b class="easy-only">Ngoại lệ: bốn kiểu cắt ngang</b>
+    <b class="en-only" lang="en">Exceptions: four classes and the exception table</b>
+  </a>
+  <a href="#tien-trinh">
+    <span>02</span>
+    <b class="standard-copy">Tiến trình, chuyển ngữ cảnh, và xử lý lỗi</b>
+    <b class="easy-only">Tiến trình và cách máy chia lượt</b>
+    <b class="en-only" lang="en">Processes, context switches, and error handling</b>
+  </a>
+  <a href="#dieu-khien">
+    <span>03</span>
+    <b class="standard-copy">Điều khiển tiến trình, tín hiệu, và nhảy phi cục bộ</b>
+    <b class="easy-only">fork, tín hiệu, và cú nhảy vọt</b>
+    <b class="en-only" lang="en">Process control, signals, and nonlocal jumps</b>
+  </a>
+  <a href="#ngo-nhan">
+    <span>04</span>
+    <b class="standard-copy">Ba ngộ nhận thường gặp</b>
+    <b class="easy-only">Ba chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Three common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="ngoai-le" aria-labelledby="ngoai-le-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="ngoai-le-title">
+      <span class="standard-copy">Ngoại lệ: phần cứng và nhân hợp tác để bẻ lái luồng điều khiển</span>
+      <span class="easy-only">Ngoại lệ: lúc máy bị cắt ngang và ai lo việc gấp</span>
+      <span class="en-only" lang="en">Exceptions: hardware and kernel cooperate to divert control flow</span>
+    </h2>
+    <p class="standard-copy">Một <b>ngoại lệ (exception)</b> là sự thay đổi đột ngột của luồng điều khiển để đáp lại một thay đổi nào đó trong trạng thái của bộ xử lý. Thay đổi trạng thái ấy gọi là một <i>sự kiện (event)</i>: có thể liên quan trực tiếp tới lệnh đang chạy (lỗi trang bộ nhớ ảo, tràn số học, chia cho 0), hoặc không liên quan (bộ định thời reo, một yêu cầu I/O hoàn tất).<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">"Ngoại lệ" là lúc máy đang chạy một lệnh thì có chuyện xảy ra, buộc nó phải dừng lại ngay và nhảy đi lo chuyện đó. Chuyện có thể do chính lệnh đang chạy gây ra (như chia cho 0), hoặc do bên ngoài (như bàn phím, đĩa báo tin). <b>Nhớ nhé: ngoại lệ = máy đang chạy thì bị một sự kiện cắt ngang.</b></p>
+    <p class="en-only" lang="en">An <b>exception</b> is an abrupt change in the control flow in response to some change in the processor's state. That state change is called an <i>event</i>: it may be directly related to the current instruction (a virtual-memory page fault, an arithmetic overflow, a divide by zero), or unrelated to it (a system timer goes off, an I/O request completes).<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Mỗi loại ngoại lệ được gán một số nguyên không âm duy nhất gọi là <i>số hiệu ngoại lệ (exception number)</i>. Khi khởi động, hệ điều hành dựng một bảng nhảy gọi là <b>bảng ngoại lệ (exception table)</b> sao cho mục <i>k</i> chứa địa chỉ bộ xử lý ngoại lệ <i>k</i>. Khi sự kiện xảy ra, bộ xử lý dùng số hiệu làm chỉ số vào bảng — địa chỉ nền của bảng nằm trong một thanh ghi riêng gọi là <i>exception table base register</i> — rồi gọi gián tiếp tới bộ xử lý tương ứng, chạy trong chế độ nhân (kernel mode).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Mỗi loại sự cố có một con số riêng. Máy giữ một "bảng tra địa chỉ": tra số sự cố ra địa chỉ đoạn mã lo sự cố đó, rồi nhảy tới đó chạy. <b>Nhớ nhé: mỗi sự cố có một số, và một bảng tra chỉ chỗ xử lý.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Each kind of exception is assigned a unique nonnegative integer <i>exception number</i>. At boot time the OS builds a jump table — the <b>exception table</b> — so that entry <i>k</i> holds the address of the handler for exception <i>k</i>. When the event occurs, the processor uses the number as an index into the table (whose base address lives in a special <i>exception table base register</i>) and makes an indirect call to the handler, which runs in kernel mode.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">Lớp     | Đồng bộ? | Quay lại<br>Ngắt    | async    | lệnh kế tiếp<br>Bẫy     | sync     | lệnh kế tiếp<br>Lỗi     | sync     | lệnh hiện tại / huỷ<br>Huỷ     | sync     | không quay lại</p>
+      <p class="easy-only">Ngắt → do bên ngoài<br>Bẫy → cố ý gọi nhân<br>Lỗi → có thể sửa<br>Huỷ → chết luôn</p>
+      <p class="en-only" lang="en">Class     | Sync? | Returns to<br>Interrupt | async | next instr.<br>Trap      | sync  | next instr.<br>Fault     | sync  | current instr. / abort<br>Abort     | sync  | never returns</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">exception handling</span>
+      <h3>
+        <span class="standard-copy">Cơ chế xử lý — nửa phần cứng, nửa phần mềm</span>
+        <span class="easy-only">Cách xử lý — phần cứng với phần mềm cùng lo</span>
+        <span class="en-only" lang="en">Exception handling — half hardware, half software</span>
+      </h3>
+      <p class="standard-copy">Ngoại lệ khó hiểu vì nó đòi phần cứng và phần mềm phối hợp chặt chẽ. Giống một lời gọi thủ tục, bộ xử lý đẩy địa chỉ trả về lên ngăn xếp trước khi nhảy tới bộ xử lý; nhưng khác ở chỗ nó còn đẩy thêm trạng thái bộ xử lý (ví dụ trên x86-64 là thanh ghi EFLAGS chứa mã điều kiện), và khi đi từ chương trình người dùng vào nhân, mọi thứ được đẩy lên <i>ngăn xếp của nhân</i> chứ không phải ngăn xếp người dùng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Phần cứng lo phần đầu: phát hiện sự cố và nhảy tới đúng đoạn mã. Phần mềm (bộ xử lý ngoại lệ) lo phần sau: giải quyết sự cố rồi quyết định có quay lại chương trình cũ hay không. <b>Nhớ nhé: phần cứng bắt lấy sự cố, phần mềm giải quyết nó.</b></p>
+      <p class="en-only" lang="en">Exceptions are hard because they need close hardware–software cooperation. Like a procedure call, the processor pushes a return address before branching to the handler; unlike one, it also pushes extra processor state (e.g. x86-64 pushes the EFLAGS register with the condition codes), and when crossing from a user program into the kernel, everything is pushed onto the <i>kernel's stack</i>, not the user's.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi chương trình gọi một dịch vụ của hệ điều hành, hay khi đĩa báo "đã đọc xong" — phần cứng đang âm thầm bẻ lái qua bảng ngoại lệ.</span>
+        <span class="easy-only">Mỗi lần máy phản ứng với bàn phím, đĩa, hay một lỗi — cơ chế này đang chạy.</span>
+        <span class="en-only" lang="en">Every time a program requests an OS service, or a disk signals "read complete" — the hardware is quietly diverting through the exception table.</span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ba kết cục có thể</h4>
+          <p>Sau khi xử lý xong, bộ xử lý ngoại lệ làm một trong ba việc: trả điều khiển về lệnh hiện tại <code>Icurr</code>, trả về lệnh kế tiếp <code>Inext</code>, hoặc huỷ chương trình bị cắt ngang — tuỳ loại sự kiện gây ra ngoại lệ.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Return from interrupt</h4>
+          <p>Nếu quay lại, bộ xử lý thực thi một lệnh đặc biệt "return from interrupt": pop trạng thái đã lưu trở lại các thanh ghi, khôi phục chế độ người dùng (nếu ngoại lệ đã cắt ngang một chương trình người dùng), rồi trả điều khiển.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">four classes</span>
+      <h3>
+        <span class="standard-copy">Bốn lớp — ngắt, bẫy, lỗi, huỷ</span>
+        <span class="easy-only">Bốn kiểu — ngắt, bẫy, lỗi, huỷ</span>
+        <span class="en-only" lang="en">Four classes — interrupts, traps, faults, aborts</span>
+      </h3>
+      <p class="standard-copy">Ngoại lệ chia thành bốn lớp. <b>Ngắt (interrupt)</b> xảy ra <i>không đồng bộ</i> do tín hiệu từ thiết bị I/O bên ngoài, luôn quay về lệnh kế tiếp. Ba lớp còn lại xảy ra <i>đồng bộ</i> do thực thi một lệnh. <b>Bẫy (trap)</b> là ngoại lệ cố ý, dùng để hiện thực lời gọi hệ thống, cũng quay về lệnh kế tiếp. <b>Lỗi (fault)</b> có thể sửa được: nếu sửa xong thì chạy lại lệnh gây lỗi, nếu không thì huỷ. <b>Huỷ (abort)</b> là lỗi phần cứng không khắc phục được và không bao giờ quay lại.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Có bốn kiểu cắt ngang. Ngắt: do bên ngoài (bàn phím, đĩa), xong thì chạy tiếp. Bẫy: chương trình cố ý xin nhân làm việc gì đó. Lỗi: có thể sửa rồi làm lại, như thiếu một trang bộ nhớ. Huỷ: hỏng nặng, chết luôn. <b>Nhớ nhé: ngắt–bẫy–lỗi–huỷ, chỉ "huỷ" là không quay lại.</b></p>
+      <p class="en-only" lang="en">Exceptions fall into four classes. <b>Interrupts</b> occur <i>asynchronously</i> from external I/O signals and always return to the next instruction. The other three occur <i>synchronously</i> from executing an instruction. <b>Traps</b> are intentional exceptions used to implement system calls, also returning to the next instruction. <b>Faults</b> are potentially recoverable: if repaired, the faulting instruction is re-executed, otherwise the program aborts. <b>Aborts</b> are unrecoverable hardware errors that never return.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lỗi trang (page fault) là ví dụ kinh điển của lớp "lỗi": lệnh truy cập một trang chưa có trong bộ nhớ, bộ xử lý nạp trang đó từ đĩa rồi cho lệnh chạy lại.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi chương trình cần một mẩu dữ liệu chưa nằm trong bộ nhớ, máy lẳng lặng nạp vào rồi chạy lại.</span>
+        <span class="en-only" lang="en">A page fault is the classic "fault": an instruction touches a page not yet in memory, the handler loads it from disk, then the instruction re-executes.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Bẫy và lời gọi hệ thống</h4>
+          <p>Ứng dụng cần dịch vụ của nhân — đọc tệp (<code>read</code>), tạo tiến trình (<code>fork</code>), nạp chương trình (<code>execve</code>), kết thúc (<code>exit</code>) — qua lệnh <code>syscall</code>. Từ góc nhìn lập trình viên, lời gọi hệ thống giống hệt một lời gọi hàm, nhưng nó chạy trong chế độ nhân với toàn quyền.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một lưu ý thuật ngữ</h4>
+          <p>Thuật ngữ khác nhau giữa các hệ thống: nhiều đặc tả ISA tách "interrupt" (không đồng bộ) khỏi "exception" (đồng bộ). Sách dùng "exception" làm thuật ngữ chung, chỉ phân biệt khi cần.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">Linux / x86-64</span>
+      <h3>
+        <span class="standard-copy">Ngoại lệ trên Linux/x86-64 — những con số cụ thể</span>
+        <span class="easy-only">Ngoại lệ trên Linux/x86-64 — số hiệu cụ thể</span>
+        <span class="en-only" lang="en">Linux/x86-64 exceptions — the concrete numbers</span>
+      </h3>
+      <p class="standard-copy">Hệ x86-64 có tới 256 loại ngoại lệ. Các số từ 0 đến 31 do kiến trúc sư Intel định nghĩa nên giống nhau trên mọi hệ x86-64; các số từ 32 đến 255 là ngắt và bẫy do hệ điều hành định nghĩa. Vài ví dụ: số 0 là <i>divide error</i> (lỗi chia, lớp fault; Linux báo "Floating exception"), số 13 là <i>general protection fault</i> (Linux báo "Segmentation fault"), số 14 là <i>page fault</i>, số 18 là <i>machine check</i> (lớp abort).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only">Trên máy x86-64 chạy Linux, mỗi loại sự cố có một số. Số 0–31 là của Intel đặt (giống nhau mọi máy), số 32–255 là của hệ điều hành. Ví dụ "Segmentation fault" quen thuộc chính là ngoại lệ số 13. <b>Nhớ nhé: "Segmentation fault" là một ngoại lệ phần cứng có số hiệu hẳn hoi.</b></p>
+      <p class="en-only" lang="en">An x86-64 system has up to 256 exception types. Numbers 0–31 are defined by Intel's architects and so are identical on every x86-64 system; numbers 32–255 are OS-defined interrupts and traps. Examples: number 0 is <i>divide error</i> (a fault; Linux reports "Floating exception"), number 13 is the <i>general protection fault</i> (Linux reports "Segmentation fault"), number 14 is the <i>page fault</i>, and number 18 is a <i>machine check</i> (an abort).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lời gọi hệ thống trên x86-64 dùng lệnh <code>syscall</code>: theo quy ước, <code>%rax</code> giữ số hiệu lời gọi, tối đa sáu tham số nằm trong <code>%rdi, %rsi, %rdx, %r10, %r8, %r9</code>; khi trả về, <code>%rax</code> chứa giá trị trả về.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span>
+        <span class="easy-only">Khi chương trình xin nhân làm việc gì, nó đặt "số việc" vào một thanh ghi rồi gọi <code>syscall</code>.</span>
+        <span class="en-only" lang="en">A system call on x86-64 uses the <code>syscall</code> instruction: by convention <code>%rax</code> holds the call number, up to six arguments go in <code>%rdi, %rsi, %rdx, %r10, %r8, %r9</code>, and on return <code>%rax</code> holds the result.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Một vài lời gọi quen thuộc</h4>
+          <p>Mỗi lời gọi có một số hiệu riêng: <code>read</code> là 0, <code>write</code> là 1, <code>open</code> là 2, <code>fork</code> là 57, <code>execve</code> là 59, <code>_exit</code> là 60, <code>kill</code> là 62. Bảng nhảy của lời gọi hệ thống khác với bảng ngoại lệ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hàm bọc của thư viện C</h4>
+          <p>Hiếm khi lập trình viên gọi <code>syscall</code> trực tiếp; thư viện C chuẩn cung cấp các <i>hàm bọc (wrapper)</i> tiện lợi, đóng gói tham số, bẫy vào nhân, rồi trả kết quả về. Sách gọi chung lời gọi hệ thống và hàm bọc là <i>hàm mức hệ thống (system-level function)</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Ngoại lệ là những khối gạch nền tảng cho phép nhân hệ điều hành dựng nên khái niệm quan trọng bậc nhất của ngành: <b>tiến trình (process)</b>. Chuyển ngữ cảnh — thứ cho ta ảo giác "một mình một máy" — chính là một dạng luồng điều khiển ngoại lệ xây trên cơ chế ngoại lệ vừa nói.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Nhờ có ngoại lệ, hệ điều hành mới dựng được "tiến trình" — tức một chương trình đang chạy tưởng như chiếm cả máy. Phần tiếp theo nói về điều đó.</p>
+    <p class="en-only" lang="en">Exceptions are the building blocks that let the kernel create the field's most profound idea: the <b>process</b>. Context switching — which gives the illusion of owning the whole machine — is itself a form of exceptional control flow built on the exception mechanism we just saw.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="tien-trinh" aria-labelledby="tien-trinh-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="tien-trinh-title">
+      <span class="standard-copy">Tiến trình: hai ảo giác, chuyển ngữ cảnh, và xử lý lỗi hệ thống</span>
+      <span class="easy-only">Tiến trình: ảo giác "một mình một máy" và cách chia lượt</span>
+      <span class="en-only" lang="en">Processes: two illusions, context switches, and error handling</span>
+    </h2>
+    <p class="standard-copy">Định nghĩa kinh điển: một <b>tiến trình (process)</b> là một thể hiện của một chương trình đang thực thi. Mỗi chương trình chạy trong <i>ngữ cảnh (context)</i> của một tiến trình nào đó — gồm mã và dữ liệu trong bộ nhớ, ngăn xếp, nội dung các thanh ghi, bộ đếm chương trình, biến môi trường, và tập các mô tả tệp (file descriptor) đang mở. Tiến trình trao cho chương trình hai trừu tượng then chốt: một <i>luồng điều khiển logic (logical control flow)</i> và một <i>không gian địa chỉ riêng (private address space)</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">"Tiến trình" là một chương trình đang chạy. Hệ điều hành cho mỗi tiến trình cảm giác như nó chiếm trọn bộ xử lý và trọn bộ nhớ, dù thực ra máy đang chạy rất nhiều chương trình. <b>Nhớ nhé: tiến trình = chương trình đang chạy, được cho ảo giác "một mình một máy".</b></p>
+    <p class="en-only" lang="en">The classic definition: a <b>process</b> is an instance of a program in execution. Each program runs in the <i>context</i> of some process — its code and data in memory, its stack, its registers, its program counter, environment variables, and its set of open file descriptors. A process gives the program two key abstractions: an independent <i>logical control flow</i> and a <i>private address space</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Hai luồng điều khiển logic là <i>đồng thời (concurrent)</i> nếu thời gian thực thi của chúng chồng lấn nhau — bất kể chạy trên một hay nhiều lõi. Việc nhiều luồng chạy đan xen gọi là <i>đa nhiệm (multitasking)</i> hay <i>chia thời gian (time slicing)</i>. Khi (và chỉ khi) hai luồng chạy trên các lõi khác nhau thì mới gọi là <i>song song (parallel)</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> "Đồng thời" là hai việc có khoảng thời gian chồng lên nhau — kể cả khi chỉ có một người làm, luân phiên qua lại. "Song song" mới là thật sự hai người làm cùng lúc. <b>Nhớ nhé: đồng thời chưa chắc song song.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Two logical flows are <i>concurrent</i> if their executions overlap in time — whether on one core or many. Multiple flows interleaving is <i>multitasking</i> or <i>time slicing</i>. Only when two flows run on different cores are they <i>parallel</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">Ba trạng thái tiến trình:<br>&nbsp;&nbsp;Running — chạy / chờ xếp lịch<br>&nbsp;&nbsp;Stopped — tạm dừng tới khi SIGCONT<br>&nbsp;&nbsp;Terminated — dừng vĩnh viễn<br>Vùng user bắt đầu ở 0x400000</p>
+      <p class="easy-only">đang chạy → tạm dừng → chấm dứt<br>&nbsp;&nbsp;tín hiệu đẩy qua lại các trạng thái</p>
+      <p class="en-only" lang="en">Three process states:<br>&nbsp;&nbsp;Running — on CPU or ready<br>&nbsp;&nbsp;Stopped — until a SIGCONT<br>&nbsp;&nbsp;Terminated — stopped forever<br>User region starts at 0x400000</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">logical flow</span>
+      <h3>
+        <span class="standard-copy">Luồng điều khiển logic và tính đồng thời</span>
+        <span class="easy-only">Luồng logic — mỗi chương trình tưởng mình chiếm CPU</span>
+        <span class="en-only" lang="en">Logical control flow and concurrency</span>
+      </h3>
+      <p class="standard-copy">Nếu dùng trình gỡ lỗi chạy từng bước, ta sẽ thấy một dãy giá trị PC chỉ thuộc về chương trình của mình — đó là <i>luồng điều khiển logic</i>. Thực tế một luồng vật lý duy nhất của bộ xử lý bị chia thành nhiều luồng logic, mỗi tiến trình một luồng; chúng thay phiên dùng bộ xử lý: chạy một lúc rồi bị <i>chiếm quyền trước (preempt)</i> để tiến trình khác chạy.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mỗi chương trình thấy một chuỗi lệnh liền mạch của riêng nó, tưởng mình độc chiếm máy. Thật ra máy chia lượt rất nhanh: chạy chương trình này một nhịp, tạm ngừng, chạy chương trình kia một nhịp. <b>Nhớ nhé: máy luân phiên siêu nhanh nên ai cũng tưởng mình đang chạy một mình.</b></p>
+      <p class="en-only" lang="en">If you single-step with a debugger, you see a sequence of PC values belonging only to your program — its <i>logical control flow</i>. The single physical flow of the processor is partitioned into many logical flows, one per process; they take turns using the processor: each runs a while, then is <i>preempted</i> so another can run.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi lần bạn mở nhiều ứng dụng cùng lúc trên một máy chỉ có vài lõi — chúng là các luồng logic đồng thời, luân phiên nhau.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn vừa nghe nhạc vừa gõ văn bản trên cùng một máy.</span>
+        <span class="en-only" lang="en">Whenever you run many apps at once on a machine with only a few cores — they are concurrent logical flows taking turns.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đồng thời ≠ song song</h4>
+          <p>Hai luồng là đồng thời nếu thời gian chạy chồng lấn, kể cả trên cùng một lõi. Song song là tập con của đồng thời: chỉ khi chúng chạy trên các lõi (hoặc máy) khác nhau. Khái niệm đồng thời độc lập với số lõi.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Nhiều dạng luồng logic</h4>
+          <p>Bộ xử lý ngoại lệ, tiến trình, bộ xử lý tín hiệu (signal handler), luồng (thread) đều là các luồng logic. Mỗi khoảng thời gian một tiến trình chạy một phần luồng của nó gọi là một <i>lát thời gian (time slice)</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">address space &amp; modes</span>
+      <h3>
+        <span class="standard-copy">Không gian địa chỉ riêng, và chế độ người dùng / nhân</span>
+        <span class="easy-only">Bộ nhớ riêng, và hai chế độ: người dùng và nhân</span>
+        <span class="en-only" lang="en">Private address space, and user / kernel mode</span>
+      </h3>
+      <p class="standard-copy">Mỗi tiến trình có một <i>không gian địa chỉ riêng</i>: trên máy địa chỉ <i>n</i> bit, đó là tập 2<sup>n</sup> địa chỉ, và một byte ở địa chỉ nào đó nói chung không thể bị tiến trình khác đọc hay ghi. Để bảo vệ, bộ xử lý có một <i>bit chế độ (mode bit)</i>: khi bật, tiến trình chạy trong <b>chế độ nhân (kernel mode)</b> với toàn quyền; khi tắt, nó ở <b>chế độ người dùng (user mode)</b>, không được thực thi lệnh đặc quyền hay chạm trực tiếp vào vùng nhân.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mỗi chương trình có một "bản đồ bộ nhớ" riêng, chương trình khác không thọc vào được. Máy cũng có hai chế độ: chế độ thường (bị hạn chế) và chế độ nhân (toàn quyền). Chương trình của bạn chạy ở chế độ thường cho an toàn. <b>Nhớ nhé: bộ nhớ ai nấy giữ; muốn toàn quyền phải nhờ nhân.</b></p>
+      <p class="en-only" lang="en">Each process has a <i>private address space</i>: on a machine with <i>n</i>-bit addresses, the set of 2<sup>n</sup> addresses, and a byte at an address generally cannot be read or written by any other process. To protect this, the processor has a <i>mode bit</i>: when set, the process runs in <b>kernel mode</b> with full power; when clear, it is in <b>user mode</b>, forbidden from privileged instructions or directly touching the kernel area.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đoạn mã của một tiến trình x86-64 Linux luôn bắt đầu ở địa chỉ <code>0x400000</code>; cách duy nhất để chuyển từ chế độ người dùng sang chế độ nhân là qua một ngoại lệ — ngắt, lỗi, hoặc một bẫy lời gọi hệ thống.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi chương trình cần làm việc "nhạy cảm", nó phải xin phép nhân qua một lời gọi hệ thống.</span>
+        <span class="en-only" lang="en">A x86-64 Linux process's code always begins at <code>0x400000</code>; the only way to go from user to kernel mode is via an exception — an interrupt, a fault, or a trapping system call.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hệ tệp /proc</h4>
+          <p>Linux cung cấp <code>/proc</code>, một cơ chế khéo léo phơi bày nội dung nhiều cấu trúc dữ liệu của nhân dưới dạng tệp văn bản mà tiến trình chế độ người dùng đọc được — ví dụ <code>/proc/cpuinfo</code> cho biết loại CPU.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Bố cục không gian địa chỉ</h4>
+          <p>Phần thấp dành cho chương trình người dùng (mã, dữ liệu, heap, ngăn xếp); phần cao dành cho nhân — nơi nhân chạy mã khi thực thi lời gọi hệ thống thay cho tiến trình.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">context switch &amp; errno</span>
+      <h3>
+        <span class="standard-copy">Chuyển ngữ cảnh, và xử lý lỗi lời gọi hệ thống</span>
+        <span class="easy-only">Chuyển lượt giữa các tiến trình, và kiểm tra lỗi</span>
+        <span class="en-only" lang="en">Context switches, and system call error handling</span>
+      </h3>
+      <p class="standard-copy">Nhân hiện thực đa nhiệm bằng một dạng ECF cấp cao hơn gọi là <b>chuyển ngữ cảnh (context switch)</b>: nó (1) lưu ngữ cảnh của tiến trình hiện tại, (2) khôi phục ngữ cảnh của một tiến trình trước đó đã bị chiếm quyền, và (3) trao điều khiển cho tiến trình vừa khôi phục. Quyết định chuyển lượt gọi là <i>xếp lịch (scheduling)</i>, do bộ xếp lịch (scheduler) trong nhân lo. Một ngắt định thời (timer interrupt) — thường mỗi 1&nbsp;ms hoặc 10&nbsp;ms — có thể kích hoạt việc chuyển lượt.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Khi muốn đổi từ chương trình này sang chương trình khác, nhân cất trạng thái của cái cũ, lấy lại trạng thái cái mới, rồi giao quyền. Cứ vài mili-giây lại có một "tiếng chuông" (ngắt định thời) nhắc nhân cân nhắc đổi lượt. <b>Nhớ nhé: đổi lượt = cất trạng thái cũ, khôi phục trạng thái mới.</b></p>
+      <p class="en-only" lang="en">The kernel implements multitasking with a higher-level form of ECF called a <b>context switch</b>: it (1) saves the current process's context, (2) restores a previously preempted process's saved context, and (3) passes control to it. Deciding to switch is <i>scheduling</i>, done by the kernel's scheduler. A timer interrupt — typically every 1&nbsp;ms or 10&nbsp;ms — can trigger a switch.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một lời gọi như <code>read</code> phải chờ đĩa, nhân có thể chuyển ngữ cảnh sang tiến trình khác thay vì ngồi chờ — nhờ vậy CPU không lãng phí hàng chục mili-giây.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi một chương trình đang chờ đĩa, máy tranh thủ chạy chương trình khác.</span>
+        <span class="en-only" lang="en">When a call like <code>read</code> must wait for disk, the kernel can switch to another process instead of idling — so the CPU doesn't waste tens of milliseconds.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>errno và các hàm bọc lỗi</h4>
+          <p>Khi hàm mức hệ thống Unix gặp lỗi, nó thường trả về −1 và đặt biến toàn cục <code>errno</code>. Lập trình viên nên luôn kiểm tra lỗi; <code>strerror(errno)</code> trả về chuỗi mô tả. Sách dùng các <i>hàm bọc xử lý lỗi</i> (kiểu Stevens) viết hoa chữ cái đầu — ví dụ <code>Fork</code> gọi <code>fork</code>, kiểm lỗi, và thoát nếu có sự cố.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Ngữ cảnh gồm những gì</h4>
+          <p>Ngữ cảnh mà nhân lưu gồm: các thanh ghi đa dụng và dấu phẩy động, bộ đếm chương trình, ngăn xếp người dùng, thanh ghi trạng thái, ngăn xếp nhân, và các cấu trúc như bảng trang, bảng tiến trình, bảng tệp.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đó là bức tranh khái niệm. Nhưng làm sao chương trình C thật sự <i>tạo</i> một tiến trình mới, <i>nạp</i> một chương trình khác vào, hay <i>chờ</i> con mình kết thúc? Và làm sao một tiến trình <i>đánh thức</i> tiến trình khác? Phần tiếp theo đi vào các lời gọi cụ thể: fork, execve, waitpid, tín hiệu, và nhảy phi cục bộ.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Trên đây là ý tưởng. Giờ ta xem lệnh cụ thể để tạo tiến trình, chạy chương trình mới, chờ con, và gửi tín hiệu.</p>
+    <p class="en-only" lang="en">That is the conceptual picture. But how does a C program actually <i>create</i> a new process, <i>load</i> another program, or <i>wait</i> for its child to finish? And how does one process <i>wake</i> another? The next section turns to the concrete calls: fork, execve, waitpid, signals, and nonlocal jumps.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="dieu-khien" aria-labelledby="dieu-khien-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="dieu-khien-title">
+      <span class="standard-copy">Điều khiển tiến trình, tín hiệu, và nhảy phi cục bộ</span>
+      <span class="easy-only">Tạo tiến trình, gửi tín hiệu, và cú nhảy vọt trong mã C</span>
+      <span class="en-only" lang="en">Process control, signals, and nonlocal jumps</span>
+    </h2>
+    <p class="standard-copy">Unix cung cấp một loạt lời gọi hệ thống để thao tác tiến trình từ chương trình C. Ba lời gọi cốt lõi: <code>fork</code> tạo một tiến trình con mới, <code>execve</code> nạp và chạy một chương trình mới trong ngữ cảnh tiến trình hiện tại, và <code>waitpid</code> cho tiến trình cha chờ và "thu hoạch" (reap) con đã kết thúc. Trên hai cơ chế này, Linux thêm <b>tín hiệu (signal)</b> — thông điệp nhỏ báo cho tiến trình một sự kiện — và C thêm <b>nhảy phi cục bộ (nonlocal jump)</b> qua <code>setjmp</code>/<code>longjmp</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Chương trình C có thể "đẻ" ra chương trình con (<code>fork</code>), "thay da đổi thịt" thành chương trình khác (<code>execve</code>), và "chờ con" xong việc (<code>waitpid</code>). Ngoài ra, các chương trình gửi cho nhau những mẩu tin nhỏ gọi là "tín hiệu". <b>Nhớ nhé: fork đẻ con, execve đổi chương trình, waitpid chờ con.</b></p>
+    <p class="en-only" lang="en">Unix provides many system calls for manipulating processes from C. Three are central: <code>fork</code> creates a new child process, <code>execve</code> loads and runs a new program in the current process's context, and <code>waitpid</code> lets a parent wait for and reap a terminated child. On top of these, Linux adds <b>signals</b> — small messages notifying a process of an event — and C adds <b>nonlocal jumps</b> via <code>setjmp</code>/<code>longjmp</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>fork</code> độc đáo ở chỗ <i>gọi một lần nhưng trả về hai lần</i>: trả về 0 cho tiến trình con, trả về PID của con cho tiến trình cha, và −1 nếu lỗi. Con nhận một bản sao <i>giống hệt nhưng tách biệt</i> không gian địa chỉ của cha, cùng các mô tả tệp đang mở. Ngược lại, <code>execve</code> <i>gọi một lần và không bao giờ trả về</i> (trừ khi lỗi).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Gọi <code>fork</code> một lần mà thấy "hai bản chạy ra": một bản là cha, một bản là con, giống hệt nhau nhưng từ đó sống riêng. <b>Nhớ nhé: fork gọi một lần, trả về hai lần — 0 cho con, PID cho cha.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>fork</code> is unique: it is <i>called once but returns twice</i> — 0 to the child, the child's PID to the parent, and −1 on error. The child gets an <i>identical but separate</i> copy of the parent's address space plus its open file descriptors. By contrast, <code>execve</code> is <i>called once and never returns</i> (unless it fails).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">pid = fork();<br>&nbsp;&nbsp;con   → pid == 0<br>&nbsp;&nbsp;cha   → pid == &lt;PID con&gt;<br>&nbsp;&nbsp;lỗi   → pid == -1<br><br>setjmp()  → 0 lần đầu, khác 0 khi longjmp</p>
+      <p class="easy-only">fork → con thấy 0<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ cha thấy số PID<br>execve → không quay lại</p>
+      <p class="en-only" lang="en">pid = fork();<br>&nbsp;&nbsp;child  → pid == 0<br>&nbsp;&nbsp;parent → pid == &lt;child PID&gt;<br>&nbsp;&nbsp;error  → pid == -1<br><br>setjmp()  → 0 first, nonzero on longjmp</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">fork / execve / waitpid</span>
+      <h3>
+        <span class="standard-copy">fork, execve, waitpid — đẻ, đổi, và thu hoạch con</span>
+        <span class="easy-only">fork, execve, waitpid — đẻ con, đổi chương trình, chờ con</span>
+        <span class="en-only" lang="en">fork, execve, waitpid — spawn, replace, and reap</span>
+      </h3>
+      <p class="standard-copy">Mỗi tiến trình có một PID dương duy nhất (lấy qua <code>getpid</code>; PID của cha qua <code>getppid</code>). Khi một tiến trình kết thúc, nhân <i>không</i> xoá nó ngay mà giữ ở trạng thái đã chấm dứt cho tới khi cha <i>thu hoạch (reap)</i> nó bằng <code>waitpid</code>; một tiến trình đã chết nhưng chưa được thu hoạch gọi là <b>zombie</b>. Nếu cha chết trước, tiến trình <code>init</code> (PID 1) nhận nuôi và thu hoạch các con mồ côi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <p class="easy-only">Khi "con" chạy xong, nó chưa biến mất hẳn — nó thành "xác sống" (zombie) chờ cha đến nhận. Cha phải gọi <code>waitpid</code> để dọn. Nếu cha đi mất, có một "ông tổ" tên <code>init</code> (số 1) đứng ra nhận nuôi. <b>Nhớ nhé: cha phải dọn xác con, kẻo zombie ngốn tài nguyên.</b></p>
+      <p class="en-only" lang="en">Each process has a unique positive PID (via <code>getpid</code>; the parent's via <code>getppid</code>). When a process terminates, the kernel does <i>not</i> remove it at once but keeps it in a terminated state until the parent <i>reaps</i> it with <code>waitpid</code>; a dead-but-unreaped process is a <b>zombie</b>. If the parent dies first, the <code>init</code> process (PID 1) adopts and reaps the orphans.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Shell và máy chủ web dùng rất nhiều cặp <code>fork</code> + <code>execve</code>: fork ra một con, rồi con gọi execve để biến thành chương trình bạn muốn chạy.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn gõ một lệnh trong terminal: shell đẻ một con, rồi con hoá thành chương trình đó.</span>
+        <span class="en-only" lang="en">Shells and web servers lean on <code>fork</code> + <code>execve</code>: fork a child, then the child calls execve to become the program you want to run.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Kiểm tra trạng thái thoát</h4>
+          <p>Nếu truyền một con trỏ <code>statusp</code> khác NULL, <code>waitpid</code> mã hoá trạng thái; tệp <code>wait.h</code> cung cấp các macro giải mã như <code>WIFEXITED</code> (thoát bình thường), <code>WEXITSTATUS</code> (mã thoát), <code>WIFSIGNALED</code> (bị tín hiệu giết), <code>WTERMSIG</code> (số tín hiệu đó).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Call once, return twice</h4>
+          <p>Vì con là bản sao tách biệt, mọi thay đổi của cha hay con lên biến đều riêng tư. Trong ví dụ của sách, biến <code>x</code> bằng 1 ở cả hai ngay sau <code>fork</code>; con tăng thành 2, cha giảm thành 0 — hai bản nhớ độc lập.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">signals</span>
+      <h3>
+        <span class="standard-copy">Tín hiệu — thông điệp nhỏ báo một sự kiện</span>
+        <span class="easy-only">Tín hiệu — mẩu tin báo "có chuyện xảy ra"</span>
+        <span class="en-only" lang="en">Signals — a small message about an event</span>
+      </h3>
+      <p class="standard-copy">Một <b>tín hiệu (signal)</b> là một thông điệp nhỏ báo cho tiến trình biết một loại sự kiện đã xảy ra. Linux hỗ trợ 30 loại tín hiệu, mỗi loại ứng với một sự kiện hệ thống. Ví dụ: gõ Ctrl+C gửi <code>SIGINT</code> (số 2); chia cho 0 nhận <code>SIGFPE</code> (số 8); truy cập bộ nhớ sai nhận <code>SIGSEGV</code> (số 11); một tiến trình có thể cưỡng bức giết tiến trình khác bằng <code>SIGKILL</code> (số 9); khi con kết thúc hay dừng, nhân gửi <code>SIGCHLD</code> (số 17) cho cha.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Tín hiệu là mẩu tin ngắn báo "có chuyện": bạn bấm Ctrl+C là gửi một tín hiệu bảo chương trình dừng; chia cho 0 cũng sinh một tín hiệu. Mỗi loại tín hiệu có một con số và một cái tên. <b>Nhớ nhé: Ctrl+C chính là gửi tín hiệu số 2 (SIGINT).</b></p>
+      <p class="en-only" lang="en">A <b>signal</b> is a small message notifying a process that some event occurred. Linux supports 30 signal types, each tied to a system event. Examples: Ctrl+C sends <code>SIGINT</code> (number 2); dividing by zero yields <code>SIGFPE</code> (8); a bad memory access yields <code>SIGSEGV</code> (11); a process can forcibly kill another with <code>SIGKILL</code> (9); when a child stops or terminates, the kernel sends <code>SIGCHLD</code> (17) to the parent.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Nhận một tín hiệu xảy ra hai bước: <i>gửi</i> (nhân cập nhật trạng thái tiến trình đích) rồi <i>nhận</i> (tiến trình phản ứng: bỏ qua, kết thúc, hoặc chạy một <i>bộ xử lý tín hiệu</i>).<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Một tín hiệu được gửi đi rồi mới được nhận; lúc nhận, chương trình có thể lờ đi, dừng, hoặc chạy một đoạn mã xử lý.</span>
+        <span class="en-only" lang="en">Receiving a signal takes two steps: <i>sending</i> (the kernel updates the target's state) then <i>receiving</i> (the process reacts: ignore, terminate, or run a <i>signal handler</i>).<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Đang chờ và bị chặn</h4>
+          <p>Nhân giữ hai véc-tơ bit cho mỗi tiến trình: <i>pending</i> (tín hiệu đã gửi nhưng chưa nhận) và <i>blocked</i> (tín hiệu bị chặn). Với mỗi loại <i>k</i>, tối đa chỉ có một tín hiệu đang chờ: tín hiệu <i>k</i> thứ hai gửi tới khi đã có một cái chờ sẽ bị bỏ, không xếp hàng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>SIGKILL và SIGSTOP đặc biệt</h4>
+          <p><code>SIGKILL</code> (9) và <code>SIGSTOP</code> (19) không thể bị bắt cũng không thể bị bỏ qua — đó là lý do <code>kill -9</code> luôn hạ được một tiến trình bướng bỉnh.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">safe handlers</span>
+      <h3>
+        <span class="standard-copy">Bộ xử lý tín hiệu an toàn — cái bẫy đồng thời</span>
+        <span class="easy-only">Viết bộ xử lý tín hiệu an toàn — tránh lỗi khó lường</span>
+        <span class="en-only" lang="en">Safe signal handlers — the concurrency trap</span>
+      </h3>
+      <p class="standard-copy">Bộ xử lý tín hiệu chạy <i>đồng thời</i> với chương trình chính và dùng chung biến toàn cục, nên dễ sinh lỗi đồng thời hiểm hóc. Quy tắc vàng: giữ bộ xử lý càng đơn giản càng tốt (ví dụ chỉ đặt một cờ rồi trả về), và chỉ gọi các hàm <b>an toàn với tín hiệu không đồng bộ (async-signal-safe)</b>. Nhiều hàm quen thuộc — <code>printf</code>, <code>sprintf</code>, <code>malloc</code>, <code>exit</code> — <i>không</i> an toàn; cách an toàn duy nhất để in từ bộ xử lý là dùng <code>write</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <p class="easy-only">Đoạn mã xử lý tín hiệu chạy xen vào giữa chương trình chính, nên nếu nó đụng vào dữ liệu chung thì dễ gây lỗi lúc được lúc không, rất khó tìm. Mẹo: giữ nó thật ngắn, và đừng gọi những hàm "không an toàn" như <code>printf</code>. <b>Nhớ nhé: trong bộ xử lý tín hiệu, giữ ngắn và chỉ gọi hàm an toàn.</b></p>
+      <p class="en-only" lang="en">A signal handler runs <i>concurrently</i> with the main program and shares its global variables, so it easily breeds nasty concurrency bugs. The golden rules: keep handlers as simple as possible (e.g. just set a flag and return), and call only <b>async-signal-safe</b> functions. Many familiar functions — <code>printf</code>, <code>sprintf</code>, <code>malloc</code>, <code>exit</code> — are <i>not</i> safe; the only safe way to print from a handler is <code>write</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Một bộ xử lý tốt luôn lưu và khôi phục <code>errno</code> (vì các hàm nó gọi có thể ghi đè), để không làm hỏng việc kiểm tra lỗi của chương trình chính bị cắt ngang.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi chương trình thỉnh thoảng lỗi một cách khó hiểu, thủ phạm thường là bộ xử lý tín hiệu đụng nhầm dữ liệu chung.</span>
+        <span class="en-only" lang="en">A good handler saves and restores <code>errno</code> (since the functions it calls may overwrite it), so it doesn't corrupt the interrupted main program's error checking.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">nonlocal jumps</span>
+      <h3>
+        <span class="standard-copy">Nhảy phi cục bộ — thoát thẳng khỏi hàm lồng sâu</span>
+        <span class="easy-only">Nhảy phi cục bộ — cú nhảy vọt qua nhiều tầng hàm</span>
+        <span class="en-only" lang="en">Nonlocal jumps — escaping straight out of deep nesting</span>
+      </h3>
+      <p class="standard-copy">C cung cấp một dạng ECF ở mức người dùng gọi là <b>nhảy phi cục bộ (nonlocal jump)</b>, chuyển điều khiển thẳng từ hàm này sang một hàm đang chạy khác mà không theo trình tự gọi–trả bình thường. <code>setjmp</code> lưu môi trường hiện tại và trả về 0 lần đầu; <code>longjmp</code> khôi phục môi trường đó khiến <code>setjmp</code> "trả về" lần nữa với một giá trị khác 0. Vậy <code>setjmp</code> gọi một lần nhưng trả về nhiều lần; <code>longjmp</code> gọi một lần và không bao giờ trả về.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <p class="easy-only">Bình thường hàm gọi hàm theo kiểu "đi rồi về" từng tầng. Nhảy phi cục bộ cho phép từ sâu trong nhiều tầng hàm nhảy vọt một phát về chỗ đã đánh dấu trước đó — tiện khi gặp lỗi ở tầng sâu. <b>Nhớ nhé: setjmp đặt mốc, longjmp nhảy vọt về mốc đó.</b></p>
+      <p class="en-only" lang="en">C offers a user-level form of ECF called a <b>nonlocal jump</b>, transferring control directly from one function to another currently executing one, bypassing the normal call-and-return. <code>setjmp</code> saves the current environment and returns 0 the first time; <code>longjmp</code> restores it, making <code>setjmp</code> "return" again with a nonzero value. So <code>setjmp</code> is called once but returns multiple times; <code>longjmp</code> is called once and never returns.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Dùng để trả về ngay từ một lời gọi lồng sâu khi phát hiện lỗi, hoặc để nhảy ra khỏi một bộ xử lý tín hiệu — khi đó dùng cặp <code>sigsetjmp</code>/<code>siglongjmp</code>, ví dụ "khởi động lại mềm" khi người dùng gõ Ctrl+C.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi chương trình cần thoát khẩn khỏi nhiều tầng hàm, hoặc tự khởi động lại khi bạn bấm Ctrl+C.</span>
+        <span class="en-only" lang="en">Used to return immediately from a deeply nested call on an error, or to jump out of a signal handler — then using <code>sigsetjmp</code>/<code>siglongjmp</code>, e.g. a "soft restart" when the user hits Ctrl+C.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Tương tự try/catch</h4>
+          <p>Cơ chế ngoại lệ của C++ và Java là phiên bản cấp cao, có cấu trúc của <code>setjmp</code>/<code>longjmp</code>: mệnh đề <code>catch</code> trong <code>try</code> giống <code>setjmp</code>, còn <code>throw</code> giống <code>longjmp</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>8.7 · Công cụ thao tác tiến trình</h4>
+          <p>Linux có nhiều công cụ giám sát và thao tác tiến trình: <code>strace</code> (in dấu vết mỗi lời gọi hệ thống), <code>ps</code> (liệt kê tiến trình, kể cả zombie), <code>top</code> (mức dùng tài nguyên), <code>pmap</code> (bản đồ bộ nhớ), và <code>/proc</code> (hệ tệp ảo phơi bày cấu trúc của nhân dạng văn bản).<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Sợi chỉ chung của cả ba cụm là một ý tưởng duy nhất: <b>luồng điều khiển ngoại lệ</b> xuất hiện ở mọi tầng và là cơ chế nền tảng cung cấp tính đồng thời cho hệ thống — từ ngoại lệ phần cứng, qua tiến trình và chuyển ngữ cảnh, tới tín hiệu và nhảy phi cục bộ.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Tất cả — ngắt, tiến trình, tín hiệu, cú nhảy vọt — đều là những cách "bẻ lái" luồng điều khiển, giúp máy làm nhiều việc cùng lúc. Giờ hãy dọn vài hiểu lầm hay gặp.</p>
+    <p class="en-only" lang="en">The common thread across all three clusters is one idea: <b>exceptional control flow</b> appears at every level and is the basic mechanism providing a system's concurrency — from hardware exceptions, through processes and context switches, to signals and nonlocal jumps.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only" id="ngo-nhan" aria-labelledby="ngo-nhan-title">
+    <p class="eyebrow" id="ngo-nhan-title">
+      <span class="vi-only">Ba ngộ nhận thường gặp</span>
+      <span class="en-only" lang="en">Three common misconceptions</span>
+    </p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Ngoại lệ chỉ là try/catch trong C++/Java”</span>
+          <span class="en-only" lang="en">“Exceptions just mean try/catch in C++/Java”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> "ngoại lệ" là một tính năng ngôn ngữ cấp cao.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> trong sách, ngoại lệ là cơ chế phần cứng/hệ điều hành ở mức thấp (ngắt, bẫy, lỗi, huỷ). <code>try/catch</code> của C++/Java là "ngoại lệ phần mềm" cấp cao, tương tự <code>setjmp</code>/<code>longjmp</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> an "exception" is a high-level language feature.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> in the book an exception is a low-level hardware/OS mechanism (interrupts, traps, faults, aborts). C++/Java <code>try/catch</code> are high-level "software exceptions", akin to <code>setjmp</code>/<code>longjmp</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“fork tạo con dùng chung bộ nhớ với cha”</span>
+          <span class="en-only" lang="en">“fork makes a child that shares memory with the parent”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> sau <code>fork</code>, cha và con sửa chung một vùng nhớ.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> con nhận một bản sao <i>giống hệt nhưng tách biệt</i>; mọi thay đổi sau đó là riêng tư. Chúng dùng chung các <i>tệp đang mở</i>, nhưng không dùng chung không gian địa chỉ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> after <code>fork</code>, parent and child edit the same memory.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> the child gets an <i>identical but separate</i> copy; later changes are private. They share <i>open files</i>, not the address space.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Gọi printf trong bộ xử lý tín hiệu là an toàn”</span>
+          <span class="en-only" lang="en">“Calling printf in a signal handler is safe”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> bộ xử lý tín hiệu nào cũng in bằng <code>printf</code> được.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> <code>printf</code>, <code>malloc</code>, <code>exit</code> không async-signal-safe. Cách in an toàn duy nhất là <code>write</code>; hãy giữ bộ xử lý đơn giản và chỉ gọi hàm an toàn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> any signal handler can print with <code>printf</code>.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> <code>printf</code>, <code>malloc</code>, <code>exit</code> are not async-signal-safe. The only safe print is <code>write</code>; keep handlers simple and call only safe functions.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm luồng điều khiển ngoại lệ</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped exceptional control flow</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã theo trọn ECF từ tầng phần cứng, qua tiến trình và chuyển ngữ cảnh, tới tín hiệu và nhảy phi cục bộ.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you followed ECF from the hardware level, through processes and context switches, to signals and nonlocal jumps.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Kể tên bốn lớp ngoại lệ và cho biết lớp nào xảy ra <i>không đồng bộ</i>. Lớp nào có thể chạy lại lệnh gây ra nó?</p>
+        <p class="deep-only">Gợi ý sâu hơn: "Segmentation fault" ứng với ngoại lệ số mấy trên x86-64, và nó thuộc lớp nào?</p>
+      </li>
+      <li>
+        <p>Một tiến trình trao cho chương trình hai trừu tượng nào? Phân biệt "đồng thời" với "song song".</p>
+        <p class="deep-only">Gợi ý sâu hơn: chuyển ngữ cảnh gồm ba bước nào, và điều gì có thể kích hoạt nó?</p>
+      </li>
+      <li>
+        <p>Vì sao nói <code>fork</code> "gọi một lần, trả về hai lần"? Giá trị trả về cho con và cho cha khác nhau ra sao?</p>
+        <p class="deep-only">Gợi ý sâu hơn: zombie là gì, ai thu hoạch con mồ côi, và PID của tiến trình đó là bao nhiêu?</p>
+      </li>
+      <li>
+        <p>Tín hiệu là gì? Gõ Ctrl+C gửi tín hiệu nào (số mấy), và tín hiệu nào không thể bị bắt hay bỏ qua?</p>
+        <p class="deep-only">Gợi ý sâu hơn: véc-tơ pending và blocked khác nhau thế nào; điều gì xảy ra với tín hiệu <i>k</i> thứ hai khi đã có một cái đang chờ?</p>
+      </li>
+      <li>
+        <p>Vì sao gọi <code>printf</code> trong một bộ xử lý tín hiệu là nguy hiểm? Nên dùng hàm nào để in an toàn?</p>
+        <p class="deep-only">Gợi ý sâu hơn: nhảy phi cục bộ khác lời gọi–trả bình thường ở điểm nào, và nó giống <code>try/catch</code> ra sao?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>"Ngoại lệ" là gì? Kể hai thứ có thể cắt ngang một chương trình đang chạy.</p></li>
+      <li><p>"Tiến trình" là gì? Vì sao nhiều chương trình trông như chạy cùng lúc?</p></li>
+      <li><p>Lệnh nào tạo ra một chương trình con? Sau đó con và cha có dùng chung bộ nhớ không?</p></li>
+      <li><p>Bấm Ctrl+C là bạn đang làm gì với chương trình?</p></li>
+      <li><p>Vì sao đoạn mã xử lý tín hiệu nên thật ngắn và cẩn thận?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>Name the four classes of exceptions and say which occur <i>asynchronously</i>. Which can re-execute the instruction that caused it?</p></li>
+      <li><p>What two abstractions does a process give a program? Distinguish "concurrent" from "parallel".</p></li>
+      <li><p>Why is <code>fork</code> "called once, returns twice"? How do the return values to child and parent differ?</p></li>
+      <li><p>What is a signal? Which signal (number) does Ctrl+C send, and which signal cannot be caught or ignored?</p></li>
+      <li><p>Why is calling <code>printf</code> in a signal handler dangerous? Which function should you use to print safely?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Luồng điều khiển không phải lúc nào cũng trơn tru: ở mọi tầng, hệ thống <span class="closing-accent">bẻ lái luồng điều khiển</span> để đáp lại sự kiện. Ngoại lệ phần cứng dựng nên tiến trình, tiến trình sinh ra chuyển ngữ cảnh và tín hiệu, còn C cho ta cú nhảy phi cục bộ — tất cả là <span class="closing-accent">một cơ chế chung mang tên ECF</span>, nền tảng của tính đồng thời.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Máy không chỉ chạy lệnh theo thứ tự; nó còn biết <span class="closing-accent">tạm dừng để lo việc gấp</span> rồi quay lại. Chính những cú "bẻ lái" đó — <span class="closing-accent">ngắt, tiến trình, tín hiệu, cú nhảy vọt</span> — giúp một cái máy làm được nhiều việc một lúc. <b>Nhớ nhé: hiểu các cú bẻ lái này là hiểu cách máy làm nhiều việc cùng lúc.</b></p>
+    <p class="en-only" lang="en">Control flow is not always smooth: at every level, a system <span class="closing-accent">swerves its control flow</span> in response to events. Hardware exceptions build processes, processes give us context switches and signals, and C gives us the nonlocal jump — all <span class="closing-accent">one mechanism named ECF</span>, the foundation of concurrency.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-7-linking.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 7 · Liên kết</span>
+    <span class="nav-title en-only" lang="en">Chapter 7 · Linking</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-9-virtual-memory.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 9 · Bộ nhớ ảo</span>
+    <span class="nav-title en-only" lang="en">Chapter 9 · Virtual Memory</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, tái bản lần thứ 3, Global Edition, Pearson, 2016 (ISBN 978-1-292-10176-7) — Chương 8, “Exceptional Control Flow”, trang 757–823.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, 3rd edition, Global Edition, Pearson, 2016 (ISBN 978-1-292-10176-7) — Chapter 8, “Exceptional Control Flow”, pp. 757–823.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the authors and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the authors' words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Randal E. Bryant &amp; David R. O'Hallaron, <i>Computer Systems: A Programmer's Perspective</i>, 3rd ed. (Global Edition), Pearson, 2016, ch. 8 “Exceptional Control Flow”, pp. 757–823. — <a href="http://csapp.cs.cmu.edu/" target="_blank" rel="noopener noreferrer">csapp.cs.cmu.edu</a></li>
+      <li id="ref-2"><code>signal(7)</code> — overview of signals, numbers and default actions, Linux manual pages (Linux man-pages project). <a href="https://man7.org/linux/man-pages/man7/signal.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/signal.7.html</a></li>
+      <li id="ref-3">Intel, <i>Intel 64 and IA-32 Architectures Software Developer's Manual, Vol. 3A</i>, ch. 6 “Interrupt and Exception Handling” (exception vectors 0–31). <a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html" target="_blank" rel="noopener noreferrer">intel.com · Intel SDM</a></li>
+      <li id="ref-4"><code>fork(2)</code> — create a child process (return values; duplicated address space; shared file descriptors), Linux manual pages. <a href="https://man7.org/linux/man-pages/man2/fork.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/fork.2.html</a></li>
+      <li id="ref-5"><code>execve(2)</code> — execute a program (does not return on success), Linux manual pages. <a href="https://man7.org/linux/man-pages/man2/execve.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/execve.2.html</a></li>
+      <li id="ref-6"><code>waitpid(2)</code> / <code>wait(2)</code> — wait for and reap child processes; status macros, Linux manual pages. <a href="https://man7.org/linux/man-pages/man2/waitpid.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/waitpid.2.html</a></li>
+      <li id="ref-7"><code>setjmp(3)</code> / <code>longjmp(3)</code> — save and restore the calling environment (nonlocal jumps), Linux manual pages. <a href="https://man7.org/linux/man-pages/man3/setjmp.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/setjmp.3.html</a></li>
+      <li id="ref-8"><code>signal-safety(7)</code> — list of async-signal-safe functions, Linux manual pages. <a href="https://man7.org/linux/man-pages/man7/signal-safety.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/signal-safety.7.html</a></li>
+      <li id="ref-9"><code>syscall(2)</code> — Linux system call interface and x86-64 register convention (<code>%rax</code>, <code>%rdi</code>, <code>%rsi</code>, <code>%rdx</code>, <code>%r10</code>, <code>%r8</code>, <code>%r9</code>), Linux manual pages. <a href="https://man7.org/linux/man-pages/man2/syscall.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/syscall.2.html</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-7-linking.html">chapter 7</a>
+      <a href="chapter-9-virtual-memory.html">chapter 9</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('csapp-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('csapp-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('csapp-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>
