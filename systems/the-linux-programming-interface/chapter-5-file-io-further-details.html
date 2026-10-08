@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 5 · File I/O: Các chi tiết sâu hơn — The Linux Programming Interface</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 5 “File I/O: Further Details” trong The Linux Programming Interface (Michael Kerrisk, No Starch Press, 2010): tính nguyên tử (atomicity) và race condition, lời gọi fcntl(), open file status flags, quan hệ giữa file descriptor và open file description qua ba bảng của nhân, nhân bản file descriptor bằng dup()/dup2(), pread()/pwrite(), scatter-gather readv()/writev(), truncate()/ftruncate(), nonblocking I/O, I/O trên tệp lớn, /dev/fd và tệp tạm — ba mức đọc, mọi khẳng định đều có nguồn.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('tlpi-reading-mode'),
+l=localStorage.getItem('tlpi-lang'),
+t=localStorage.getItem('tlpi-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   THE LINUX PROGRAMMING INTERFACE — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"TLPI · CH.5";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+/* soon = chapter not yet on disk; rendered as a non-link cell. */
+.chapter-path .soon{
+  display:block;padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--tint);border:1px dashed var(--line);opacity:.6;
+}
+.chapter-path .soon .soon-tag{
+  display:inline-block;font-family:var(--sans);font-size:.6rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:.1rem .45rem;margin-top:.4rem;
+}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.series-links .soon{margin-right:.5rem;color:var(--muted);opacity:.55;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+
+/* ---------- whole-book mind map banner ---------- */
+.mindmap-banner{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  gap:clamp(1rem,3vw,2rem);align-items:center;
+  margin:3rem 0 0;padding:1.35rem clamp(1.15rem,3vw,2rem);
+  border:1px solid var(--line);border-left:4px solid var(--teal);
+  border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);
+  color:var(--ink);text-decoration:none;
+  transition:border-color .15s,transform .15s;
+}
+a.mindmap-banner:hover{border-color:var(--teal);transform:translateY(-2px);}
+a.mindmap-banner:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.mindmap-banner.soon{opacity:.5;cursor:default;}
+.mindmap-icon{font-size:1.9rem;line-height:1;}
+.mindmap-banner h3{margin:0 0 .3rem;font-size:1.05rem;}
+.mindmap-banner p{margin:0;max-width:48rem;font-size:.88rem;color:var(--muted);}
+.mindmap-banner .result{margin-top:0;color:var(--teal);font-weight:600;white-space:nowrap;}
+.mindmap-banner.soon .result{color:var(--muted);}
+@media (max-width:860px){
+  .mindmap-banner{grid-template-columns:auto minmax(0,1fr);}
+  .mindmap-banner .result{grid-column:2;white-space:normal;}
+}
+@media (max-width:460px){
+  .mindmap-banner{margin-left:0;margin-right:0;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    The Linux Programming Interface
+    <span>Chương 5 · File I/O: Further Details</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="ch5-mo-dau" aria-labelledby="ch5-mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 5 · File I/O: Các chi tiết sâu hơn</span>
+      <span class="en-only" lang="en">Chapter 5 · File I/O: Further Details</span>
+    </p>
+
+    <h1 id="ch5-mo-dau-title">
+      <span class="standard-copy">Bên dưới bốn lời gọi: nguyên tử tính, ba bảng của nhân, và các lời gọi I/O mở rộng</span>
+      <span class="easy-only">Đào sâu hơn về đọc–ghi tệp: làm sao để an toàn và chính xác</span>
+      <span class="en-only" lang="en">Beneath the four calls: atomicity, the kernel's three tables, and extended I/O</span>
+    </h1>
+
+    <p class="standard-copy">Chương 4 cho ta bốn lời gọi của mô hình I/O phổ quát. Chương 5 nối tiếp để hé lộ phần tinh tế ẩn bên dưới: khái niệm <b>atomicity</b> (tính nguyên tử) giúp loại trừ <i>race condition</i>; lời gọi đa dụng <code>fcntl()</code> để đọc và sửa <i>open file status flags</i>; ba cấu trúc dữ liệu mà nhân dùng để biểu diễn file descriptor và tệp đang mở; cách nhân bản file descriptor; rồi một loạt lời gọi I/O mở rộng — <code>pread()</code>/<code>pwrite()</code>, scatter-gather, <code>truncate()</code>, nonblocking I/O, và I/O trên tệp lớn.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Chương trước dạy bốn lệnh cơ bản để đọc–ghi tệp. Chương này đi sâu hơn: làm sao để nhiều chương trình cùng ghi một tệp mà không giẫm lên nhau (tính nguyên tử), làm sao đổi cách một tệp đang mở hành xử (<code>fcntl()</code>), và vì sao hai “con số tệp” có thể trỏ chung một chỗ. Cuối cùng là vài lệnh đọc–ghi nâng cao. <b>Nhớ nhé: chương này là phần “chi tiết sâu” của việc đọc–ghi tệp.</b></p>
+    <p class="en-only" lang="en">Chapter 4 gave us the four calls of the universal I/O model. Chapter 5 continues by revealing the subtlety beneath them: the concept of <b>atomicity</b> that eliminates <i>race conditions</i>; the multipurpose <code>fcntl()</code> call for reading and modifying <i>open file status flags</i>; the three data structures the kernel uses to represent file descriptors and open files; how to duplicate a file descriptor; and a set of extended I/O calls — <code>pread()</code>/<code>pwrite()</code>, scatter-gather, <code>truncate()</code>, nonblocking I/O, and I/O on large files.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Kerrisk mở đầu chương bằng việc mở rộng thảo luận về <code>open()</code> sang khái niệm atomicity — một yêu cầu cần thiết cho sự vận hành đúng đắn của nhiều system call. Sau đó ông giới thiệu <code>fcntl()</code>, rồi khảo sát các cấu trúc dữ liệu của nhân để làm rõ nhiều điều tinh tế của file I/O sẽ gặp lại ở các chương sau. Ông cũng bàn các lời gọi mở rộng, nonblocking I/O, phần mở rộng cho tệp lớn, thư mục <code>/dev/fd</code>, và các hàm thư viện tạo tệp tạm với tên duy nhất sinh ngẫu nhiên.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> sự tinh tế thật sự của file I/O không nằm ở bốn lời gọi, mà ở <i>bên dưới</i> chúng — ở tính <b>nguyên tử</b> giúp loại bỏ race condition, ở <b>ba bảng của nhân</b> (file descriptor table, open file description table, i-node table) lý giải vì sao các fd lại chia sẻ hay không chia sẻ trạng thái, và ở các <b>lời gọi mở rộng</b> cho ta kiểm soát chính xác offset, nhiều bộ đệm, kích thước tệp và hành vi chặn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> điều khó của việc đọc–ghi tệp không nằm ở bốn lệnh, mà ở những chi tiết bên dưới: làm sao để thao tác diễn ra “một mạch” không bị chen ngang, cách nhân ghi nhớ tệp đang mở, và vài lệnh nâng cao cho những tình huống đặc biệt. <b>Nhớ nhé: hiểu phần “bên dưới” thì mới viết được chương trình tệp chắc chắn.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> the real subtlety of file I/O lies not in the four calls but <i>beneath</i> them — in the <b>atomicity</b> that eliminates race conditions, in the <b>kernel's three tables</b> (the file descriptor table, the open file description table, and the i-node table) that explain why descriptors do or don't share state, and in the <b>extended calls</b> that give precise control over offset, multiple buffers, file size, and blocking behavior.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: các chủ đề của Chương 5 — tính nguyên tử và race condition, fcntl cùng open file status flags, ba bảng của nhân nối file descriptor với open file description và i-node, nhân bản file descriptor, và các lời gọi I/O mở rộng. Diagram: the topics of Chapter 5 — atomicity and race conditions, fcntl with open file status flags, the kernel's three tables linking a file descriptor to an open file description and an i-node, descriptor duplication, and the extended I/O calls.">
+    <div class="core">
+      <b>File I/O: chi tiết sâu hơn</b>
+      <small class="standard-copy">Nguyên tử tính · ba bảng của nhân · lời gọi mở rộng</small>
+      <small class="easy-only">An toàn khi tranh chấp · tệp đang mở · lệnh nâng cao</small>
+      <small class="en-only" lang="en">Atomicity · the kernel's three tables · extended calls</small>
+    </div>
+
+    <div class="node">
+      <b>atomicity &amp; fcntl()</b>
+      <small class="standard-copy">O_EXCL và O_APPEND bảo đảm nguyên tử; fcntl đọc/sửa status flags</small>
+      <small class="easy-only">Thao tác “một mạch”; fcntl đổi cách tệp đang mở hành xử</small>
+      <small class="en-only" lang="en">O_EXCL and O_APPEND guarantee atomicity; fcntl reads/sets status flags</small>
+    </div>
+
+    <div class="node">
+      <b>fd → open file → i-node</b>
+      <small class="standard-copy">Ba bảng của nhân; dup()/dup2() tạo fd thứ hai cùng trỏ một open file</small>
+      <small class="easy-only">Nhiều con số có thể trỏ chung một tệp đang mở; dup() nhân bản</small>
+      <small class="en-only" lang="en">The three kernel tables; dup()/dup2() make a second fd to one open file</small>
+    </div>
+
+    <div class="node">
+      <b>pread · readv · truncate</b>
+      <small class="standard-copy">I/O tại offset chỉ định, scatter-gather, đổi kích thước tệp, nonblocking</small>
+      <small class="easy-only">Đọc–ghi ở vị trí định sẵn, nhiều bộ đệm, cắt/nới tệp</small>
+      <small class="en-only" lang="en">I/O at a given offset, scatter-gather, resizing a file, nonblocking</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#ch5-nguyen-tu">
+    <span>01</span>
+    <b class="standard-copy">Nguyên tử tính, fcntl() và status flags</b>
+    <b class="easy-only">Thao tác “một mạch” và đổi tính chất tệp mở</b>
+    <b class="en-only" lang="en">Atomicity, fcntl() and status flags</b>
+  </a>
+  <a href="#ch5-cau-truc">
+    <span>02</span>
+    <b class="standard-copy">Ba bảng của nhân và nhân bản fd</b>
+    <b class="easy-only">Tệp đang mở trong nhân và dup()</b>
+    <b class="en-only" lang="en">The kernel's three tables and duplicating fds</b>
+  </a>
+  <a href="#ch5-morong">
+    <span>03</span>
+    <b class="standard-copy">Các lời gọi I/O mở rộng</b>
+    <b class="easy-only">Những lệnh đọc–ghi nâng cao</b>
+    <b class="en-only" lang="en">The extended I/O calls</b>
+  </a>
+  <a href="#ch5-ngo-nhan">
+    <span>04</span>
+    <b class="standard-copy">Bốn ngộ nhận thường gặp</b>
+    <b class="easy-only">Bốn chỗ dễ hiểu nhầm</b>
+    <b class="en-only" lang="en">Four common misconceptions</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="ch5-nguyen-tu" aria-labelledby="ch5-nguyen-tu-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="ch5-nguyen-tu-title">
+      <span class="standard-copy">Nguyên tử tính, race condition, fcntl() và open file status flags</span>
+      <span class="easy-only">Thao tác “một mạch”, và cách đổi tính chất của tệp đang mở</span>
+      <span class="en-only" lang="en">Atomicity, race conditions, fcntl() and open file status flags</span>
+    </h2>
+    <p class="standard-copy"><b>Atomicity</b> (tính nguyên tử) là khái niệm sẽ gặp lại nhiều lần khi bàn về system call: nhân bảo đảm mọi bước của một system call được hoàn tất như <i>một thao tác duy nhất, không bị tiến trình hay luồng khác chen vào</i>.<span class="cite"><a href="#ref-1">1</a></span> Nhờ đó ta tránh được <b>race condition</b> (race hazard) — tình huống mà kết quả phụ thuộc một cách bất ngờ vào thứ tự các tiến trình giành được CPU.<span class="cite"><a href="#ref-1">1</a></span> Phần thứ hai của cụm này là <code>fcntl()</code>, lời gọi đa dụng dùng (trong nhiều việc khác) để đọc và sửa các <i>open file status flags</i>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    <p class="easy-only">“Nguyên tử” nghĩa là một thao tác diễn ra trọn vẹn trong một mạch, không ai chen ngang được nửa chừng. Nếu không có tính chất này, hai chương trình chạy cùng lúc có thể giẫm chân nhau và cho kết quả sai — gọi là race condition. Chương này còn giới thiệu lệnh <code>fcntl()</code> để hỏi và đổi vài “tính chất” của một tệp đang mở. <b>Nhớ nhé: nguyên tử = một mạch không bị cắt ngang; thiếu nó thì sinh race condition.</b></p>
+    <p class="en-only" lang="en"><b>Atomicity</b> is a concept we meet repeatedly when discussing system calls: the kernel guarantees that all the steps of a system call complete as <i>a single operation, without being interrupted by another process or thread</i>.<span class="cite"><a href="#ref-1">1</a></span> This lets us avoid <b>race conditions</b> (race hazards) — situations where the result depends in an unexpected way on the order in which processes gain access to the CPU(s).<span class="cite"><a href="#ref-1">1</a></span> The second part of this cluster is <code>fcntl()</code>, the multipurpose call used (among much else) to fetch and modify the <i>open file status flags</i>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Một <i>race condition</i> xảy ra khi hai (hay nhiều) tiến trình thao tác trên tài nguyên dùng chung, và kết quả cuối phụ thuộc vào thứ tự lập lịch của chúng.<span class="cite"><a href="#ref-1">1</a></span> Cách chữa trong chương này là biến chuỗi “kiểm tra rồi hành động” thành một bước <b>nguyên tử</b> duy nhất bằng các cờ của <code>open()</code>. <code>fcntl()</code> có chữ ký <code>int fcntl(int fd, int cmd, ... /* arg */);</code> — giá trị trả về khi thành công phụ thuộc vào <code>cmd</code>, hoặc −1 khi lỗi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Race condition là “ai nhanh tay hơn thì thắng”, và vì không đoán được ai nhanh nên kết quả bấp bênh. Muốn chắc chắn, ta ghép bước kiểm tra và bước làm thành một, để không ai chen vào giữa. Lệnh <code>fcntl()</code> thì như một “bảng điều khiển” cho tệp đang mở. <b>Nhớ nhé: gộp “kiểm tra” với “hành động” thành một bước là cách diệt race condition.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A <i>race condition</i> occurs when two (or more) processes operate on a shared resource and the final outcome depends on the order in which they are scheduled.<span class="cite"><a href="#ref-1">1</a></span> The remedy in this chapter is to turn a “check then act” sequence into a single <b>atomic</b> step using <code>open()</code> flags. <code>fcntl()</code> has the signature <code>int fcntl(int fd, int cmd, ... /* arg */);</code> — its return value on success depends on <code>cmd</code>, or −1 on error.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">/* tạo độc quyền, nguyên tử */<br>fd = open(p, O_WRONLY |<br>&nbsp;&nbsp;O_CREAT | O_EXCL, 0644);<br>— — —<br>/* đọc rồi bật thêm O_APPEND */<br>flags = fcntl(fd, F_GETFL);<br>flags |= O_APPEND;<br>fcntl(fd, F_SETFL, flags);</p>
+      <p class="easy-only">tạo mới, chắc chắn mình tạo:<br>&nbsp;&nbsp;O_CREAT | O_EXCL<br>ghi luôn nối đuôi:<br>&nbsp;&nbsp;O_APPEND<br>đọc cờ: fcntl(F_GETFL)<br>đổi cờ: fcntl(F_SETFL)</p>
+      <p class="en-only" lang="en">/* atomic exclusive create */<br>fd = open(p, O_WRONLY |<br>&nbsp;&nbsp;O_CREAT | O_EXCL, 0644);<br>— — —<br>/* read, then add O_APPEND */<br>flags = fcntl(fd, F_GETFL);<br>flags |= O_APPEND;<br>fcntl(fd, F_SETFL, flags);</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">atomicity &amp; race conditions</span>
+      <h3>
+        <span class="standard-copy">Nguyên tử tính diệt race condition</span>
+        <span class="easy-only">“Một mạch” để không ai chen ngang</span>
+        <span class="en-only" lang="en">Atomicity eliminates race conditions</span>
+      </h3>
+      <p class="standard-copy">Tính nguyên tử thiết yếu cho sự đúng đắn của nhiều thao tác. Kerrisk minh hoạ bằng hai tình huống file I/O nơi race condition phát sinh, rồi cho thấy chúng bị loại bỏ nhờ các cờ của <code>open()</code> bảo đảm nguyên tử.<span class="cite"><a href="#ref-1">1</a></span> Ý cốt lõi: nếu một tiến trình bị cắt ngang giữa bước “kiểm tra trạng thái” và bước “hành động dựa trên trạng thái đó”, một tiến trình khác có thể làm trạng thái thay đổi — khiến kết luận ban đầu sai.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Hãy hình dung hai người cùng muốn đặt chỗ một bàn trống. Nếu người A nhìn thấy “bàn trống” rồi dừng lại một chút, người B có thể chen vào ngồi mất. Khi A quay lại, bàn đã có người nhưng A vẫn tưởng mình đặt được. Thao tác nguyên tử giống như “nhìn và ngồi” trong một nhịp, không ai xen vào được. <b>Nhớ nhé: khe hở giữa “nhìn” và “làm” chính là nơi race condition chui vào.</b></p>
+      <p class="en-only" lang="en">Atomicity is essential to the correctness of many operations. Kerrisk illustrates it with two file-I/O situations where a race condition arises, then shows them eliminated through <code>open()</code> flags that guarantee atomicity.<span class="cite"><a href="#ref-1">1</a></span> The core idea: if a process is interrupted between “checking some state” and “acting on that state”, another process can change the state in between — making the original conclusion wrong.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi hai tiến trình cùng ghi vào một tệp log chung, hay cùng muốn chắc chắn mình là người tạo ra một tệp, bạn đang đứng trước đúng loại race condition này.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Hai chương trình cùng ghi vào một tệp nhật ký là ví dụ kinh điển của tình huống này.</span>
+        <span class="en-only" lang="en">Whenever two processes write to a shared log file, or both want to be sure they created a file, you are facing exactly this kind of race condition.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">O_EXCL &amp; O_APPEND</span>
+      <h3>
+        <span class="standard-copy">Hai bảo đảm nguyên tử: tạo độc quyền và ghi nối</span>
+        <span class="easy-only">Tạo tệp chắc chắn, và ghi luôn vào cuối</span>
+        <span class="en-only" lang="en">Two atomic guarantees: exclusive create and append</span>
+      </h3>
+      <p class="standard-copy">Dùng một lời gọi <code>open()</code> duy nhất với <code>O_CREAT | O_EXCL</code> bảo đảm bước kiểm tra sự tồn tại của tệp và bước tạo tệp được thực hiện như một thao tác nguyên tử; nếu tệp đã có, <code>open()</code> thất bại với <code>EEXIST</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Tình huống thứ hai là nhiều tiến trình cùng ghi nối (append) vào một tệp: tách thành <code>lseek()</code> rồi <code>write()</code> sẽ dính race; mở tệp với cờ <code>O_APPEND</code> bảo đảm việc dời tới cuối tệp và việc ghi diễn ra nguyên tử.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only">Muốn chắc chắn chính mình tạo ra tệp (chưa ai có trước): mở với <code>O_CREAT | O_EXCL</code> — nếu tệp đã tồn tại thì báo lỗi ngay. Muốn nhiều chương trình cùng ghi nối vào cuối một tệp mà không đè nhau: mở với <code>O_APPEND</code>, hệ thống sẽ tự dời tới cuối và ghi trong một nhịp. <b>Nhớ nhé: O_EXCL để tạo chắc chắn, O_APPEND để ghi nối an toàn.</b></p>
+      <p class="en-only" lang="en">Using a single <code>open()</code> call with <code>O_CREAT | O_EXCL</code> guarantees that the existence check and the file creation are performed as one atomic operation; if the file already exists, <code>open()</code> fails with <code>EEXIST</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> The second situation is multiple processes appending to one file: splitting it into <code>lseek()</code> then <code>write()</code> is racy; opening the file with the <code>O_APPEND</code> flag guarantees that seeking to the end and writing happen atomically.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Một số hệ thống tệp (ví dụ NFS) không hỗ trợ <code>O_APPEND</code>; khi đó nhân quay về chuỗi không-nguyên-tử <code>lseek()</code>+<code>write()</code>, kéo theo nguy cơ hỏng tệp như đã mô tả.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Trên vài hệ thống tệp mạng (như NFS), O_APPEND không hoạt động, nên ghi nối lại có thể bị đè — cần lưu ý.</span>
+        <span class="en-only" lang="en">Some file systems (e.g. NFS) don't support <code>O_APPEND</code>; the kernel then reverts to the non-atomic <code>lseek()</code>+<code>write()</code> sequence, with the attendant risk of file corruption.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">fcntl: F_GETFL &amp; F_SETFL</span>
+      <h3>
+        <span class="standard-copy">Đọc và sửa open file status flags bằng fcntl()</span>
+        <span class="easy-only">Hỏi và đổi “tính chất” của tệp đang mở</span>
+        <span class="en-only" lang="en">Reading and changing status flags with fcntl()</span>
+      </h3>
+      <p class="standard-copy">Một công dụng của <code>fcntl()</code> là lấy lại (hoặc sửa) access mode và open file status flags của một tệp đang mở — chính các giá trị đã đặt qua đối số <code>flags</code> của <code>open()</code>. Dùng <code>cmd = F_GETFL</code> để lấy; để kiểm tra access mode phải che (mask) bằng <code>O_ACCMODE</code> vì <code>O_RDONLY</code> (0), <code>O_WRONLY</code> (1), <code>O_RDWR</code> (2) không ứng với từng bit riêng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Dùng <code>F_SETFL</code> để sửa, nhưng chỉ sửa được một nhóm nhỏ: <code>O_APPEND</code>, <code>O_NONBLOCK</code>, <code>O_NOATIME</code>, <code>O_ASYNC</code> và <code>O_DIRECT</code>; mọi cờ khác bị bỏ qua.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Sau khi mở tệp, bạn vẫn hỏi lại được nó đang mở ở kiểu nào và bật những công tắc gì — bằng <code>fcntl(fd, F_GETFL)</code>. Bạn cũng đổi được vài công tắc như “ghi nối” hay “không chặn” bằng <code>F_SETFL</code>, nhưng không đổi được kiểu đọc/ghi hay việc tạo tệp. <b>Nhớ nhé: F_GETFL để xem, F_SETFL để chỉnh vài công tắc cho phép.</b></p>
+      <p class="en-only" lang="en">One use of <code>fcntl()</code> is to retrieve (or modify) the access mode and open file status flags of an open file — the very values set via <code>open()</code>'s <code>flags</code> argument. Use <code>cmd = F_GETFL</code> to retrieve them; to test the access mode you must mask with <code>O_ACCMODE</code>, because <code>O_RDONLY</code> (0), <code>O_WRONLY</code> (1) and <code>O_RDWR</code> (2) don't correspond to single bits.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Use <code>F_SETFL</code> to modify them, but only a small group can be changed: <code>O_APPEND</code>, <code>O_NONBLOCK</code>, <code>O_NOATIME</code>, <code>O_ASYNC</code> and <code>O_DIRECT</code>; all other flags are ignored.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Khi nào F_SETFL là bắt buộc</h4>
+          <p>Sửa status flags bằng <code>fcntl()</code> đặc biệt hữu ích khi: tệp không do chính chương trình mở (ví dụ một trong ba fd chuẩn), hoặc fd đến từ system call khác <code>open()</code> — như <code>pipe()</code> trả về hai đầu ống, hay <code>socket()</code> trả về fd socket. Với những fd đó, ta không điều khiển được <code>flags</code> lúc mở, nên phải chỉnh sau bằng <code>F_GETFL</code> rồi <code>F_SETFL</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một sai lệch của Linux</h4>
+          <p>SUSv3 yêu cầu chỉ các status flags đặt lúc <code>open()</code> hay qua <code>F_SETFL</code> về sau mới hiện trong kết quả <code>F_GETFL</code>. Nhưng Linux lệch ở một điểm: nếu chương trình được biên dịch với một trong các kỹ thuật mở tệp lớn (Mục 5.10), thì <code>O_LARGEFILE</code> sẽ luôn xuất hiện trong các cờ lấy về bằng <code>F_GETFL</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Ta đã thấy status flags có thể được <i>chia sẻ</i> hay <i>riêng tư</i> giữa các file descriptor. Nhưng chia sẻ với ai, và tại sao? Câu trả lời nằm ở cách nhân biểu diễn tệp đang mở — ba bảng dữ liệu nối file descriptor với open file description rồi tới i-node. Hiểu ba bảng ấy là chìa khoá cho mọi điều tinh tế còn lại của file I/O.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Vừa rồi ta nhắc tới chuyện vài công tắc được “chia sẻ” giữa các con số tệp. Muốn hiểu chia sẻ với ai, phải xem nhân lưu giữ tệp đang mở ra sao — đó là nội dung tiếp theo.</p>
+    <p class="en-only" lang="en">We've seen that status flags can be <i>shared</i> or <i>private</i> between file descriptors. But shared with whom, and why? The answer lies in how the kernel represents an open file — three tables linking a file descriptor to an open file description and then to an i-node. Understanding those three tables is the key to all the remaining subtleties of file I/O.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="ch5-cau-truc" aria-labelledby="ch5-cau-truc-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="ch5-cau-truc-title">
+      <span class="standard-copy">Ba bảng của nhân và nhân bản file descriptor</span>
+      <span class="easy-only">Nhân lưu tệp đang mở thế nào, và dup() nhân bản con số tệp</span>
+      <span class="en-only" lang="en">The kernel's three tables and duplicating file descriptors</span>
+    </h2>
+    <p class="standard-copy">Thoạt nhìn, dường như file descriptor và tệp đang mở tương ứng một-một. Thực tế không phải vậy: có thể — và có ích — khi nhiều file descriptor cùng trỏ tới <i>một</i> open file description, dù trong cùng một tiến trình hay ở các tiến trình khác nhau. Để hiểu, cần xem ba cấu trúc dữ liệu mà nhân duy trì: <b>bảng file descriptor</b> của từng tiến trình, <b>bảng open file description</b> toàn hệ thống, và <b>bảng i-node</b> của hệ thống tệp.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Ta hay tưởng mỗi “con số tệp” ứng với đúng một tệp đang mở. Thật ra nhiều con số có thể trỏ chung một chỗ. Để hiểu, hãy biết nhân giữ ba bảng: bảng con số của mỗi chương trình, bảng “tệp đang mở” dùng chung cho cả máy, và bảng i-node mô tả chính tệp trên đĩa. <b>Nhớ nhé: một con số tệp đi qua ba bảng mới tới được tệp thật.</b></p>
+    <p class="en-only" lang="en">At first glance it may appear that there is a one-to-one correspondence between a file descriptor and an open file. In fact this is not the case: it is possible — and useful — for multiple descriptors to refer to <i>one</i> open file description, whether within the same process or in different processes. To understand this, we examine three data structures the kernel maintains: the per-process <b>file descriptor table</b>, the system-wide <b>open file description table</b>, and the file system <b>i-node table</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Một <i>open file description</i> (bản mô tả tệp đang mở, còn gọi là <i>open file handle</i>) là một mục trong bảng toàn hệ thống, lưu mọi thông tin của một lần mở tệp: <b>file offset</b> hiện tại, các <b>status flags</b> (từ đối số <code>flags</code>), <b>access mode</b>, thiết lập cho signal-driven I/O, và một tham chiếu tới <b>i-node</b> của tệp.<span class="cite"><a href="#ref-1">1</a></span> Mỗi mục trong bảng file descriptor của tiến trình lại chứa một tập cờ điều khiển fd (đúng một cờ: close-on-exec) và một tham chiếu tới open file description.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> “Open file description” là một phiếu ghi lại một lần mở tệp: đang đọc tới đâu (offset), bật công tắc gì (status flags), mở ở kiểu nào. Con số tệp của bạn chỉ là một mũi tên trỏ tới phiếu ấy; nhiều mũi tên có thể trỏ chung một phiếu. <b>Nhớ nhé: offset và status flags nằm ở phiếu “tệp đang mở”, không nằm ở con số tệp.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> An <i>open file description</i> (also called an <i>open file handle</i>) is an entry in a system-wide table storing everything about one open instance of a file: the current <b>file offset</b>, the <b>status flags</b> (from the <code>flags</code> argument), the <b>access mode</b>, signal-driven I/O settings, and a reference to the file's <b>i-node</b>.<span class="cite"><a href="#ref-1">1</a></span> Each entry in a process's file descriptor table holds a set of fd flags (just one: close-on-exec) and a reference to an open file description.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">fd table (mỗi tiến trình)<br>&nbsp;&nbsp;fd 0 ─┐<br>&nbsp;&nbsp;fd 20 ┴─► open file descr.<br>open file descr. (toàn hệ thống)<br>&nbsp;&nbsp;[offset | status flags | i-node*]<br>i-node table → tệp trên đĩa</p>
+      <p class="easy-only">con số tệp → mũi tên<br>phiếu “tệp đang mở”:<br>&nbsp;&nbsp;đọc tới đâu + công tắc<br>i-node → tệp thật trên đĩa<br>nhiều mũi tên → 1 phiếu</p>
+      <p class="en-only" lang="en">fd table (per process)<br>&nbsp;&nbsp;fd 0 ─┐<br>&nbsp;&nbsp;fd 20 ┴─► open file descr.<br>open file descr. (system-wide)<br>&nbsp;&nbsp;[offset | status flags | i-node*]<br>i-node table → file on disk</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">the three kernel tables</span>
+      <h3>
+        <span class="standard-copy">fd table → open file description → i-node</span>
+        <span class="easy-only">Ba bảng nối con số tệp tới tệp thật</span>
+        <span class="en-only" lang="en">fd table → open file description → i-node</span>
+      </h3>
+      <p class="standard-copy">Mỗi tiến trình có bảng file descriptor riêng; mỗi mục trỏ tới một open file description trong bảng toàn hệ thống; và mỗi open file description trỏ tới một i-node trong bảng i-node. i-node ghi kiểu tệp (tệp thường, socket, FIFO…), quyền hạn, con trỏ tới danh sách khoá (lock) đang giữ trên tệp, và các thuộc tính như kích thước cùng các mốc thời gian.<span class="cite"><a href="#ref-1">1</a></span> Chính ba tầng này giải thích vì sao hai fd có thể dùng chung một offset, hoặc trỏ tới cùng một tệp qua hai open file description riêng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Hình dung ba bảng xếp chồng: bảng con số của riêng chương trình, bảng “tệp đang mở” dùng chung cả máy, và bảng i-node tả tệp thật. Đi từ con số → phiếu tệp đang mở → i-node là ra tới tệp trên đĩa. Nhờ cách xếp này mà hai con số có thể trỏ chung một phiếu. <b>Nhớ nhé: con số → phiếu → i-node, ba chặng mới tới tệp.</b></p>
+      <p class="en-only" lang="en">Each process has its own file descriptor table; each entry points to an open file description in the system-wide table; and each open file description points to an i-node in the i-node table. The i-node records the file type (regular file, socket, FIFO…), permissions, a pointer to the list of locks held on the file, and properties such as size and timestamps.<span class="cite"><a href="#ref-1">1</a></span> It is these three levels that explain why two fds can share one offset, or point at the same file through two separate open file descriptions.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Hình 5-2 trong sách vẽ đúng ba bảng này cho hai tiến trình: hai fd của một tiến trình trỏ chung một open file description (do <code>dup()</code>), hai tiến trình chia sẻ một description (do <code>fork()</code>), và hai description riêng trỏ chung một i-node (do hai lần <code>open()</code>).<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn chạy một chương trình con hay nhân bản con số tệp, chính ba bảng này quyết định ai chia sẻ gì với ai.</span>
+        <span class="en-only" lang="en">Figure 5-2 in the book draws exactly these three tables for two processes: two fds of one process sharing an open file description (via <code>dup()</code>), two processes sharing one description (via <code>fork()</code>), and two separate descriptions pointing at one i-node (via two <code>open()</code> calls).<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">shared vs private state</span>
+      <h3>
+        <span class="standard-copy">Cái gì chia sẻ, cái gì riêng tư</span>
+        <span class="easy-only">Offset thì chung, cờ close-on-exec thì riêng</span>
+        <span class="en-only" lang="en">What is shared, and what is private</span>
+      </h3>
+      <p class="standard-copy">Từ mô hình ba bảng rút ra ba hệ quả. (1) Hai fd cùng trỏ một open file description <b>chia sẻ file offset</b>: đổi offset qua fd này (do <code>read()</code>, <code>write()</code> hay <code>lseek()</code>) thì fd kia cũng thấy — kể cả khi hai fd ở hai tiến trình.<span class="cite"><a href="#ref-1">1</a></span> (2) Tương tự, các <b>open file status flags</b> (như <code>O_APPEND</code>, <code>O_NONBLOCK</code>, <code>O_ASYNC</code>) cũng được chia sẻ, và lấy/đổi được qua <code>fcntl()</code> <code>F_GETFL</code>/<code>F_SETFL</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> (3) Ngược lại, <b>file descriptor flags</b> (cờ close-on-exec) là <i>riêng tư</i> cho từng fd; đổi nó không ảnh hưởng fd khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nếu hai con số trỏ chung một phiếu “tệp đang mở”: vị trí đang đọc (offset) và các công tắc trạng thái là dùng chung — một bên dời thì bên kia thấy. Nhưng cờ “đóng khi chạy chương trình mới” (close-on-exec) lại của riêng từng con số. <b>Nhớ nhé: offset và status flags là chung; cờ close-on-exec là riêng.</b></p>
+      <p class="en-only" lang="en">The three-table model yields three implications. (1) Two fds pointing at one open file description <b>share a file offset</b>: changing the offset through one fd (via <code>read()</code>, <code>write()</code> or <code>lseek()</code>) is visible through the other — even across two processes.<span class="cite"><a href="#ref-1">1</a></span> (2) Likewise the <b>open file status flags</b> (such as <code>O_APPEND</code>, <code>O_NONBLOCK</code>, <code>O_ASYNC</code>) are shared, and retrievable/changeable via <code>fcntl()</code> <code>F_GETFL</code>/<code>F_SETFL</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> (3) By contrast, the <b>file descriptor flags</b> (the close-on-exec flag) are <i>private</i> to each fd; changing one affects no other.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Hai lần <code>open()</code> riêng trên cùng một tệp tạo ra hai open file description <i>khác nhau</i>, nên mỗi fd có offset <i>riêng</i> — khác hẳn trường hợp <code>dup()</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mở cùng một tệp hai lần bằng hai lệnh open() thì mỗi con số có vị trí đọc riêng, không ảnh hưởng nhau.</span>
+        <span class="en-only" lang="en">Two separate <code>open()</code> calls on the same file create two <i>different</i> open file descriptions, so each fd has its <i>own</i> offset — quite unlike the <code>dup()</code> case.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">dup, dup2, dup3, F_DUPFD</span>
+      <h3>
+        <span class="standard-copy">Nhân bản fd: dup(), dup2() và họ hàng</span>
+        <span class="easy-only">Tạo con số tệp thứ hai trỏ cùng một chỗ</span>
+        <span class="en-only" lang="en">Duplicating fds: dup(), dup2() and kin</span>
+      </h3>
+      <p class="standard-copy"><code>dup(oldfd)</code> tạo một fd mới trỏ tới <i>cùng</i> open file description với <code>oldfd</code>; fd mới là số chưa dùng <b>nhỏ nhất</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> <code>dup2(oldfd, newfd)</code> thì buộc fd mới mang đúng số <code>newfd</code>; nếu <code>newfd</code> đang mở, nó được đóng lại trước (lỗi khi đóng bị bỏ qua âm thầm).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> Nếu <code>oldfd</code> không hợp lệ, <code>dup2()</code> thất bại với <code>EBADF</code>; còn nếu <code>oldfd</code> hợp lệ và <code>oldfd == newfd</code>, <code>dup2()</code> không làm gì và trả về <code>newfd</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only">Đây chính là cơ chế đằng sau <code>2&gt;&amp;1</code> trong shell: shell nhân bản con số tệp để báo lỗi (2) trỏ cùng chỗ với đầu ra (1). <code>dup()</code> cho bạn con số trống nhỏ nhất; <code>dup2()</code> cho bạn chọn đúng con số muốn. <b>Nhớ nhé: dup() lấy số nhỏ nhất, dup2() lấy đúng số bạn chỉ định.</b></p>
+      <p class="en-only" lang="en"><code>dup(oldfd)</code> makes a new fd pointing at the <i>same</i> open file description as <code>oldfd</code>; the new fd is the <b>lowest</b> unused number.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> <code>dup2(oldfd, newfd)</code> forces the new fd to be exactly <code>newfd</code>; if <code>newfd</code> is open, it is closed first (an error on that close is silently ignored).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> If <code>oldfd</code> is invalid, <code>dup2()</code> fails with <code>EBADF</code>; if <code>oldfd</code> is valid and <code>oldfd == newfd</code>, <code>dup2()</code> does nothing and returns <code>newfd</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>F_DUPFD và dup3()</h4>
+          <p><code>fcntl(oldfd, F_DUPFD, startfd)</code> nhân bản <code>oldfd</code> thành fd chưa dùng nhỏ nhất <i>lớn hơn hoặc bằng</i> <code>startfd</code> — tiện khi muốn fd mới rơi vào một khoảng số nhất định. <code>dup3(oldfd, newfd, flags)</code> giống <code>dup2()</code> nhưng thêm đối số <code>flags</code>; hiện hỗ trợ <code>O_CLOEXEC</code> để bật close-on-exec cho fd mới. <code>dup3()</code> mới có từ Linux 2.6.27 và là đặc thù Linux.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Cái gì theo sang fd nhân bản</h4>
+          <p>fd nhân bản chia sẻ cùng file offset và status flags với fd gốc (vì chung open file description), nhưng có <i>tập cờ fd riêng</i>, và cờ close-on-exec (<code>FD_CLOEXEC</code>) của nó <b>luôn bị tắt</b>. Từ Linux 2.6.24 còn có thao tác <code>F_DUPFD_CLOEXEC</code>: như <code>F_DUPFD</code> nhưng đồng thời bật close-on-exec cho fd mới.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Mô hình ba bảng cũng chỉ ra một hạn chế của <code>read()</code>/<code>write()</code> thường: mọi thao tác đều đi qua file offset chia sẻ, chỉ chuyển được một bộ đệm mỗi lần, và không đổi được kích thước tệp. Chương dành phần còn lại cho các lời gọi mở rộng vá đúng những hạn chế ấy.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Vì mọi thao tác thường đều dùng chung một vị trí đọc, đôi khi ta cần cách đọc–ghi ở một vị trí cố định, hay chuyển nhiều bộ đệm một lần. Đó là việc của các lệnh nâng cao tiếp theo.</p>
+    <p class="en-only" lang="en">The three-table model also exposes a limitation of ordinary <code>read()</code>/<code>write()</code>: every operation goes through the shared file offset, transfers only one buffer at a time, and can't change the file's size. The rest of the chapter is devoted to extended calls that fix exactly those limitations.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="ch5-morong" aria-labelledby="ch5-morong-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="ch5-morong-title">
+      <span class="standard-copy">Các lời gọi I/O mở rộng: pread/pwrite, scatter-gather, truncate, nonblocking, tệp lớn</span>
+      <span class="easy-only">Những lệnh đọc–ghi nâng cao cho tình huống đặc biệt</span>
+      <span class="en-only" lang="en">The extended I/O calls: pread/pwrite, scatter-gather, truncate, nonblocking, large files</span>
+    </h2>
+    <p class="standard-copy">Phần cuối chương giới thiệu các system call mở rộng chức năng đọc–ghi quy ước. <code>pread()</code>/<code>pwrite()</code> thực hiện I/O tại một vị trí chỉ định mà không đụng tới file offset; <code>readv()</code>/<code>writev()</code> chuyển dữ liệu từ/tới nhiều bộ đệm trong một lời gọi; <code>truncate()</code>/<code>ftruncate()</code> đặt lại kích thước tệp; nonblocking I/O tránh việc bị chặn; và các phần mở rộng LFS cho phép thao tác trên tệp rất lớn.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Phần cuối gom các lệnh đọc–ghi nâng cao: đọc–ghi ngay tại một vị trí định sẵn mà không làm xê dịch vị trí đang đọc; gửi nhiều bộ đệm trong một lần; cắt ngắn hoặc nới dài tệp; không chờ khi chưa có dữ liệu; và xử lý được tệp cực lớn. <b>Nhớ nhé: đây là hộp đồ nghề cho những tình huống mà bốn lệnh cơ bản chưa đủ.</b></p>
+    <p class="en-only" lang="en">The final part of the chapter introduces system calls that extend conventional read/write. <code>pread()</code>/<code>pwrite()</code> perform I/O at a specified location without touching the file offset; <code>readv()</code>/<code>writev()</code> transfer data from/to multiple buffers in a single call; <code>truncate()</code>/<code>ftruncate()</code> reset a file's size; nonblocking I/O avoids blocking; and the LFS extensions allow operations on very large files.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <i>Scatter-gather I/O</i> là việc đọc hoặc ghi dữ liệu qua một <i>mảng bộ đệm</i> trong một system call duy nhất, mô tả bởi mảng <code>struct iovec</code> gồm <code>iov_base</code> (địa chỉ bộ đệm) và <code>iov_len</code> (số byte).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> <code>readv()</code> làm <i>scatter input</i> — đọc một dãy byte liền mạch từ tệp rồi “rải” vào các bộ đệm; <code>writev()</code> làm <i>gather output</i> — “gom” các bộ đệm rồi ghi liền mạch ra tệp. Cả hai hoàn tất <b>nguyên tử</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Thay vì gọi nhiều lần, mỗi lần một bộ đệm, scatter-gather cho phép gửi/nhận cả một danh sách bộ đệm trong một lệnh. “Scatter” là rải dữ liệu đọc được vào nhiều hộp; “gather” là gom nhiều hộp rồi ghi ra. <b>Nhớ nhé: một lệnh, nhiều bộ đệm — gọn và nhanh hơn.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <i>Scatter-gather I/O</i> reads or writes data across an <i>array of buffers</i> in a single system call, described by an array of <code>struct iovec</code> holding <code>iov_base</code> (buffer address) and <code>iov_len</code> (byte count).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> <code>readv()</code> performs <i>scatter input</i> — it reads a contiguous run of bytes from the file and “scatters” them into the buffers; <code>writev()</code> performs <i>gather output</i> — it “gathers” the buffers and writes them contiguously. Both complete <b>atomically</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">n = pread(fd, buf, len, offset);<br>n = pwrite(fd, buf, len, offset);<br>n = readv(fd, iov, iovcnt);<br>n = writev(fd, iov, iovcnt);<br>truncate(path, length);<br>ftruncate(fd, length);</p>
+      <p class="easy-only">đọc ở vị trí định sẵn → pread<br>ghi ở vị trí định sẵn → pwrite<br>nhiều bộ đệm → readv / writev<br>đổi kích thước tệp →<br>&nbsp;&nbsp;truncate / ftruncate</p>
+      <p class="en-only" lang="en">n = pread(fd, buf, len, offset);<br>n = pwrite(fd, buf, len, offset);<br>n = readv(fd, iov, iovcnt);<br>n = writev(fd, iov, iovcnt);<br>truncate(path, length);<br>ftruncate(fd, length);</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">pread() &amp; pwrite()</span>
+      <h3>
+        <span class="standard-copy">I/O tại một offset chỉ định</span>
+        <span class="easy-only">Đọc–ghi ngay tại vị trí định sẵn</span>
+        <span class="en-only" lang="en">I/O at a specified offset</span>
+      </h3>
+      <p class="standard-copy"><code>pread()</code> và <code>pwrite()</code> hoạt động y như <code>read()</code> và <code>write()</code>, chỉ khác là I/O diễn ra tại vị trí <code>offset</code> cho sẵn chứ không phải tại file offset hiện hành — và <b>không làm thay đổi</b> file offset.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Gọi <code>pread()</code> tương đương thực hiện <i>nguyên tử</i> chuỗi: lưu offset hiện tại, <code>lseek()</code> tới <code>offset</code>, <code>read()</code>, rồi khôi phục offset cũ. Tệp phải <i>seekable</i> (gọi được <code>lseek()</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only">Hai lệnh này cho bạn đọc hoặc ghi đúng tại một vị trí bạn chỉ ra, mà không làm “con trỏ đọc” của tệp bị xê dịch. Nhờ vậy, lần đọc–ghi sau vẫn tiếp tục từ chỗ cũ như chưa có gì xảy ra. <b>Nhớ nhé: pread/pwrite nhảy tới vị trí định sẵn mà không làm lạc chỗ đang đọc.</b></p>
+      <p class="en-only" lang="en"><code>pread()</code> and <code>pwrite()</code> work just like <code>read()</code> and <code>write()</code>, except that the I/O is performed at the given <code>offset</code> rather than at the current file offset — and the file offset is <b>left unchanged</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Calling <code>pread()</code> is equivalent to atomically performing: save the current offset, <code>lseek()</code> to <code>offset</code>, <code>read()</code>, then restore the old offset. The file must be <i>seekable</i> (one on which <code>lseek()</code> is permitted).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Rất hữu ích trong ứng dụng đa luồng: mọi luồng của một tiến trình dùng chung bảng fd, nên file offset là chung; <code>pread()</code>/<code>pwrite()</code> cho nhiều luồng cùng I/O trên một fd mà không bị offset của luồng khác làm lệch.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span>
+        <span class="easy-only">Khi nhiều luồng cùng đọc–ghi một tệp, pread/pwrite giúp chúng không giẫm lên vị trí đọc của nhau.</span>
+        <span class="en-only" lang="en">Very useful in multithreaded applications: all threads of a process share the fd table, so the file offset is shared; <code>pread()</code>/<code>pwrite()</code> let multiple threads I/O on one fd without being thrown off by another thread's offset.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">readv() &amp; writev()</span>
+      <h3>
+        <span class="standard-copy">Scatter-gather: nhiều bộ đệm trong một lời gọi</span>
+        <span class="easy-only">Gửi hoặc nhận nhiều bộ đệm một lần</span>
+        <span class="en-only" lang="en">Scatter-gather: many buffers in one call</span>
+      </h3>
+      <p class="standard-copy">Thay vì một bộ đệm, <code>readv()</code>/<code>writev()</code> chuyển nhiều bộ đệm qua mảng <code>iov</code> gồm <code>iovcnt</code> phần tử. <code>readv()</code> đổ đầy từng bộ đệm theo thứ tự — <code>iov[0]</code> đầy xong mới sang <code>iov[1]</code> — và hoàn tất nguyên tử.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> Lợi thế chính là <i>tiện lợi</i> và <i>tốc độ</i>: một lời gọi <code>writev()</code> rẻ hơn nhiều lời gọi <code>write()</code>, lại ghi liền mạch nên không bị các tiến trình khác chèn dữ liệu vào giữa.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> SUSv3 cho phép đặt giới hạn số phần tử qua <code>IOV_MAX</code>; trên Linux giá trị này là 1024.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Hai lệnh này cho bạn liệt kê một danh sách “hộp” (bộ đệm) rồi đọc hoặc ghi cả danh sách trong một nhịp. Đọc thì đổ đầy hộp đầu trước rồi mới tới hộp sau; ghi thì nối nội dung các hộp lại rồi tuôn ra. Nhanh hơn và gọn hơn gọi nhiều lần. <b>Nhớ nhé: một danh sách hộp, một lệnh — vừa nhanh vừa liền mạch.</b></p>
+      <p class="en-only" lang="en">Instead of a single buffer, <code>readv()</code>/<code>writev()</code> transfer multiple buffers via the array <code>iov</code> of <code>iovcnt</code> elements. <code>readv()</code> fills each buffer in order — <code>iov[0]</code> completely before <code>iov[1]</code> — and completes atomically.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> The main advantages are <i>convenience</i> and <i>speed</i>: a single <code>writev()</code> is cheaper than multiple <code>write()</code> calls, and writes contiguously so other processes can't interleave data in between.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> SUSv3 lets an implementation cap the element count via <code>IOV_MAX</code>; on Linux that value is 1024.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Linux 2.6.30 thêm <code>preadv()</code>/<code>pwritev()</code> — kết hợp scatter-gather <i>với</i> I/O tại offset chỉ định; chúng phi chuẩn nhưng cũng có trên các BSD hiện đại.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span>
+        <span class="easy-only">Phiên bản preadv/pwritev gộp cả hai tiện ích: nhiều bộ đệm, lại đặt đúng vị trí định sẵn.</span>
+        <span class="en-only" lang="en">Linux 2.6.30 added <code>preadv()</code>/<code>pwritev()</code> — combining scatter-gather <i>with</i> I/O at a specified offset; they are nonstandard but also available on the modern BSDs.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">truncate() &amp; ftruncate()</span>
+      <h3>
+        <span class="standard-copy">Đặt lại kích thước tệp</span>
+        <span class="easy-only">Cắt ngắn hoặc nới dài một tệp</span>
+        <span class="en-only" lang="en">Resetting a file's size</span>
+      </h3>
+      <p class="standard-copy"><code>truncate()</code> và <code>ftruncate()</code> đặt kích thước tệp về đúng <code>length</code>. Nếu tệp đang dài hơn <code>length</code>, phần dư bị mất; nếu đang ngắn hơn, tệp được nới ra bằng cách đệm thêm một dãy byte 0 — hoặc một file hole.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Khác biệt: <code>truncate()</code> nhận <i>pathname</i> (tệp phải truy cập được và ghi được; nếu là symbolic link thì được dereference), còn <code>ftruncate()</code> nhận một <i>fd</i> đã mở để ghi và <b>không</b> làm đổi file offset.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <p class="easy-only">Hai lệnh này đặt lại độ dài của tệp theo con số bạn đưa. Lớn hơn hiện tại thì tệp được nới ra (phần mới toàn số 0); nhỏ hơn thì phần thừa bị cắt bỏ. Một lệnh làm việc qua tên tệp, lệnh kia qua con số tệp đã mở. <b>Nhớ nhé: truncate đặt độ dài tệp — cắt bớt hoặc kéo dài.</b></p>
+      <p class="en-only" lang="en"><code>truncate()</code> and <code>ftruncate()</code> set a file's size to exactly <code>length</code>. If the file is longer than <code>length</code>, the excess is lost; if it is shorter, it is extended by padding with a sequence of null bytes — or a file hole.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> The difference: <code>truncate()</code> takes a <i>pathname</i> (the file must be accessible and writable; a symbolic link is dereferenced), while <code>ftruncate()</code> takes an <i>fd</i> opened for writing and does <b>not</b> change the file offset.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy"><code>truncate()</code> là system call <i>duy nhất</i> có thể đổi nội dung một tệp mà không cần trước hết lấy một file descriptor qua <code>open()</code> (hay cách khác).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span>
+        <span class="easy-only">Điểm đặc biệt: truncate() đổi được tệp chỉ bằng tên, không cần mở tệp trước.</span>
+        <span class="en-only" lang="en"><code>truncate()</code> is the <i>only</i> system call that can change a file's contents without first obtaining a file descriptor via <code>open()</code> (or some other means).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">O_NONBLOCK</span>
+      <h3>
+        <span class="standard-copy">Nonblocking I/O: không chờ khi chưa sẵn</span>
+        <span class="easy-only">Không đứng chờ nếu dữ liệu chưa tới</span>
+        <span class="en-only" lang="en">Nonblocking I/O: don't wait when not ready</span>
+      </h3>
+      <p class="standard-copy">Cờ <code>O_NONBLOCK</code> phục vụ hai mục đích. Một, nếu không thể mở tệp ngay, <code>open()</code> trả về lỗi thay vì chặn (ví dụ mở một FIFO).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Hai, sau khi mở thành công, các thao tác I/O cũng nonblocking: nếu không hoàn tất ngay được, hoặc chuyển một phần, hoặc thất bại với <code>EAGAIN</code>/<code>EWOULDBLOCK</code> (trên Linux hai hằng này đồng nghĩa).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Nonblocking dùng được với thiết bị, pipe, FIFO và socket.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bình thường, đọc khi chưa có dữ liệu thì chương trình phải đứng chờ. Bật chế độ nonblocking thì thay vì chờ, nó quay lại ngay và báo “chưa có gì”, để bạn làm việc khác rồi thử lại sau. <b>Nhớ nhé: nonblocking = thà quay lại tay không còn hơn đứng chờ mãi.</b></p>
+      <p class="en-only" lang="en">The <code>O_NONBLOCK</code> flag serves two purposes. First, if the file can't be opened immediately, <code>open()</code> returns an error instead of blocking (e.g. opening a FIFO).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Second, after a successful open, I/O operations are also nonblocking: if one can't complete immediately, it either transfers partially or fails with <code>EAGAIN</code>/<code>EWOULDBLOCK</code> (on Linux these two constants are synonymous).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Nonblocking mode works with devices, pipes, FIFOs and sockets.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Thường bị bỏ qua với tệp thường</h4>
+          <p><code>O_NONBLOCK</code> nói chung bị <i>bỏ qua</i> với tệp thường, vì buffer cache của nhân bảo đảm I/O trên tệp thường không chặn (Mục 13.1). Ngoại lệ: khi dùng mandatory file locking (Mục 55.4) thì <code>O_NONBLOCK</code> vẫn có hiệu lực. Về lịch sử, System V có cờ <code>O_NDELAY</code> ngữ nghĩa gần giống; trên Linux <code>O_NDELAY</code> được định nghĩa nhưng đồng nghĩa với <code>O_NONBLOCK</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Bật sau khi mở</h4>
+          <p>Với pipe và socket, fd không lấy qua <code>open()</code>, nên để bật nonblocking ta phải dùng thao tác <code>fcntl()</code> <code>F_SETFL</code> (như đã nói ở cụm 01) chứ không truyền <code>O_NONBLOCK</code> vào <code>open()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">large files · /dev/fd · temp files</span>
+      <h3>
+        <span class="standard-copy">Tệp lớn, /dev/fd và tệp tạm</span>
+        <span class="easy-only">Tệp cực lớn, con số tệp dưới dạng tên, và tệp tạm</span>
+        <span class="en-only" lang="en">Large files, /dev/fd, and temporary files</span>
+      </h3>
+      <p class="standard-copy">Kiểu <code>off_t</code> giữ file offset thường là số nguyên có dấu; trên kiến trúc 32-bit, điều này giới hạn kích thước tệp ở 2³¹−1 byte (2 GB). Để vượt qua, cách <i>được khuyến nghị</i> là định nghĩa macro <code>_FILE_OFFSET_BITS</code> bằng 64 khi biên dịch, biến mọi hàm và kiểu 32-bit liên quan thành phiên bản 64-bit mà không phải sửa mã nguồn; cách cũ hơn là transitional LFS API (<code>_LARGEFILE64_SOURCE</code>, <code>open64()</code>, <code>off64_t</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> Nhân còn cung cấp thư mục ảo <code>/dev/fd</code>: mở <code>/dev/fd/n</code> tương đương nhân bản fd <code>n</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Trên máy 32-bit, mặc định tệp không vượt quá 2 GB. Muốn làm việc với tệp lớn hơn, chỉ cần biên dịch chương trình với một tuỳ chọn đặc biệt (<code>_FILE_OFFSET_BITS=64</code>). Ngoài ra có thư mục <code>/dev/fd</code> cho phép gọi các con số tệp đang mở như thể chúng là tên tệp. <b>Nhớ nhé: bật _FILE_OFFSET_BITS=64 là cách gọn nhất để mở được tệp lớn.</b></p>
+      <p class="en-only" lang="en">The <code>off_t</code> type that holds a file offset is typically a signed integer; on 32-bit architectures this limits file size to 2³¹−1 bytes (2 GB). To get past this, the <i>recommended</i> way is to define the macro <code>_FILE_OFFSET_BITS</code> to 64 at compile time, turning all relevant 32-bit functions and types into their 64-bit counterparts with no source changes; the older way is the transitional LFS API (<code>_LARGEFILE64_SOURCE</code>, <code>open64()</code>, <code>off64_t</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> The kernel also provides the virtual directory <code>/dev/fd</code>: opening <code>/dev/fd/n</code> is equivalent to duplicating fd <code>n</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Để tạo tệp tạm với tên duy nhất, <code>mkstemp(template)</code> thay 6 ký tự <code>XXXXXX</code> cuối template, tạo tệp với <code>O_EXCL</code> (chỉ chủ sở hữu đọc/ghi) và trả về một fd; <code>tmpfile()</code> trả về một <code>FILE*</code> mở để đọc–ghi và tự xoá khi đóng (nó <code>unlink()</code> ngay sau khi mở).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span>
+        <span class="easy-only">Cần một tệp nháp dùng xong bỏ? mkstemp() tạo tên không trùng; tmpfile() tạo tệp tự biến mất khi đóng.</span>
+        <span class="en-only" lang="en">To create a uniquely named temporary file, <code>mkstemp(template)</code> replaces the trailing 6 <code>XXXXXX</code> characters, creates the file with <code>O_EXCL</code> (owner read/write only) and returns an fd; <code>tmpfile()</code> returns a <code>FILE*</code> opened for reading and writing that is deleted on close (it <code>unlink()</code>s it right after opening).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Mỗi lời gọi mở rộng vá một hạn chế cụ thể của <code>read()</code>/<code>write()</code> thường — nhưng tất cả đều xoay quanh ba ý xuyên suốt chương: nguyên tử tính, cách offset và status flags được chia sẻ qua open file description, và sự kiểm soát chính xác mà người lập trình giành lại được. Phần cuối là bốn ngộ nhận hay gặp quanh đúng những ý đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Mỗi lệnh nâng cao giải một bài toán riêng, nhưng đều quay về ba ý chính của chương. Trước khi khép lại, hãy điểm qua bốn chỗ người mới dễ hiểu nhầm.</p>
+    <p class="en-only" lang="en">Each extended call patches a specific limitation of ordinary <code>read()</code>/<code>write()</code> — but all of them revolve around the chapter's three threads: atomicity, how offset and status flags are shared through the open file description, and the precise control the programmer reclaims. Last come four misconceptions clustered around exactly those ideas.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== MISCONCEPTIONS ===================== -->
+<section class="section" id="ch5-ngo-nhan" aria-labelledby="ch5-ngo-nhan-title">
+  <div class="trap-comparison deep-only deep-bilingual">
+    <p class="eyebrow" id="ch5-ngo-nhan-title">
+      <span class="vi-only">Bốn ngộ nhận thường gặp</span>
+      <span class="en-only" lang="en">Four common misconceptions</span>
+    </p>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“dup() tạo một tệp độc lập, có offset riêng”</span>
+          <span class="en-only" lang="en">“dup() makes an independent file with its own offset”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> fd nhân bản là một bản sao độc lập, có vị trí đọc riêng.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> <code>dup()</code>/<code>dup2()</code> cho fd mới trỏ chung <i>một</i> open file description với fd gốc, nên hai fd <b>chia sẻ file offset và status flags</b>; chỉ cờ fd (close-on-exec) là riêng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> a duplicated fd is an independent copy with its own offset.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> <code>dup()</code>/<code>dup2()</code> give a new fd onto <i>one</i> open file description shared with the original, so both fds <b>share the file offset and status flags</b>; only the fd flag (close-on-exec) is private.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“lseek() rồi write() là đủ để ghi nối an toàn”</span>
+          <span class="en-only" lang="en">“lseek() then write() is enough to append safely”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> cứ <code>lseek()</code> tới cuối rồi <code>write()</code> là ghi nối được an toàn.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> hai bước tách rời có thể bị cắt ngang giữa chừng, sinh race condition và đè dữ liệu; muốn ghi nối nguyên tử phải mở tệp với <code>O_APPEND</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> an <code>lseek()</code> to the end followed by <code>write()</code> is a safe append.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> the two separate steps can be interrupted in between, creating a race condition that overwrites data; for atomic appends the file must be opened with <code>O_APPEND</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“F_SETFL đổi được mọi cờ, kể cả access mode”</span>
+          <span class="en-only" lang="en">“F_SETFL can change any flag, even the access mode”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> dùng <code>fcntl()</code> <code>F_SETFL</code> thì đổi được mọi cờ của tệp đang mở.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> chỉ đổi được <code>O_APPEND</code>, <code>O_NONBLOCK</code>, <code>O_NOATIME</code>, <code>O_ASYNC</code>, <code>O_DIRECT</code>; access mode và các creation flag <b>không</b> đổi được sau khi mở, mọi cờ khác bị bỏ qua.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> <code>fcntl()</code> <code>F_SETFL</code> can change any flag of an open file.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> only <code>O_APPEND</code>, <code>O_NONBLOCK</code>, <code>O_NOATIME</code>, <code>O_ASYNC</code>, <code>O_DIRECT</code> can be changed; the access mode and creation flags <b>cannot</b> be changed after opening, and all other flags are ignored.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“O_NONBLOCK khiến read() trên tệp thường trả về ngay”</span>
+          <span class="en-only" lang="en">“O_NONBLOCK makes read() on a regular file return at once”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> bật <code>O_NONBLOCK</code> thì đọc tệp thường cũng thành nonblocking.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> với tệp thường, <code>O_NONBLOCK</code> nói chung bị bỏ qua vì buffer cache bảo đảm I/O không chặn; nó chỉ thật sự có tác dụng với thiết bị, pipe, FIFO, socket (hoặc khi dùng mandatory locking).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> turning on <code>O_NONBLOCK</code> also makes reads on regular files nonblocking.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> for regular files <code>O_NONBLOCK</code> is generally ignored, because the buffer cache ensures I/O doesn't block; it only really matters for devices, pipes, FIFOs and sockets (or with mandatory locking).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="ch5-chan-doan" aria-labelledby="ch5-chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="ch5-chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm các chi tiết sâu của file I/O</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped the further details of file I/O</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã theo trọn mạch từ nguyên tử tính và <code>fcntl()</code>, qua ba bảng của nhân và <code>dup()</code>, tới các lời gọi I/O mở rộng.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you followed the whole line from atomicity and <code>fcntl()</code>, through the kernel's three tables and <code>dup()</code>, to the extended I/O calls.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Atomicity nghĩa là gì, và vì sao <code>O_CREAT | O_EXCL</code> lại loại bỏ được race condition khi tạo tệp?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao tách thành “kiểm tra tồn tại” rồi “tạo tệp” là không an toàn?</p>
+      </li>
+      <li>
+        <p><code>fcntl()</code> <code>F_GETFL</code>/<code>F_SETFL</code> làm gì, và những status flag nào đổi được sau khi mở?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao phải che bằng <code>O_ACCMODE</code> để kiểm tra access mode?</p>
+      </li>
+      <li>
+        <p>Ba bảng của nhân là gì, và chúng giải thích ra sao việc hai fd có thể chia sẻ một file offset?</p>
+        <p class="deep-only">Gợi ý sâu hơn: cái gì được chia sẻ giữa các fd trỏ chung một open file description, cái gì thì riêng tư?</p>
+      </li>
+      <li>
+        <p><code>dup()</code> và <code>dup2()</code> khác nhau thế nào, và fd nhân bản chia sẻ gì với fd gốc?</p>
+        <p class="deep-only">Gợi ý sâu hơn: cờ close-on-exec của fd nhân bản mặc định bật hay tắt?</p>
+      </li>
+      <li>
+        <p><code>pread()</code>/<code>pwrite()</code> và <code>readv()</code>/<code>writev()</code> cho ta điều gì mà <code>read()</code>/<code>write()</code> thường không có?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao <code>pread()</code> đặc biệt hữu ích trong ứng dụng đa luồng, và vì sao <code>O_NONBLOCK</code> thường vô hiệu với tệp thường?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>“Nguyên tử” nghĩa là gì, và vì sao nó giúp tránh lỗi khi nhiều chương trình cùng làm việc?</p></li>
+      <li><p>Lệnh <code>fcntl()</code> dùng để làm gì với một tệp đang mở?</p></li>
+      <li><p>Vì sao hai “con số tệp” có thể trỏ chung một chỗ và dùng chung vị trí đọc?</p></li>
+      <li><p><code>dup()</code> dùng để làm gì, và nó liên quan thế nào tới <code>2&gt;&amp;1</code> trong terminal?</p></li>
+      <li><p>Lệnh nào giúp đọc–ghi ngay tại một vị trí định sẵn mà không làm lạc chỗ đang đọc?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>What does atomicity mean, and why does <code>O_CREAT | O_EXCL</code> eliminate the race condition when creating a file?</p></li>
+      <li><p>What do <code>fcntl()</code> <code>F_GETFL</code>/<code>F_SETFL</code> do, and which status flags can be changed after opening?</p></li>
+      <li><p>What are the kernel's three tables, and how do they explain how two fds can share one file offset?</p></li>
+      <li><p>How do <code>dup()</code> and <code>dup2()</code> differ, and what does a duplicated fd share with the original?</p></li>
+      <li><p>What do <code>pread()</code>/<code>pwrite()</code> and <code>readv()</code>/<code>writev()</code> give us that ordinary <code>read()</code>/<code>write()</code> don't?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="ch5-khep-lai" aria-labelledby="ch5-khep-lai-title">
+  <p class="eyebrow" id="ch5-khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Sự tinh tế của file I/O sống <span class="closing-accent">bên dưới bốn lời gọi</span>: <code>O_EXCL</code> và <code>O_APPEND</code> dùng tính nguyên tử để diệt race condition; ba bảng của nhân lý giải vì sao các fd <span class="closing-accent">chia sẻ offset và status flags</span> nhưng giữ riêng cờ close-on-exec; và các lời gọi mở rộng — <code>pread()</code>, <code>readv()</code>, <code>truncate()</code> — trả lại cho người lập trình <span class="closing-accent">quyền kiểm soát chính xác</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Điều khó của việc đọc–ghi tệp nằm ở phần bên dưới: làm thao tác “một mạch” để khỏi giẫm chân nhau, hiểu cách nhân ghi nhớ tệp đang mở, và biết dùng vài lệnh nâng cao đúng lúc. <b>Nhớ nhé: nắm được phần “bên dưới” này là viết được chương trình tệp vững vàng.</b></p>
+    <p class="en-only" lang="en">The subtlety of file I/O lives <span class="closing-accent">beneath the four calls</span>: <code>O_EXCL</code> and <code>O_APPEND</code> use atomicity to kill race conditions; the kernel's three tables explain why fds <span class="closing-accent">share an offset and status flags</span> yet keep the close-on-exec flag private; and the extended calls — <code>pread()</code>, <code>readv()</code>, <code>truncate()</code> — hand the programmer <span class="closing-accent">precise control</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-4-file-io-the-universal-io-model.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 4 · File I/O: Mô hình I/O phổ quát</span>
+    <span class="nav-title en-only" lang="en">Chapter 4 · File I/O: The Universal I/O Model</span>
+  </a>
+  <div class="nav-cell nav-next disabled" aria-disabled="true">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 6 · Tiến trình · sắp có</span>
+    <span class="nav-title en-only" lang="en">Chapter 6 · Processes · coming soon</span>
+  </div>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chương 5, “File I/O: Further Details”, trang 89–112.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chapter 5, “File I/O: Further Details”, pp. 89–112.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Michael Kerrisk, <i>The Linux Programming Interface</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3), ch. 5 “File I/O: Further Details”, pp. 89–112. — <a href="https://man7.org/tlpi/" target="_blank" rel="noopener noreferrer">man7.org/tlpi</a></li>
+      <li id="ref-2">fcntl(2) — Linux manual page: <code>F_GETFL</code>/<code>F_SETFL</code>, <code>F_DUPFD</code>/<code>F_DUPFD_CLOEXEC</code>, and the modifiable status flags. The Linux man-pages project. <a href="https://man7.org/linux/man-pages/man2/fcntl.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/fcntl.2.html</a></li>
+      <li id="ref-3">open(2) — Linux manual page: <code>O_CREAT</code>/<code>O_EXCL</code> atomic creation, <code>O_APPEND</code> atomicity, and <code>O_NONBLOCK</code>. The Linux man-pages project. <a href="https://man7.org/linux/man-pages/man2/open.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/open.2.html</a></li>
+      <li id="ref-4">dup(2) — Linux manual page: <code>dup()</code>, <code>dup2()</code>, <code>dup3()</code>, shared open file description and the close-on-exec flag. The Linux man-pages project. <a href="https://man7.org/linux/man-pages/man2/dup.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/dup.2.html</a></li>
+      <li id="ref-5">pread(2) — Linux manual page: <code>pread()</code>/<code>pwrite()</code>, I/O at a given offset leaving the file offset unchanged. The Linux man-pages project. <a href="https://man7.org/linux/man-pages/man2/pread.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/pread.2.html</a></li>
+      <li id="ref-6">readv(2) — Linux manual page: <code>readv()</code>/<code>writev()</code>, <code>struct iovec</code>, atomic scatter-gather, and <code>preadv()</code>/<code>pwritev()</code>. The Linux man-pages project. <a href="https://man7.org/linux/man-pages/man2/readv.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/readv.2.html</a></li>
+      <li id="ref-7">truncate(2) — Linux manual page: <code>truncate()</code>/<code>ftruncate()</code>, setting file size, holes, and the pathname-vs-fd distinction. The Linux man-pages project. <a href="https://man7.org/linux/man-pages/man2/truncate.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/truncate.2.html</a></li>
+      <li id="ref-8">lseek(2) — Linux manual page: the file offset, <code>off_t</code>, <code>ESPIPE</code>, and sparse files (holes). The Linux man-pages project. <a href="https://man7.org/linux/man-pages/man2/lseek.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/lseek.2.html</a></li>
+      <li id="ref-9">mkstemp(3) — Linux manual page: <code>mkstemp()</code> (and <code>tmpfile()</code>), the <code>XXXXXX</code> template and <code>O_EXCL</code> creation. The Linux man-pages project. <a href="https://man7.org/linux/man-pages/man3/mkstemp.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/mkstemp.3.html</a></li>
+      <li id="ref-10">“fcntl — file control” — POSIX.1-2017 / The Open Group Base Specifications, defining <code>F_GETFL</code>/<code>F_SETFL</code> and <code>F_DUPFD</code>. IEEE &amp; The Open Group. <a href="https://pubs.opengroup.org/onlinepubs/9699919799/functions/fcntl.html" target="_blank" rel="noopener noreferrer">pubs.opengroup.org</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-4-file-io-the-universal-io-model.html">chapter 4</a>
+      <span class="soon">chapter 6</span>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('tlpi-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('tlpi-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('tlpi-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>
