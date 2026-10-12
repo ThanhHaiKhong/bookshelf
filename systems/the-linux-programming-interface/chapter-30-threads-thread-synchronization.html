@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 30 · Luồng: đồng bộ hoá — The Linux Programming Interface</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 30 “Threads: Thread Synchronization” trong The Linux Programming Interface (Michael Kerrisk, No Starch Press, 2010): vì sao cần mutex để tránh cuộc đua cập-nhật-bị-mất, khoá/mở khoá mutex (pthread_mutex_lock/unlock), mutex tĩnh (PTHREAD_MUTEX_INITIALIZER) và động (pthread_mutex_init/destroy), bế tắc giữa hai mutex và thứ tự khoá, hiệu năng mutex, các loại mutex (NORMAL/ERRORCHECK/RECURSIVE); biến điều kiện báo hiệu thay đổi trạng thái (pthread_cond_signal/broadcast/wait), vì sao biến điều kiện luôn đi với mutex và được kiểm trong vòng while. Ba mức đọc, mọi khẳng định đều có nguồn.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('tlpi-reading-mode'),
+l=localStorage.getItem('tlpi-lang'),
+t=localStorage.getItem('tlpi-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   THE LINUX PROGRAMMING INTERFACE — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"TLPI · CH.30";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+/* soon = chapter not yet on disk; rendered as a non-link cell. */
+.chapter-path .soon{
+  display:block;padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--tint);border:1px dashed var(--line);opacity:.6;
+}
+.chapter-path .soon .soon-tag{
+  display:inline-block;font-family:var(--sans);font-size:.6rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:.1rem .45rem;margin-top:.4rem;
+}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.series-links .soon{margin-right:.5rem;color:var(--muted);opacity:.55;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+
+/* ---------- whole-book mind map banner ---------- */
+.mindmap-banner{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  gap:clamp(1rem,3vw,2rem);align-items:center;
+  margin:3rem 0 0;padding:1.35rem clamp(1.15rem,3vw,2rem);
+  border:1px solid var(--line);border-left:4px solid var(--teal);
+  border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);
+  color:var(--ink);text-decoration:none;
+  transition:border-color .15s,transform .15s;
+}
+a.mindmap-banner:hover{border-color:var(--teal);transform:translateY(-2px);}
+a.mindmap-banner:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.mindmap-banner.soon{opacity:.5;cursor:default;}
+.mindmap-icon{font-size:1.9rem;line-height:1;}
+.mindmap-banner h3{margin:0 0 .3rem;font-size:1.05rem;}
+.mindmap-banner p{margin:0;max-width:48rem;font-size:.88rem;color:var(--muted);}
+.mindmap-banner .result{margin-top:0;color:var(--teal);font-weight:600;white-space:nowrap;}
+.mindmap-banner.soon .result{color:var(--muted);}
+@media (max-width:860px){
+  .mindmap-banner{grid-template-columns:auto minmax(0,1fr);}
+  .mindmap-banner .result{grid-column:2;white-space:normal;}
+}
+@media (max-width:460px){
+  .mindmap-banner{margin-left:0;margin-right:0;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    The Linux Programming Interface
+    <span>Chương 30 · Threads: Thread Synchronization</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 30 · Luồng: đồng bộ hoá</span>
+      <span class="en-only" lang="en">Chapter 30 · Threads: Thread Synchronization</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Nhiều luồng dùng chung một bộ nhớ — làm sao chúng không giẫm lên nhau</span>
+      <span class="easy-only">Nhiều luồng cùng một trí nhớ — làm sao để chúng không làm hỏng đồ của nhau</span>
+      <span class="en-only" lang="en">Many threads sharing one memory — how to keep them from clobbering each other</span>
+    </h1>
+
+    <p class="standard-copy">Điều làm cho luồng (thread) mạnh mẽ cũng chính là điều khiến chúng nguy hiểm: mọi luồng trong một tiến trình <i>dùng chung</i> một không gian địa chỉ, nên có thể cùng đọc và ghi vào một biến toàn cục.<span class="cite"><a href="#ref-1">1</a></span> Kerrisk mở chương bằng câu hỏi cốt lõi đó, rồi trao hai công cụ. Thứ nhất là <b>mutex</b> (loại trừ lẫn nhau), bảo đảm tại một thời điểm chỉ một luồng chạm vào một biến dùng chung — chặn cuộc đua <i>cập-nhật-bị-mất</i> (lost update).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Thứ hai là <b>biến điều kiện</b> (condition variable), để một luồng ngủ chờ cho tới khi một luồng khác báo rằng trạng thái dùng chung đã đổi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    <p class="easy-only">Hãy hình dung nhiều người cùng viết lên <i>một tấm bảng</i>. Nếu ai cũng xoá và viết tuỳ ý cùng lúc, chữ sẽ thành một mớ hỗn độn. Chương này đưa ra hai luật chơi: một là chiếc <i>chìa khoá</i> (mutex) — ai cầm chìa mới được viết, viết xong trả chìa cho người khác; hai là chiếc <i>chuông</i> (biến điều kiện) — ai đang chờ thì ngồi yên, có thay đổi thì được rung chuông gọi dậy. <b>Nhớ nhé: chìa khoá để không giẫm lên nhau, chuông để khỏi phải ngồi ngó hoài.</b></p>
+    <p class="en-only" lang="en">What makes threads powerful is also what makes them dangerous: every thread in a process <i>shares</i> one address space, so they can all read and write the same global variable.<span class="cite"><a href="#ref-1">1</a></span> Kerrisk opens the chapter with that core problem, then hands over two tools. The first is the <b>mutex</b> (mutual exclusion), which guarantees that only one thread touches a shared variable at a time — blocking the <i>lost-update</i> race.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> The second is the <b>condition variable</b>, which lets a thread sleep until another thread signals that the shared state has changed.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    <p class="deep-only deep-bilingual"><span class="vi-only">Điểm mấu chốt khiến đồng bộ hoá cần thiết: các thao tác tưởng là "một bước" trên ngôn ngữ cấp cao — ví dụ <code>glob++</code> — thực ra gồm nhiều bước máy (đọc giá trị vào thanh ghi, tăng, ghi lại). Nếu hai luồng xen kẽ nhau giữa chừng chuỗi đọc–sửa–ghi ấy, một cập nhật sẽ bị đè mất. Mutex và biến điều kiện là hai mảnh ghép bổ sung nhau: mutex bảo vệ <i>tính toàn vẹn</i> của dữ liệu dùng chung, còn biến điều kiện giải quyết <i>bài toán thời gian</i> — chờ đợi hiệu quả thay vì quay vòng kiểm tra liên tục.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">The crux that makes synchronization necessary: operations that look atomic in a high-level language — say <code>glob++</code> — actually comprise several machine steps (load the value into a register, increment, store it back). If two threads interleave in the middle of that read-modify-write sequence, one update is overwritten and lost. Mutexes and condition variables are complementary pieces: the mutex protects the <i>integrity</i> of shared data, while the condition variable solves the <i>timing</i> problem — waiting efficiently instead of busy-polling.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> vì các luồng dùng chung bộ nhớ, truy cập <i>đồng thời</i> vào một biến dùng chung sẽ phá hỏng dữ liệu; hai nguyên thủy đồng bộ của Pthreads — <b>mutex</b> để nối tiếp hoá truy cập và <b>biến điều kiện</b> để báo hiệu thay đổi trạng thái — là cặp công cụ nền tảng để lập trình đa luồng cho đúng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> dùng chung trí nhớ thì tiện, nhưng cùng lúc sửa một chỗ thì hỏng. Giải pháp: một chiếc chìa khoá để thay phiên nhau, và một chiếc chuông để chờ nhau. <b>Nhớ nhé: chia sẻ cần có luật — chìa khoá và chuông chính là luật đó.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> because threads share memory, <i>concurrent</i> access to a shared variable corrupts data; the two Pthreads synchronization primitives — the <b>mutex</b> to serialize access and the <b>condition variable</b> to signal state changes — are the foundational pair for writing correct multithreaded programs.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: đồng bộ hoá luồng dựa trên hai công cụ. Mutex loại trừ lẫn nhau, bảo vệ vùng tới hạn để tránh cuộc đua cập-nhật-bị-mất. Biến điều kiện cho một luồng chờ và được báo hiệu khi trạng thái dùng chung thay đổi, luôn đi kèm một mutex và một vị từ kiểm trong vòng while. Diagram: thread synchronization rests on two tools. A mutex gives mutual exclusion, guarding a critical section against the lost-update race. A condition variable lets a thread wait and be signaled when shared state changes, always paired with a mutex and a predicate tested in a while loop.">
+    <div class="core">
+      <b>thread synchronization</b>
+      <small class="standard-copy">Bảo vệ truy cập vào dữ liệu dùng chung giữa các luồng</small>
+      <small class="easy-only">Giữ cho nhiều luồng không làm hỏng đồ chung</small>
+      <small class="en-only" lang="en">Protecting access to data shared between threads</small>
+    </div>
+
+    <div class="node">
+      <b>mutex · loại trừ lẫn nhau</b>
+      <small class="standard-copy">Một lúc chỉ một luồng vào vùng tới hạn; chặn cuộc đua cập-nhật-bị-mất</small>
+      <small class="easy-only">Ai cầm chìa mới được viết, viết xong trả chìa</small>
+      <small class="en-only" lang="en">Only one thread in the critical section; blocks the lost-update race</small>
+    </div>
+
+    <div class="node">
+      <b>condition variable · báo hiệu</b>
+      <small class="standard-copy">Một luồng ngủ chờ cho tới khi luồng khác báo trạng thái đã đổi</small>
+      <small class="easy-only">Ngồi chờ yên, có chuông thì dậy — khỏi ngó liên tục</small>
+      <small class="en-only" lang="en">A thread sleeps until another signals that state has changed</small>
+    </div>
+
+    <div class="node">
+      <b>cặp bất ly · mutex + vị từ</b>
+      <small class="standard-copy">Biến điều kiện luôn đi với một mutex và một vị từ kiểm trong vòng while</small>
+      <small class="easy-only">Chuông luôn đi kèm chìa khoá và một câu hỏi "xong chưa?"</small>
+      <small class="en-only" lang="en">A condition variable always pairs with a mutex and a while-loop predicate</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#why-mutex">
+    <span>01</span>
+    <b class="standard-copy">Vì sao cần mutex: cuộc đua cập-nhật-bị-mất, khoá và mở khoá</b>
+    <b class="easy-only">Vì sao cần chìa khoá, và cách khoá/mở khoá</b>
+    <b class="en-only" lang="en">Why a mutex: the lost-update race, locking and unlocking</b>
+  </a>
+  <a href="#mutex-mechanics">
+    <span>02</span>
+    <b class="standard-copy">Mutex tĩnh và động, bế tắc &amp; thứ tự khoá, hiệu năng, các loại</b>
+    <b class="easy-only">Tạo mutex, tránh bế tắc, và các kiểu mutex</b>
+    <b class="en-only" lang="en">Static &amp; dynamic mutexes, deadlock &amp; ordering, performance, types</b>
+  </a>
+  <a href="#condition-variables">
+    <span>03</span>
+    <b class="standard-copy">Biến điều kiện: báo hiệu, chờ, và vì sao luôn đi với một vị từ</b>
+    <b class="easy-only">Biến điều kiện: chờ và báo hiệu đúng cách</b>
+    <b class="en-only" lang="en">Condition variables: signal, wait, and the ever-present predicate</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="why-mutex" aria-labelledby="why-mutex-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="why-mutex-title">
+      <span class="standard-copy">Dùng chung biến mà không khoá sẽ mất cập nhật — mutex nối tiếp hoá truy cập</span>
+      <span class="easy-only">Cùng sửa một biến mà không thay phiên thì mất dữ liệu — chìa khoá giải quyết điều đó</span>
+      <span class="en-only" lang="en">Sharing a variable without a lock loses updates — a mutex serializes access</span>
+    </h2>
+    <p class="standard-copy">Giả sử hai luồng cùng tăng một biến toàn cục bằng <code>glob = glob + 1</code>. Tuy một dòng, thao tác này gồm ba bước máy: <i>đọc</i> <code>glob</code> vào thanh ghi, <i>tăng</i>, rồi <i>ghi</i> lại. Nếu bộ lập lịch cắt ngang một luồng giữa bước đọc và bước ghi để chạy luồng kia, cả hai sẽ đọc cùng một giá trị cũ, cùng tăng, rồi cùng ghi — và một lần tăng <b>biến mất</b>. Đây là <b>cuộc đua</b> (race condition), và vùng mã truy cập tài nguyên dùng chung ấy gọi là <b>vùng tới hạn</b> (critical section).<span class="cite"><a href="#ref-1">1</a></span> Để tránh, Pthreads cho ta <b>mutex</b> — một khoá chỉ cho đúng một luồng vào vùng tới hạn tại một thời điểm.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    <p class="easy-only">Tưởng tượng hai người cùng đếm kẹo trong một cái lọ và cùng ghi số mới lên nhãn. Cả hai đọc "10", mỗi người thêm 1 trong đầu, rồi cùng viết "11" — đáng lẽ phải là "12"! Một lần thêm đã bị mất. Cách chữa: đặt một chiếc chìa khoá cạnh lọ; ai cầm chìa mới được đếm và ghi, xong trả chìa. <b>Nhớ nhé: không thay phiên nhau thì sẽ có lần cộng bị nuốt mất.</b></p>
+    <p class="en-only" lang="en">Suppose two threads each increment a global via <code>glob = glob + 1</code>. Though one line, this is three machine steps: <i>load</i> <code>glob</code> into a register, <i>increment</i>, then <i>store</i> it back. If the scheduler preempts one thread between the load and the store to run the other, both read the same old value, both increment, and both store — and one increment <b>vanishes</b>. This is a <b>race condition</b>, and the region of code accessing the shared resource is the <b>critical section</b>.<span class="cite"><a href="#ref-1">1</a></span> To prevent it, Pthreads gives us a <b>mutex</b> — a lock that admits exactly one thread into the critical section at a time.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Một <b>mutex</b> có đúng hai trạng thái: <i>đã khoá</i> (locked) và <i>chưa khoá</i> (unlocked). Tại mọi thời điểm, nhiều nhất một luồng được giữ khoá. Luồng muốn vào vùng tới hạn gọi <code>pthread_mutex_lock()</code>; nếu mutex đang bị luồng khác giữ, lời gọi <b>chặn</b> (blocks) cho tới khi khoá được nhả. Xong việc, luồng gọi <code>pthread_mutex_unlock()</code> để trả khoá.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Mutex như một chiếc chìa khoá duy nhất cho một căn phòng. Muốn vào phòng (sửa dữ liệu chung) thì phải lấy được chìa; nếu người khác đang cầm, bạn đứng chờ. Ra khỏi phòng thì treo chìa lại cho người tiếp theo. <b>Nhớ nhé: khoá trước khi sửa, mở sau khi xong.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A <b>mutex</b> has exactly two states: <i>locked</i> and <i>unlocked</i>. At any moment at most one thread may hold it locked. A thread wanting to enter the critical section calls <code>pthread_mutex_lock()</code>; if the mutex is held by another thread, the call <b>blocks</b> until the lock is released. When done, the thread calls <code>pthread_mutex_unlock()</code> to release it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#include &lt;pthread.h&gt;<br>pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;<br>pthread_mutex_lock(&amp;m);&nbsp;&nbsp;&nbsp;/* vào vùng tới hạn */<br>glob = glob + 1;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* dữ liệu dùng chung */<br>pthread_mutex_unlock(&amp;m); /* rời vùng tới hạn */<br>/* trả 0 nếu thành công */</p>
+      <p class="easy-only">lock(&amp;m)&nbsp;&nbsp;&nbsp;--&gt; lấy chìa<br>glob = glob + 1 --&gt; sửa đồ chung<br>unlock(&amp;m) --&gt; trả chìa</p>
+      <p class="en-only" lang="en">#include &lt;pthread.h&gt;<br>pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;<br>pthread_mutex_lock(&amp;m);&nbsp;&nbsp;&nbsp;/* enter critical section */<br>glob = glob + 1;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* shared data */<br>pthread_mutex_unlock(&amp;m); /* leave critical section */<br>/* returns 0 on success */</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">lost update</span>
+      <h3>
+        <span class="standard-copy">Cuộc đua cập-nhật-bị-mất: tổng cuối cùng nhỏ hơn mong đợi</span>
+        <span class="easy-only">Mất cập nhật: cộng mãi mà con số cuối lại thiếu</span>
+        <span class="en-only" lang="en">The lost-update race: the final total comes up short</span>
+      </h3>
+      <p class="standard-copy">Kerrisk minh hoạ bằng một chương trình (Listing 30-1, <code>thread_incr.c</code>): hai luồng, mỗi luồng tăng cùng một biến toàn cục cả triệu lần mà <i>không</i> dùng mutex. Với số vòng lớn (ví dụ 10 triệu mỗi luồng), kết quả cuối thường nhỏ hơn hẳn con số mong đợi 20 triệu — bằng chứng rõ ràng rằng vô số lần tăng đã bị đè mất.<span class="cite"><a href="#ref-1">1</a></span> Thêm một cặp khoá/mở khoá quanh phép tăng là biến đổi đó biến mất.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Trong ví dụ của sách, hai "người đếm" cùng cộng vào một con số hàng triệu lần mà không dùng chìa khoá. Đáng lẽ tổng là 20 triệu, nhưng con số cuối lại thiếu rất nhiều — vì nhiều lần cộng đã bị nuốt mất. Thêm chìa khoá vào là tổng lại đúng. <b>Nhớ nhé: thiếu khoá thì con số cuối sẽ "bốc hơi" bớt.</b></p>
+      <p class="en-only" lang="en">Kerrisk illustrates this with a program (Listing 30-1, <code>thread_incr.c</code>): two threads each increment the same global millions of times <i>without</i> a mutex. With a large loop count (say 10 million per thread), the final result is usually far below the expected 20 million — clear evidence that countless increments were overwritten.<span class="cite"><a href="#ref-1">1</a></span> Add one lock/unlock pair around the increment and the corruption disappears.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Bất cứ bộ đếm, danh sách liên kết hay cấu trúc dữ liệu nào bị nhiều luồng sửa — thiếu khoá là lỗi "chạy phần lớn thời gian nhưng thỉnh thoảng sai" khét tiếng khó tái hiện.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mọi bộ đếm hay danh sách bị nhiều luồng sửa — thiếu khoá là loại lỗi lúc đúng lúc sai, rất khó bắt.</span>
+        <span class="en-only" lang="en">Any counter, linked list, or data structure modified by several threads — a missing lock is the notorious "works most of the time but occasionally wrong" bug that is hard to reproduce.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Vì sao kết quả không ổn định</span><span class="en-only" lang="en">Why the result is nondeterministic</span></h4>
+          <p><span class="vi-only">Chạy chương trình thiếu khoá nhiều lần thường cho các con số sai <i>khác nhau</i>, vì nó phụ thuộc vào thời điểm chính xác mà bộ lập lịch cắt ngang — điều thay đổi theo tải máy. Chính tính không lặp lại này khiến cuộc đua nguy hiểm: nó có thể "ẩn mình" qua mọi lần thử nghiệm rồi mới lộ ra khi đã đưa vào vận hành.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">Running the lock-less program repeatedly usually yields <i>different</i> wrong numbers, because it depends on the exact moment the scheduler preempts — which varies with machine load. This nonrepeatability is exactly what makes races dangerous: they can hide through every test run and surface only in production.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Khoá thuộc về dữ liệu, không thuộc về mã</span><span class="en-only" lang="en">The lock belongs to the data</span></h4>
+          <p><span class="vi-only">Một mutex không tự động gắn với biến nào; chính lập trình viên phải thiết lập <i>quy ước</i> rằng mọi truy cập vào một biến dùng chung đều phải diễn ra khi đang giữ một mutex nhất định. Quên quy ước đó ở một chỗ duy nhất là đủ để mở lại cuộc đua.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span><span class="en-only" lang="en">A mutex is not automatically bound to any variable; it is the programmer who must establish the <i>convention</i> that every access to a shared variable happens while holding a particular mutex. Forgetting that convention in a single place is enough to reopen the race.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">lock / unlock</span>
+      <h3>
+        <span class="standard-copy">Khoá chặn, mở nhả — và giữ vùng tới hạn thật ngắn</span>
+        <span class="easy-only">Khoá thì phải chờ, mở thì buông — và đừng ôm chìa lâu</span>
+        <span class="en-only" lang="en">Lock blocks, unlock releases — keep the critical section short</span>
+      </h3>
+      <p class="standard-copy"><code>pthread_mutex_lock()</code> chặn luồng gọi nếu mutex đang bị giữ; khi khoá được nhả, một trong các luồng đang chờ sẽ giành được nó. <code>pthread_mutex_unlock()</code> chỉ nên được gọi bởi luồng đang giữ khoá đó. Vì mọi luồng khác phải đứng chờ trong lúc khoá bị giữ, nguyên tắc vàng là giữ vùng tới hạn <b>càng ngắn càng tốt</b> — chỉ bao đúng phần chạm vào dữ liệu dùng chung, không bao các phép tính dài hay thao tác I/O.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Khi bạn cầm chìa, mọi người khác phải xếp hàng chờ. Vậy nên hãy làm việc trong phòng thật nhanh rồi trả chìa, đừng vào phòng rồi ngồi uống cà phê. Chỉ khoá đúng lúc đang sửa đồ chung, xong là mở ngay. <b>Nhớ nhé: cầm chìa càng ngắn, mọi người càng đỡ phải chờ.</b></p>
+      <p class="en-only" lang="en"><code>pthread_mutex_lock()</code> blocks the calling thread if the mutex is held; when the lock is released, one of the waiting threads acquires it. <code>pthread_mutex_unlock()</code> should be called only by the thread that holds the lock. Since every other thread must wait while the lock is held, the golden rule is to keep the critical section <b>as short as possible</b> — wrapping only the part that touches shared data, not long computations or I/O.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi hiệu năng đa luồng không tăng dù thêm lõi CPU — thủ phạm thường là một vùng tới hạn quá rộng khiến các luồng nối đuôi nhau chờ một khoá (tranh chấp khoá).<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi thêm lõi CPU mà chương trình không nhanh hơn — thường vì mọi luồng đang xếp hàng chờ chung một chìa.</span>
+        <span class="en-only" lang="en">When adding CPU cores does not speed the program up — the culprit is often a critical section so wide that threads queue up behind one lock (lock contention).<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">trylock / timedlock</span>
+      <h3>
+        <span class="standard-copy">Hai biến thể không-chặn và có-hạn-giờ</span>
+        <span class="easy-only">Thử lấy chìa mà không đứng chờ mãi</span>
+        <span class="en-only" lang="en">Two variants: nonblocking and timed</span>
+      </h3>
+      <p class="standard-copy">Ngoài lời gọi chặn, còn hai biến thể: <code>pthread_mutex_trylock()</code> thử khoá nhưng <i>trả về ngay</i> với lỗi <code>EBUSY</code> nếu mutex đang bị giữ; <code>pthread_mutex_timedlock()</code> chặn nhưng bỏ cuộc với <code>ETIMEDOUT</code> sau một mốc thời gian. Kerrisk lưu ý nên dùng <i>dè sẻn</i>: vòng lặp liên tục gọi <code>trylock()</code> (busy-wait) làm hao CPU, nên trong đa số trường hợp lời gọi chặn thông thường mới là lựa chọn đúng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Đôi khi bạn không muốn đứng chờ chìa mãi. <code>trylock</code> thử lấy chìa, nếu người khác đang cầm thì nó báo "bận" ngay để bạn đi làm việc khác. <code>timedlock</code> chờ nhưng chỉ chờ tới một lúc nhất định. Nhưng đừng cứ liên tục thử lấy chìa trong vòng lặp — vừa mệt máy vừa vô ích. <b>Nhớ nhé: thường thì cứ chờ chìa là tốt nhất, đừng hỏi dồn dập.</b></p>
+      <p class="en-only" lang="en">Besides the blocking call, there are two variants: <code>pthread_mutex_trylock()</code> attempts the lock but <i>returns immediately</i> with error <code>EBUSY</code> if the mutex is held; <code>pthread_mutex_timedlock()</code> blocks but gives up with <code>ETIMEDOUT</code> after a deadline. Kerrisk notes they should be used <i>sparingly</i>: a loop that repeatedly calls <code>trylock()</code> (a busy-wait) wastes CPU, so in most cases the ordinary blocking call is the right choice.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một luồng có việc hữu ích khác để làm nếu không lấy được khoá ngay — hoặc trong chiến lược "thử rồi lùi" (try-and-backoff) để phá bế tắc, sẽ bàn ở cụm sau.<span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Khi luồng còn việc khác để làm nếu chưa lấy được chìa — hoặc để tránh bế tắc như nói ở phần sau.</span>
+        <span class="en-only" lang="en">When a thread has other useful work to do if it cannot get the lock immediately — or in a try-and-backoff strategy to break deadlock, discussed in the next cluster.<span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Ta đã có cách bảo vệ một biến. Nhưng mutex thật sự dùng được chỉ khi ta biết <i>tạo</i> nó cho đúng loại tình huống, <i>tránh</i> cái bẫy chết người là bế tắc giữa hai mutex, biết nó <i>tốn</i> bao nhiêu, và chọn đúng <i>kiểu</i> mutex. Đó là nội dung cụm tiếp theo.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Giờ ta biết chìa khoá để làm gì. Phần sau nói cách làm ra chìa cho đúng, cách tránh kẹt cứng khi có nhiều chìa, giá phải trả khi dùng chìa, và các loại chìa khác nhau.</p>
+    <p class="en-only" lang="en">We can now protect one variable. But a mutex is only truly usable once we know how to <i>create</i> it for the right situation, how to <i>avoid</i> the deadly trap of deadlock between two mutexes, how much it <i>costs</i>, and how to pick the right <i>type</i>. That is the next cluster.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="mutex-mechanics" aria-labelledby="mutex-mechanics-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="mutex-mechanics-title">
+      <span class="standard-copy">Tạo mutex, tránh bế tắc, trả giá hiệu năng, và chọn đúng kiểu</span>
+      <span class="easy-only">Làm ra chìa khoá, tránh kẹt, và các loại chìa</span>
+      <span class="en-only" lang="en">Creating, avoiding deadlock, paying the cost, and choosing the type</span>
+    </h2>
+    <p class="standard-copy">Mutex có thể được khởi tạo theo hai cách. Với mutex cấp phát <b>tĩnh</b> và dùng thuộc tính mặc định, chỉ cần gán hằng <code>PTHREAD_MUTEX_INITIALIZER</code>. Với mutex cấp phát <b>động</b> — nằm trên vùng nhớ heap, nằm trong bộ nhớ chia sẻ, hoặc cần thuộc tính không mặc định — phải gọi <code>pthread_mutex_init()</code> lúc chạy, và khi không còn dùng thì giải phóng bằng <code>pthread_mutex_destroy()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Khi một chương trình dùng <i>nhiều</i> mutex, một nguy cơ mới xuất hiện: <b>bế tắc</b> (deadlock).<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Có hai cách làm ra chìa khoá. Cách đơn giản: với chìa "có sẵn chỗ để" và dùng kiểu thường, chỉ cần một dòng gán hằng. Cách linh hoạt: với chìa làm ra lúc chạy hoặc cần kiểu đặc biệt, phải gọi hàm tạo rồi nhớ hàm huỷ khi xong. Và khi có nhiều chìa cùng lúc, coi chừng kẹt cứng — hai người mỗi người ôm một chìa rồi chờ chìa của nhau mãi mãi. <b>Nhớ nhé: chìa đơn giản thì gán hằng, chìa linh hoạt thì tạo rồi huỷ.</b></p>
+    <p class="en-only" lang="en">A mutex can be initialized two ways. For a <b>statically</b> allocated mutex with default attributes, simply assign the constant <code>PTHREAD_MUTEX_INITIALIZER</code>. For a <b>dynamically</b> allocated mutex — on the heap, in shared memory, or needing non-default attributes — you must call <code>pthread_mutex_init()</code> at run time, and free it with <code>pthread_mutex_destroy()</code> when no longer needed.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> When a program uses <i>several</i> mutexes, a new hazard appears: <b>deadlock</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <b>Bế tắc</b> là tình huống hai (hay nhiều) luồng kẹt cứng vĩnh viễn, mỗi luồng chờ một khoá mà luồng kia đang giữ. Trường hợp kinh điển: luồng A khoá mutex 1 rồi cố khoá mutex 2, trong khi luồng B khoá mutex 2 rồi cố khoá mutex 1 — không bên nào nhường, cả hai đứng im mãi mãi.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Bế tắc giống hai người ở hai đầu một cánh cửa hẹp, ai cũng khăng khăng "anh lùi trước thì tôi mới đi" — thế là cả hai đứng mãi. Trong lập trình, mỗi luồng ôm một chìa và chờ chìa kia. <b>Nhớ nhé: ai cũng ôm một chìa rồi chờ chìa của người kia là kẹt cứng.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <b>Deadlock</b> is a situation where two (or more) threads are stuck forever, each waiting for a lock the other holds. The classic case: thread A locks mutex 1 then tries to lock mutex 2, while thread B locks mutex 2 then tries to lock mutex 1 — neither yields, and both stall permanently.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">/* tĩnh + mặc định */<br>pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;<br><br>/* động: heap / shm / thuộc tính riêng */<br>pthread_mutex_init(&amp;m, NULL);<br>&nbsp;&nbsp;...&nbsp;dùng&nbsp;...<br>pthread_mutex_destroy(&amp;m);</p>
+      <p class="easy-only">tĩnh&nbsp;&nbsp;--&gt; = PTHREAD_MUTEX_INITIALIZER<br>động --&gt; init(&amp;m, NULL)<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;... xong ...<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;destroy(&amp;m)</p>
+      <p class="en-only" lang="en">/* static + default */<br>pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;<br><br>/* dynamic: heap / shm / custom attrs */<br>pthread_mutex_init(&amp;m, NULL);<br>&nbsp;&nbsp;...&nbsp;use&nbsp;...<br>pthread_mutex_destroy(&amp;m);</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">deadlock / lock ordering</span>
+      <h3>
+        <span class="standard-copy">Phá bế tắc: khoá theo một thứ tự thống nhất</span>
+        <span class="easy-only">Tránh kẹt: ai cũng lấy chìa theo cùng một thứ tự</span>
+        <span class="en-only" lang="en">Breaking deadlock: lock in one agreed order</span>
+      </h3>
+      <p class="standard-copy">Cách phổ biến và đáng tin nhất để tránh bế tắc là xác lập một <b>thứ tự khoá</b> (lock hierarchy): mọi luồng luôn khoá các mutex theo cùng một trình tự quy định sẵn. Nếu luồng nào cũng khoá mutex 1 trước rồi mới tới mutex 2, vòng chờ tròn không thể hình thành.<span class="cite"><a href="#ref-1">1</a></span> Một giải pháp khác là <b>thử rồi lùi</b> (try-and-backoff): dùng <code>pthread_mutex_trylock()</code> cho các khoá sau, và nếu không lấy được thì nhả hết các khoá đang giữ rồi thử lại — tuy nhiên cách này kém hiệu quả hơn và chỉ nên dùng khi không thể áp đặt một thứ tự.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Mẹo đơn giản để không kẹt: quy ước mọi người <i>luôn</i> lấy các chìa theo cùng một thứ tự — chìa A trước, chìa B sau, không ai làm ngược. Khi đó không thể có cảnh hai người chờ nhau vòng tròn. <b>Nhớ nhé: cùng một thứ tự lấy chìa thì không bao giờ kẹt vòng tròn.</b></p>
+      <p class="en-only" lang="en">The most common and reliable way to avoid deadlock is to establish a <b>lock ordering</b> (a lock hierarchy): every thread always locks the mutexes in the same prescribed order. If every thread locks mutex 1 before mutex 2, no circular wait can form.<span class="cite"><a href="#ref-1">1</a></span> An alternative is <b>try-and-backoff</b>: use <code>pthread_mutex_trylock()</code> for later locks and, if one cannot be acquired, release all held locks and retry — though this is less efficient and is used only when an ordering cannot be imposed.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi chuyển tiền giữa hai tài khoản, mỗi tài khoản có khoá riêng — luôn khoá tài khoản có số hiệu nhỏ hơn trước, bất kể chiều chuyển, để không bao giờ bế tắc.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi chuyển tiền giữa hai tài khoản có khoá riêng — luôn khoá theo một thứ tự cố định thì không bao giờ kẹt.</span>
+        <span class="en-only" lang="en">When transferring between two accounts, each with its own lock — always lock the lower-numbered account first, whatever the direction, so deadlock never occurs.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Bốn điều kiện của bế tắc</span><span class="en-only" lang="en">Deadlock's preconditions</span></h4>
+          <p><span class="vi-only">Bế tắc chỉ xảy ra khi đồng thời có: loại trừ lẫn nhau, giữ-và-chờ, không thể tước đoạt khoá, và một vòng chờ tròn. Áp đặt thứ tự khoá chính là <i>phá vỡ điều kiện vòng tròn</i> — chỉ cần triệt một trong bốn điều kiện là đủ ngăn bế tắc.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">Deadlock arises only when all of these hold at once: mutual exclusion, hold-and-wait, no preemption of a lock, and a circular wait. Imposing a lock ordering <i>breaks the circular-wait condition</i> — removing any one of the four conditions suffices to prevent deadlock.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Tự khoá chính mình</span><span class="en-only" lang="en">Self-deadlock</span></h4>
+          <p><span class="vi-only">Một dạng bế tắc đơn giản hơn: một luồng khoá một mutex rồi lại cố khoá chính mutex đó lần nữa. Với mutex kiểu thường, luồng sẽ kẹt cứng với chính mình; với mutex kiểu "kiểm lỗi" (errorcheck), lời gọi trả về lỗi <code>EDEADLK</code> thay vì treo.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-4">4</a></span></span><span class="en-only" lang="en">A simpler form of deadlock: a thread locks a mutex and then tries to lock that same mutex again. With a normal-type mutex the thread deadlocks against itself; with an errorcheck-type mutex, the call returns the error <code>EDEADLK</code> rather than hanging.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-4">4</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">mutex performance</span>
+      <h3>
+        <span class="standard-copy">Mutex rẻ hơn bạn tưởng — nhờ futex</span>
+        <span class="easy-only">Dùng chìa khoá không tốn nhiều như ta sợ</span>
+        <span class="en-only" lang="en">Mutexes are cheaper than you fear — thanks to futexes</span>
+      </h3>
+      <p class="standard-copy">Kerrisk đo chi phí khoá/mở khoá bằng một vòng lặp chặt và kết luận rằng, dù mutex có thêm chi phí đo được, mỗi lần khoá rồi mở khoá là <i>rẻ</i> xét về trị tuyệt đối.<span class="cite"><a href="#ref-1">1</a></span> Lý do: trên Linux, mutex được hiện thực bằng <b>futex</b> (fast user space mutex); trong trường hợp <i>không tranh chấp</i> — không luồng nào khác đang giữ khoá — việc khoá và mở khoá hoàn toàn diễn ra trong không gian người dùng, <b>không cần</b> một system call vào nhân. Chỉ khi có tranh chấp, nhân mới được gọi tới để đưa luồng vào giấc ngủ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <p class="easy-only">Nhiều người sợ dùng khoá sẽ làm chương trình chậm hẳn. Thực ra, khi không có ai tranh chìa, việc lấy và trả chìa diễn ra rất nhanh ngay "tại chỗ", không phải phiền tới hệ điều hành. Chỉ khi thật sự có người đang giữ chìa thì mới cần hệ điều hành ra tay cho bạn ngủ chờ. <b>Nhớ nhé: khoá lúc không ai tranh thì gần như miễn phí.</b></p>
+      <p class="en-only" lang="en">Kerrisk measures the lock/unlock cost with a tight loop and concludes that, although a mutex adds measurable overhead, each lock-then-unlock is <i>cheap</i> in absolute terms.<span class="cite"><a href="#ref-1">1</a></span> The reason: on Linux, mutexes are implemented with <b>futexes</b> (fast user space mutexes); in the <i>uncontended</i> case — no other thread holds the lock — locking and unlocking happen entirely in user space with <b>no</b> system call into the kernel. Only under contention is the kernel invoked, to put a thread to sleep.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi cân nhắc "có nên khoá không vì sợ chậm" — câu trả lời gần như luôn là: cứ khoá cho đúng; chi phí thật nằm ở <i>tranh chấp</i>, không phải ở bản thân lời gọi khoá.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi phân vân "khoá có làm chậm không" — cứ khoá cho đúng; cái đắt là lúc tranh chìa, không phải lúc lấy chìa.</span>
+        <span class="en-only" lang="en">When you wonder "should I skip the lock to be fast" — the answer is almost always: lock correctly; the real cost is in <i>contention</i>, not in the lock call itself.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">NORMAL / ERRORCHECK / RECURSIVE</span>
+      <h3>
+        <span class="standard-copy">Ba kiểu mutex, ba cách ứng xử khi dùng sai</span>
+        <span class="easy-only">Ba loại chìa khoá khác nhau</span>
+        <span class="en-only" lang="en">Three mutex types, three ways to react to misuse</span>
+      </h3>
+      <p class="standard-copy">POSIX định nghĩa vài kiểu mutex, chọn qua thuộc tính lúc khởi tạo.<span class="cite"><a href="#ref-4">4</a></span> <code>PTHREAD_MUTEX_NORMAL</code> không kiểm lỗi: khoá lại mutex mình đang giữ gây bế tắc, còn mở khoá một mutex không phải của mình hay đang mở là hành vi không xác định. <code>PTHREAD_MUTEX_ERRORCHECK</code> kiểm mọi thao tác và trả lỗi (ví dụ <code>EDEADLK</code>) thay vì treo — chậm hơn, hữu ích để gỡ lỗi. <code>PTHREAD_MUTEX_RECURSIVE</code> giữ một <i>bộ đếm khoá</i>: cùng một luồng có thể khoá nhiều lần, và phải mở khoá đúng bấy nhiêu lần thì mutex mới thật sự được nhả.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only">Có ba loại chìa. Loại <i>thường</i>: nhanh nhất nhưng không bắt lỗi, dùng sai là kẹt hoặc hỏng âm thầm. Loại <i>bắt lỗi</i>: chậm hơn nhưng mách cho bạn biết khi làm sai, tiện khi đi tìm lỗi. Loại <i>đệ quy</i>: cho phép cùng một người khoá nhiều lần, nhưng phải mở đủ số lần đã khoá. <b>Nhớ nhé: thường để chạy nhanh, bắt-lỗi để gỡ lỗi, đệ quy cho trường hợp đặc biệt.</b></p>
+      <p class="en-only" lang="en">POSIX defines several mutex types, chosen via an attribute at initialization.<span class="cite"><a href="#ref-4">4</a></span> <code>PTHREAD_MUTEX_NORMAL</code> does no error checking: relocking a mutex you hold deadlocks, and unlocking one you do not own or that is already unlocked is undefined behavior. <code>PTHREAD_MUTEX_ERRORCHECK</code> checks every operation and returns an error (e.g. <code>EDEADLK</code>) instead of hanging — slower, useful for debugging. <code>PTHREAD_MUTEX_RECURSIVE</code> keeps a <i>lock count</i>: the same thread may lock it repeatedly, and must unlock an equal number of times before the mutex is truly released.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một hàm đã giữ khoá lại gọi một hàm khác cũng cố giữ cùng khoá đó — mutex đệ quy cứu được, nhưng thường đó là dấu hiệu nên thiết kế lại thay vì phụ thuộc vào đệ quy.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+        <span class="easy-only">Khi một hàm đang giữ chìa lại gọi hàm khác cũng cần chính chìa đó — chìa đệ quy gỡ được, nhưng thường nên thiết kế lại.</span>
+        <span class="en-only" lang="en">When a function already holding a lock calls another that also wants the same lock — a recursive mutex rescues this, but it is usually a sign to redesign rather than rely on recursion.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Kiểu mặc định</span><span class="en-only" lang="en">The default type</span></h4>
+          <p><span class="vi-only">Kiểu mặc định là <code>PTHREAD_MUTEX_DEFAULT</code>; trên Linux nó ứng xử như kiểu "thường". Hằng <code>PTHREAD_MUTEX_INITIALIZER</code> tạo đúng một mutex kiểu mặc định này — nên phần lớn chương trình không cần chạm tới thuộc tính kiểu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span><span class="en-only" lang="en">The default type is <code>PTHREAD_MUTEX_DEFAULT</code>; on Linux it behaves like the normal type. The <code>PTHREAD_MUTEX_INITIALIZER</code> constant creates exactly such a default mutex — so most programs never touch the type attribute at all.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Đặt kiểu ra sao</span><span class="en-only" lang="en">How to set the type</span></h4>
+          <p><span class="vi-only">Muốn một kiểu khác, khởi tạo một đối tượng thuộc tính rồi gọi <code>pthread_mutexattr_settype()</code>, truyền đối tượng ấy vào <code>pthread_mutex_init()</code>. Đây là một ví dụ của cơ chế <i>thuộc tính</i> tổng quát trong Pthreads.<span class="cite"><a href="#ref-4">4</a></span></span><span class="en-only" lang="en">For a different type, initialize an attributes object and call <code>pthread_mutexattr_settype()</code>, passing that object to <code>pthread_mutex_init()</code>. This is one instance of the general Pthreads <i>attributes</i> mechanism.<span class="cite"><a href="#ref-4">4</a></span></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Mutex giải bài toán <i>toàn vẹn</i>: không ai giẫm lên ai. Nhưng còn một bài toán khác — bài toán <i>thời gian</i>. Một luồng thường phải chờ cho tới khi một biến dùng chung đạt một trạng thái nào đó (ví dụ "đã có dữ liệu để xử lý"). Quay vòng kiểm tra liên tục với mutex sẽ phí CPU. Lời giải là <b>biến điều kiện</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Chìa khoá lo chuyện không giẫm lên nhau. Nhưng còn chuyện <i>chờ nhau</i>: một luồng phải đợi tới khi có việc để làm. Cứ hỏi đi hỏi lại "xong chưa, xong chưa" thì phí sức máy. Phần sau giới thiệu chiếc chuông để chờ cho khéo.</p>
+    <p class="en-only" lang="en">A mutex solves the <i>integrity</i> problem: no one clobbers anyone. But there is another problem — <i>timing</i>. A thread often must wait until a shared variable reaches some state (say, "there is data to process"). Polling in a loop with a mutex wastes CPU. The answer is the <b>condition variable</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="condition-variables" aria-labelledby="condition-variables-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="condition-variables-title">
+      <span class="standard-copy">Biến điều kiện: ngủ chờ cho tới khi trạng thái đổi — luôn đi với mutex và một vị từ</span>
+      <span class="easy-only">Biến điều kiện: ngồi chờ rồi được chuông gọi dậy khi có thay đổi</span>
+      <span class="en-only" lang="en">Condition variables: sleep until state changes — always with a mutex and a predicate</span>
+    </h2>
+    <p class="standard-copy">Một <b>biến điều kiện</b> cho phép một luồng ngủ chờ cho tới khi một luồng khác thông báo rằng "có chuyện vừa xảy ra" với một biến trạng thái dùng chung. Luồng chờ gọi <code>pthread_cond_wait()</code>; luồng gây ra thay đổi gọi <code>pthread_cond_signal()</code> (đánh thức ít nhất một luồng đang chờ) hoặc <code>pthread_cond_broadcast()</code> (đánh thức tất cả).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span><span class="cite"><a href="#ref-6">6</a></span> Điểm cốt lõi — và là lý do biến điều kiện không bao giờ đứng một mình — là nó <i>luôn</i> đi kèm một mutex bảo vệ biến trạng thái, và điều kiện phải được kiểm trong một <b>vòng lặp while</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    <p class="easy-only">Biến điều kiện giống một chiếc chuông. Luồng nào chưa có việc thì ngồi yên chờ chuông, không phải liên tục hỏi "xong chưa?". Khi một luồng khác làm xong phần việc khiến tình hình thay đổi, nó <i>rung chuông</i> để gọi người đang chờ dậy. Chiếc chuông này luôn đi kèm một chiếc chìa khoá, và người vừa dậy phải tự kiểm lại "giờ đã thật sự tới lượt mình chưa?". <b>Nhớ nhé: ngồi chờ chuông, dậy rồi vẫn phải kiểm lại cho chắc.</b></p>
+    <p class="en-only" lang="en">A <b>condition variable</b> lets a thread sleep until another thread announces that "something just happened" to a shared state variable. The waiting thread calls <code>pthread_cond_wait()</code>; the thread that caused the change calls <code>pthread_cond_signal()</code> (wakes at least one waiter) or <code>pthread_cond_broadcast()</code> (wakes all).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span><span class="cite"><a href="#ref-6">6</a></span> The crux — and the reason a condition variable never stands alone — is that it is <i>always</i> paired with a mutex guarding the state variable, and the condition must be tested in a <b>while loop</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>pthread_cond_wait(&amp;cv, &amp;m)</code> làm ba việc như một thao tác <i>nguyên tử</i> không thể cắt rời: nhả mutex <code>m</code>, đưa luồng vào giấc ngủ, và khi được đánh thức thì <i>khoá lại</i> <code>m</code> trước khi trả về. Chính tính nguyên tử "nhả-và-ngủ" này bảo đảm không có tín hiệu nào lọt qua kẽ hở giữa lúc kiểm điều kiện và lúc bắt đầu chờ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Khi bạn "ngồi chờ chuông", hệ thống tự động buông chìa khoá ra (để người khác làm việc được) rồi cho bạn ngủ — hai việc này làm liền một mạch. Lúc chuông reo và bạn tỉnh dậy, chìa khoá đã được trao lại vào tay bạn. <b>Nhớ nhé: chờ chuông thì chìa tự buông, dậy thì chìa tự về tay.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>pthread_cond_wait(&amp;cv, &amp;m)</code> does three things as one <i>atomic</i>, indivisible operation: it releases mutex <code>m</code>, puts the thread to sleep, and on waking <i>re-locks</i> <code>m</code> before returning. This atomic "release-and-sleep" guarantees no signal slips through the gap between testing the condition and starting to wait.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">pthread_cond_t cv = PTHREAD_COND_INITIALIZER;<br>/* luồng chờ: */<br>pthread_mutex_lock(&amp;m);<br>while (!sẵn_sàng)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* vị từ */<br>&nbsp;&nbsp;pthread_cond_wait(&amp;cv, &amp;m);<br>pthread_mutex_unlock(&amp;m);<br>/* luồng báo: */<br>pthread_mutex_lock(&amp;m);<br>sẵn_sàng = 1; pthread_cond_signal(&amp;cv);<br>pthread_mutex_unlock(&amp;m);</p>
+      <p class="easy-only">while (chưa tới lượt)<br>&nbsp;&nbsp;cond_wait(&amp;cv, &amp;m); /* ngủ chờ */<br>...<br>cond_signal(&amp;cv); /* rung chuông */</p>
+      <p class="en-only" lang="en">pthread_cond_t cv = PTHREAD_COND_INITIALIZER;<br>/* waiter: */<br>pthread_mutex_lock(&amp;m);<br>while (!ready)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* predicate */<br>&nbsp;&nbsp;pthread_cond_wait(&amp;cv, &amp;m);<br>pthread_mutex_unlock(&amp;m);<br>/* signaler: */<br>pthread_mutex_lock(&amp;m);<br>ready = 1; pthread_cond_signal(&amp;cv);<br>pthread_mutex_unlock(&amp;m);</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">pthread_cond_wait</span>
+      <h3>
+        <span class="standard-copy">Nhả-và-ngủ nguyên tử: vì sao không mất tín hiệu</span>
+        <span class="easy-only">Buông chìa và ngủ cùng một lúc, không hụt chuông</span>
+        <span class="en-only" lang="en">Atomic release-and-sleep: why no signal is lost</span>
+      </h3>
+      <p class="standard-copy">Nếu luồng phải tự nhả mutex rồi mới gọi lệnh ngủ ở hai bước riêng, sẽ có một kẽ hở: luồng khác có thể chen vào giữa hai bước đó, đổi trạng thái và rung tín hiệu <i>trước khi</i> luồng kia kịp ngủ — tín hiệu ấy rơi vào hư không, và luồng chờ sẽ ngủ mãi. <code>pthread_cond_wait()</code> gộp nhả-khoá và ngủ thành một thao tác nguyên tử để đóng kẽ hở đó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Khi trả về, luồng lại đang giữ mutex, nên có thể kiểm tiếp biến trạng thái một cách an toàn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Thử tưởng tượng nếu bạn buông chìa trước, rồi mới đi ngủ. Ngay giữa hai việc đó, người kia có thể rung chuông — mà bạn thì chưa ngủ nên không nghe thấy, rồi bạn lăn ra ngủ và chờ một tiếng chuông sẽ không bao giờ reo lại. Vì thế hệ thống làm cả hai việc liền một mạch để không bao giờ hụt chuông. <b>Nhớ nhé: buông chìa và ngủ phải liền một nhịp, nếu không sẽ hụt chuông.</b></p>
+      <p class="en-only" lang="en">If a thread had to release the mutex and then issue a sleep as two separate steps, there would be a gap: another thread could slip between them, change the state, and signal <i>before</i> the first thread slept — that signal is lost, and the waiter sleeps forever. <code>pthread_cond_wait()</code> fuses release-and-sleep into one atomic operation to close that gap.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> On return, the thread again holds the mutex, so it can safely re-test the state variable.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mẫu nhà sản xuất–người tiêu thụ (producer–consumer): người tiêu thụ chờ cho tới khi hàng đợi có việc, nhà sản xuất bỏ việc vào rồi báo hiệu.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mẫu "người làm – người nhận": người nhận chờ tới khi có việc, người làm bỏ việc vào rồi rung chuông.</span>
+        <span class="en-only" lang="en">The producer–consumer pattern: the consumer waits until the queue has work, the producer enqueues it and signals.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Phiên bản có hạn giờ</span><span class="en-only" lang="en">The timed variant</span></h4>
+          <p><span class="vi-only"><code>pthread_cond_timedwait()</code> giống <code>pthread_cond_wait()</code> nhưng bỏ cuộc với lỗi <code>ETIMEDOUT</code> nếu tới một mốc thời gian tuyệt đối mà vẫn chưa được báo hiệu — hữu ích khi luồng không được phép chờ vô hạn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span><span class="en-only" lang="en"><code>pthread_cond_timedwait()</code> is like <code>pthread_cond_wait()</code> but gives up with error <code>ETIMEDOUT</code> if an absolute deadline passes with no signal — useful when a thread may not wait indefinitely.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Báo hiệu khi giữ hay không giữ khoá</span><span class="en-only" lang="en">Signaling with or without the lock</span></h4>
+          <p><span class="vi-only">Có thể gọi <code>pthread_cond_signal()</code> khi đang giữ hoặc không giữ mutex đi kèm. Giữ khoá rồi mới báo hiệu cho hành vi dễ đoán hơn; nhả khoá trước khi báo hiệu đôi khi nhanh hơn một chút vì tránh việc luồng vừa thức dậy lại lập tức bị chặn ở mutex.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span><span class="en-only" lang="en">You may call <code>pthread_cond_signal()</code> while holding or not holding the associated mutex. Signaling with the lock held is more predictable; signaling after releasing it is sometimes slightly faster, as it avoids a just-woken thread immediately blocking on the mutex.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">while, not if</span>
+      <h3>
+        <span class="standard-copy">Luôn kiểm vị từ trong while, không bao giờ trong if</span>
+        <span class="easy-only">Dậy rồi phải kiểm lại bằng while, không phải if</span>
+        <span class="en-only" lang="en">Always test the predicate in while, never in if</span>
+      </h3>
+      <p class="standard-copy">Kerrisk nhấn mạnh rằng lời gọi <code>pthread_cond_wait()</code> phải nằm trong một vòng <code>while</code> kiểm lại <b>vị từ</b> (predicate — biểu thức về biến trạng thái), chứ không phải một câu <code>if</code>. Có nhiều lý do: một tín hiệu <code>broadcast</code> đánh thức nhiều luồng nhưng chỉ một luồng được tiếp tục; một luồng khác có thể đã thay đổi trạng thái lại trước khi luồng vừa dậy giành được mutex; và POSIX cho phép <b>đánh thức giả</b> (spurious wakeup) — luồng có thể tỉnh dậy dù không ai báo hiệu. Vòng <code>while</code> buộc luồng kiểm lại vị từ sau mỗi lần dậy và ngủ tiếp nếu điều kiện chưa thật sự đúng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only">Khi chuông reo và bạn tỉnh dậy, đừng vội cho rằng đã tới lượt mình. Có thể chuông gọi nhiều người cùng lúc mà chỉ một người được làm; có thể có người khác đã "cướp" việc trước; thậm chí đôi khi bạn tỉnh dậy mà chẳng ai gọi cả. Vì vậy, dậy rồi phải tự hỏi lại "đã thật sự tới lượt mình chưa?" — nếu chưa thì ngủ tiếp. <b>Nhớ nhé: nghe chuông xong vẫn phải kiểm lại, chưa tới lượt thì ngủ tiếp.</b></p>
+      <p class="en-only" lang="en">Kerrisk stresses that the <code>pthread_cond_wait()</code> call must sit inside a <code>while</code> loop re-testing the <b>predicate</b> (an expression about the state variable), not an <code>if</code>. There are several reasons: a <code>broadcast</code> wakes many threads but only one may proceed; another thread may have changed the state back before the just-woken thread acquired the mutex; and POSIX permits <b>spurious wakeups</b> — a thread may wake with no signal at all. The <code>while</code> loop forces the thread to re-test the predicate after each wake and go back to sleep if the condition is not truly satisfied.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mọi đoạn mã dùng biến điều kiện — dùng <code>if</code> thay <code>while</code> là một trong những lỗi đa luồng phổ biến và khó bắt nhất, vì chương trình "thường chạy đúng" cho tới một lần đánh thức giả.<span class="cite"><a href="#ref-5">5</a></span></span>
+        <span class="easy-only">Mọi chỗ dùng biến điều kiện — thay while bằng if là lỗi kinh điển, chạy đúng mãi rồi một ngày sai.</span>
+        <span class="en-only" lang="en">Every piece of code using a condition variable — using <code>if</code> instead of <code>while</code> is one of the commonest and hardest-to-catch threading bugs, since it "usually works" until one spurious wakeup.<span class="cite"><a href="#ref-5">5</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">signal vs broadcast</span>
+      <h3>
+        <span class="standard-copy">Đánh thức một hay tất cả — và mutex tĩnh/động của biến điều kiện</span>
+        <span class="easy-only">Gọi một người hay gọi tất cả, và cách tạo chiếc chuông</span>
+        <span class="en-only" lang="en">Wake one or all — and static/dynamic condition variables</span>
+      </h3>
+      <p class="standard-copy"><code>pthread_cond_signal()</code> đánh thức <i>ít nhất một</i> luồng đang chờ; <code>pthread_cond_broadcast()</code> đánh thức <i>tất cả</i>. Dùng <code>signal</code> khi chỉ một luồng được lợi từ thay đổi và luồng nào cũng được (hiệu quả hơn); dùng <code>broadcast</code> khi thay đổi có thể cho <i>nhiều</i> luồng tiếp tục, hoặc các luồng chờ kiểm những vị từ khác nhau.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> Như mutex, biến điều kiện cũng có hai cách khởi tạo: tĩnh bằng hằng <code>PTHREAD_COND_INITIALIZER</code>, hoặc động bằng <code>pthread_cond_init()</code> và huỷ bằng <code>pthread_cond_destroy()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only">Có hai cách rung chuông: gọi <i>một</i> người dậy (khi chỉ cần một người làm), hoặc gọi <i>tất cả</i> dậy (khi nhiều người có thể cùng làm, hoặc mỗi người chờ một việc khác nhau). Và chiếc chuông cũng làm được theo hai cách như chìa khoá: loại có sẵn thì gán hằng, loại linh hoạt thì tạo rồi huỷ. <b>Nhớ nhé: gọi một người cho gọn, gọi tất cả khi ai cũng có thể làm.</b></p>
+      <p class="en-only" lang="en"><code>pthread_cond_signal()</code> wakes <i>at least one</i> waiting thread; <code>pthread_cond_broadcast()</code> wakes <i>all</i>. Use <code>signal</code> when only one thread can benefit and any one will do (more efficient); use <code>broadcast</code> when the change may let <i>several</i> threads proceed, or when waiters test different predicates.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> Like a mutex, a condition variable has two initialization paths: statically with the constant <code>PTHREAD_COND_INITIALIZER</code>, or dynamically with <code>pthread_cond_init()</code> and freed with <code>pthread_cond_destroy()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Dùng <code>broadcast</code> cho khoá đọc–ghi hay hàng rào (barrier), nơi một thay đổi trạng thái có thể giải phóng nhiều luồng chờ cùng lúc; <code>signal</code> dùng cho hàng đợi một-người-lấy.<span class="cite"><a href="#ref-6">6</a></span></span>
+        <span class="easy-only">Gọi tất cả khi một thay đổi mở cửa cho nhiều người cùng đi; gọi một người cho hàng đợi mỗi lần một việc.</span>
+        <span class="en-only" lang="en">Use <code>broadcast</code> for read–write locks or barriers, where one state change may release many waiters at once; use <code>signal</code> for a one-taker queue.<span class="cite"><a href="#ref-6">6</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">An toàn khi thừa đánh thức</span><span class="en-only" lang="en">Over-waking is safe</span></h4>
+          <p><span class="vi-only">Vì mọi luồng chờ đều kiểm vị từ trong vòng <code>while</code>, dùng <code>broadcast</code> ở nơi lẽ ra chỉ cần <code>signal</code> vẫn <i>đúng</i> — chỉ kém hiệu quả hơn, vì các luồng thừa sẽ thức dậy, thấy vị từ chưa đúng rồi ngủ lại. Đây là lý do vòng <code>while</code> và <code>broadcast</code> bổ trợ cho nhau.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span><span class="en-only" lang="en">Because every waiter re-tests the predicate in a <code>while</code> loop, using <code>broadcast</code> where <code>signal</code> would suffice is still <i>correct</i> — merely less efficient, as the extra threads wake, find the predicate false, and sleep again. This is why the <code>while</code> loop and <code>broadcast</code> complement each other.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Khi nào phải dùng khởi tạo động</span><span class="en-only" lang="en">When dynamic init is required</span></h4>
+          <p><span class="vi-only">Giống mutex, biến điều kiện cấp phát động (trên heap hay trong bộ nhớ chia sẻ) hoặc cần thuộc tính không mặc định thì bắt buộc dùng <code>pthread_cond_init()</code>; chỉ biến điều kiện tĩnh với thuộc tính mặc định mới dùng được hằng khởi tạo.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span><span class="en-only" lang="en">As with mutexes, a dynamically allocated condition variable (on the heap or in shared memory) or one needing non-default attributes must use <code>pthread_cond_init()</code>; only a static condition variable with default attributes can use the initializer constant.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="section-heading">
+      <h2 id="ngo-nhan-title">
+        <span class="standard-copy">Ba ngộ nhận thường gặp</span>
+        <span class="en-only" lang="en">Three common misconceptions</span>
+      </h2>
+    </div>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Biến điều kiện ghi nhớ tín hiệu đã gửi”</span>
+          <span class="en-only" lang="en">“A condition variable remembers a signal”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> gọi <code>pthread_cond_signal()</code> trước, luồng chờ sau vẫn nhận được tín hiệu.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> biến điều kiện <i>không có trạng thái</i>; nếu không có luồng nào đang chờ lúc báo hiệu, tín hiệu bị mất. Chính vì vậy ta kiểm một <b>vị từ</b> trên biến trạng thái dùng chung, chứ không chỉ dựa vào tín hiệu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> signal first and a thread that waits later still receives it.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> a condition variable is <i>stateless</i>; if no thread is waiting when you signal, the signal is lost. That is exactly why you test a <b>predicate</b> on a shared state variable, not merely rely on the signal.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Chỉ luồng ghi mới cần khoá”</span>
+          <span class="en-only" lang="en">“Only writers need the lock”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> luồng chỉ <i>đọc</i> một biến dùng chung thì đọc tự do, không cần mutex.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> đọc trong khi một luồng khác đang ghi cũng là một cuộc đua; <b>mọi</b> truy cập vào một biến dùng chung — kể cả đọc — đều phải được nối tiếp hoá qua cùng một mutex.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> a thread that only <i>reads</i> a shared variable can read it freely, without a mutex.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> reading while another thread writes is also a race; <b>every</b> access to a shared variable — reads included — must be serialized through the same mutex.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Nên dùng mutex đệ quy cho chắc”</span>
+          <span class="en-only" lang="en">“Use a recursive mutex to be safe”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> mutex đệ quy hay kiểm-lỗi là lựa chọn mặc định an toàn hơn.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> mutex kiểu <i>thường</i> (mặc định) nhanh nhất; kiểu kiểm-lỗi là công cụ gỡ lỗi (chậm hơn); kiểu đệ quy dành cho thiết kế đặc thù. Hãy ưu tiên mutex thường cộng một thiết kế đúng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> a recursive or errorcheck mutex is the safer default choice.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> the <i>normal</i> (default) mutex is fastest; the errorcheck type is a debugging aid (slower); the recursive type is for specific designs. Prefer a normal mutex plus a correct design.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm đồng bộ hoá luồng</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped thread synchronization</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã nắm hai nguyên thủy đồng bộ của Pthreads — mutex và biến điều kiện — cùng những cái bẫy quanh chúng.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you grasp the two Pthreads synchronization primitives — mutexes and condition variables — and the traps around them.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Vì sao <code>glob = glob + 1</code> không an toàn khi hai luồng chạy đồng thời? Vùng tới hạn là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao kết quả của chương trình thiếu khoá lại khác nhau giữa các lần chạy?</p>
+      </li>
+      <li>
+        <p>Khi nào dùng <code>PTHREAD_MUTEX_INITIALIZER</code> và khi nào phải gọi <code>pthread_mutex_init()</code>? Mối quan hệ với <code>pthread_mutex_destroy()</code>?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao mutex cấp phát động hay nằm trong bộ nhớ chia sẻ không dùng được hằng khởi tạo tĩnh?</p>
+      </li>
+      <li>
+        <p>Mô tả một kịch bản bế tắc giữa hai mutex. Thứ tự khoá phá bế tắc ra sao? Vì sao mutex vẫn được coi là rẻ?</p>
+        <p class="deep-only">Gợi ý sâu hơn: futex giúp lời gọi khoá/mở khoá tránh được điều gì trong trường hợp không tranh chấp?</p>
+      </li>
+      <li>
+        <p><code>pthread_cond_wait()</code> làm những gì một cách nguyên tử? Vì sao biến điều kiện luôn đi kèm một mutex?</p>
+        <p class="deep-only">Gợi ý sâu hơn: điều gì sẽ sai nếu việc nhả mutex và việc ngủ chờ được tách thành hai bước riêng?</p>
+      </li>
+      <li>
+        <p>Vì sao vị từ phải được kiểm trong vòng <code>while</code> chứ không phải <code>if</code>? Khác biệt giữa <code>signal</code> và <code>broadcast</code>?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao đánh thức giả (spurious wakeup) khiến <code>while</code> trở thành bắt buộc chứ không chỉ là thói quen tốt?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Vì sao hai luồng cùng cộng vào một con số mà không thay phiên thì bị sai?</p></li>
+      <li><p>Chìa khoá (mutex) có mấy cách làm ra?</p></li>
+      <li><p>Bế tắc là gì, và mẹo đơn giản nào giúp tránh nó?</p></li>
+      <li><p>Chiếc chuông (biến điều kiện) dùng để làm gì?</p></li>
+      <li><p>Vì sao nghe chuông xong vẫn phải kiểm lại trước khi làm việc?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>Why is <code>glob = glob + 1</code> unsafe when two threads run concurrently? What is a critical section?</p></li>
+      <li><p>When do you use <code>PTHREAD_MUTEX_INITIALIZER</code> and when must you call <code>pthread_mutex_init()</code>? How does <code>pthread_mutex_destroy()</code> relate?</p></li>
+      <li><p>Describe a deadlock scenario between two mutexes. How does lock ordering break it? Why are mutexes still considered cheap?</p></li>
+      <li><p>What does <code>pthread_cond_wait()</code> do atomically? Why is a condition variable always paired with a mutex?</p></li>
+      <li><p>Why must the predicate be tested in a <code>while</code> loop, not an <code>if</code>? What is the difference between <code>signal</code> and <code>broadcast</code>?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Luồng dùng chung bộ nhớ, nên đồng bộ hoá không phải thứ tuỳ chọn mà là điều kiện để đúng. <span class="closing-accent">Mutex nối tiếp hoá truy cập</span> để không lần cập nhật nào bị đè mất; <span class="closing-accent">biến điều kiện cho ta chờ đợi mà không phí CPU</span>, luôn đi kèm một mutex và một vị từ kiểm trong vòng while. Nắm vững cặp công cụ này, bạn đã có nền để đọc tiếp những cấu trúc đồng bộ cao cấp hơn được dựng trên chúng.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Nhiều luồng dùng chung trí nhớ thì phải có luật. <span class="closing-accent">Chìa khoá để thay phiên nhau</span> khỏi làm mất dữ liệu, và <span class="closing-accent">chuông để chờ nhau mà không phí sức máy</span>. Hiểu hai thứ này là hiểu nền tảng của lập trình nhiều luồng. <b>Nhớ nhé: chia sẻ cần luật — chìa khoá và chuông chính là luật đó.</b></p>
+    <p class="en-only" lang="en">Threads share memory, so synchronization is not optional but a condition for correctness. <span class="closing-accent">A mutex serializes access</span> so no update is overwritten; <span class="closing-accent">a condition variable lets us wait without wasting CPU</span>, always paired with a mutex and a predicate tested in a while loop. Master this pair and you have the groundwork to read the higher-level synchronization structures built on top of them.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-29-threads-introduction.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 29 · Luồng: giới thiệu</span>
+    <span class="nav-title en-only" lang="en">Chapter 29 · Threads: Introduction</span>
+  </a>
+  <div class="nav-cell nav-next disabled" aria-disabled="true">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 37 · Daemon · sắp có</span>
+    <span class="nav-title en-only" lang="en">Chapter 37 · Daemons · coming soon</span>
+  </div>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chương 30, “Threads: Thread Synchronization”, trang 631–654.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chapter 30, “Threads: Thread Synchronization”, pp. 631–654.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Michael Kerrisk, <i>The Linux Programming Interface</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3), ch. 30 “Threads: Thread Synchronization”, pp. 631–654. — <a href="https://man7.org/tlpi/" target="_blank" rel="noopener noreferrer">man7.org/tlpi</a></li>
+      <li id="ref-2">“pthread_mutex_lock(3p) / pthread_mutex_unlock(3p) — POSIX manual page” (locking, unlocking, trylock; EBUSY; blocking semantics). Linux man-pages project, maintained by Michael Kerrisk. <a href="https://man7.org/linux/man-pages/man3/pthread_mutex_lock.3p.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/pthread_mutex_lock.3p.html</a></li>
+      <li id="ref-3">“pthread_mutex_init(3p) / pthread_mutex_destroy(3p) — POSIX manual page” (dynamic initialization and destruction of a mutex). <a href="https://man7.org/linux/man-pages/man3/pthread_mutex_init.3p.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/pthread_mutex_init.3p.html</a></li>
+      <li id="ref-4">“pthread_mutexattr_settype(3p) — POSIX manual page” (mutex types NORMAL / ERRORCHECK / RECURSIVE / DEFAULT; EDEADLK on relock of an errorcheck mutex). <a href="https://man7.org/linux/man-pages/man3/pthread_mutexattr_settype.3p.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/pthread_mutexattr_settype.3p.html</a></li>
+      <li id="ref-5">“pthread_cond_wait(3p) / pthread_cond_timedwait(3p) — POSIX manual page” (atomic release-and-wait; the mutex pairing; spurious wakeups and the while-loop predicate; ETIMEDOUT). <a href="https://man7.org/linux/man-pages/man3/pthread_cond_wait.3p.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/pthread_cond_wait.3p.html</a></li>
+      <li id="ref-6">“pthread_cond_signal(3p) / pthread_cond_broadcast(3p) — POSIX manual page” (waking at least one vs all waiters; signaling with or without the mutex held). <a href="https://man7.org/linux/man-pages/man3/pthread_cond_signal.3p.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/pthread_cond_signal.3p.html</a></li>
+      <li id="ref-7">“pthreads(7) — Linux manual page” (overview of POSIX threads: shared address space, synchronization primitives). <a href="https://man7.org/linux/man-pages/man7/pthreads.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/pthreads.7.html</a></li>
+      <li id="ref-8">“futex(7) — Linux manual page” (fast user-space locking; uncontended lock/unlock avoids a kernel system call). <a href="https://man7.org/linux/man-pages/man7/futex.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/futex.7.html</a></li>
+      <li id="ref-9">“pthread_mutex_lock — The Open Group Base Specifications (POSIX.1-2017)” (normative specification of mutex lock/unlock behavior). <a href="https://pubs.opengroup.org/onlinepubs/9699919799/functions/pthread_mutex_lock.html" target="_blank" rel="noopener noreferrer">pubs.opengroup.org/onlinepubs/9699919799/functions/pthread_mutex_lock.html</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-29-threads-introduction.html">chapter 29</a>
+      <span class="soon">chapter 37</span>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('tlpi-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('tlpi-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('tlpi-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

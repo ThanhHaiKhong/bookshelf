@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 20 · Tín hiệu: Khái niệm nền tảng — The Linux Programming Interface</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 20 “Signals: Fundamental Concepts” trong The Linux Programming Interface (Michael Kerrisk, No Starch Press, 2010): tín hiệu là gì và vòng đời sinh–chờ–phát–xử lý, các loại tín hiệu chuẩn và hành động mặc định, đổi disposition bằng signal() và sigaction() (ưu tiên), gửi tín hiệu với kill()/raise()/killpg(), kiểm tra tiến trình tồn tại và quyền gửi, mô tả tín hiệu với strsignal()/psignal(), tập tín hiệu (sigemptyset/sigfillset/sigaddset/sigdelset/sigismember), mặt nạ tín hiệu và chặn (sigprocmask), tín hiệu đang chờ (sigpending), tín hiệu chuẩn KHÔNG xếp hàng, và chờ tín hiệu bằng pause(). Ba mức đọc, mọi khẳng định đều có nguồn.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('tlpi-reading-mode'),
+l=localStorage.getItem('tlpi-lang'),
+t=localStorage.getItem('tlpi-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   THE LINUX PROGRAMMING INTERFACE — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"TLPI · CH.20";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+/* soon = chapter not yet on disk; rendered as a non-link cell. */
+.chapter-path .soon{
+  display:block;padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--tint);border:1px dashed var(--line);opacity:.6;
+}
+.chapter-path .soon .soon-tag{
+  display:inline-block;font-family:var(--sans);font-size:.6rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:.1rem .45rem;margin-top:.4rem;
+}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.series-links .soon{margin-right:.5rem;color:var(--muted);opacity:.55;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+
+/* ---------- whole-book mind map banner ---------- */
+.mindmap-banner{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  gap:clamp(1rem,3vw,2rem);align-items:center;
+  margin:3rem 0 0;padding:1.35rem clamp(1.15rem,3vw,2rem);
+  border:1px solid var(--line);border-left:4px solid var(--teal);
+  border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);
+  color:var(--ink);text-decoration:none;
+  transition:border-color .15s,transform .15s;
+}
+a.mindmap-banner:hover{border-color:var(--teal);transform:translateY(-2px);}
+a.mindmap-banner:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.mindmap-banner.soon{opacity:.5;cursor:default;}
+.mindmap-icon{font-size:1.9rem;line-height:1;}
+.mindmap-banner h3{margin:0 0 .3rem;font-size:1.05rem;}
+.mindmap-banner p{margin:0;max-width:48rem;font-size:.88rem;color:var(--muted);}
+.mindmap-banner .result{margin-top:0;color:var(--teal);font-weight:600;white-space:nowrap;}
+.mindmap-banner.soon .result{color:var(--muted);}
+@media (max-width:860px){
+  .mindmap-banner{grid-template-columns:auto minmax(0,1fr);}
+  .mindmap-banner .result{grid-column:2;white-space:normal;}
+}
+@media (max-width:460px){
+  .mindmap-banner{margin-left:0;margin-right:0;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    The Linux Programming Interface
+    <span>Chương 20 · Signals: Fundamental Concepts</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 20 · Tín hiệu — khái niệm nền tảng</span>
+      <span class="en-only" lang="en">Chapter 20 · Signals: Fundamental Concepts</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Tín hiệu là gì, và một tiến trình phản ứng với nó ra sao</span>
+      <span class="easy-only">Tín hiệu là gì, và máy làm gì khi nhận được một tín hiệu</span>
+      <span class="en-only" lang="en">What a signal is, and how a process responds to one</span>
+    </h1>
+
+    <p class="standard-copy">Kerrisk định nghĩa <b>tín hiệu</b> (signal) là một <i>thông báo gửi tới tiến trình</i> rằng một sự kiện đã xảy ra — đôi khi được gọi là "ngắt phần mềm" (software interrupt), vì nó cắt ngang luồng chạy bình thường và thường không thể đoán trước thời điểm đến.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Chương đi qua: khái niệm và vòng đời của tín hiệu; các <b>loại tín hiệu chuẩn</b> (1–31) cùng <b>hành động mặc định</b> của chúng; cách đổi <b>disposition</b> bằng <code>signal()</code> và <code>sigaction()</code> (được ưu tiên); cách <i>gửi</i> tín hiệu với <code>kill()</code>, <code>raise()</code>, <code>killpg()</code>; cách kiểm tra một tiến trình còn tồn tại; quyền cần có để gửi; cách mô tả tín hiệu với <code>strsignal()</code>/<code>psignal()</code>; <b>tập tín hiệu</b>, <b>mặt nạ tín hiệu</b> và việc chặn (<code>sigprocmask</code>); tín hiệu <b>đang chờ</b> (<code>sigpending</code>); việc tín hiệu chuẩn <i>không</i> xếp hàng; và chờ tín hiệu bằng <code>pause()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hãy tưởng tượng bạn đang làm việc thì có người gõ cửa. Tiếng gõ ấy là một <i>tín hiệu</i>: nó báo "có chuyện xảy ra" và cắt ngang việc bạn đang làm. Tiến trình trong máy cũng vậy — nó có thể bị một tín hiệu gõ cửa bất cứ lúc nào, và nó phải quyết định: lờ đi, làm theo mặc định, hay chạy một việc riêng để đáp lại. Chương này dạy cách nhận biết, gửi đi, chặn lại và chờ đợi những tiếng gõ cửa ấy. <b>Nhớ nhé: tín hiệu là một tiếng gõ cửa báo "có chuyện" cho tiến trình.</b></p>
+    <p class="en-only" lang="en">Kerrisk defines a <b>signal</b> as a <i>notification to a process</i> that an event has occurred — sometimes called a "software interrupt," because it cuts across a program's normal flow and usually cannot be predicted in advance.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> The chapter walks through: the concept and lifecycle of signals; the <b>standard signal types</b> (1–31) and their <b>default actions</b>; changing a signal's <b>disposition</b> with <code>signal()</code> and the preferred <code>sigaction()</code>; <i>sending</i> signals with <code>kill()</code>, <code>raise()</code>, <code>killpg()</code>; checking whether a process still exists; the permissions required to send; describing signals with <code>strsignal()</code>/<code>psignal()</code>; <b>signal sets</b>, the <b>signal mask</b> and blocking (<code>sigprocmask</code>); <b>pending</b> signals (<code>sigpending</code>); the fact that standard signals are <i>not</i> queued; and waiting for a signal with <code>pause()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only deep-bilingual"><span class="vi-only">Góc nhìn của nhân: một tín hiệu đi qua một vòng đời rõ rệt. Nó được <i>sinh ra</i> (generated) khi một sự kiện xảy ra — do nhân, do một tiến trình khác, hay do phần cứng; rồi nó được <i>phát</i> (delivered) tới tiến trình đích, lúc đó tiến trình thực hiện <b>hành động</b> tương ứng với <b>disposition</b> hiện thời của tín hiệu. Khoảng giữa sinh và phát, tín hiệu ở trạng thái <i>đang chờ</i> (pending); và nếu tín hiệu đó đang bị <b>chặn</b> (blocked) bởi mặt nạ tín hiệu của tiến trình, nó cứ nằm chờ cho tới khi được bỏ chặn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span><span class="en-only" lang="en">The kernel's view: a signal passes through a distinct lifecycle. It is <i>generated</i> when an event occurs — by the kernel, by another process, or by hardware; then it is <i>delivered</i> to the target process, at which point the process performs the <b>action</b> dictated by the signal's current <b>disposition</b>. Between generation and delivery the signal is <i>pending</i>; and if that signal is currently <b>blocked</b> by the process's signal mask, it remains pending until it is unblocked.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> một tín hiệu là một <i>cơ chế thông báo bất đồng bộ</i> do nhân điều phối; làm chủ được nó nghĩa là làm chủ bốn việc — <i>phân loại</i> các tín hiệu và biết hành động mặc định của chúng, <i>đổi</i> cách tiến trình phản ứng (disposition) một cách khả chuyển qua <code>sigaction()</code>, <i>gửi</i> tín hiệu đúng quyền với <code>kill()</code>, và <i>trì hoãn</i> việc phát bằng mặt nạ tín hiệu — tất cả trong khi nhớ rằng tín hiệu chuẩn không xếp hàng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> tín hiệu là tiếng gõ cửa bất ngờ từ bên ngoài luồng chạy của chương trình. Hiểu một tín hiệu là biết: nó mặc định làm gì, làm sao đổi cách đáp lại, làm sao tự gửi, và làm sao bảo "khoan đã" để nó chờ. <b>Nhớ nhé: tín hiệu là tiếng gõ cửa — bạn chọn cách mở, cách gửi, và cách bảo nó đợi.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> a signal is an <i>asynchronous notification mechanism</i> orchestrated by the kernel; mastering it means mastering four things — <i>classifying</i> signals and knowing their default actions, <i>changing</i> how a process reacts (its disposition) portably via <code>sigaction()</code>, <i>sending</i> signals with the right permissions via <code>kill()</code>, and <i>deferring</i> delivery with the signal mask — all while remembering that standard signals are not queued.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: một tín hiệu đi qua vòng đời sinh ra, đang chờ rồi được phát tới tiến trình; tiến trình thực hiện hành động theo disposition — mặc định, bỏ qua, hoặc chạy trình xử lý; mặt nạ tín hiệu có thể chặn để tín hiệu nằm chờ. Diagram: a signal passes through generated, pending, then delivered; the process performs the action set by its disposition — default, ignore, or run a handler; the signal mask can block it so it stays pending.">
+    <div class="core">
+      <b>signal</b>
+      <small class="standard-copy">Thông báo bất đồng bộ về một sự kiện gửi tới tiến trình</small>
+      <small class="easy-only">Tiếng gõ cửa báo "có chuyện" cho tiến trình</small>
+      <small class="en-only" lang="en">An asynchronous notification of an event to a process</small>
+    </div>
+
+    <div class="node">
+      <b>vòng đời · generated → pending → delivered</b>
+      <small class="standard-copy">Sinh ra khi có sự kiện, chờ nếu bị chặn, rồi được phát</small>
+      <small class="easy-only">Sinh ra, có thể phải chờ, rồi mới được trao tới nơi</small>
+      <small class="en-only" lang="en">Generated on an event, waits if blocked, then delivered</small>
+    </div>
+
+    <div class="node">
+      <b>disposition · hành động</b>
+      <small class="standard-copy">Mặc định (term/ign/core/stop/cont), bỏ qua, hoặc handler</small>
+      <small class="easy-only">Làm mặc định, lờ đi, hay chạy một việc riêng để đáp lại</small>
+      <small class="en-only" lang="en">Default (term/ign/core/stop/cont), ignore, or a handler</small>
+    </div>
+
+    <div class="node">
+      <b>mặt nạ · signal mask</b>
+      <small class="standard-copy">Chặn delivery để tín hiệu nằm chờ (sigprocmask, sigpending)</small>
+      <small class="easy-only">Bảo "khoan đã" để tín hiệu đứng chờ ngoài cửa</small>
+      <small class="en-only" lang="en">Blocks delivery so a signal stays pending (sigprocmask)</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#signal-concepts">
+    <span>01</span>
+    <b class="standard-copy">Khái niệm, vòng đời và các loại tín hiệu chuẩn</b>
+    <b class="easy-only">Tín hiệu là gì và có những loại nào</b>
+    <b class="en-only" lang="en">Concepts, lifecycle, and the standard signal types</b>
+  </a>
+  <a href="#dispositions">
+    <span>02</span>
+    <b class="standard-copy">Đổi disposition: signal() và sigaction() được ưu tiên</b>
+    <b class="easy-only">Đổi cách tiến trình đáp lại một tín hiệu</b>
+    <b class="en-only" lang="en">Changing disposition: signal() and preferred sigaction()</b>
+  </a>
+  <a href="#sending">
+    <span>03</span>
+    <b class="standard-copy">Gửi tín hiệu: kill(), raise(), killpg() và quyền hạn</b>
+    <b class="easy-only">Gửi tín hiệu đi và kiểm tra tiến trình còn sống</b>
+    <b class="en-only" lang="en">Sending signals: kill(), raise(), killpg(), and permissions</b>
+  </a>
+  <a href="#masks-sets">
+    <span>04</span>
+    <b class="standard-copy">Tập tín hiệu, mặt nạ, tín hiệu đang chờ và pause()</b>
+    <b class="easy-only">Chặn, cho chờ, và đợi một tín hiệu</b>
+    <b class="en-only" lang="en">Signal sets, the mask, pending signals, and pause()</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="signal-concepts" aria-labelledby="signal-concepts-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="signal-concepts-title">
+      <span class="standard-copy">Một tín hiệu đi qua vòng đời sinh–chờ–phát — và mỗi loại có một hành động mặc định</span>
+      <span class="easy-only">Tín hiệu sinh ra, chờ, rồi được trao — và mỗi loại có cách xử mặc định</span>
+      <span class="en-only" lang="en">A signal has a generate–pending–deliver lifecycle — and each type has a default action</span>
+    </h2>
+    <p class="standard-copy">Mỗi tín hiệu là một số nguyên nhỏ, định danh duy nhất, bắt đầu tuần tự từ 1, với tên biểu tượng dạng <code>SIGxxxx</code> định nghĩa trong <code>&lt;signal.h&gt;</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Vì con số thực tế khác nhau giữa các hệ, mã nên dùng <i>tên</i> chứ không dùng số. Trên Linux, các <b>tín hiệu chuẩn</b> (standard) được đánh số từ 1 đến 31; còn một tập khác là <b>tín hiệu thời gian thực</b> (realtime) — chương này mô tả tín hiệu chuẩn.<span class="cite"><a href="#ref-1">1</a></span> Khi một tín hiệu đến mà tiến trình chưa thiết lập cách xử riêng, nhân thực thi một trong các <b>hành động mặc định</b>: kết thúc tiến trình (<i>term</i>), kết thúc kèm dump lõi (<i>core</i>), bỏ qua (<i>ign</i>), dừng (<i>stop</i>), hoặc tiếp tục chạy (<i>cont</i>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    <p class="easy-only">Mỗi loại tín hiệu có một con số và một cái tên, ví dụ <code>SIGINT</code> là tín hiệu ngắt khi bạn bấm Ctrl-C. Có khoảng ba mươi loại tín hiệu "cổ điển" (số 1 đến 31). Khi một tín hiệu tới mà bạn chưa dặn gì, máy làm theo "nếp mặc định" của loại đó: có loại khiến chương trình tắt ngay, có loại bị lờ đi, có loại khiến chương trình tạm dừng rồi chạy tiếp. <b>Nhớ nhé: mỗi tín hiệu có tên, có số, và có một nếp xử mặc định nếu bạn không dặn gì khác.</b></p>
+    <p class="en-only" lang="en">Each signal is a unique small integer, numbered sequentially from 1, with a symbolic name of the form <code>SIGxxxx</code> defined in <code>&lt;signal.h&gt;</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Because the actual numbers vary across implementations, code should use the <i>names</i>, not the numbers. On Linux the <b>standard signals</b> are numbered 1 to 31; a separate set are the <b>realtime signals</b> — this chapter covers the standard ones.<span class="cite"><a href="#ref-1">1</a></span> When a signal arrives and the process has set no handling of its own, the kernel performs one of the <b>default actions</b>: terminate the process (<i>term</i>), terminate with a core dump (<i>core</i>), ignore (<i>ign</i>), stop (<i>stop</i>), or resume (<i>cont</i>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <b>Disposition</b> của một tín hiệu là cái mà tiến trình quy định sẽ xảy ra khi tín hiệu đó được phát: để nguyên <i>hành động mặc định</i>, <i>bỏ qua</i> tín hiệu (<code>SIG_IGN</code>), hoặc chạy một <b>trình xử lý tín hiệu</b> (signal handler) do lập trình viên viết (<code>SIG_DFL</code> là khôi phục về mặc định).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> "Disposition" là lời dặn trước: khi tín hiệu này tới thì làm gì — cứ làm mặc định, lờ nó đi, hay chạy một đoạn việc riêng của tôi. <b>Nhớ nhé: disposition là lời dặn "khi gõ cửa thì làm thế này".</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A signal's <b>disposition</b> is what the process specifies should happen when that signal is delivered: leave the <i>default action</i>, <i>ignore</i> the signal (<code>SIG_IGN</code>), or run a programmer-written <b>signal handler</b> (<code>SIG_DFL</code> restores the default).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">sự kiện xảy ra<br>&nbsp;&nbsp;&nbsp;↓ <i>generated</i><br>[ đang chờ · pending ]&nbsp;← bị chặn? (mask)<br>&nbsp;&nbsp;&nbsp;↓ <i>delivered</i><br>hành động = term | core | ign | stop | cont<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hoặc handler / SIG_IGN</p>
+      <p class="easy-only">có chuyện xảy ra<br>&nbsp;&nbsp;→ sinh tín hiệu<br>&nbsp;&nbsp;→ (có thể phải chờ)<br>&nbsp;&nbsp;→ được trao → làm gì đó<br>(tắt / lờ / chạy việc riêng)</p>
+      <p class="en-only" lang="en">event occurs<br>&nbsp;&nbsp;&nbsp;↓ <i>generated</i><br>[ pending ]&nbsp;← blocked? (mask)<br>&nbsp;&nbsp;&nbsp;↓ <i>delivered</i><br>action = term | core | ign | stop | cont<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;or handler / SIG_IGN</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">software interrupt</span>
+      <h3>
+        <span class="standard-copy">Tín hiệu là bất đồng bộ — không đoán được lúc đến</span>
+        <span class="easy-only">Tín hiệu đến bất chợt, không báo trước</span>
+        <span class="en-only" lang="en">Signals are asynchronous — you can't predict their arrival</span>
+      </h3>
+      <p class="standard-copy">Tín hiệu giống ngắt phần cứng ở chỗ nó <i>cắt ngang</i> luồng chạy bình thường; trong hầu hết trường hợp không thể biết trước chính xác khi nào một tín hiệu sẽ tới.<span class="cite"><a href="#ref-1">1</a></span> Các nguồn sinh tín hiệu điển hình gồm: một ngoại lệ phần cứng (ví dụ chia cho 0 hay tham chiếu địa chỉ sai), người dùng gõ một ký tự đặc biệt trên terminal (như Ctrl-C sinh <code>SIGINT</code>), hay một tiến trình khác chủ động gửi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Tín hiệu cắt ngang việc chương trình đang làm, giống như chuông điện thoại reo giữa bữa ăn. Nó có thể do một lỗi phần cứng (chia cho 0), do bạn bấm một phím đặc biệt (Ctrl-C), hay do một chương trình khác gửi sang. <b>Nhớ nhé: tín hiệu đến bất chợt, giữa chừng việc đang làm.</b></p>
+      <p class="en-only" lang="en">A signal resembles a hardware interrupt in that it <i>interrupts</i> normal flow; in most cases you cannot know in advance exactly when one will arrive.<span class="cite"><a href="#ref-1">1</a></span> Typical sources are: a hardware exception (such as dividing by zero or a bad memory reference), the user typing a terminal special character (like Ctrl-C generating <code>SIGINT</code>), or another process deliberately sending one.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi bạn bấm Ctrl-C để dừng một lệnh đang chạy ở terminal — đó là <code>SIGINT</code> được sinh và phát tới tiến trình tiền cảnh.<span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Khi bấm Ctrl-C để dừng một lệnh — đó chính là một tín hiệu đang được gửi đi.</span>
+        <span class="en-only" lang="en">Every time you press Ctrl-C to stop a running command in the terminal — that is <code>SIGINT</code> being generated and delivered to the foreground process.<span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Chuẩn và thời gian thực</span><span class="en-only" lang="en">Standard vs realtime</span></h4>
+          <p><span class="vi-only">Tín hiệu rơi vào hai nhóm: nhóm <i>chuẩn</i> (số 1–31 trên Linux), dùng để nhân báo các sự kiện truyền thống; và nhóm <i>thời gian thực</i> được thêm sau, có nhiều điểm khác — đáng chú ý nhất là tín hiệu thời gian thực <b>được xếp hàng</b>, còn tín hiệu chuẩn thì không.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span><span class="en-only" lang="en">Signals fall into two groups: the <i>standard</i> set (numbered 1–31 on Linux), used by the kernel for traditional events; and the later <i>realtime</i> set, which differs in several ways — most notably, realtime signals <b>are queued</b>, whereas standard signals are not.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Dùng tên, đừng dùng số</span><span class="en-only" lang="en">Use names, not numbers</span></h4>
+          <p><span class="vi-only">Vì số hiệu của mỗi tín hiệu khác nhau giữa các hiện thực UNIX, chương trình khả chuyển luôn tham chiếu tín hiệu bằng tên biểu tượng (<code>SIGINT</code>, <code>SIGTERM</code>…) chứ không bằng số thô.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">Because each signal's number varies across UNIX implementations, portable programs always refer to signals by their symbolic names (<code>SIGINT</code>, <code>SIGTERM</code>…) rather than raw numbers.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">default actions</span>
+      <h3>
+        <span class="standard-copy">Năm hành động mặc định: term, core, ign, stop, cont</span>
+        <span class="easy-only">Năm nếp xử mặc định khi không dặn gì</span>
+        <span class="en-only" lang="en">Five default actions: term, core, ign, stop, cont</span>
+      </h3>
+      <p class="standard-copy">Mỗi tín hiệu chuẩn có một hành động mặc định ghi trong bảng của sách (Table 20-1): <i>term</i> — kết thúc tiến trình; <i>core</i> — kết thúc và ghi một tệp core dump để gỡ lỗi; <i>ign</i> — tín hiệu bị bỏ qua; <i>stop</i> — tạm dừng tiến trình; <i>cont</i> — cho tiến trình đang dừng chạy tiếp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Phần lớn tín hiệu trên các bản UNIX đời đầu có mặc định là kết thúc tiến trình.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Khi một tín hiệu tới mà bạn chưa dặn gì, máy làm theo một trong năm nếp: tắt chương trình; tắt kèm ghi "hộp đen" (core dump) để soi lỗi; lờ đi; tạm dừng; hoặc cho chạy tiếp. Mỗi loại tín hiệu có sẵn một nếp riêng. <b>Nhớ nhé: không dặn gì thì máy theo nếp mặc định của loại tín hiệu đó.</b></p>
+      <p class="en-only" lang="en">Each standard signal has a default action listed in the book's table (Table 20-1): <i>term</i> — terminate the process; <i>core</i> — terminate and write a core dump file for debugging; <i>ign</i> — the signal is ignored; <i>stop</i> — suspend the process; <i>cont</i> — resume a stopped process.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> On early UNIX systems most signals defaulted to terminating the process.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một chương trình "chết" và để lại tệp <code>core</code> — đó là một tín hiệu có mặc định <i>core</i> (như <code>SIGSEGV</code>, <code>SIGABRT</code>) vừa kết thúc nó.<span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Khi chương trình sập và để lại tệp core — đó là một tín hiệu loại "tắt kèm hộp đen".</span>
+        <span class="en-only" lang="en">When a program dies and leaves a <code>core</code> file — a signal whose default is <i>core</i> (like <code>SIGSEGV</code>, <code>SIGABRT</code>) just terminated it.<span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">SIGKILL / SIGSTOP</span>
+      <h3>
+        <span class="standard-copy">Hai tín hiệu không thể bắt, chặn hay bỏ qua</span>
+        <span class="easy-only">Hai tín hiệu không ai cưỡng lại được</span>
+        <span class="en-only" lang="en">Two signals that cannot be caught, blocked, or ignored</span>
+      </h3>
+      <p class="standard-copy"><code>SIGKILL</code> (kết thúc tức thì) và <code>SIGSTOP</code> (dừng tức thì) là hai ngoại lệ đặc biệt: disposition của chúng <i>không thể</i> bị thay đổi — không thể bắt bằng handler, không thể bỏ qua, và cũng không thể chặn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Đó là lý do <code>kill -9</code> (gửi <code>SIGKILL</code>) luôn hạ được một tiến trình bướng bỉnh — nó bỏ qua mọi handler. Vì vậy Kerrisk khuyên: hãy thử <code>SIGTERM</code> trước (tiến trình có thể dọn dẹp rồi thoát gọn), chỉ dùng <code>SIGKILL</code> như biện pháp cuối cùng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Hầu hết tín hiệu, chương trình có quyền "chặn cửa" hoặc tự xử theo ý mình. Nhưng hai tín hiệu đặc biệt — "giết" (<code>SIGKILL</code>) và "dừng" (<code>SIGSTOP</code>) — thì không ai cưỡng lại được: không chặn được, không lờ được, không tự xử được. Nên <code>kill -9</code> luôn hạ được chương trình. Nhưng hãy lịch sự thử <code>SIGTERM</code> trước để nó kịp dọn dẹp. <b>Nhớ nhé: SIGKILL và SIGSTOP là tuyệt đối — dùng SIGKILL là lựa chọn cuối.</b></p>
+      <p class="en-only" lang="en"><code>SIGKILL</code> (instant termination) and <code>SIGSTOP</code> (instant stop) are special exceptions: their disposition <i>cannot</i> be changed — they cannot be caught by a handler, ignored, or blocked.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> That is why <code>kill -9</code> (sending <code>SIGKILL</code>) always brings down a stubborn process — it bypasses every handler. Hence Kerrisk's advice: try <code>SIGTERM</code> first (the process can clean up and exit gracefully), and reserve <code>SIGKILL</code> as a last resort.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một tiến trình "treo" không chịu thoát dù đã gửi <code>SIGTERM</code> — <code>kill -KILL</code> là cứu cánh, vì nó không thể bị handler nào cản.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi một chương trình treo cứng không chịu tắt — <code>kill -9</code> luôn dứt điểm được.</span>
+        <span class="en-only" lang="en">When a hung process refuses to exit even after <code>SIGTERM</code> — <code>kill -KILL</code> is the fallback, since no handler can block it.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Vì sao phải cứng rắn như vậy</span><span class="en-only" lang="en">Why they must be absolute</span></h4>
+          <p><span class="vi-only">Nếu một tiến trình có thể bắt hay bỏ qua <code>SIGKILL</code>, nó sẽ có thể tự biến mình thành bất tử — không cách nào hạ được. Giữ <code>SIGKILL</code> và <code>SIGSTOP</code> ngoài tầm với của tiến trình đảm bảo hệ điều hành luôn còn một cách dứt khoát để kết thúc hay tạm dừng bất kỳ tiến trình nào.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span><span class="en-only" lang="en">If a process could catch or ignore <code>SIGKILL</code>, it could make itself immortal — unkillable. Keeping <code>SIGKILL</code> and <code>SIGSTOP</code> out of a process's reach guarantees the operating system always retains a definitive way to terminate or suspend any process.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">SIGTERM trước, SIGKILL sau</span><span class="en-only" lang="en">SIGTERM first, SIGKILL after</span></h4>
+          <p><span class="vi-only"><code>SIGTERM</code> là tín hiệu "xin hãy kết thúc" tiêu chuẩn mà công cụ như <code>kill</code> gửi mặc định; tiến trình có thể bắt nó để lưu dữ liệu và đóng tài nguyên. Nhảy thẳng sang <code>SIGKILL</code> bỏ qua bước dọn dẹp ấy, nên dễ để lại trạng thái dở dang.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en"><code>SIGTERM</code> is the standard "please terminate" signal that tools like <code>kill</code> send by default; a process can catch it to save data and close resources. Jumping straight to <code>SIGKILL</code> skips that cleanup, so it can leave state half-finished.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đã biết tín hiệu là gì và mặc định nó làm gì, câu hỏi tiếp theo thực tế hơn: làm sao để <i>đổi</i> cách một tiến trình phản ứng — bắt một tín hiệu bằng handler của riêng mình, hay chủ động bỏ qua nó? Đó là việc đổi <b>disposition</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Giờ ta biết tín hiệu là gì và nếp mặc định ra sao. Câu hỏi kế: làm sao để bảo máy "đừng làm mặc định, hãy làm theo ý tôi"?</p>
+    <p class="en-only" lang="en">Having seen what a signal is and what it does by default, the next question is practical: how do you <i>change</i> how a process reacts — catch a signal with your own handler, or deliberately ignore it? That means changing the <b>disposition</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="dispositions" aria-labelledby="dispositions-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="dispositions-title">
+      <span class="standard-copy">Đổi disposition: signal() là bản gốc, sigaction() là bản được ưu tiên</span>
+      <span class="easy-only">Hai cách dặn máy phản ứng với tín hiệu — và cách nên dùng</span>
+      <span class="en-only" lang="en">Changing disposition: signal() is the original, sigaction() the preferred one</span>
+    </h2>
+    <p class="standard-copy">UNIX cho hai cách đổi disposition của một tín hiệu: <code>signal()</code> và <code>sigaction()</code>.<span class="cite"><a href="#ref-1">1</a></span> <code>signal()</code> là API gốc, giao diện đơn giản hơn, nhưng hành vi của nó <i>khác nhau giữa các hệ UNIX</i> — một nguồn lỗi khả chuyển kinh điển. Vì vậy Kerrisk khuyến nghị (rất mạnh) dùng <code>sigaction()</code> để thiết lập trình xử lý tín hiệu trong chương trình khả chuyển.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-4">4</a></span> Thú vị là trên glibc, bản thân <code>signal()</code> được hiện thực như một hàm thư viện đặt chồng lên <code>sigaction()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Có hai cách dặn máy "khi tín hiệu này tới thì làm thế này". Cách cũ tên <code>signal()</code> ngắn gọn nhưng trớ trêu: mỗi hệ UNIX hiểu nó một kiểu, nên dễ gây lỗi khi chuyển máy. Cách mới tên <code>sigaction()</code> dài hơn chút nhưng rõ ràng và giống nhau ở mọi nơi. <b>Nhớ nhé: để dặn tín hiệu cho chắc và chuyển máy an toàn, hãy dùng sigaction().</b></p>
+    <p class="en-only" lang="en">UNIX provides two ways to change a signal's disposition: <code>signal()</code> and <code>sigaction()</code>.<span class="cite"><a href="#ref-1">1</a></span> <code>signal()</code> is the original API with a simpler interface, but its behavior <i>varies across UNIX systems</i> — a classic portability pitfall. So Kerrisk (strongly) recommends <code>sigaction()</code> for establishing signal handlers in portable programs.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-4">4</a></span> Interestingly, on glibc <code>signal()</code> itself is implemented as a library function layered on top of <code>sigaction()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>signal(sig, handler)</code> đặt disposition cho tín hiệu <code>sig</code>; đối số <code>handler</code> là địa chỉ hàm xử lý, hoặc một trong hai hằng đặc biệt: <code>SIG_DFL</code> (khôi phục hành động mặc định) và <code>SIG_IGN</code> (bỏ qua tín hiệu). Hàm trả về disposition <i>trước đó</i> khi thành công, hoặc <code>SIG_ERR</code> khi lỗi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> <code>signal(tín_hiệu, việc_cần_làm)</code>: bạn nói "khi tín hiệu này tới, chạy đoạn việc này", hoặc đưa <code>SIG_DFL</code> để trả về mặc định, <code>SIG_IGN</code> để lờ đi. <b>Nhớ nhé: SIG_DFL là về mặc định, SIG_IGN là lờ đi.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>signal(sig, handler)</code> sets the disposition for signal <code>sig</code>; the <code>handler</code> argument is a handler function's address, or one of two special constants: <code>SIG_DFL</code> (restore the default action) and <code>SIG_IGN</code> (ignore the signal). It returns the <i>previous</i> disposition on success, or <code>SIG_ERR</code> on error.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#include &lt;signal.h&gt;<br>void (*signal(int sig,<br>&nbsp;&nbsp;void (*handler)(int)))(int);<br>/* trả về disposition cũ, hoặc SIG_ERR */<br>signal(SIGINT, SIG_IGN);&nbsp;/* lờ Ctrl-C */</p>
+      <p class="easy-only">signal(SIGINT, SIG_IGN);<br>&nbsp;&nbsp;--&gt; lờ Ctrl-C<br>signal(SIGINT, SIG_DFL);<br>&nbsp;&nbsp;--&gt; về lại mặc định</p>
+      <p class="en-only" lang="en">#include &lt;signal.h&gt;<br>void (*signal(int sig,<br>&nbsp;&nbsp;void (*handler)(int)))(int);<br>/* returns old disposition, or SIG_ERR */<br>signal(SIGINT, SIG_IGN);&nbsp;/* ignore Ctrl-C */</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">sigaction()</span>
+      <h3>
+        <span class="standard-copy">Vì sao sigaction() được ưu tiên tuyệt đối</span>
+        <span class="easy-only">Vì sao nên chọn sigaction() thay vì signal()</span>
+        <span class="en-only" lang="en">Why sigaction() is strongly preferred</span>
+      </h3>
+      <p class="standard-copy"><code>sigaction()</code> cung cấp chức năng mà <code>signal()</code> không có, và — quan trọng hơn — cho một hành vi <i>nhất quán, xác định rõ</i> khi thiết lập handler, không phụ thuộc hệ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> Nó nhận một cấu trúc <code>struct sigaction</code> mô tả handler cùng các cờ (flags) và một tập tín hiệu sẽ được chặn trong lúc handler chạy. Vì những khác biệt khả chuyển của <code>signal()</code>, sách dùng <code>sigaction()</code> xuyên suốt các chương về sau.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><code>sigaction()</code> làm mọi việc <code>signal()</code> làm, nhưng rõ ràng và giống nhau ở mọi hệ máy, lại cho thêm nhiều lựa chọn tinh chỉnh. Vì thế đây là cách sách dùng từ đây về sau. <b>Nhớ nhé: sigaction() là lựa chọn mặc định đúng đắn để bắt tín hiệu.</b></p>
+      <p class="en-only" lang="en"><code>sigaction()</code> provides functionality that <code>signal()</code> lacks and — more importantly — gives <i>consistent, well-defined</i> behavior when establishing a handler, independent of the system.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> It takes a <code>struct sigaction</code> describing the handler, plus flags and a set of signals to block while the handler runs. Because of <code>signal()</code>'s portability differences, the book uses <code>sigaction()</code> throughout the later chapters.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong gần như mọi chương trình nghiêm túc có bắt tín hiệu — và trong toàn bộ Chương 21 về thiết kế trình xử lý tín hiệu.<span class="cite"><a href="#ref-4">4</a></span></span>
+        <span class="easy-only">Trong hầu hết chương trình thực tế có xử lý tín hiệu — và suốt Chương 21 kế tiếp.</span>
+        <span class="en-only" lang="en">In nearly every serious program that catches signals — and throughout Chapter 21 on designing signal handlers.<span class="cite"><a href="#ref-4">4</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">signal() đặt trên sigaction()</span><span class="en-only" lang="en">signal() layered on sigaction()</span></h4>
+          <p><span class="vi-only">Dù <code>signal()</code> được ghi trong mục 2 của man page (system call), trên glibc nó thực chất là một hàm thư viện gọi tới <code>sigaction()</code>. Chính vì vậy hành vi khả chuyển của <code>signal()</code> phụ thuộc vào cách thư viện C ánh xạ nó — một lý do nữa để gọi thẳng <code>sigaction()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span><span class="en-only" lang="en">Although <code>signal()</code> is documented in section 2 of the manual (system calls), on glibc it is actually a library function that calls <code>sigaction()</code>. That is exactly why <code>signal()</code>'s portable behavior depends on how the C library maps it — one more reason to call <code>sigaction()</code> directly.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Đọc disposition mà không đổi</span><span class="en-only" lang="en">Reading disposition without changing it</span></h4>
+          <p><span class="vi-only">Không thể dùng <code>signal()</code> để chỉ <i>đọc</i> disposition hiện thời mà không đồng thời thay đổi nó; muốn chỉ xem (hoặc xem rồi đặt) thì phải dùng <code>sigaction()</code>, vốn tách bạch hai việc này.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span><span class="en-only" lang="en">You cannot use <code>signal()</code> merely to <i>read</i> the current disposition without also changing it; to just inspect it (or inspect-then-set) you must use <code>sigaction()</code>, which separates those operations.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">SIG_IGN</span>
+      <h3>
+        <span class="standard-copy">Bỏ qua khác với chặn — một phân biệt quan trọng</span>
+        <span class="easy-only">"Lờ đi" không giống "cho chờ"</span>
+        <span class="en-only" lang="en">Ignoring is not blocking — an important distinction</span>
+      </h3>
+      <p class="standard-copy">Đặt disposition thành <code>SIG_IGN</code> khiến tín hiệu bị <i>vứt bỏ</i> khi được phát — nó đến rồi biến mất, không để lại dấu vết. Điều này khác hẳn việc <b>chặn</b> (block) qua mặt nạ tín hiệu: tín hiệu bị chặn không bị vứt, mà được <i>giữ lại</i> ở trạng thái đang chờ cho tới khi được bỏ chặn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">"Lờ đi" (<code>SIG_IGN</code>) nghĩa là tín hiệu tới thì bị ném đi luôn, coi như chưa từng có. "Cho chờ" (chặn) thì khác: tín hiệu đứng đợi ngoài cửa, chưa bị bỏ, và sẽ vào khi bạn mở chặn. <b>Nhớ nhé: lờ đi là ném bỏ, chặn là bắt đứng chờ.</b></p>
+      <p class="en-only" lang="en">Setting the disposition to <code>SIG_IGN</code> causes the signal to be <i>discarded</i> on delivery — it arrives and vanishes, leaving no trace. This differs entirely from <b>blocking</b> via the signal mask: a blocked signal is not discarded but <i>held</i> in the pending state until it is unblocked.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một chương trình muốn phớt lờ <code>SIGINT</code> trong một đoạn tới hạn — đặt <code>SIG_IGN</code> thì Ctrl-C hoàn toàn vô hại trong đoạn đó.<span class="cite"><a href="#ref-3">3</a></span></span>
+        <span class="easy-only">Khi muốn Ctrl-C không có tác dụng trong một lúc — đặt tín hiệu đó thành "lờ đi".</span>
+        <span class="en-only" lang="en">When a program wants to ignore <code>SIGINT</code> during a critical section — setting <code>SIG_IGN</code> makes Ctrl-C harmless there.<span class="cite"><a href="#ref-3">3</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">disposition is inherited</span>
+      <h3>
+        <span class="standard-copy">Hai tín hiệu vẫn trơ: SIGKILL và SIGSTOP</span>
+        <span class="easy-only">Dù muốn, bạn vẫn không đổi được hai tín hiệu này</span>
+        <span class="en-only" lang="en">Two still immovable: SIGKILL and SIGSTOP</span>
+      </h3>
+      <p class="standard-copy">Cả <code>signal()</code> lẫn <code>sigaction()</code> đều không thể đổi disposition của <code>SIGKILL</code> hay <code>SIGSTOP</code> — nỗ lực làm vậy sẽ thất bại.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> Đây là hệ quả trực tiếp của tính "không thể bắt, chặn hay bỏ qua" đã nêu ở cụm trước: không có cửa sau nào, dù qua API cũ hay mới.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Dù dùng cách cũ hay cách mới, bạn vẫn không thể dặn lại hai tín hiệu "giết" và "dừng". Chúng luôn làm đúng việc của mình. <b>Nhớ nhé: không API nào đổi được SIGKILL và SIGSTOP.</b></p>
+      <p class="en-only" lang="en">Neither <code>signal()</code> nor <code>sigaction()</code> can change the disposition of <code>SIGKILL</code> or <code>SIGSTOP</code> — any such attempt fails.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> This follows directly from their "cannot be caught, blocked, or ignored" property from the previous cluster: there is no back door, old API or new.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi gọi <code>sigaction(SIGKILL, …)</code> trả về lỗi <code>EINVAL</code> — đó không phải bug, mà là thiết kế có chủ ý.<span class="cite"><a href="#ref-4">4</a></span></span>
+        <span class="easy-only">Khi thử dặn lại SIGKILL và nhận lỗi — đó là điều bình thường, cố ý như vậy.</span>
+        <span class="en-only" lang="en">When <code>sigaction(SIGKILL, …)</code> returns <code>EINVAL</code> — that is not a bug but a deliberate design.<span class="cite"><a href="#ref-4">4</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đổi disposition là chuẩn bị cách <i>nhận</i> tín hiệu. Mặt còn lại của câu chuyện là cách <i>gửi</i>: một tiến trình làm sao chủ động phát một tín hiệu tới một tiến trình khác — và cần quyền gì để làm điều đó?<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Dặn cách nhận xong rồi, giờ xem mặt kia: làm sao tự gửi một tín hiệu đi, và ai được phép gửi cho ai.</p>
+    <p class="en-only" lang="en">Changing disposition prepares how you <i>receive</i> a signal. The other half of the story is how you <i>send</i> one: how does a process actively deliver a signal to another — and what permission does it need?<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="sending" aria-labelledby="sending-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="sending-title">
+      <span class="standard-copy">Gửi tín hiệu: kill(), raise(), killpg() — và câu chuyện quyền hạn</span>
+      <span class="easy-only">Cách tự gửi tín hiệu, và ai được phép gửi cho ai</span>
+      <span class="en-only" lang="en">Sending signals: kill(), raise(), killpg() — and the question of permission</span>
+    </h2>
+    <p class="standard-copy">Một tiến trình (nếu đủ quyền) có thể gửi tín hiệu tới tiến trình khác bằng <code>kill(pid, sig)</code> — tên "kill" là di sản lịch sử, vì mặc định của phần lớn tín hiệu đời đầu là kết thúc tiến trình.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Để tự gửi cho chính mình có <code>raise(sig)</code>; để gửi cho cả một nhóm tiến trình (process group) có <code>killpg()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span><span class="cite"><a href="#ref-7">7</a></span> Việc gửi bị ràng buộc bởi <b>quyền</b>: nói đại thể, một tiến trình thường chỉ được gửi tín hiệu tới tiến trình khác nếu người gửi và người nhận thuộc cùng chủ sở hữu (hoặc người gửi là đặc quyền).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    <p class="easy-only">Để gửi một tín hiệu cho chương trình khác, ta dùng <code>kill()</code> — cái tên nghe đáng sợ nhưng chỉ là "gửi tín hiệu", không nhất thiết là giết. Muốn gửi cho chính mình thì dùng <code>raise()</code>; gửi cho cả một nhóm thì dùng <code>killpg()</code>. Nhưng không phải ai cũng gửi được cho ai: thường chỉ gửi được cho tiến trình cùng chủ, trừ khi bạn là quản trị. <b>Nhớ nhé: kill() là "gửi tín hiệu", và phải đúng quyền mới gửi được.</b></p>
+    <p class="en-only" lang="en">A process (with suitable permission) can send a signal to another with <code>kill(pid, sig)</code> — the name "kill" is a historical legacy, since most early signals defaulted to terminating the process.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> To send to itself there is <code>raise(sig)</code>; to send to a whole process group there is <code>killpg()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span><span class="cite"><a href="#ref-7">7</a></span> Sending is bound by <b>permission</b>: broadly, an ordinary process may signal another only if sender and recipient share an owner (or the sender is privileged).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>kill(pid, sig)</code> gửi tín hiệu <code>sig</code> tới tiến trình có số <code>pid</code>. Giá trị <code>pid</code> còn có các nghĩa đặc biệt: <code>pid &gt; 0</code> gửi tới một tiến trình; <code>pid == 0</code> gửi tới mọi thành viên cùng nhóm tiến trình với người gửi; <code>pid == -1</code> gửi tới mọi tiến trình người gửi có quyền gửi; <code>pid &lt; -1</code> gửi tới nhóm tiến trình có mã bằng trị tuyệt đối của <code>pid</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> <code>kill(ai, tín_hiệu)</code>: gửi tín hiệu cho một tiến trình (theo số của nó). Có mẹo: số 0 nghĩa là "cả nhóm của tôi", số −1 nghĩa là "mọi tiến trình tôi được phép". <b>Nhớ nhé: kill nhận một số pid, và vài giá trị đặc biệt mở rộng phạm vi gửi.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>kill(pid, sig)</code> sends signal <code>sig</code> to the process numbered <code>pid</code>. The <code>pid</code> value carries special meanings: <code>pid &gt; 0</code> targets one process; <code>pid == 0</code> targets every member of the sender's own process group; <code>pid == -1</code> targets every process the sender may signal; <code>pid &lt; -1</code> targets the process group whose ID equals the absolute value of <code>pid</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#include &lt;signal.h&gt;<br>int kill(pid_t pid, int sig);<br>int raise(int sig);&nbsp;&nbsp;&nbsp;&nbsp;/* gửi cho chính mình */<br>int killpg(pid_t pgrp, int sig);<br>kill(pid, 0);&nbsp;/* tín hiệu null: kiểm tra tồn tại */</p>
+      <p class="easy-only">kill(pid, sig) --&gt; gửi cho pid<br>raise(sig)&nbsp;&nbsp;&nbsp;--&gt; gửi cho mình<br>kill(pid, 0) --&gt; pid còn sống không?</p>
+      <p class="en-only" lang="en">#include &lt;signal.h&gt;<br>int kill(pid_t pid, int sig);<br>int raise(int sig);&nbsp;&nbsp;&nbsp;&nbsp;/* send to self */<br>int killpg(pid_t pgrp, int sig);<br>kill(pid, 0);&nbsp;/* null signal: existence check */</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">null signal (0)</span>
+      <h3>
+        <span class="standard-copy">Gửi tín hiệu 0 không gửi gì — nó kiểm tra sự tồn tại</span>
+        <span class="easy-only">Tín hiệu số 0: không gửi gì, chỉ để dò xem còn sống không</span>
+        <span class="en-only" lang="en">Signal 0 sends nothing — it checks existence</span>
+      </h3>
+      <p class="standard-copy">Nếu <code>sig</code> là 0 (gọi là <b>tín hiệu null</b>), <code>kill()</code> <i>không thực sự gửi</i> tín hiệu nào; thay vào đó nó chỉ làm các bước kiểm tra lỗi thường lệ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Nhờ đó ta dùng tín hiệu null để kiểm tra một tiến trình có tồn tại không: nếu gọi thất bại với lỗi <code>ESRCH</code>, tiến trình đó không tồn tại; nếu thất bại với <code>EPERM</code> thì nó tồn tại nhưng ta không có quyền gửi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only">Gửi "tín hiệu số 0" là một mẹo: thực ra chẳng gửi gì cả, chỉ để hỏi "tiến trình kia còn sống không?". Nếu máy báo lỗi "không tìm thấy" (<code>ESRCH</code>), nghĩa là nó đã biến mất. <b>Nhớ nhé: tín hiệu 0 là cách gõ cửa hỏi "có ai ở nhà không" mà không làm phiền.</b></p>
+      <p class="en-only" lang="en">If <code>sig</code> is 0 (the <b>null signal</b>), <code>kill()</code> <i>sends no signal</i>; instead it performs only the usual error checks.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> This lets you use the null signal to test whether a process exists: if the call fails with <code>ESRCH</code>, the process does not exist; if it fails with <code>EPERM</code>, it exists but you lack permission to signal it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong các script giám sát viết bằng C: định kỳ gọi <code>kill(pid, 0)</code> để biết một dịch vụ còn chạy hay đã chết.<span class="cite"><a href="#ref-5">5</a></span></span>
+        <span class="easy-only">Khi muốn biết một tiến trình còn chạy không — <code>kill(pid, 0)</code> trả lời mà không làm phiền nó.</span>
+        <span class="en-only" lang="en">In monitoring code: periodically call <code>kill(pid, 0)</code> to learn whether a service is still running or has died.<span class="cite"><a href="#ref-5">5</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Một cuộc đua ẩn</span><span class="en-only" lang="en">A hidden race</span></h4>
+          <p><span class="vi-only">Kiểm tra tồn tại bằng tín hiệu null có một bẫy: PID được tái sử dụng (Chương 6), nên tiến trình trả về "còn sống" có thể là một tiến trình <i>khác</i> vừa nhận lại PID cũ. Vì vậy cách này chỉ nên dùng khi biết PID chưa thể bị tái dùng trong khoảng thời gian liên quan.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span><span class="en-only" lang="en">Existence checks via the null signal have a trap: PIDs are reused (Chapter 6), so a process reported "alive" might be a <i>different</i> process that just inherited the old PID. Use this only when you know the PID cannot be recycled within the relevant window.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Các mã lỗi cần phân biệt</span><span class="en-only" lang="en">Error codes to distinguish</span></h4>
+          <p><span class="vi-only"><code>ESRCH</code> ("no such process") nghĩa là không có tiến trình với PID đó; <code>EPERM</code> nghĩa là có nhưng thiếu quyền. Phân biệt hai mã này cho phép suy ra tiến trình tồn tại ngay cả khi không gửi được tín hiệu thật.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span><span class="en-only" lang="en"><code>ESRCH</code> ("no such process") means no process with that PID exists; <code>EPERM</code> means one exists but you lack permission. Distinguishing the two lets you infer existence even when you cannot actually deliver a signal.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">permission</span>
+      <h3>
+        <span class="standard-copy">Không phải ai cũng gửi được cho ai</span>
+        <span class="easy-only">Phải đúng quyền mới gửi tín hiệu được</span>
+        <span class="en-only" lang="en">Not everyone may signal everyone</span>
+      </h3>
+      <p class="standard-copy">Để gửi tín hiệu, tiến trình gửi phải có quyền phù hợp. Quy tắc cốt lõi: một tiến trình đặc quyền (CAP_KILL) gửi được cho bất kỳ ai; một tiến trình thường chỉ gửi được nếu định danh người dùng thực hoặc hiệu lực của nó khớp với định danh thực hoặc đã-lưu của tiến trình đích.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Riêng <code>SIGCONT</code> có ngoại lệ: có thể gửi tới bất kỳ tiến trình nào trong cùng một phiên (session).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Hệ điều hành không cho bạn gửi tín hiệu lung tung tới chương trình của người khác — đó là chuyện bảo mật. Nói nôm na: bạn gửi được cho các chương trình của chính mình; chỉ "người quản trị" mới gửi được cho tất cả. <b>Nhớ nhé: thường thì chỉ gửi tín hiệu được cho tiến trình cùng chủ với mình.</b></p>
+      <p class="en-only" lang="en">To send a signal, the sender must have appropriate permission. The core rule: a privileged process (CAP_KILL) may signal anyone; an ordinary process may signal only if its real or effective user ID matches the real or saved user ID of the target.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> <code>SIGCONT</code> is a special case: it may be sent to any process in the same session.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi lệnh <code>kill</code> báo "Operation not permitted" (<code>EPERM</code>) lúc bạn cố dừng tiến trình của người dùng khác mà không có quyền root.<span class="cite"><a href="#ref-5">5</a></span></span>
+        <span class="easy-only">Khi bạn cố dừng chương trình của người khác và máy báo "không được phép" — đó là quy tắc quyền hạn.</span>
+        <span class="en-only" lang="en">When <code>kill</code> reports "Operation not permitted" (<code>EPERM</code>) as you try to stop another user's process without root.<span class="cite"><a href="#ref-5">5</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">strsignal / psignal</span>
+      <h3>
+        <span class="standard-copy">Mô tả tín hiệu bằng lời người đọc được</span>
+        <span class="easy-only">Đổi số tín hiệu thành câu chữ dễ hiểu</span>
+        <span class="en-only" lang="en">Describing a signal in human-readable words</span>
+      </h3>
+      <p class="standard-copy"><code>strsignal(sig)</code> trả về một chuỗi mô tả tín hiệu (ví dụ "Interrupt"); nó có kiểm tra biên và <i>nhạy locale</i>, nên mô tả hiển thị theo ngôn ngữ hệ thống.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> <code>psignal(sig, msg)</code> in ra lỗi chuẩn (stderr) chuỗi <code>msg</code>, dấu hai chấm, rồi phần mô tả tín hiệu. Cả hai được ưa dùng hơn việc truy cập trực tiếp mảng <code>sys_siglist</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <p class="easy-only">Con số tín hiệu khó nhớ. <code>strsignal()</code> đổi một số tín hiệu thành câu chữ dễ hiểu như "Interrupt". <code>psignal()</code> thì in thẳng dòng mô tả ra màn hình lỗi. <b>Nhớ nhé: strsignal cho bạn tên mô tả, psignal in nó ra giúp bạn.</b></p>
+      <p class="en-only" lang="en"><code>strsignal(sig)</code> returns a string describing the signal (e.g. "Interrupt"); it does bounds checking and is <i>locale-sensitive</i>, so the description appears in the system's language.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> <code>psignal(sig, msg)</code> prints to standard error the string <code>msg</code>, a colon, then the signal description. Both are preferable to directly accessing the <code>sys_siglist</code> array.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong thông báo lỗi thân thiện: thay vì in "caught signal 2", chương trình in "caught signal: Interrupt" nhờ <code>strsignal()</code>.<span class="cite"><a href="#ref-8">8</a></span></span>
+        <span class="easy-only">Khi một chương trình báo "bị tín hiệu: Interrupt" thay vì "tín hiệu 2" — đó là nhờ strsignal.</span>
+        <span class="en-only" lang="en">In friendly error messages: instead of "caught signal 2", a program prints "caught signal: Interrupt" via <code>strsignal()</code>.<span class="cite"><a href="#ref-8">8</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Chuẩn hóa muộn</span><span class="en-only" lang="en">Standardized late</span></h4>
+          <p><span class="vi-only"><code>psignal()</code>, <code>strsignal()</code> và <code>sys_siglist</code> không nằm trong SUSv3 nhưng có mặt trên nhiều hệ UNIX; SUSv4 về sau mới bổ sung đặc tả cho <code>psignal()</code> và <code>strsignal()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></span><span class="en-only" lang="en"><code>psignal()</code>, <code>strsignal()</code>, and <code>sys_siglist</code> are not in SUSv3 but are present on many UNIX systems; SUSv4 later added specifications for <code>psignal()</code> and <code>strsignal()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Vì sao ưu tiên hàm</span><span class="en-only" lang="en">Why prefer the function</span></h4>
+          <p><span class="vi-only">Ngoài tính nhạy locale, <code>strsignal()</code> còn kiểm tra biên của <code>sig</code> và trả về NULL nếu không hợp lệ — an toàn hơn so với lập chỉ mục thô vào mảng <code>sys_siglist</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></span><span class="en-only" lang="en">Beyond locale sensitivity, <code>strsignal()</code> also bounds-checks <code>sig</code> and returns NULL if it is invalid — safer than raw indexing into the <code>sys_siglist</code> array.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Nhận và gửi đã xong. Phần cuối là công cụ để <i>điều phối thời gian</i>: biểu diễn nhiều tín hiệu cùng lúc bằng <b>tập tín hiệu</b>, tạm hoãn việc phát bằng <b>mặt nạ tín hiệu</b>, xem những gì đang <b>chờ</b>, và dừng lại <b>đợi</b> một tín hiệu bằng <code>pause()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Nhận và gửi đã xong. Giờ tới cách điều phối thời điểm: gom nhiều tín hiệu vào một "danh sách", bảo một số tín hiệu "khoan đã", xem ai đang chờ, và cách đứng đợi một tín hiệu.</p>
+    <p class="en-only" lang="en">Receiving and sending are done. The last part is about <i>timing control</i>: representing many signals at once with <b>signal sets</b>, deferring delivery with the <b>signal mask</b>, inspecting what is <b>pending</b>, and halting to <b>wait</b> for a signal with <code>pause()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="masks-sets" aria-labelledby="masks-sets-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="masks-sets-title">
+      <span class="standard-copy">Tập tín hiệu, mặt nạ, tín hiệu đang chờ — và một sự thật: tín hiệu chuẩn không xếp hàng</span>
+      <span class="easy-only">Gom tín hiệu, chặn tạm, xem ai đang chờ, và đứng đợi</span>
+      <span class="en-only" lang="en">Signal sets, the mask, pending signals — and a truth: standard signals don't queue</span>
+    </h2>
+    <p class="standard-copy">Nhiều system call cần biểu diễn một <i>nhóm</i> tín hiệu. Kiểu dữ liệu <code>sigset_t</code> làm việc đó, thao tác qua bộ hàm: <code>sigemptyset()</code> (tập rỗng), <code>sigfillset()</code> (chứa <i>mọi</i> tín hiệu, kể cả realtime), <code>sigaddset()</code>/<code>sigdelset()</code> (thêm/bớt một tín hiệu), và <code>sigismember()</code> (kiểm tra một tín hiệu có trong tập).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> Nhân giữ cho mỗi tiến trình một <b>mặt nạ tín hiệu</b> (signal mask) — tập các tín hiệu đang bị <i>chặn</i> khỏi việc phát; <code>sigprocmask()</code> xem và sửa mặt nạ này, còn <code>sigpending()</code> trả về tập tín hiệu đang <b>chờ</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+    <p class="easy-only">Thay vì xử lý từng tín hiệu một, hệ thống cho ta một "danh sách" tín hiệu (<code>sigset_t</code>): tạo danh sách rỗng, điền đầy, thêm hoặc bớt từng cái, hay hỏi "cái này có trong danh sách không". Dùng danh sách đó, ta bảo máy "hãy cho mấy tín hiệu này đứng chờ" (mặt nạ), rồi có thể hỏi "ai đang chờ ngoài cửa". <b>Nhớ nhé: tập tín hiệu là một danh sách; mặt nạ là danh sách những tín hiệu đang bị cho chờ.</b></p>
+    <p class="en-only" lang="en">Many system calls must represent a <i>group</i> of signals. The <code>sigset_t</code> type does this, manipulated by a family of functions: <code>sigemptyset()</code> (empty set), <code>sigfillset()</code> (contains <i>every</i> signal, including realtime), <code>sigaddset()</code>/<code>sigdelset()</code> (add/remove one), and <code>sigismember()</code> (test membership).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> The kernel keeps, for each process, a <b>signal mask</b> — the set of signals currently <i>blocked</i> from delivery; <code>sigprocmask()</code> inspects and modifies it, while <code>sigpending()</code> returns the set of <b>pending</b> signals.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>sigprocmask(how, set, oldset)</code> thay đổi mặt nạ theo ba cách tùy <code>how</code>: <code>SIG_BLOCK</code> (thêm <code>set</code> vào mặt nạ), <code>SIG_UNBLOCK</code> (bỏ <code>set</code> khỏi mặt nạ), và <code>SIG_SETMASK</code> (đặt mặt nạ đúng bằng <code>set</code>). Truyền <code>set</code> là NULL chỉ để lấy mặt nạ hiện thời vào <code>oldset</code> mà không đổi gì.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> <code>sigprocmask</code> sửa danh sách "đang cho chờ": thêm vào (<code>SIG_BLOCK</code>), bỏ ra (<code>SIG_UNBLOCK</code>), hay đặt lại cả danh sách (<code>SIG_SETMASK</code>). <b>Nhớ nhé: BLOCK là thêm vào chặn, UNBLOCK là mở ra, SETMASK là thay cả danh sách.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>sigprocmask(how, set, oldset)</code> changes the mask three ways by <code>how</code>: <code>SIG_BLOCK</code> (add <code>set</code> to the mask), <code>SIG_UNBLOCK</code> (remove <code>set</code>), and <code>SIG_SETMASK</code> (set the mask exactly to <code>set</code>). Passing <code>set</code> as NULL just fetches the current mask into <code>oldset</code> without changing anything.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">sigset_t s;<br>sigemptyset(&amp;s);<br>sigaddset(&amp;s, SIGINT);<br>sigprocmask(SIG_BLOCK, &amp;s, NULL);<br>/* ... đoạn tới hạn ... */<br>sigprocmask(SIG_UNBLOCK, &amp;s, NULL);</p>
+      <p class="easy-only">sigemptyset(&amp;s);&nbsp;// danh sách rỗng<br>sigaddset(&amp;s, SIGINT);<br>sigprocmask(SIG_BLOCK, &amp;s, NULL);<br>// ...làm việc quan trọng...<br>sigprocmask(SIG_UNBLOCK, &amp;s, NULL);</p>
+      <p class="en-only" lang="en">sigset_t s;<br>sigemptyset(&amp;s);<br>sigaddset(&amp;s, SIGINT);<br>sigprocmask(SIG_BLOCK, &amp;s, NULL);<br>/* ... critical section ... */<br>sigprocmask(SIG_UNBLOCK, &amp;s, NULL);</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">blocking ≠ discarding</span>
+      <h3>
+        <span class="standard-copy">Chặn chỉ hoãn, không vứt — tín hiệu nằm chờ</span>
+        <span class="easy-only">Chặn là bắt chờ, không phải ném đi</span>
+        <span class="en-only" lang="en">Blocking defers, it doesn't discard — the signal stays pending</span>
+      </h3>
+      <p class="standard-copy">Khi một tín hiệu bị chặn trong mặt nạ, nó không bị mất: nó trở thành <b>pending</b> và ở đó cho tới khi được bỏ chặn, lúc ấy mới được phát.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span> Nỗ lực chặn <code>SIGKILL</code> hay <code>SIGSTOP</code> bị <i>âm thầm bỏ qua</i> — một hệ quả nữa của tính bất khả cưỡng của chúng.<span class="cite"><a href="#ref-1">1</a></span> Nếu ta đổi disposition của một tín hiệu đang chờ, thì khi nó được bỏ chặn, nó sẽ được xử theo disposition <i>mới</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Chặn một tín hiệu không làm nó biến mất — nó chỉ đứng chờ ngoài cửa, và sẽ vào ngay khi bạn mở chặn. Riêng SIGKILL và SIGSTOP thì không chặn được (máy lặng lẽ lờ yêu cầu chặn). <b>Nhớ nhé: chặn là cho chờ, mở chặn là tín hiệu ùa vào.</b></p>
+      <p class="en-only" lang="en">When a signal is blocked by the mask it is not lost: it becomes <b>pending</b> and stays so until unblocked, at which point it is delivered.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span> Attempts to block <code>SIGKILL</code> or <code>SIGSTOP</code> are <i>silently ignored</i> — another consequence of their irresistibility.<span class="cite"><a href="#ref-1">1</a></span> If you change the disposition of a pending signal, then when it is later unblocked it is handled by its <i>new</i> disposition.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bảo vệ một đoạn tới hạn khỏi bị cắt ngang: chặn tín hiệu, làm việc, rồi bỏ chặn — tín hiệu dồn lại sẽ được phát sau.<span class="cite"><a href="#ref-10">10</a></span></span>
+        <span class="easy-only">Khi làm một việc không được phép bị ngắt giữa chừng — chặn tín hiệu trong lúc đó rồi mở lại.</span>
+        <span class="en-only" lang="en">When protecting a critical section from interruption: block the signal, do the work, then unblock — the deferred signal is delivered afterward.<span class="cite"><a href="#ref-10">10</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">not queued</span>
+      <h3>
+        <span class="standard-copy">Tín hiệu chuẩn không xếp hàng — chờ nhiều lần chỉ còn một</span>
+        <span class="easy-only">Nhiều tín hiệu cùng loại dồn lại chỉ tính một</span>
+        <span class="en-only" lang="en">Standard signals don't queue — many pending become one</span>
+      </h3>
+      <p class="standard-copy">Đây là một sự thật dễ gây sốc: mỗi tín hiệu <i>chuẩn</i> chỉ được đánh dấu "đang chờ" <b>một lần duy nhất</b>. Nếu cùng một tín hiệu được sinh ra nhiều lần trong khi nó đang bị chặn, thì khi bỏ chặn nó chỉ được phát <b>một lần</b> — các lần sinh dư "biến mất".<span class="cite"><a href="#ref-1">1</a></span> Tập pending thực chất là một <i>tập hợp</i> (có/không), không phải một hàng đợi đếm số lần. Đây chính là điểm khác cốt lõi với tín hiệu thời gian thực, vốn <i>được</i> xếp hàng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Tưởng tượng chuông cửa chỉ nhớ "có người bấm" chứ không đếm bấm bao nhiêu lần. Tín hiệu chuẩn cũng vậy: nếu nó tới năm lần trong lúc bị chặn, khi mở ra bạn chỉ nhận <i>một</i> lần. Bốn lần kia mất. <b>Nhớ nhé: tín hiệu chuẩn chỉ nhớ "có hay không", không đếm số lần.</b></p>
+      <p class="en-only" lang="en">A surprising truth: each <i>standard</i> signal is marked pending <b>only once</b>. If the same signal is generated many times while blocked, then on unblocking it is delivered just <b>once</b> — the extra generations simply "disappear."<span class="cite"><a href="#ref-1">1</a></span> The pending set is really a <i>set</i> (present/absent), not a counting queue. This is the core difference from realtime signals, which <i>are</i> queued.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một handler <code>SIGCHLD</code> bỏ sót vài tiến trình con — vì nhiều <code>SIGCHLD</code> dồn lại chỉ phát một lần, nên handler phải lặp để thu hết (Chương 26).<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi chương trình "bỏ quên" vài sự kiện — vì nhiều tín hiệu cùng loại dồn lại chỉ tính một lần.</span>
+        <span class="en-only" lang="en">When a <code>SIGCHLD</code> handler misses some children — because several <code>SIGCHLD</code>s coalesce into one delivery, so the handler must loop to reap them all (Chapter 26).<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Vì sao chỉ "có/không"</span><span class="en-only" lang="en">Why only present/absent</span></h4>
+          <p><span class="vi-only">Trạng thái "đang chờ" của tập tín hiệu chuẩn được biểu diễn bằng một mặt nạ bit — mỗi tín hiệu một bit. Một bit chỉ ghi được "có" hoặc "không", nên tự nó không thể đếm số lần tín hiệu được sinh. Đó là lý do kỹ thuật khiến tín hiệu chuẩn không xếp hàng.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">The pending state of standard signals is represented by a bit mask — one bit per signal. A single bit records only "present" or "absent," so it inherently cannot count generations. That is the technical reason standard signals do not queue.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Khác biệt với realtime</span><span class="en-only" lang="en">Difference from realtime</span></h4>
+          <p><span class="vi-only">Tín hiệu thời gian thực giữ một hàng đợi riêng nên mỗi lần sinh đều được phát đúng một lần và còn kèm dữ liệu đi theo. Khi cần đếm chính xác số sự kiện, đó là lựa chọn phù hợp hơn tín hiệu chuẩn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span><span class="en-only" lang="en">Realtime signals maintain a queue, so every generation is delivered exactly once and can carry accompanying data. When you need an exact count of events, they are a better fit than standard signals.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">pause()</span>
+      <h3>
+        <span class="standard-copy">pause(): đứng yên cho tới khi có tín hiệu</span>
+        <span class="easy-only">pause(): ngủ cho tới khi có tín hiệu đánh thức</span>
+        <span class="en-only" lang="en">pause(): sleep until a signal arrives</span>
+      </h3>
+      <p class="standard-copy"><code>pause()</code> treo tiến trình gọi cho tới khi một tín hiệu được bắt (hoặc một tín hiệu kết thúc tiến trình).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span> Đây là cách đơn giản nhất để một tiến trình "ngủ" mà không tốn CPU, rồi tỉnh dậy đúng khi có việc — thường dùng trong các ví dụ chờ tín hiệu của chương này.<span class="cite"><a href="#ref-1">1</a></span> Khi tín hiệu được xử lý, <code>pause()</code> trở về với lỗi <code>EINTR</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+      <p class="easy-only"><code>pause()</code> là cách nói "tôi ngủ đây, có tín hiệu thì gọi tôi dậy". Trong lúc ngủ, chương trình không tốn sức máy. Khi một tín hiệu tới và được xử lý xong, nó tỉnh dậy. <b>Nhớ nhé: pause() là nút "ngủ cho tới khi có tín hiệu".</b></p>
+      <p class="en-only" lang="en"><code>pause()</code> suspends the calling process until a signal is caught (or one terminates it).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span> It is the simplest way for a process to "sleep" without burning CPU and wake exactly when there is work — used in this chapter's signal-waiting examples.<span class="cite"><a href="#ref-1">1</a></span> After the signal is handled, <code>pause()</code> returns with the error <code>EINTR</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong các chương trình nhỏ chỉ chờ một tín hiệu để hành động — một vòng chờ tối giản, không bận rộn quay CPU.<span class="cite"><a href="#ref-12">12</a></span></span>
+        <span class="easy-only">Khi một chương trình đứng im chờ Ctrl-C hay một tín hiệu khác rồi mới làm gì đó.</span>
+        <span class="en-only" lang="en">In small programs that just wait for one signal to act — a minimal wait loop that does not spin the CPU.<span class="cite"><a href="#ref-12">12</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Một cuộc đua rình rập</span><span class="en-only" lang="en">A lurking race</span></h4>
+          <p><span class="vi-only"><code>pause()</code> có một cuộc đua kinh điển: nếu tín hiệu đến <i>giữa</i> lúc kiểm tra điều kiện và lúc gọi <code>pause()</code>, chương trình có thể ngủ mãi. Cách giải đúng là <code>sigsuspend()</code>, kết hợp mở mặt nạ và chờ một cách nguyên tử — sách phát triển ý này ở các chương sau.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en"><code>pause()</code> has a classic race: if the signal arrives <i>between</i> testing a condition and calling <code>pause()</code>, the program may sleep forever. The correct fix is <code>sigsuspend()</code>, which atomically unblocks and waits — the book develops this in later chapters.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Trả về EINTR</span><span class="en-only" lang="en">It returns EINTR</span></h4>
+          <p><span class="vi-only"><code>pause()</code> luôn trả về −1 với <code>errno</code> đặt là <code>EINTR</code> sau khi một handler chạy xong — một ví dụ điển hình của việc một system call bị tín hiệu cắt ngang, chủ đề được bàn kỹ ở Chương 21.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></span><span class="en-only" lang="en"><code>pause()</code> always returns −1 with <code>errno</code> set to <code>EINTR</code> after a handler runs — a textbook case of a system call interrupted by a signal, a topic treated fully in Chapter 21.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="section-heading">
+      <h2 id="ngo-nhan-title">
+        <span class="standard-copy">Ba ngộ nhận thường gặp</span>
+        <span class="en-only" lang="en">Three common misconceptions</span>
+      </h2>
+    </div>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“kill() nghĩa là giết một tiến trình”</span>
+          <span class="en-only" lang="en">“kill() means killing a process”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> <code>kill()</code> luôn kết thúc tiến trình đích.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> <code>kill()</code> chỉ <i>gửi một tín hiệu</i>; cái tên là di sản lịch sử. Có thể gửi <code>SIGCONT</code> (cho chạy tiếp), hay tín hiệu null 0 (không gửi gì, chỉ kiểm tra tồn tại).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> <code>kill()</code> always terminates the target.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> <code>kill()</code> merely <i>sends a signal</i>; the name is historical. You can send <code>SIGCONT</code> (resume), or the null signal 0 (sends nothing, just checks existence).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Chặn và bỏ qua là như nhau”</span>
+          <span class="en-only" lang="en">“Blocking and ignoring are the same”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> chặn một tín hiệu cũng vứt bỏ nó như <code>SIG_IGN</code>.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> <code>SIG_IGN</code> <i>vứt bỏ</i> tín hiệu khi phát; chặn chỉ <i>hoãn</i> — tín hiệu thành pending và sẽ được phát khi bỏ chặn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> blocking a signal discards it, just like <code>SIG_IGN</code>.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> <code>SIG_IGN</code> <i>discards</i> the signal on delivery; blocking only <i>defers</i> it — the signal becomes pending and is delivered once unblocked.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Mỗi lần tín hiệu tới đều được nhận riêng”</span>
+          <span class="en-only" lang="en">“Every signal arrival is received separately”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> gửi cùng một tín hiệu năm lần thì handler chạy đủ năm lần.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> tín hiệu chuẩn <b>không xếp hàng</b> — nhiều lần sinh khi đang chờ chỉ gộp thành một lần phát. Cần đếm chính xác thì dùng tín hiệu thời gian thực.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> sending the same signal five times runs the handler five times.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> standard signals <b>do not queue</b> — multiple generations while pending coalesce into one delivery. For an exact count, use realtime signals.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm nền tảng về tín hiệu</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped the signal fundamentals</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã nắm vòng đời, cách đổi disposition, cách gửi và cách điều phối tín hiệu — nền cho Chương 21 về thiết kế trình xử lý tín hiệu.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you grasp the lifecycle, changing disposition, sending, and controlling signals — the groundwork for Chapter 21 on designing signal handlers.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Mô tả vòng đời của một tín hiệu: sinh ra, đang chờ, được phát. Năm hành động mặc định là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao mã nên tham chiếu tín hiệu bằng tên biểu tượng chứ không bằng số?</p>
+      </li>
+      <li>
+        <p>Vì sao <code>sigaction()</code> được ưu tiên hơn <code>signal()</code>? Ba hằng <code>SIG_DFL</code>, <code>SIG_IGN</code>, <code>SIG_ERR</code> có nghĩa gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao không thể dùng <code>signal()</code> để chỉ đọc disposition mà không đổi nó?</p>
+      </li>
+      <li>
+        <p><code>SIGKILL</code> và <code>SIGSTOP</code> khác mọi tín hiệu khác ở điểm nào, và vì sao phải như vậy?</p>
+        <p class="deep-only">Gợi ý sâu hơn: điều gì sẽ xảy ra nếu một tiến trình có thể bắt hoặc chặn <code>SIGKILL</code>?</p>
+      </li>
+      <li>
+        <p>Tín hiệu null (0) dùng để làm gì, và <code>ESRCH</code> với <code>EPERM</code> cho ta biết điều gì khác nhau?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao kiểm tra tồn tại bằng tín hiệu null có thể sai do PID được tái sử dụng?</p>
+      </li>
+      <li>
+        <p>Phân biệt "chặn" với "bỏ qua" một tín hiệu. Vì sao gửi cùng một tín hiệu chuẩn năm lần có thể chỉ được nhận một lần?</p>
+        <p class="deep-only">Gợi ý sâu hơn: ba giá trị <code>SIG_BLOCK</code>, <code>SIG_UNBLOCK</code>, <code>SIG_SETMASK</code> của <code>sigprocmask()</code> làm gì?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Một tín hiệu đi qua những bước nào từ lúc sinh ra tới lúc được xử lý?</p></li>
+      <li><p>Có mấy cách dặn máy phản ứng với một tín hiệu, và nên dùng cách nào?</p></li>
+      <li><p>Vì sao <code>kill -9</code> luôn tắt được một chương trình treo?</p></li>
+      <li><p>Làm sao kiểm tra một tiến trình còn sống mà không làm phiền nó?</p></li>
+      <li><p>"Chặn" một tín hiệu khác gì với "lờ đi" nó?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>Describe a signal's lifecycle: generated, pending, delivered. What are the five default actions?</p></li>
+      <li><p>Why is <code>sigaction()</code> preferred over <code>signal()</code>? What do <code>SIG_DFL</code>, <code>SIG_IGN</code>, and <code>SIG_ERR</code> mean?</p></li>
+      <li><p>How do <code>SIGKILL</code> and <code>SIGSTOP</code> differ from all other signals, and why must they?</p></li>
+      <li><p>What is the null signal (0) used for, and what do <code>ESRCH</code> versus <code>EPERM</code> tell you?</p></li>
+      <li><p>Distinguish "blocking" from "ignoring" a signal. Why can sending the same standard signal five times be received only once?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Một tín hiệu là <span class="closing-accent">tiếng gõ cửa bất đồng bộ</span> do nhân điều phối: nó đi qua vòng đời sinh–chờ–phát, mỗi loại có <span class="closing-accent">hành động mặc định</span> riêng, ta đổi cách đáp lại nó qua <code>sigaction()</code>, gửi nó đi đúng quyền với <code>kill()</code>, và điều phối thời điểm bằng <span class="closing-accent">mặt nạ tín hiệu</span> — luôn nhớ rằng tín hiệu chuẩn không xếp hàng. Nắm được nền này, bạn đã sẵn sàng cho câu hỏi kế tiếp — <i>viết</i> một trình xử lý tín hiệu cho an toàn và đúng đắn.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Tín hiệu là <span class="closing-accent">tiếng gõ cửa bất ngờ</span>: có vòng đời rõ ràng, có <span class="closing-accent">nếp xử mặc định</span>, có cách đổi cách đáp, cách gửi, và cách bảo nó chờ. Hiểu bộ khung này là đủ để đi tiếp sang chuyện viết trình xử lý tín hiệu. <b>Nhớ nhé: tín hiệu là tiếng gõ cửa — bạn chọn cách mở, cách gửi, và cách bảo nó đợi.</b></p>
+    <p class="en-only" lang="en">A signal is <span class="closing-accent">an asynchronous knock at the door</span> orchestrated by the kernel: it runs a generate–pending–deliver lifecycle, each type has its own <span class="closing-accent">default action</span>, you change your response via <code>sigaction()</code>, send it with the right permission via <code>kill()</code>, and control its timing with the <span class="closing-accent">signal mask</span> — always remembering that standard signals do not queue. Grasp this groundwork and you are ready for the next question — how to <i>write</i> a signal handler safely and correctly.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-18-directories-and-links.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 18 · Thư mục và liên kết</span>
+    <span class="nav-title en-only" lang="en">Chapter 18 · Directories and Links</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-21-signals-signal-handlers.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 21 · Tín hiệu: Trình xử lý tín hiệu</span>
+    <span class="nav-title en-only" lang="en">Chapter 21 · Signals: Signal Handlers</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chương 20, “Signals: Fundamental Concepts”, trang 387–420.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chapter 20, “Signals: Fundamental Concepts”, pp. 387–420.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Michael Kerrisk, <i>The Linux Programming Interface</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3), ch. 20 “Signals: Fundamental Concepts”, pp. 387–420. — <a href="https://man7.org/tlpi/" target="_blank" rel="noopener noreferrer">man7.org/tlpi</a></li>
+      <li id="ref-2">“signal(7) — Linux manual page” (overview of signals: standard signals 1–31, default actions term/ign/core/stop/cont, SIGKILL/SIGSTOP cannot be caught/blocked/ignored, standard signals not queued). Linux man-pages project, maintained by Michael Kerrisk. <a href="https://man7.org/linux/man-pages/man7/signal.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/signal.7.html</a></li>
+      <li id="ref-3">“signal(2) — Linux manual page” (the original API for setting a signal's disposition; SIG_DFL, SIG_IGN, SIG_ERR; portability caveats; glibc layers it on sigaction). <a href="https://man7.org/linux/man-pages/man2/signal.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/signal.2.html</a></li>
+      <li id="ref-4">“sigaction(2) — Linux manual page” (the preferred API for establishing signal handlers; struct sigaction, flags, blocked-signal set; cannot change SIGKILL/SIGSTOP). <a href="https://man7.org/linux/man-pages/man2/sigaction.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/sigaction.2.html</a></li>
+      <li id="ref-5">“kill(2) — Linux manual page” (send a signal to a process; pid &gt;0, 0, −1, &lt;−1 semantics; the null signal 0 for existence checks; ESRCH/EPERM; permission rules). <a href="https://man7.org/linux/man-pages/man2/kill.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/kill.2.html</a></li>
+      <li id="ref-6">“raise(3) — Linux manual page” (send a signal to the calling process/thread). <a href="https://man7.org/linux/man-pages/man3/raise.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/raise.3.html</a></li>
+      <li id="ref-7">“killpg(3) — Linux manual page” (send a signal to all members of a process group). <a href="https://man7.org/linux/man-pages/man3/killpg.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/killpg.3.html</a></li>
+      <li id="ref-8">“strsignal(3) / psignal(3) — Linux manual pages” (return and print human-readable, locale-sensitive signal descriptions; sys_siglist; bounds checking). <a href="https://man7.org/linux/man-pages/man3/strsignal.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/strsignal.3.html</a></li>
+      <li id="ref-9">“sigsetops(3) — Linux manual page” (POSIX signal-set operations: sigemptyset, sigfillset, sigaddset, sigdelset, sigismember). <a href="https://man7.org/linux/man-pages/man3/sigsetops.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/sigsetops.3.html</a></li>
+      <li id="ref-10">“sigprocmask(2) — Linux manual page” (examine and change the blocked-signal mask; SIG_BLOCK, SIG_UNBLOCK, SIG_SETMASK; blocking defers delivery). <a href="https://man7.org/linux/man-pages/man2/sigprocmask.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/sigprocmask.2.html</a></li>
+      <li id="ref-11">“sigpending(2) — Linux manual page” (retrieve the set of signals pending for the calling thread/process). <a href="https://man7.org/linux/man-pages/man2/sigpending.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/sigpending.2.html</a></li>
+      <li id="ref-12">“pause(2) — Linux manual page” (suspend the process until a signal is caught; returns −1 with EINTR). <a href="https://man7.org/linux/man-pages/man2/pause.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/pause.2.html</a></li>
+      <li id="ref-13">IEEE Std 1003.1 (POSIX.1-2017), <i>&lt;signal.h&gt;</i> — signal concepts, standard signal definitions, and signal-handling interfaces. The Open Group. <a href="https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/signal.h.html" target="_blank" rel="noopener noreferrer">pubs.opengroup.org — signal.h</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-18-directories-and-links.html">chapter 18</a>
+      <a href="chapter-21-signals-signal-handlers.html">chapter 21</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('tlpi-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('tlpi-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('tlpi-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

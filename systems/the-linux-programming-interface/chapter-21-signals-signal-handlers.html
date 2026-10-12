@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 21 · Tín hiệu: Trình xử lý tín hiệu — The Linux Programming Interface</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 21 “Signals: Signal Handlers” trong The Linux Programming Interface (Michael Kerrisk, No Starch Press, 2010): thiết kế trình xử lý tín hiệu, tính khả tái nhập (reentrancy) và hàm an toàn với tín hiệu bất đồng bộ (async-signal-safe), biến toàn cục và kiểu volatile sig_atomic_t, các cách kết thúc handler — nhảy phi cục bộ sigsetjmp()/siglongjmp(), _exit() và abort(), chạy handler trên ngăn xếp phụ với sigaltstack(), cờ SA_SIGINFO và cấu trúc siginfo_t, system call bị ngắt và được khởi động lại (SA_RESTART). Ba mức đọc, mọi khẳng định đều có nguồn.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('tlpi-reading-mode'),
+l=localStorage.getItem('tlpi-lang'),
+t=localStorage.getItem('tlpi-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   THE LINUX PROGRAMMING INTERFACE — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"TLPI · CH.21";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+/* soon = chapter not yet on disk; rendered as a non-link cell. */
+.chapter-path .soon{
+  display:block;padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--tint);border:1px dashed var(--line);opacity:.6;
+}
+.chapter-path .soon .soon-tag{
+  display:inline-block;font-family:var(--sans);font-size:.6rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:.1rem .45rem;margin-top:.4rem;
+}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.series-links .soon{margin-right:.5rem;color:var(--muted);opacity:.55;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+
+/* ---------- whole-book mind map banner ---------- */
+.mindmap-banner{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  gap:clamp(1rem,3vw,2rem);align-items:center;
+  margin:3rem 0 0;padding:1.35rem clamp(1.15rem,3vw,2rem);
+  border:1px solid var(--line);border-left:4px solid var(--teal);
+  border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);
+  color:var(--ink);text-decoration:none;
+  transition:border-color .15s,transform .15s;
+}
+a.mindmap-banner:hover{border-color:var(--teal);transform:translateY(-2px);}
+a.mindmap-banner:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.mindmap-banner.soon{opacity:.5;cursor:default;}
+.mindmap-icon{font-size:1.9rem;line-height:1;}
+.mindmap-banner h3{margin:0 0 .3rem;font-size:1.05rem;}
+.mindmap-banner p{margin:0;max-width:48rem;font-size:.88rem;color:var(--muted);}
+.mindmap-banner .result{margin-top:0;color:var(--teal);font-weight:600;white-space:nowrap;}
+.mindmap-banner.soon .result{color:var(--muted);}
+@media (max-width:860px){
+  .mindmap-banner{grid-template-columns:auto minmax(0,1fr);}
+  .mindmap-banner .result{grid-column:2;white-space:normal;}
+}
+@media (max-width:460px){
+  .mindmap-banner{margin-left:0;margin-right:0;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    The Linux Programming Interface
+    <span>Chương 21 · Signals: Signal Handlers</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 21 · Trình xử lý tín hiệu</span>
+      <span class="en-only" lang="en">Chapter 21 · Signal Handlers</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Viết một trình xử lý tín hiệu cho an toàn — khi nó cắt ngang chương trình bất kỳ lúc nào</span>
+      <span class="easy-only">Viết trình xử lý tín hiệu sao cho an toàn, vì nó xen vào đúng lúc chương trình đang dở tay</span>
+      <span class="en-only" lang="en">Writing a signal handler safely — when it can cut in on your program at any moment</span>
+    </h1>
+
+    <p class="standard-copy">Nếu Chương 20 trả lời "có những tín hiệu nào và làm sao bắt được chúng", thì Chương 21 bước sang câu hỏi khó hơn: <i>bên trong</i> một trình xử lý tín hiệu (signal handler), ta được phép làm gì? Kerrisk mổ xẻ thiết kế của handler: tính <b>khả tái nhập</b> (reentrancy) và khái niệm hàm <b>an toàn với tín hiệu bất đồng bộ</b> (async-signal-safe); cách chia sẻ biến toàn cục an toàn qua kiểu <code>volatile sig_atomic_t</code>; các lối thoát khỏi handler — nhảy phi cục bộ bằng <code>sigsetjmp()</code>/<code>siglongjmp()</code>, kết thúc bằng <code>_exit()</code> hay <code>abort()</code>; chạy handler trên một <b>ngăn xếp phụ</b> với <code>sigaltstack()</code>; cờ <code>SA_SIGINFO</code> cùng cấu trúc <code>siginfo_t</code>; và chuyện <b>system call bị ngắt rồi được khởi động lại</b> (<code>SA_RESTART</code>).<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hãy tưởng tượng bạn đang viết dở một câu thì có người gõ cửa báo tin khẩn. Bạn phải xử lý tin đó thật nhanh, thật gọn, rồi quay lại viết tiếp đúng chỗ đang dở. Trình xử lý tín hiệu cũng vậy: nó xen vào giữa lúc chương trình đang làm việc khác, nên phải cực kỳ cẩn thận — chỉ làm những việc an toàn, rồi trả lại quyền điều khiển. Chương này dạy cách làm điều đó. <b>Nhớ nhé: handler là người gõ cửa báo tin khẩn, phải làm nhanh và an toàn rồi rút lui.</b></p>
+    <p class="en-only" lang="en">If Chapter 20 answered "which signals exist and how to catch them," Chapter 21 moves to the harder question: <i>inside</i> a signal handler, what are we actually allowed to do? Kerrisk dissects handler design: <b>reentrancy</b> and the notion of <b>async-signal-safe</b> functions; how to share global variables safely via the <code>volatile sig_atomic_t</code> type; the ways out of a handler — a nonlocal goto with <code>sigsetjmp()</code>/<code>siglongjmp()</code>, terminating with <code>_exit()</code> or <code>abort()</code>; running a handler on an <b>alternate stack</b> with <code>sigaltstack()</code>; the <code>SA_SIGINFO</code> flag and the <code>siginfo_t</code> structure; and the matter of <b>interrupted and restarted system calls</b> (<code>SA_RESTART</code>).<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only deep-bilingual"><span class="vi-only">Cốt lõi của mọi rắc rối là một sự thật: handler chạy <i>bất đồng bộ</i>. Nhân có thể gọi nó ngay giữa lúc chương trình chính đang thực thi một hàm bất kỳ — kể cả một hàm thư viện đang cập nhật dở cấu trúc dữ liệu toàn cục của chính nó. Vì thế handler không được giả định bất cứ điều gì về trạng thái mà nó cắt ngang, và chỉ được đụng vào những gì đã được chứng minh là an toàn trong hoàn cảnh ấy.<span class="cite"><a href="#ref-2">2</a></span></span><span class="en-only" lang="en">At the root of every difficulty is one fact: a handler runs <i>asynchronously</i>. The kernel may invoke it right in the middle of the main program executing any function — including a library function that is halfway through updating its own global data structures. The handler therefore cannot assume anything about the state it interrupts, and may touch only what is provably safe under those conditions.<span class="cite"><a href="#ref-2">2</a></span></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> vì một handler cắt ngang chương trình chính tại một điểm <i>không đoán trước được</i>, thiết kế đúng của nó bị chi phối bởi một kỷ luật duy nhất — <b>làm càng ít càng tốt, và chỉ làm những việc an toàn khi mọi thứ khác đang đóng băng giữa chừng</b>. Mọi kỹ thuật trong chương (async-signal-safe, <code>sig_atomic_t</code>, <code>siglongjmp()</code>, ngăn xếp phụ, <code>SA_RESTART</code>) đều là hệ quả của kỷ luật đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> handler xen vào giữa chừng, nên nguyên tắc vàng là làm thật ít và thật an toàn, rồi quay về ngay. Mọi mẹo trong chương đều phục vụ nguyên tắc đó. <b>Nhớ nhé: trong handler, ít mà an toàn luôn thắng nhiều mà liều.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> because a handler interrupts the main program at an <i>unpredictable</i> point, its correct design is governed by a single discipline — <b>do as little as possible, and do only what is safe while everything else is frozen mid-step</b>. Every technique in the chapter (async-signal-safe functions, <code>sig_atomic_t</code>, <code>siglongjmp()</code>, an alternate stack, <code>SA_RESTART</code>) follows from that discipline.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: một trình xử lý tín hiệu chạy bất đồng bộ, cắt ngang chương trình chính. Bốn mối bận tâm của người viết handler: thiết kế an toàn (khả tái nhập, hàm async-signal-safe, biến volatile sig_atomic_t); các cách kết thúc handler (return, _exit, abort, siglongjmp); ngữ cảnh chạy (ngăn xếp phụ sigaltstack, thông tin mở rộng SA_SIGINFO); và system call bị ngắt rồi khởi động lại (EINTR, SA_RESTART). Diagram: a signal handler runs asynchronously, interrupting the main program. Four concerns for the handler author: safe design (reentrancy, async-signal-safe functions, volatile sig_atomic_t); ways to terminate the handler (return, _exit, abort, siglongjmp); the execution context (alternate stack sigaltstack, extended info SA_SIGINFO); and interrupted and restarted system calls (EINTR, SA_RESTART).">
+    <div class="core">
+      <b>signal handler</b>
+      <small class="standard-copy">Hàm chạy bất đồng bộ, cắt ngang chương trình chính</small>
+      <small class="easy-only">Hàm xen vào giữa chừng khi tín hiệu tới</small>
+      <small class="en-only" lang="en">A function run asynchronously, cutting in on the main program</small>
+    </div>
+
+    <div class="node">
+      <b>thiết kế an toàn · safe design</b>
+      <small class="standard-copy">Khả tái nhập · hàm async-signal-safe · volatile sig_atomic_t</small>
+      <small class="easy-only">Chỉ gọi hàm an toàn, chia sẻ biến đúng cách</small>
+      <small class="en-only" lang="en">Reentrancy · async-signal-safe functions · volatile sig_atomic_t</small>
+    </div>
+
+    <div class="node">
+      <b>cách kết thúc · how to exit</b>
+      <small class="standard-copy">return · _exit() · abort() · siglongjmp()</small>
+      <small class="easy-only">Trả về, thoát hẳn, hoặc nhảy phi cục bộ</small>
+      <small class="en-only" lang="en">return · _exit() · abort() · siglongjmp()</small>
+    </div>
+
+    <div class="node">
+      <b>ngữ cảnh &amp; gián đoạn · context &amp; interruption</b>
+      <small class="standard-copy">Ngăn xếp phụ (SA_ONSTACK) · siginfo_t (SA_SIGINFO) · EINTR / SA_RESTART</small>
+      <small class="easy-only">Chạy trên ngăn xếp riêng, nhận thêm thông tin, và chuyện bị ngắt giữa chừng</small>
+      <small class="en-only" lang="en">Alternate stack (SA_ONSTACK) · siginfo_t (SA_SIGINFO) · EINTR / SA_RESTART</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#handler-design">
+    <span>01</span>
+    <b class="standard-copy">Thiết kế handler: khả tái nhập, async-signal-safe, sig_atomic_t</b>
+    <b class="easy-only">Viết handler an toàn và chia sẻ biến đúng cách</b>
+    <b class="en-only" lang="en">Handler design: reentrancy, async-signal-safe, sig_atomic_t</b>
+  </a>
+  <a href="#terminating-handler">
+    <span>02</span>
+    <b class="standard-copy">Các cách kết thúc handler: siglongjmp(), _exit(), abort()</b>
+    <b class="easy-only">Những lối thoát khỏi một handler</b>
+    <b class="en-only" lang="en">Ways to terminate a handler: siglongjmp(), _exit(), abort()</b>
+  </a>
+  <a href="#altstack-siginfo">
+    <span>03</span>
+    <b class="standard-copy">Ngăn xếp phụ sigaltstack() và cờ SA_SIGINFO</b>
+    <b class="easy-only">Chạy handler trên ngăn xếp riêng và nhận thêm thông tin</b>
+    <b class="en-only" lang="en">The alternate stack sigaltstack() and the SA_SIGINFO flag</b>
+  </a>
+  <a href="#restart-eintr">
+    <span>04</span>
+    <b class="standard-copy">System call bị ngắt và được khởi động lại (SA_RESTART)</b>
+    <b class="easy-only">Khi tín hiệu làm gián đoạn một lời gọi đang chờ</b>
+    <b class="en-only" lang="en">Interrupted and restarted system calls (SA_RESTART)</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="handler-design" aria-labelledby="handler-design-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="handler-design-title">
+      <span class="standard-copy">Vì handler cắt ngang chương trình, nó chỉ được gọi hàm an toàn và chia sẻ biến thật cẩn thận</span>
+      <span class="easy-only">Handler xen vào giữa chừng, nên chỉ làm việc an toàn và chia sẻ biến đúng cách</span>
+      <span class="en-only" lang="en">Because a handler cuts in, it may call only safe functions and must share variables carefully</span>
+    </h2>
+    <p class="standard-copy">Kerrisk nêu hai thiết kế handler thông dụng. Thứ nhất: handler <i>đặt một cờ toàn cục rồi trả về</i>; chương trình chính định kỳ kiểm tra cờ đó và làm phần việc nặng. Thứ hai: handler <i>dọn dẹp rồi kết thúc</i> tiến trình, hoặc dùng nhảy phi cục bộ để quay về một điểm đã định trong chương trình chính.<span class="cite"><a href="#ref-1">1</a></span> Dù chọn kiểu nào, một hiểm họa luôn rình rập: nếu handler gọi một hàm <i>không khả tái nhập</i> ngay lúc chương trình chính cũng đang ở trong hàm đó, dữ liệu có thể hỏng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    <p class="easy-only">Có hai cách viết handler cho gọn. Cách một: handler chỉ <i>giơ một lá cờ</i> báo "có việc" rồi lui ra; chương trình chính thấy cờ thì tự lo. Cách hai: handler <i>dọn dẹp rồi tắt</i> chương trình, hoặc nhảy về một chỗ an toàn đã hẹn trước. Nhưng coi chừng: nếu handler gọi một hàm mà chương trình chính <i>đang gọi dở</i> hàm đó, mọi thứ có thể rối tung. <b>Nhớ nhé: handler nên giơ cờ rồi lui, đừng ôm việc nặng.</b></p>
+    <p class="en-only" lang="en">Kerrisk presents two common handler designs. First: the handler <i>sets a global flag and returns</i>; the main program periodically checks the flag and does the heavy work. Second: the handler <i>performs cleanup and terminates</i> the process, or uses a nonlocal goto to return to a predetermined point in the main program.<span class="cite"><a href="#ref-1">1</a></span> Whichever you choose, one hazard always lurks: if the handler calls a <i>non-reentrant</i> function just as the main program is also inside that function, data can be corrupted.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Một hàm là <b>khả tái nhập</b> (reentrant) nếu nó có thể được nhiều luồng thực thi gọi <i>đồng thời</i> một cách an toàn. Một hàm <b>an toàn với tín hiệu bất đồng bộ</b> (async-signal-safe) là hàm mà việc gọi nó từ trong một handler là an toàn — hoặc vì nó khả tái nhập, hoặc vì nó không thể bị tín hiệu làm gián đoạn. SUSv3 và trang <code>signal-safety(7)</code> liệt kê tập hàm được bảo đảm an toàn này.<span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Một hàm "an toàn để gọi trong handler" là hàm không bị rối khi bị gọi chồng lên chính nó. Chỉ những hàm nằm trong danh sách được bảo đảm mới nên gọi trong handler. <b>Nhớ nhé: trong handler, chỉ gọi hàm nằm trong danh sách an toàn.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A function is <b>reentrant</b> if it can safely be executed <i>simultaneously</i> by multiple threads of execution. A function is <b>async-signal-safe</b> if calling it from within a handler is safe — either because it is reentrant, or because it cannot be interrupted by a signal. SUSv3 and the <code>signal-safety(7)</code> page list this guaranteed-safe set.<span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">/* Thiết kế 1: giơ cờ rồi về */<br>volatile sig_atomic_t gotSig = 0;<br>void handler(int sig){ gotSig = 1; }<br>/* main: ... while (!gotSig) pause(); */<br><br>/* Thiết kế 2: dọn dẹp rồi _exit() */<br>void handler(int sig){ cleanup(); _exit(1); }</p>
+      <p class="easy-only">Cách 1:<br>&nbsp;&nbsp;handler --&gt; gotSig = 1;<br>&nbsp;&nbsp;main&nbsp;&nbsp;&nbsp;&nbsp;--&gt; thấy cờ thì xử lý<br>Cách 2:<br>&nbsp;&nbsp;handler --&gt; dọn dẹp rồi thoát</p>
+      <p class="en-only" lang="en">/* Design 1: set a flag and return */<br>volatile sig_atomic_t gotSig = 0;<br>void handler(int sig){ gotSig = 1; }<br>/* main: ... while (!gotSig) pause(); */<br><br>/* Design 2: clean up, then _exit() */<br>void handler(int sig){ cleanup(); _exit(1); }</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">reentrancy</span>
+      <h3>
+        <span class="standard-copy">Hàm không khả tái nhập: dùng dữ liệu toàn cục hoặc bộ nhớ tĩnh</span>
+        <span class="easy-only">Vì sao có hàm không an toàn khi bị gọi chồng</span>
+        <span class="en-only" lang="en">Non-reentrant functions: those using global or static data</span>
+      </h3>
+      <p class="standard-copy">Một hàm là <i>không khả tái nhập</i> khi nó dùng cấu trúc dữ liệu toàn cục hay tĩnh. Ví dụ kinh điển của tác giả: họ hàm <code>malloc()</code> dùng một danh sách liên kết toàn cục của các khối nhớ rỗi; nếu handler gọi <code>malloc()</code> ngay lúc chương trình chính đang cập nhật dở danh sách đó, đống (heap) có thể hỏng.<span class="cite"><a href="#ref-1">1</a></span> Tương tự, các hàm trả về con trỏ tới <b>bộ nhớ cấp phát tĩnh</b> — như <code>strtok()</code>, <code>getpwnam()</code>, <code>crypt()</code> — cũng không khả tái nhập.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Hàm "không khả tái nhập" là hàm giữ một cuốn sổ chung và sửa sổ đó từng bước. Nếu đang sửa dở mà bị gọi lại lần nữa, cuốn sổ sẽ loạn. <code>malloc()</code> là ví dụ: nó quản lý một danh sách bộ nhớ rỗi dùng chung. <b>Nhớ nhé: hàm dùng sổ chung thì không được gọi chồng lên nhau.</b></p>
+      <p class="en-only" lang="en">A function is <i>non-reentrant</i> when it uses global or static data structures. The author's classic example: the <code>malloc()</code> family uses a global linked list of free blocks; if a handler calls <code>malloc()</code> just as the main program is halfway through updating that list, the heap can be corrupted.<span class="cite"><a href="#ref-1">1</a></span> Likewise, functions returning a pointer to <b>statically allocated memory</b> — such as <code>strtok()</code>, <code>getpwnam()</code>, <code>crypt()</code> — are non-reentrant.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi thấy một handler gọi <code>printf()</code> để gỡ lỗi — đó là một lỗi tiềm ẩn, vì thư viện stdio không khả tái nhập.<span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Khi thấy ai đó gọi <code>printf()</code> bên trong handler để in thử — đó là thói quen nguy hiểm.</span>
+        <span class="en-only" lang="en">Whenever you see a handler call <code>printf()</code> to debug — that is a latent bug, because the stdio library is non-reentrant.<span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Vì sao stdio nguy hiểm</span><span class="en-only" lang="en">Why stdio is dangerous</span></h4>
+          <p><span class="vi-only">Mọi hàm thư viện stdio đều không khả tái nhập: chúng giữ một vùng đệm tĩnh cùng các bộ đếm và con trỏ ghi vị trí. Nếu chương trình chính đang ở giữa một lời <code>printf()</code> khi handler cũng gọi <code>printf()</code>, lời thứ hai sẽ thao tác trên dữ liệu nửa vời, cho kết quả không đoán trước.<span class="cite"><a href="#ref-2">2</a></span></span><span class="en-only" lang="en">All stdio library functions are non-reentrant: they maintain a static buffer plus counters and pointers recording the position. If the main program is mid-<code>printf()</code> when a handler also calls <code>printf()</code>, the second call operates on half-updated data, with unpredictable results.<span class="cite"><a href="#ref-2">2</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Phiên bản "_r"</span><span class="en-only" lang="en">The "_r" versions</span></h4>
+          <p><span class="vi-only">Nhiều hàm không khả tái nhập có phiên bản khả tái nhập hậu tố <code>_r</code> (ví dụ <code>strtok_r()</code>, <code>getpwnam_r()</code>): chúng nhận thêm một đối số là vùng đệm do người gọi cấp, nên không dựa vào bộ nhớ tĩnh dùng chung.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">Many non-reentrant functions have reentrant counterparts with a <code>_r</code> suffix (for example <code>strtok_r()</code>, <code>getpwnam_r()</code>): they take an extra caller-supplied buffer argument, so they do not rely on shared static memory.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">async-signal-safe</span>
+      <h3>
+        <span class="standard-copy">Danh sách hàm an toàn — và nghĩa vụ lưu lại errno</span>
+        <span class="easy-only">Chỉ gọi hàm trong danh sách an toàn, và nhớ giữ errno</span>
+        <span class="en-only" lang="en">The safe-function list — and the duty to save errno</span>
+      </h3>
+      <p class="standard-copy">Quy tắc thực hành: trong một handler, chỉ gọi những hàm mà SUSv3 (và <code>signal-safety(7)</code>) bảo đảm là async-signal-safe — ví dụ <code>write()</code>, <code>_exit()</code>, <code>sigaction()</code>, <code>kill()</code> — và tránh mọi thứ khác.<span class="cite"><a href="#ref-2">2</a></span> Có một bẫy tinh vi: ngay cả khi một handler chỉ gọi hàm an toàn, nó vẫn có thể cập nhật <code>errno</code>; nếu chương trình chính bị ngắt ngay sau một system call và chưa kịp đọc <code>errno</code>, handler sẽ ghi đè mất giá trị đó. Vì vậy handler nên <b>lưu <code>errno</code> khi vào và khôi phục khi ra</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Trong handler, chỉ dùng những hàm nằm trong "danh sách an toàn" đã được bảo đảm, như <code>write()</code> hay <code>_exit()</code>. Thêm một mẹo nhỏ: nhiều hàm làm thay đổi biến báo lỗi <code>errno</code>; handler nên chép lại <code>errno</code> lúc vào rồi trả về như cũ lúc ra, kẻo làm hỏng việc kiểm tra lỗi của chương trình chính. <b>Nhớ nhé: vào handler thì cất errno, ra thì trả lại y nguyên.</b></p>
+      <p class="en-only" lang="en">The practical rule: inside a handler, call only functions that SUSv3 (and <code>signal-safety(7)</code>) guarantee to be async-signal-safe — for example <code>write()</code>, <code>_exit()</code>, <code>sigaction()</code>, <code>kill()</code> — and avoid everything else.<span class="cite"><a href="#ref-2">2</a></span> There is a subtle trap: even when a handler calls only safe functions, it may still update <code>errno</code>; if the main program was interrupted right after a system call and had not yet read <code>errno</code>, the handler would clobber that value. So a handler should <b>save <code>errno</code> on entry and restore it on exit</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi cần in gì đó từ handler: dùng <code>write(STDOUT_FILENO, ...)</code> thay cho <code>printf()</code>, vì <code>write()</code> nằm trong danh sách an toàn còn <code>printf()</code> thì không.<span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Muốn in trong handler thì dùng <code>write()</code> thay cho <code>printf()</code> — một cái an toàn, một cái không.</span>
+        <span class="en-only" lang="en">When you must print from a handler: use <code>write(STDOUT_FILENO, ...)</code> instead of <code>printf()</code>, since <code>write()</code> is on the safe list and <code>printf()</code> is not.<span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">POSIX bảo đảm điều gì</span><span class="en-only" lang="en">What POSIX guarantees</span></h4>
+          <p><span class="vi-only">POSIX.1 chỉ <i>bắt buộc</i> một tập hàm nhất định phải async-signal-safe; hiện thực có thể làm thêm hàm khác an toàn, nhưng không bắt buộc, nên chương trình khả chuyển không được trông cậy vào các hàm ngoài danh sách.<span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-9">9</a></span></span><span class="en-only" lang="en">POSIX.1 only <i>requires</i> a specific set of functions to be async-signal-safe; an implementation may make others safe too, but is not obliged to, so portable programs must not rely on functions outside the list.<span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-9">9</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Chặn tín hiệu thay vì tránh né</span><span class="en-only" lang="en">Block instead of avoid</span></h4>
+          <p><span class="vi-only">Nếu chương trình chính <i>buộc</i> phải gọi một hàm không an toàn, nó có thể chặn tạm thời tín hiệu quanh lời gọi đó (bằng mặt nạ tín hiệu) để handler không chen vào giữa chừng — một cách thay thế cho việc cấm tiệt.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">If the main program <i>must</i> call an unsafe function, it can temporarily block the signal around that call (via the signal mask) so the handler cannot cut in mid-way — an alternative to forbidding it outright.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">volatile sig_atomic_t</span>
+      <h3>
+        <span class="standard-copy">Cách duy nhất chắc chắn để chia sẻ một biến với handler</span>
+        <span class="easy-only">Kiểu biến chuyên để handler và main cùng dùng</span>
+        <span class="en-only" lang="en">The one sure way to share a variable with a handler</span>
+      </h3>
+      <p class="standard-copy">Khi handler và chương trình chính cùng dùng một biến toàn cục (thiết kế "giơ cờ"), phải bảo đảm việc đọc/ghi biến đó là <i>nguyên tử</i> (atomic). Chuẩn C quy định kiểu <code>sig_atomic_t</code> — một kiểu nguyên mà việc đọc và ghi luôn diễn ra nguyên tử — và yêu cầu khai nó là <code>volatile</code> để trình biên dịch không giữ bản sao trong thanh ghi mà luôn đọc lại từ bộ nhớ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> Lưu ý: chỉ việc <i>đọc</i> và <i>ghi</i> là nguyên tử; các phép như <code>++</code> hay <code>--</code> trên <code>sig_atomic_t</code> <b>không</b> được bảo đảm nguyên tử.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Khi handler giơ một lá cờ cho chương trình chính đọc, lá cờ ấy phải là loại mà thao tác đọc/ghi diễn ra "một phát ăn ngay", không bị cắt nửa chừng. Kiểu <code>sig_atomic_t</code> làm đúng việc đó, và ta thêm chữ <code>volatile</code> để trình biên dịch luôn nhìn vào giá trị mới nhất. Nhưng đừng dùng phép tăng <code>++</code> trên nó. <b>Nhớ nhé: cờ chia sẻ với handler phải là volatile sig_atomic_t, và chỉ gán 0 hay 1 thôi.</b></p>
+      <p class="en-only" lang="en">When a handler and the main program share a global variable (the "set-a-flag" design), reads and writes of that variable must be <i>atomic</i>. The C standard specifies the <code>sig_atomic_t</code> type — an integer type whose reads and writes are always atomic — and requires declaring it <code>volatile</code> so the compiler does not keep a copy in a register but always re-reads from memory.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> Note: only <i>reads</i> and <i>writes</i> are atomic; operations like <code>++</code> or <code>--</code> on a <code>sig_atomic_t</code> are <b>not</b> guaranteed atomic.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi biến cờ mà một handler đặt và chương trình chính đọc — khai báo nó đúng kiểu <code>volatile sig_atomic_t</code> là đã tránh được một lớp lỗi khó tái hiện.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mọi lá cờ mà handler đặt cho main đọc — hãy khai đúng <code>volatile sig_atomic_t</code>.</span>
+        <span class="en-only" lang="en">Every flag a handler sets and the main program reads — declaring it exactly <code>volatile sig_atomic_t</code> heads off a class of hard-to-reproduce bugs.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Giơ cờ rồi trả về là lối thoát "nhẹ" nhất khỏi một handler. Nhưng đôi khi ta cần thoát khác đi: nhảy thẳng về một điểm an toàn trong chương trình chính, hay kết thúc tiến trình ngay. Mỗi lối thoát có một cạm bẫy riêng — và đó là nội dung tiếp theo.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Giơ cờ rồi lui là cách thoát nhẹ nhàng nhất. Nhưng còn những cách khác: nhảy về một chỗ an toàn, hoặc tắt hẳn chương trình. Mỗi cách có cái bẫy riêng, ta xem tiếp.</p>
+    <p class="en-only" lang="en">Setting a flag and returning is the gentlest way out of a handler. But sometimes we need another exit: jumping straight back to a safe point in the main program, or terminating the process at once. Each exit has its own pitfall — and that is what comes next.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="terminating-handler" aria-labelledby="terminating-handler-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="terminating-handler-title">
+      <span class="standard-copy">Ngoài việc trả về bình thường, một handler còn ba lối thoát khác</span>
+      <span class="easy-only">Những cách khác để kết thúc một handler ngoài việc trả về</span>
+      <span class="en-only" lang="en">Besides returning normally, a handler has three other exits</span>
+    </h2>
+    <p class="standard-copy">Cách thông thường nhất để kết thúc một handler là <i>trả về</i>, khi đó chương trình chính chạy tiếp từ điểm bị ngắt. Nhưng tác giả nêu ba lối khác: dùng <code>_exit()</code> để kết thúc tiến trình; dùng <code>abort()</code> để kết thúc kèm ảnh đổ (core dump); và thực hiện một <b>nhảy phi cục bộ</b> bằng cặp <code>sigsetjmp()</code>/<code>siglongjmp()</code> để quay về một điểm đã định trong chương trình chính.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+    <p class="easy-only">Thường thì handler xong việc sẽ <i>trả về</i>, chương trình chạy tiếp chỗ cũ. Nhưng còn ba cách khác: tắt hẳn chương trình bằng <code>_exit()</code>; tắt kèm ghi lại hiện trường bằng <code>abort()</code>; hoặc "nhảy" về một chỗ an toàn đã hẹn trước. <b>Nhớ nhé: handler có thể về chỗ cũ, tắt máy, hoặc nhảy về điểm hẹn.</b></p>
+    <p class="en-only" lang="en">The most common way to end a handler is to <i>return</i>, whereupon the main program resumes from the point it was interrupted. But the author lists three others: use <code>_exit()</code> to terminate the process; use <code>abort()</code> to terminate with a core dump; and perform a <b>nonlocal goto</b> with the <code>sigsetjmp()</code>/<code>siglongjmp()</code> pair to return to a predetermined point in the main program.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Dùng <code>longjmp()</code> thường để thoát khỏi handler có một vấn đề về <b>mặt nạ tín hiệu</b> (signal mask): khi handler được gọi, nhân chặn tạm tín hiệu đang xử lý; nếu ta thoát bằng <code>longjmp()</code> thì mặt nạ có thể <i>không</i> được khôi phục, khiến tín hiệu bị chặn mãi. Cặp <code>sigsetjmp(env, savesigs)</code>/<code>siglongjmp()</code> giải quyết việc này: nếu <code>savesigs</code> khác 0, mặt nạ tín hiệu được lưu vào <code>env</code> và sẽ được <code>siglongjmp()</code> khôi phục.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Khi handler đang chạy, tín hiệu vừa tới bị "khóa" lại. Nếu bạn nhảy ra bằng <code>longjmp()</code> thường, cái khóa đó có thể không được mở lại — tín hiệu kẹt luôn. Cặp <code>sigsetjmp</code>/<code>siglongjmp</code> biết cách lưu và mở lại cái khóa ấy. <b>Nhớ nhé: nhảy ra khỏi handler thì dùng siglongjmp, đừng dùng longjmp.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Using an ordinary <code>longjmp()</code> to leave a handler has a <b>signal mask</b> problem: when the handler is invoked, the kernel temporarily blocks the signal being handled; if we exit via <code>longjmp()</code>, the mask may <i>not</i> be restored, leaving the signal blocked forever. The <code>sigsetjmp(env, savesigs)</code>/<code>siglongjmp()</code> pair solves this: if <code>savesigs</code> is nonzero, the signal mask is saved in <code>env</code> and restored by <code>siglongjmp()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#include &lt;setjmp.h&gt;<br>sigjmp_buf env;<br>if (sigsetjmp(env, 1) == 0) {<br>&nbsp;&nbsp;/* lần đầu: cài handler, chạy... */<br>} else {<br>&nbsp;&nbsp;/* vừa siglongjmp về, mask đã khôi phục */<br>}<br>/* trong handler: siglongjmp(env, 1); */</p>
+      <p class="easy-only">if (sigsetjmp(env, 1) == 0) {<br>&nbsp;&nbsp;/* lần đầu */<br>} else {<br>&nbsp;&nbsp;/* vừa nhảy về */<br>}<br>/* handler: siglongjmp(env, 1); */</p>
+      <p class="en-only" lang="en">#include &lt;setjmp.h&gt;<br>sigjmp_buf env;<br>if (sigsetjmp(env, 1) == 0) {<br>&nbsp;&nbsp;/* first time: install handler, run... */<br>} else {<br>&nbsp;&nbsp;/* arrived via siglongjmp, mask restored */<br>}<br>/* in handler: siglongjmp(env, 1); */</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">sigsetjmp / siglongjmp</span>
+      <h3>
+        <span class="standard-copy">Nhảy phi cục bộ từ handler — nhưng phải giữ đúng mặt nạ tín hiệu</span>
+        <span class="easy-only">Nhảy về chỗ an toàn mà không để tín hiệu bị kẹt</span>
+        <span class="en-only" lang="en">A nonlocal goto from a handler — keeping the mask right</span>
+      </h3>
+      <p class="standard-copy"><code>sigsetjmp()</code> và <code>siglongjmp()</code> giống <code>setjmp()</code>/<code>longjmp()</code> của Chương 6, nhưng thêm đối số <code>savesigs</code> để <i>chủ động</i> quyết định có lưu-và-khôi-phục mặt nạ tín hiệu hay không. Điều này cần thiết vì <code>setjmp()</code>/<code>longjmp()</code> thường không quy định rõ số phận của mặt nạ — trên một số hệ nó được khôi phục, trên hệ khác thì không, khiến hành vi không khả chuyển.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only">Cặp này giống cặp nhảy đã học ở Chương 6, nhưng có thêm một công tắc: bật lên thì nó nhớ và trả lại đúng "danh sách tín hiệu đang bị khóa". Nhờ vậy sau khi nhảy về, chương trình không bị kẹt với một tín hiệu bị khóa quên mở. <b>Nhớ nhé: bật savesigs = 1 để mặt nạ tín hiệu được trả lại đúng.</b></p>
+      <p class="en-only" lang="en"><code>sigsetjmp()</code> and <code>siglongjmp()</code> are like Chapter 6's <code>setjmp()</code>/<code>longjmp()</code>, but add a <code>savesigs</code> argument to <i>deliberately</i> decide whether the signal mask is saved and restored. This is needed because <code>setjmp()</code>/<code>longjmp()</code> leave the mask's fate unspecified — on some systems it is restored, on others not, making the behavior non-portable.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong một vòng lặp chính muốn "thiết lập lại" sau khi nhận một tín hiệu nào đó (ví dụ <code>SIGINT</code>) thay vì thoát — <code>siglongjmp()</code> đưa luồng điều khiển về đầu vòng lặp một cách sạch sẽ.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi muốn chương trình "quay về vạch xuất phát" sau khi nhận tín hiệu, thay vì thoát hẳn.</span>
+        <span class="en-only" lang="en">In a main loop that wants to "reset" after a certain signal (say <code>SIGINT</code>) rather than exit — <code>siglongjmp()</code> cleanly returns control to the top of the loop.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Nguồn gốc của sự khác biệt</span><span class="en-only" lang="en">Origin of the difference</span></h4>
+          <p><span class="vi-only">Tác giả giải thích: System V không khôi phục mặt nạ qua <code>longjmp()</code>, còn BSD thì có; để tránh phụ thuộc vào nền tảng, chuẩn hóa cặp <code>sigsetjmp()</code>/<code>siglongjmp()</code> cho ta quyền kiểm soát tường minh.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span><span class="en-only" lang="en">The author explains: System V does not restore the mask across <code>longjmp()</code>, whereas BSD does; to avoid platform dependence, the standardized <code>sigsetjmp()</code>/<code>siglongjmp()</code> pair gives us explicit control.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Vẫn còn cái bẫy volatile</span><span class="en-only" lang="en">The volatile trap persists</span></h4>
+          <p><span class="vi-only">Giống <code>longjmp()</code>, biến cục bộ bị tối ưu vào thanh ghi có thể mang giá trị sai sau <code>siglongjmp()</code>; biến cần giữ đúng vẫn phải khai <code>volatile</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span><span class="en-only" lang="en">As with <code>longjmp()</code>, locals optimized into registers may hold wrong values after <code>siglongjmp()</code>; variables that must survive still need <code>volatile</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">_exit() not exit()</span>
+      <h3>
+        <span class="standard-copy">Kết thúc từ handler: dùng _exit(), không dùng exit()</span>
+        <span class="easy-only">Muốn thoát trong handler thì gọi _exit, đừng gọi exit</span>
+        <span class="en-only" lang="en">Terminating from a handler: use _exit(), not exit()</span>
+      </h3>
+      <p class="standard-copy">Nếu handler cần kết thúc tiến trình, phải gọi <code>_exit()</code> chứ <i>không</i> gọi <code>exit()</code>. Lý do: <code>exit()</code> xả các vùng đệm stdio và chạy các bộ xử lý thoát (exit handler) do <code>atexit()</code>/<code>on_exit()</code> đăng ký — những việc <i>không</i> async-signal-safe. Ngược lại, <code>_exit()</code> kết thúc tiến trình ngay lập tức mà không làm các việc đó, nên nằm trong danh sách an toàn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Khi handler muốn tắt chương trình, dùng <code>_exit()</code> — nó tắt ngay. Đừng dùng <code>exit()</code>, vì <code>exit()</code> còn lo dọn dẹp vùng đệm và chạy thêm vài việc không an toàn khi đang ở trong handler. <b>Nhớ nhé: thoát trong handler thì dùng _exit(), cái "có gạch dưới".</b></p>
+      <p class="en-only" lang="en">If a handler must terminate the process, it must call <code>_exit()</code>, <i>not</i> <code>exit()</code>. The reason: <code>exit()</code> flushes stdio buffers and runs exit handlers registered with <code>atexit()</code>/<code>on_exit()</code> — none of which is async-signal-safe. By contrast, <code>_exit()</code> terminates the process immediately without doing any of that, so it is on the safe list.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong một handler bắt tín hiệu "chết người" (fatal) để dọn dẹp gọn trước khi tắt — kết thúc bằng <code>_exit()</code> để không kích hoạt lại thư viện stdio từ bên trong handler.<span class="cite"><a href="#ref-7">7</a></span></span>
+        <span class="easy-only">Trong handler bắt một tín hiệu nguy hiểm để dọn trước khi tắt — nhớ kết thúc bằng <code>_exit()</code>.</span>
+        <span class="en-only" lang="en">In a handler catching a fatal signal to tidy up before exiting — finish with <code>_exit()</code> so you do not re-enter the stdio library from inside the handler.<span class="cite"><a href="#ref-7">7</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">abort()</span>
+      <h3>
+        <span class="standard-copy">abort(): kết thúc kèm ảnh đổ để mổ xẻ về sau</span>
+        <span class="easy-only">abort(): tắt chương trình và lưu lại hiện trường</span>
+        <span class="en-only" lang="en">abort(): terminate with a core dump for later analysis</span>
+      </h3>
+      <p class="standard-copy">Hàm <code>abort()</code> kết thúc tiến trình đang gọi và sinh một <b>ảnh đổ lõi</b> (core dump) để gỡ lỗi, bằng cách phát tín hiệu <code>SIGABRT</code> cho chính tiến trình.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> Điểm đáng nhớ: <code>abort()</code> được thiết kế để <i>luôn</i> kết thúc được tiến trình — nếu <code>SIGABRT</code> đang bị chặn hoặc bị bỏ qua, <code>abort()</code> sẽ hoàn tác cái đó để bảo đảm tín hiệu có hiệu lực.<span class="cite"><a href="#ref-6">6</a></span></p>
+      <p class="easy-only"><code>abort()</code> tắt chương trình nhưng trước khi tắt còn chụp lại "hiện trường" (core dump) để sau này soi xem vì sao hỏng. Nó được làm sao cho chắc chắn tắt được, dù ai đó có cố chặn tín hiệu kết thúc. <b>Nhớ nhé: abort() tắt máy và để lại ảnh hiện trường cho ta điều tra.</b></p>
+      <p class="en-only" lang="en">The <code>abort()</code> function terminates the calling process and produces a <b>core dump</b> for debugging, by raising the <code>SIGABRT</code> signal at the process itself.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> A memorable point: <code>abort()</code> is designed to <i>always</i> succeed in terminating the process — if <code>SIGABRT</code> is blocked or ignored, <code>abort()</code> undoes that to ensure the signal takes effect.<span class="cite"><a href="#ref-6">6</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi một thư viện phát hiện một điều kiện "không thể xảy ra" (vi phạm bất biến nội bộ) và chọn dừng ngay với ảnh đổ, thay vì chạy tiếp trong trạng thái hỏng — đó là lúc gọi <code>abort()</code>.<span class="cite"><a href="#ref-6">6</a></span></span>
+        <span class="easy-only">Khi một thư viện gặp lỗi "lẽ ra không bao giờ xảy ra" và muốn dừng ngay để điều tra.</span>
+        <span class="en-only" lang="en">Whenever a library detects an "impossible" condition (an internal invariant violated) and chooses to stop at once with a dump, rather than run on in a broken state — that is when <code>abort()</code> is called.<span class="cite"><a href="#ref-6">6</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đến đây ta đã biết handler <i>làm</i> gì và <i>thoát</i> ra sao. Câu hỏi còn lại là về <i>ngữ cảnh</i> nó chạy: nó dùng ngăn xếp nào, và nó biết được gì về tín hiệu đã gọi nó? Hai cơ chế <code>sigaltstack()</code> và <code>SA_SIGINFO</code> trả lời hai câu hỏi đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Giờ ta đã biết handler làm gì và thoát ra sao. Còn lại là chuyện nó chạy ở đâu và biết gì về tín hiệu vừa tới. Hai công cụ tiếp theo lo đúng hai việc đó.</p>
+    <p class="en-only" lang="en">By now we know what a handler <i>does</i> and how it <i>exits</i>. What remains is its <i>context</i>: which stack it runs on, and what it can learn about the signal that invoked it. The <code>sigaltstack()</code> and <code>SA_SIGINFO</code> mechanisms answer those two questions.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="altstack-siginfo" aria-labelledby="altstack-siginfo-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="altstack-siginfo-title">
+      <span class="standard-copy">Chọn ngăn xếp cho handler, và yêu cầu nhân cung cấp thêm thông tin về tín hiệu</span>
+      <span class="easy-only">Cho handler một ngăn xếp riêng, và xin thêm thông tin về tín hiệu</span>
+      <span class="en-only" lang="en">Choosing the handler's stack, and asking the kernel for more signal detail</span>
+    </h2>
+    <p class="standard-copy">Mặc định, handler chạy trên <i>chính</i> ngăn xếp của tiến trình. Nhưng nếu ngăn xếp đã tràn — khiến nhân phát <code>SIGSEGV</code> — thì không còn chỗ để dựng khung cho handler. <code>sigaltstack()</code> cho phép khai báo một <b>ngăn xếp phụ</b> (alternate signal stack) để handler chạy ở đó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Một hướng khác là lấy <i>thêm thông tin</i> về tín hiệu: đặt cờ <code>SA_SIGINFO</code> khi cài handler, và handler sẽ nhận một con trỏ tới cấu trúc <code>siginfo_t</code> mô tả tín hiệu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    <p class="easy-only">Bình thường handler mượn ngăn xếp của chương trình chính để làm việc. Nhưng nếu ngăn xếp đã đầy ứ thì handler không có chỗ đứng. <code>sigaltstack()</code> dành sẵn một ngăn xếp phụ cho những ca như vậy. Ngoài ra, nếu muốn handler biết rõ hơn "tín hiệu này từ đâu tới", bật cờ <code>SA_SIGINFO</code> là nhân sẽ trao kèm một tờ khai chi tiết. <b>Nhớ nhé: sigaltstack cho handler chỗ đứng dự phòng, SA_SIGINFO cho nó biết nhiều hơn.</b></p>
+    <p class="en-only" lang="en">By default, a handler runs on the process's <i>own</i> stack. But if that stack has overflowed — causing the kernel to raise <code>SIGSEGV</code> — there is no room to build a frame for the handler. <code>sigaltstack()</code> lets you declare an <b>alternate signal stack</b> for the handler to run on.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> A separate avenue is getting <i>more information</i> about the signal: set the <code>SA_SIGINFO</code> flag when installing the handler, and it receives a pointer to a <code>siginfo_t</code> structure describing the signal.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Để lập một ngăn xếp phụ cần ba bước: (1) cấp một khối nhớ làm ngăn xếp; (2) gọi <code>sigaltstack()</code> để báo cho nhân biết vị trí và kích thước khối đó; (3) khi cài handler bằng <code>sigaction()</code>, đặt cờ <code>SA_ONSTACK</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Hằng <code>SIGSTKSZ</code> là kích thước <i>gợi ý</i> cho một ngăn xếp phụ thông thường, còn <code>MINSIGSTKSZ</code> là kích thước <i>tối thiểu</i> cần để chạy một handler.<span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Muốn có ngăn xếp phụ, làm ba việc: xin một khối nhớ, báo cho hệ thống biết khối đó ở đâu, và khi cài handler thì bật cờ "hãy dùng ngăn xếp phụ". Hệ thống còn gợi ý sẵn một cỡ vừa đủ. <b>Nhớ nhé: cấp nhớ, báo chỗ, bật cờ SA_ONSTACK — đủ ba bước.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Establishing an alternate stack takes three steps: (1) allocate a block of memory for the stack; (2) call <code>sigaltstack()</code> to tell the kernel its location and size; (3) when installing the handler with <code>sigaction()</code>, set the <code>SA_ONSTACK</code> flag.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> The <code>SIGSTKSZ</code> constant is a <i>suggested</i> size for a typical alternate stack, and <code>MINSIGSTKSZ</code> is the <i>minimum</i> needed to run a handler.<span class="cite"><a href="#ref-5">5</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">stack_t ss;<br>ss.ss_sp = malloc(SIGSTKSZ);<br>ss.ss_size = SIGSTKSZ;<br>ss.ss_flags = 0;<br>sigaltstack(&amp;ss, NULL);<br>/* rồi: sa.sa_flags |= SA_ONSTACK; */<br><br>/* handler kiểu SA_SIGINFO: */<br>void h(int sig, siginfo_t *si, void *uc);</p>
+      <p class="easy-only">ss.ss_sp&nbsp;&nbsp;= vùng nhớ xin được<br>ss.ss_size = SIGSTKSZ<br>sigaltstack(&amp;ss, NULL);<br>sa.sa_flags |= SA_ONSTACK;</p>
+      <p class="en-only" lang="en">stack_t ss;<br>ss.ss_sp = malloc(SIGSTKSZ);<br>ss.ss_size = SIGSTKSZ;<br>ss.ss_flags = 0;<br>sigaltstack(&amp;ss, NULL);<br>/* then: sa.sa_flags |= SA_ONSTACK; */<br><br>/* SA_SIGINFO-style handler: */<br>void h(int sig, siginfo_t *si, void *uc);</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">sigaltstack</span>
+      <h3>
+        <span class="standard-copy">Ngăn xếp phụ: cách duy nhất bắt được SIGSEGV do tràn ngăn xếp</span>
+        <span class="easy-only">Khi ngăn xếp tràn, chỉ ngăn xếp phụ mới cứu được</span>
+        <span class="en-only" lang="en">The alternate stack: the only way to catch a stack-overflow SIGSEGV</span>
+      </h3>
+      <p class="standard-copy">Khi ngăn xếp chính cạn kiệt, nhân phát <code>SIGSEGV</code>. Nhưng để chạy handler cho tín hiệu đó, nhân lại cần chỗ trên ngăn xếp — mà ngăn xếp thì đã tràn. Vì vậy, <i>cách duy nhất</i> để bắt được một <code>SIGSEGV</code> do tràn ngăn xếp là chạy handler trên một ngăn xếp phụ đã dựng sẵn bằng <code>sigaltstack()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Cấu trúc <code>stack_t</code> gồm ba trường: <code>ss_sp</code> (địa chỉ gốc), <code>ss_size</code> (số byte), và <code>ss_flags</code> (cờ như <code>SS_ONSTACK</code>, <code>SS_DISABLE</code>).<span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only">Khi ngăn xếp đầy tràn, hệ thống báo lỗi <code>SIGSEGV</code>. Nhưng để xử lý lỗi đó, handler lại cần chỗ trên ngăn xếp — vốn đã hết. Thế nên phải chuẩn bị trước một ngăn xếp phụ; đó là cách duy nhất bắt được lỗi tràn này. <b>Nhớ nhé: muốn bắt lỗi tràn ngăn xếp thì phải có ngăn xếp phụ dựng từ trước.</b></p>
+      <p class="en-only" lang="en">When the main stack is exhausted, the kernel raises <code>SIGSEGV</code>. But to run a handler for that signal, the kernel needs room on the stack — which has overflowed. So the <i>only</i> way to catch a stack-overflow <code>SIGSEGV</code> is to run the handler on an alternate stack set up in advance with <code>sigaltstack()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> The <code>stack_t</code> structure has three fields: <code>ss_sp</code> (base address), <code>ss_size</code> (number of bytes), and <code>ss_flags</code> (flags such as <code>SS_ONSTACK</code>, <code>SS_DISABLE</code>).<span class="cite"><a href="#ref-5">5</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong các bộ dò lỗi và trình thu thập "backtrace khi sập" — chúng gần như luôn lập một ngăn xếp phụ để còn chạy được handler ngay cả khi ngăn xếp chính đã hỏng.<span class="cite"><a href="#ref-5">5</a></span></span>
+        <span class="easy-only">Trong công cụ ghi lại "vì sao chương trình sập" — chúng luôn chuẩn bị ngăn xếp phụ để còn chạy được khi ngăn xếp chính hỏng.</span>
+        <span class="en-only" lang="en">In crash-handlers and "backtrace on crash" collectors — they almost always set up an alternate stack so the handler can still run even when the main stack is broken.<span class="cite"><a href="#ref-5">5</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">SS_ONSTACK và SS_DISABLE</span><span class="en-only" lang="en">SS_ONSTACK and SS_DISABLE</span></h4>
+          <p><span class="vi-only">Khi truy vấn trạng thái bằng <code>sigaltstack()</code>, cờ <code>SS_ONSTACK</code> cho biết tiến trình hiện đang thực thi <i>trên</i> ngăn xếp phụ (không được đổi nó lúc này), còn <code>SS_DISABLE</code> dùng để vô hiệu hóa ngăn xếp phụ đang có.<span class="cite"><a href="#ref-5">5</a></span></span><span class="en-only" lang="en">When you query the state with <code>sigaltstack()</code>, the <code>SS_ONSTACK</code> flag indicates the process is currently executing <i>on</i> the alternate stack (which must not be changed then), while <code>SS_DISABLE</code> disables an existing alternate stack.<span class="cite"><a href="#ref-5">5</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Kích thước nên lấy động</span><span class="en-only" lang="en">Size it dynamically</span></h4>
+          <p><span class="vi-only">Trên hệ thống hiện đại, nên lấy <code>SIGSTKSZ</code>/<code>MINSIGSTKSZ</code> <i>lúc chạy</i> (ví dụ qua <code>sysconf()</code>) thay vì coi chúng là hằng cố định, vì giá trị phù hợp có thể phụ thuộc đặc tính phần cứng của máy.<span class="cite"><a href="#ref-5">5</a></span></span><span class="en-only" lang="en">On modern systems, obtain <code>SIGSTKSZ</code>/<code>MINSIGSTKSZ</code> <i>at run time</i> (for example via <code>sysconf()</code>) rather than treating them as fixed constants, since the right value can depend on the machine's hardware characteristics.<span class="cite"><a href="#ref-5">5</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">SA_SIGINFO</span>
+      <h3>
+        <span class="standard-copy">SA_SIGINFO: handler nhận thêm một cấu trúc siginfo_t</span>
+        <span class="easy-only">Bật SA_SIGINFO để handler biết nhiều hơn về tín hiệu</span>
+        <span class="en-only" lang="en">SA_SIGINFO: the handler receives a siginfo_t structure</span>
+      </h3>
+      <p class="standard-copy">Một handler thông thường chỉ nhận số hiệu tín hiệu. Nếu cài handler với cờ <code>SA_SIGINFO</code>, nó nhận một nguyên mẫu mở rộng — <code>void handler(int sig, siginfo_t *si, void *ucontext)</code> — và khi đó phải điền trường <code>sa_sigaction</code> của cấu trúc <code>sigaction</code> thay vì trường <code>sa_handler</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Cấu trúc <code>siginfo_t</code> chứa nhiều thông tin: <code>si_signo</code> (số hiệu), <code>si_code</code> (nguồn phát tín hiệu), <code>si_pid</code>/<code>si_uid</code> (PID và UID của tiến trình gửi), và <code>si_value</code> (dữ liệu kèm theo khi dùng tín hiệu thời gian thực).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only">Handler thường chỉ biết "số mấy đã tới". Bật cờ <code>SA_SIGINFO</code>, handler sẽ nhận kèm một tờ khai (<code>siginfo_t</code>) ghi rõ: ai gửi, gửi từ đâu, kèm giá trị gì. Khi dùng cờ này, ta khai handler vào ô <code>sa_sigaction</code> chứ không phải ô <code>sa_handler</code>. <b>Nhớ nhé: SA_SIGINFO đổi lấy một tờ khai chi tiết, nhưng phải khai handler vào đúng ô.</b></p>
+      <p class="en-only" lang="en">An ordinary handler receives only the signal number. If you install the handler with the <code>SA_SIGINFO</code> flag, it gets an extended prototype — <code>void handler(int sig, siginfo_t *si, void *ucontext)</code> — and must then fill the <code>sa_sigaction</code> field of the <code>sigaction</code> structure instead of <code>sa_handler</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> The <code>siginfo_t</code> structure carries much detail: <code>si_signo</code> (signal number), <code>si_code</code> (the signal's origin), <code>si_pid</code>/<code>si_uid</code> (the sending process's PID and UID), and <code>si_value</code> (data attached when using realtime signals).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi cần biết <i>ai</i> gửi một tín hiệu, hay truyền kèm một giá trị cùng tín hiệu thời gian thực (qua <code>sigqueue()</code>) — <code>SA_SIGINFO</code> là cách lấy những dữ liệu đó.<span class="cite"><a href="#ref-3">3</a></span></span>
+        <span class="easy-only">Khi muốn biết ai gửi tín hiệu, hoặc nhận kèm một con số theo tín hiệu — hãy bật SA_SIGINFO.</span>
+        <span class="en-only" lang="en">When you need to know <i>who</i> sent a signal, or to carry a value alongside a realtime signal (via <code>sigqueue()</code>) — <code>SA_SIGINFO</code> is how you get that data.<span class="cite"><a href="#ref-3">3</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">si_code / si_addr</span>
+      <h3>
+        <span class="standard-copy">si_addr: địa chỉ đã gây lỗi khi sập vì SIGSEGV</span>
+        <span class="easy-only">Khi sập, siginfo_t còn cho biết địa chỉ gây lỗi</span>
+        <span class="en-only" lang="en">si_addr: the address that faulted on a SIGSEGV crash</span>
+      </h3>
+      <p class="standard-copy">Với các tín hiệu do lỗi phần cứng như <code>SIGSEGV</code>, <code>SIGBUS</code>, <code>SIGILL</code> hay <code>SIGFPE</code>, trường <code>si_addr</code> của <code>siginfo_t</code> chứa <i>địa chỉ bộ nhớ</i> đã gây ra lỗi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Trường <code>si_code</code> thì cho biết <i>nguồn gốc</i> của tín hiệu — ví dụ <code>SI_USER</code> (do <code>kill()</code>), <code>SI_QUEUE</code> (do <code>sigqueue()</code>), <code>SI_KERNEL</code> (do nhân), hay các mã riêng của từng tín hiệu như <code>SEGV_MAPERR</code>/<code>SEGV_ACCERR</code> cho <code>SIGSEGV</code>.<span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only">Khi chương trình sập vì chạm nhầm vùng nhớ, tờ khai còn ghi rõ <i>địa chỉ</i> nào đã gây ra sự cố (trường <code>si_addr</code>), và lỗi <i>đến từ đâu</i> (trường <code>si_code</code>). Đó là manh mối quý để truy ra nguyên nhân. <b>Nhớ nhé: khi sập, siginfo_t chỉ cho ta địa chỉ phạm lỗi và xuất xứ của tín hiệu.</b></p>
+      <p class="en-only" lang="en">For hardware-fault signals such as <code>SIGSEGV</code>, <code>SIGBUS</code>, <code>SIGILL</code>, or <code>SIGFPE</code>, the <code>si_addr</code> field of <code>siginfo_t</code> holds the <i>memory address</i> that caused the fault.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> The <code>si_code</code> field tells the signal's <i>origin</i> — for example <code>SI_USER</code> (from <code>kill()</code>), <code>SI_QUEUE</code> (from <code>sigqueue()</code>), <code>SI_KERNEL</code> (from the kernel), or signal-specific codes like <code>SEGV_MAPERR</code>/<code>SEGV_ACCERR</code> for <code>SIGSEGV</code>.<span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong báo cáo sập của nhiều chương trình lớn: dòng "fault address 0x…" được lấy thẳng từ <code>si_addr</code> trong handler <code>SIGSEGV</code>.<span class="cite"><a href="#ref-3">3</a></span></span>
+        <span class="easy-only">Dòng "địa chỉ lỗi 0x…" trong báo cáo sập chính là lấy từ si_addr của tờ khai.</span>
+        <span class="en-only" lang="en">In the crash reports of large programs: the "fault address 0x…" line is read straight from <code>si_addr</code> in the <code>SIGSEGV</code> handler.<span class="cite"><a href="#ref-3">3</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Có một hệ quả mà mọi lập trình viên hệ thống đều gặp: nếu một tín hiệu tới <i>trong lúc</i> chương trình chính đang kẹt trong một system call chờ đợi (như <code>read()</code> trên bàn phím), thì lời gọi đó sẽ ra sao sau khi handler chạy xong? Đó là câu hỏi của cụm cuối cùng.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Một tình huống ai cũng gặp: nếu tín hiệu tới đúng lúc chương trình đang <i>đứng chờ</i> một việc (ví dụ chờ gõ phím), thì sau khi handler xong, việc đang chờ đó tiếp tục hay bỏ dở? Phần cuối trả lời.</p>
+    <p class="en-only" lang="en">There is a consequence every systems programmer meets: if a signal arrives <i>while</i> the main program is blocked in a waiting system call (like <code>read()</code> on the keyboard), what happens to that call once the handler finishes? That is the final cluster's question.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="restart-eintr" aria-labelledby="restart-eintr-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="restart-eintr-title">
+      <span class="standard-copy">Khi tín hiệu ngắt một lời gọi đang chờ: EINTR và cờ SA_RESTART</span>
+      <span class="easy-only">Khi tín hiệu cắt ngang một lời gọi đang đứng chờ</span>
+      <span class="en-only" lang="en">When a signal interrupts a blocked call: EINTR and the SA_RESTART flag</span>
+    </h2>
+    <p class="standard-copy">Nếu một handler được gọi trong lúc một system call đang <i>đứng chờ</i> (blocked), thì theo mặc định, sau khi handler trả về, lời gọi đó <b>không</b> được tiếp tục mà <b>thất bại</b> với mã lỗi <code>EINTR</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> Người lập trình có hai lựa chọn: hoặc tự kiểm tra <code>EINTR</code> rồi gọi lại bằng tay, hoặc cài handler với cờ <code>SA_RESTART</code> để một số system call được nhân <i>tự động khởi động lại</i>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    <p class="easy-only">Giả sử chương trình đang đứng chờ gõ phím thì có tín hiệu tới. Handler chạy xong, nhưng việc "chờ gõ phím" không tự nối lại — nó báo lỗi <code>EINTR</code> ("bị ngắt"). Bạn có thể tự gọi lại, hoặc bật cờ <code>SA_RESTART</code> để hệ thống tự nối lại giúp. <b>Nhớ nhé: bị tín hiệu ngắt thì gặp lỗi EINTR; bật SA_RESTART để đỡ phải gọi lại tay.</b></p>
+    <p class="en-only" lang="en">If a handler is invoked while a system call is <i>blocked</i>, then by default, after the handler returns, that call is <b>not</b> resumed but <b>fails</b> with the error <code>EINTR</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> The programmer has two options: either check for <code>EINTR</code> and manually call again, or install the handler with the <code>SA_RESTART</code> flag so that certain system calls are <i>automatically restarted</i> by the kernel.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>EINTR</code> ("interrupted system call") là mã lỗi mà một lời gọi đang chờ trả về khi nó bị một handler làm gián đoạn. Mẫu xử lý thủ công kinh điển là lặp lại lời gọi chừng nào còn gặp <code>EINTR</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> Cờ <code>SA_RESTART</code> biến việc khởi động lại thành tự động — nhưng chỉ cho <i>một số</i> lời gọi, không phải tất cả.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> <code>EINTR</code> là tín báo "việc đang chờ bị cắt ngang". Cách xử lý tay: cứ gặp <code>EINTR</code> thì gọi lại. Cờ <code>SA_RESTART</code> làm việc gọi-lại đó tự động, nhưng không áp dụng cho mọi lời gọi. <b>Nhớ nhé: thấy EINTR thì gọi lại; SA_RESTART làm giúp nhưng không cho tất cả.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>EINTR</code> ("interrupted system call") is the error a blocked call returns when a handler interrupts it. The classic manual pattern is to repeat the call as long as it keeps returning <code>EINTR</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> The <code>SA_RESTART</code> flag makes restarting automatic — but only for <i>some</i> calls, not all.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">/* khởi động lại thủ công */<br>while ((n = read(fd, buf, len)) == -1<br>&nbsp;&nbsp;&nbsp;&nbsp;&amp;&amp; errno == EINTR)<br>&nbsp;&nbsp;continue;&nbsp;&nbsp;/* bị ngắt: thử lại */<br>if (n == -1) { /* lỗi thật */ }<br><br>/* hoặc: sa.sa_flags |= SA_RESTART; */</p>
+      <p class="easy-only">while (read(...) == -1<br>&nbsp;&nbsp;&amp;&amp; errno == EINTR)<br>&nbsp;&nbsp;continue;&nbsp;/* bị ngắt, gọi lại */<br><br>/* hoặc bật SA_RESTART */</p>
+      <p class="en-only" lang="en">/* manual restart */<br>while ((n = read(fd, buf, len)) == -1<br>&nbsp;&nbsp;&nbsp;&nbsp;&amp;&amp; errno == EINTR)<br>&nbsp;&nbsp;continue;&nbsp;&nbsp;/* interrupted: retry */<br>if (n == -1) { /* real error */ }<br><br>/* or: sa.sa_flags |= SA_RESTART; */</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">EINTR</span>
+      <h3>
+        <span class="standard-copy">Mặc định, lời gọi bị ngắt sẽ thất bại — không tự nối lại</span>
+        <span class="easy-only">Mặc định: việc đang chờ bị ngắt thì báo lỗi, không tự tiếp</span>
+        <span class="en-only" lang="en">By default, an interrupted call fails — it does not auto-resume</span>
+      </h3>
+      <p class="standard-copy">Hành vi mặc định là một "bẫy" cho người mới: các lời gọi có thể chặn lâu — như <code>read()</code> từ thiết bị chậm, <code>wait()</code>, hay <code>accept()</code> — sẽ trả về <code>-1</code> với <code>errno</code> bằng <code>EINTR</code> nếu bị handler cắt ngang, dù chưa làm xong việc.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> Mã bền vững phải lường trước điều này và lặp lại lời gọi khi gặp <code>EINTR</code>, nếu không nó sẽ thỉnh thoảng thất bại một cách khó hiểu mỗi khi có tín hiệu tới.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Đây là bẫy hay gặp: những việc "đứng chờ lâu" như đọc bàn phím hay chờ con kết thúc, nếu bị tín hiệu cắt ngang, sẽ báo lỗi <code>EINTR</code> dù chưa xong. Code tốt phải biết gặp lỗi đó thì bình tĩnh gọi lại. <b>Nhớ nhé: EINTR không phải lỗi thật, chỉ là "bị cắt ngang, hãy gọi lại".</b></p>
+      <p class="en-only" lang="en">The default behavior is a trap for newcomers: calls that may block for a long time — like <code>read()</code> from a slow device, <code>wait()</code>, or <code>accept()</code> — return <code>-1</code> with <code>errno</code> set to <code>EINTR</code> if a handler cuts in, even though the work is unfinished.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> Robust code must anticipate this and repeat the call on <code>EINTR</code>, or it will occasionally fail mysteriously whenever a signal arrives.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Bất cứ chương trình nào vừa cài handler (ví dụ cho <code>SIGCHLD</code>) vừa đọc/ghi thiết bị chậm — thiếu vòng lặp <code>EINTR</code> là một lỗi rất thường gặp.<span class="cite"><a href="#ref-9">9</a></span></span>
+        <span class="easy-only">Mọi chương trình vừa bắt tín hiệu vừa đọc/ghi chậm — quên xử lý EINTR là lỗi rất phổ biến.</span>
+        <span class="en-only" lang="en">Any program that both installs a handler (say for <code>SIGCHLD</code>) and reads/writes a slow device — missing the <code>EINTR</code> loop is a very common bug.<span class="cite"><a href="#ref-9">9</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">SA_RESTART</span>
+      <h3>
+        <span class="standard-copy">SA_RESTART giúp tự khởi động lại — nhưng không cho mọi lời gọi</span>
+        <span class="easy-only">SA_RESTART gọi lại giúp, nhưng không phải việc nào cũng được</span>
+        <span class="en-only" lang="en">SA_RESTART auto-restarts — but not for every call</span>
+      </h3>
+      <p class="standard-copy">Đặt cờ <code>SA_RESTART</code> khi cài handler khiến nhân tự khởi động lại nhiều lời gọi bị ngắt, như thể chúng chưa từng bị gián đoạn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Nhưng tác giả nhấn mạnh một điều then chốt: <code>SA_RESTART</code> <i>không</i> có tác dụng với mọi lời gọi. Một số lời gọi — như <code>poll()</code>, <code>select()</code>, <code>epoll_wait()</code>, <code>msgrcv()</code>/<code>msgsnd()</code>, <code>semop()</code>, hay các thao tác socket có đặt thời gian chờ — <b>luôn</b> thất bại với <code>EINTR</code> dù đã bật cờ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+      <p class="easy-only">Bật <code>SA_RESTART</code> thì hệ thống tự gọi lại giúp nhiều việc bị ngắt, đỡ cho bạn viết vòng lặp. Nhưng có một số việc — như <code>select()</code>, <code>poll()</code>, một vài thao tác mạng có hẹn giờ — thì dù bật cờ vẫn cứ báo <code>EINTR</code>. Với chúng, bạn vẫn phải tự lo. <b>Nhớ nhé: SA_RESTART đỡ nhiều việc, nhưng một số việc vẫn phải gọi lại tay.</b></p>
+      <p class="en-only" lang="en">Setting the <code>SA_RESTART</code> flag when installing a handler makes the kernel automatically restart many interrupted calls, as if they had never been interrupted.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> But the author stresses a crucial point: <code>SA_RESTART</code> does <i>not</i> work for every call. Some calls — such as <code>poll()</code>, <code>select()</code>, <code>epoll_wait()</code>, <code>msgrcv()</code>/<code>msgsnd()</code>, <code>semop()</code>, or socket operations with a timeout set — <b>always</b> fail with <code>EINTR</code> even with the flag set.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong vòng lặp sự kiện dùng <code>select()</code>/<code>poll()</code>: dù có bật <code>SA_RESTART</code>, vẫn <i>phải</i> xử lý <code>EINTR</code> cho đúng — đây là chỗ nhiều bug nằm ẩn.<span class="cite"><a href="#ref-9">9</a></span></span>
+        <span class="easy-only">Trong vòng lặp dùng <code>select()</code>/<code>poll()</code>: vẫn phải tự xử lý EINTR, bật cờ không cứu được.</span>
+        <span class="en-only" lang="en">In an event loop using <code>select()</code>/<code>poll()</code>: even with <code>SA_RESTART</code>, you still <i>must</i> handle <code>EINTR</code> — this is where many bugs hide.<span class="cite"><a href="#ref-9">9</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">siginterrupt() — cách cũ</span><span class="en-only" lang="en">siginterrupt() — the older way</span></h4>
+          <p><span class="vi-only">Trước <code>sigaction()</code>, hàm <code>siginterrupt()</code> dùng để bật/tắt việc khởi động lại cho một tín hiệu cụ thể. Nay nó bị coi là lỗi thời; <code>SUSv4</code> đánh dấu nó <i>obsolete</i> và khuyến nghị dùng cờ <code>SA_RESTART</code> của <code>sigaction()</code> thay thế.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span><span class="en-only" lang="en">Before <code>sigaction()</code>, the <code>siginterrupt()</code> function toggled restarting for a specific signal. It is now considered dated; <code>SUSv4</code> marks it <i>obsolete</i> and recommends the <code>SA_RESTART</code> flag of <code>sigaction()</code> instead.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Khởi động lại cũng có mặt trái</span><span class="en-only" lang="en">Restarting has a downside too</span></h4>
+          <p><span class="vi-only">Đôi khi ta <i>muốn</i> một lời gọi bị ngắt để thoát khỏi trạng thái chờ (ví dụ để kiểm tra một cờ đã đổi). Khi đó <i>không</i> nên bật <code>SA_RESTART</code>, mà chủ động dựa vào <code>EINTR</code> để phá vỡ sự chờ đợi.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">Sometimes we <i>want</i> a call interrupted so we can break out of a wait (for example to check a flag that changed). Then you should <i>not</i> set <code>SA_RESTART</code>, but deliberately rely on <code>EINTR</code> to break the wait.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">slow system calls</span>
+      <h3>
+        <span class="standard-copy">Chỉ "system call chậm" mới bị ngắt — và vài trường hợp đặc biệt</span>
+        <span class="easy-only">Chỉ những việc chờ lâu mới bị ngắt giữa chừng</span>
+        <span class="en-only" lang="en">Only "slow" calls get interrupted — plus a few special cases</span>
+      </h3>
+      <p class="standard-copy">Chuyện gián đoạn chỉ xảy ra với các <b>system call chậm</b> — những lời gọi có thể chặn vô hạn định, như đọc/ghi thiết bị chậm (bàn phím, đường ống, socket), <code>wait()</code>, hay chờ khóa tệp.<span class="cite"><a href="#ref-1">1</a></span> Các lời gọi hoàn tất ngay (như đọc từ tệp đĩa thông thường) thì không bị ảnh hưởng. Tác giả còn lưu ý một số lời gọi <i>luôn</i> bị ngắt bất kể cờ (như <code>pause()</code>), và liệt kê cụ thể trong sách những lời gọi nào khởi động lại được với <code>SA_RESTART</code>, những lời gọi nào thì không.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+      <p class="easy-only">Chỉ những việc "có thể đứng chờ rất lâu" mới bị tín hiệu cắt ngang — như chờ gõ phím hay chờ dữ liệu qua mạng. Việc xong ngay (đọc tệp trên đĩa) thì không sao. Sách còn kê rõ việc nào tự nối lại được, việc nào không. <b>Nhớ nhé: chỉ việc chờ lâu mới sợ bị ngắt; việc xong ngay thì yên tâm.</b></p>
+      <p class="en-only" lang="en">Interruption only happens to <b>slow system calls</b> — those that may block indefinitely, such as read/write on slow devices (keyboard, pipes, sockets), <code>wait()</code>, or waiting on a file lock.<span class="cite"><a href="#ref-1">1</a></span> Calls that complete at once (like reading from an ordinary disk file) are unaffected. The author also notes some calls are <i>always</i> interrupted regardless of the flag (like <code>pause()</code>), and the book specifically lists which calls are restartable with <code>SA_RESTART</code> and which are not.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi gỡ lỗi một máy chủ mạng "thỉnh thoảng đứt kết nối lúc nhận tín hiệu" — gần như luôn vì một lời gọi socket chậm bị ngắt mà không được xử lý <code>EINTR</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi máy chủ mạng thỉnh thoảng trục trặc đúng lúc nhận tín hiệu — thường vì một việc mạng chậm bị ngắt mà không xử lý.</span>
+        <span class="en-only" lang="en">When debugging a network server that "occasionally drops a connection on a signal" — almost always a slow socket call interrupted without handling <code>EINTR</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="section-heading">
+      <h2 id="ngo-nhan-title">
+        <span class="standard-copy">Ba ngộ nhận thường gặp</span>
+        <span class="en-only" lang="en">Three common misconceptions</span>
+      </h2>
+    </div>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Trong handler gọi hàm nào cũng được”</span>
+          <span class="en-only" lang="en">“Any function may be called inside a handler”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> đã vào được handler thì gọi <code>printf()</code>, <code>malloc()</code> gì cũng an toàn.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> chỉ được gọi các hàm <i>async-signal-safe</i> mà SUSv3 bảo đảm. <code>printf()</code>, <code>malloc()</code> không khả tái nhập nên có thể làm hỏng dữ liệu.<span class="cite"><a href="#ref-2">2</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> once inside a handler, calling <code>printf()</code> or <code>malloc()</code> is safe.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> only <i>async-signal-safe</i> functions guaranteed by SUSv3 may be called. <code>printf()</code> and <code>malloc()</code> are non-reentrant and can corrupt data.<span class="cite"><a href="#ref-2">2</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“longjmp() dùng được trong handler như bình thường”</span>
+          <span class="en-only" lang="en">“longjmp() works fine from a handler”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> cứ dùng <code>setjmp()</code>/<code>longjmp()</code> để nhảy ra khỏi handler.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> <code>longjmp()</code> không quy định rõ số phận của mặt nạ tín hiệu, có thể khiến tín hiệu bị chặn mãi. Dùng <code>sigsetjmp()</code>/<code>siglongjmp()</code> với <code>savesigs</code> để kiểm soát.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> just use <code>setjmp()</code>/<code>longjmp()</code> to jump out of a handler.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> <code>longjmp()</code> leaves the signal mask's fate unspecified, possibly leaving a signal blocked forever. Use <code>sigsetjmp()</code>/<code>siglongjmp()</code> with <code>savesigs</code> to control it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“SA_RESTART khởi động lại mọi lời gọi bị ngắt”</span>
+          <span class="en-only" lang="en">“SA_RESTART restarts every interrupted call”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> bật <code>SA_RESTART</code> là hết lo <code>EINTR</code>.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> nhiều lời gọi (<code>select()</code>, <code>poll()</code>, <code>semop()</code>, socket có thời gian chờ…) <b>luôn</b> trả <code>EINTR</code> dù đã bật cờ; vẫn phải tự xử lý.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> set <code>SA_RESTART</code> and <code>EINTR</code> is no longer a worry.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> many calls (<code>select()</code>, <code>poll()</code>, <code>semop()</code>, timed socket ops…) <b>always</b> return <code>EINTR</code> even with the flag; you must still handle it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã viết được một trình xử lý tín hiệu an toàn</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you can write a safe signal handler</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã nắm kỷ luật thiết kế handler — nền cho mọi chương trình hệ thống phải sống chung với tín hiệu bất đồng bộ.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you grasp the discipline of handler design — the groundwork for any systems program that must coexist with asynchronous signals.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Phân biệt hàm <i>khả tái nhập</i> và <i>async-signal-safe</i>. Vì sao <code>printf()</code> và <code>malloc()</code> không an toàn để gọi trong handler?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao một handler nên lưu và khôi phục <code>errno</code> dù chỉ gọi hàm an toàn?</p>
+      </li>
+      <li>
+        <p>Vì sao một biến chia sẻ giữa handler và chương trình chính nên có kiểu <code>volatile sig_atomic_t</code>? Vì sao không được dùng <code>++</code> trên nó?</p>
+        <p class="deep-only">Gợi ý sâu hơn: chữ <code>volatile</code> ngăn trình biên dịch làm điều gì?</p>
+      </li>
+      <li>
+        <p>Vì sao nên dùng <code>sigsetjmp()</code>/<code>siglongjmp()</code> thay cho <code>setjmp()</code>/<code>longjmp()</code> khi nhảy ra khỏi handler? Đối số <code>savesigs</code> làm gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao kết thúc một handler phải dùng <code>_exit()</code> chứ không <code>exit()</code>?</p>
+      </li>
+      <li>
+        <p>Trong hoàn cảnh nào <i>bắt buộc</i> phải dùng ngăn xếp phụ (<code>sigaltstack()</code>)? Nêu ba bước để lập nó.</p>
+        <p class="deep-only">Gợi ý sâu hơn: cờ <code>SA_SIGINFO</code> cho handler nhận thêm gì, và trường <code>si_addr</code> hữu ích khi nào?</p>
+      </li>
+      <li>
+        <p>Mặc định, điều gì xảy ra với một system call đang chờ khi bị handler cắt ngang? Cờ <code>SA_RESTART</code> giúp gì, và vì sao chưa đủ?</p>
+        <p class="deep-only">Gợi ý sâu hơn: kể vài lời gọi <i>luôn</i> trả <code>EINTR</code> bất kể <code>SA_RESTART</code>.</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Vì sao không nên gọi <code>printf()</code> bên trong một handler?</p></li>
+      <li><p>Lá cờ mà handler đặt cho chương trình chính đọc nên khai kiểu gì?</p></li>
+      <li><p>Muốn thoát hẳn chương trình từ trong handler thì nên gọi hàm nào?</p></li>
+      <li><p>Ngăn xếp phụ dùng để làm gì?</p></li>
+      <li><p>Khi tín hiệu cắt ngang một việc đang chờ, mặc định chuyện gì xảy ra?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>Distinguish <i>reentrant</i> from <i>async-signal-safe</i>. Why are <code>printf()</code> and <code>malloc()</code> unsafe to call in a handler?</p></li>
+      <li><p>Why should a variable shared between a handler and the main program be <code>volatile sig_atomic_t</code>? Why can't you use <code>++</code> on it?</p></li>
+      <li><p>Why prefer <code>sigsetjmp()</code>/<code>siglongjmp()</code> over <code>setjmp()</code>/<code>longjmp()</code> when jumping out of a handler? What does <code>savesigs</code> do?</p></li>
+      <li><p>When is an alternate stack (<code>sigaltstack()</code>) <i>required</i>? Name the three steps to set one up.</p></li>
+      <li><p>By default, what happens to a blocked system call interrupted by a handler? What does <code>SA_RESTART</code> help, and why is it not enough?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Một trình xử lý tín hiệu chạy <span class="closing-accent">bất đồng bộ, cắt ngang chương trình giữa chừng</span>; vì thế kỷ luật của nó là <span class="closing-accent">làm ít và chỉ làm những việc an toàn</span> — gọi hàm async-signal-safe, chia sẻ biến qua <code>volatile sig_atomic_t</code>, thoát ra bằng <code>_exit()</code> hay <code>siglongjmp()</code>, và lường trước <code>EINTR</code>. Nắm được điều này, bạn đã sẵn sàng cho các mô hình tín hiệu nâng cao và cho câu chuyện lớn hơn về vòng đời tiến trình.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Handler <span class="closing-accent">xen vào giữa chừng</span>, nên hãy <span class="closing-accent">làm thật ít và thật an toàn</span>: giơ cờ, gọi hàm an toàn, thoát đúng cách. Hiểu được chừng này là đủ nền để đi tiếp. <b>Nhớ nhé: trong handler, ít mà an toàn luôn thắng nhiều mà liều.</b></p>
+    <p class="en-only" lang="en">A signal handler runs <span class="closing-accent">asynchronously, cutting in on the program mid-step</span>; so its discipline is to <span class="closing-accent">do little and do only what is safe</span> — call async-signal-safe functions, share variables via <code>volatile sig_atomic_t</code>, exit via <code>_exit()</code> or <code>siglongjmp()</code>, and anticipate <code>EINTR</code>. Grasp this, and you are ready for advanced signal models and the larger story of the process lifecycle.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-20-signals-fundamental-concepts.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 20 · Tín hiệu: Khái niệm nền tảng</span>
+    <span class="nav-title en-only" lang="en">Chapter 20 · Signals: Fundamental Concepts</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-24-process-creation.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 24 · Tạo tiến trình</span>
+    <span class="nav-title en-only" lang="en">Chapter 24 · Process Creation</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chương 21, “Signals: Signal Handlers”, trang 421–444.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chapter 21, “Signals: Signal Handlers”, pp. 421–444.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Michael Kerrisk, <i>The Linux Programming Interface</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3), ch. 21 “Signals: Signal Handlers”, pp. 421–444. — <a href="https://man7.org/tlpi/" target="_blank" rel="noopener noreferrer">man7.org/tlpi</a></li>
+      <li id="ref-2">“signal-safety(7) — Linux manual page” (async-signal-safe functions; why stdio/malloc are unsafe; the POSIX-guaranteed safe-function list). Linux man-pages project, maintained by Michael Kerrisk. <a href="https://man7.org/linux/man-pages/man7/signal-safety.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/signal-safety.7.html</a></li>
+      <li id="ref-3">“sigaction(2) — Linux manual page” (SA_SIGINFO, the siginfo_t structure and si_code/si_addr fields, sa_sigaction, SA_RESTART, SA_ONSTACK). <a href="https://man7.org/linux/man-pages/man2/sigaction.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/sigaction.2.html</a></li>
+      <li id="ref-4">“setjmp(3) / sigsetjmp / longjmp / siglongjmp — Linux manual page” (nonlocal goto; the savesigs argument and signal-mask save/restore; the volatile caveat). <a href="https://man7.org/linux/man-pages/man3/setjmp.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/setjmp.3.html</a></li>
+      <li id="ref-5">“sigaltstack(2) — Linux manual page” (the stack_t fields ss_sp/ss_size/ss_flags, SIGSTKSZ and MINSIGSTKSZ, SS_ONSTACK/SS_DISABLE, catching stack-overflow SIGSEGV). <a href="https://man7.org/linux/man-pages/man2/sigaltstack.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/sigaltstack.2.html</a></li>
+      <li id="ref-6">“abort(3) — Linux manual page” (raises SIGABRT, produces a core dump, and always terminates the process even if SIGABRT is blocked or ignored). <a href="https://man7.org/linux/man-pages/man3/abort.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/abort.3.html</a></li>
+      <li id="ref-7">“_exit(2) — Linux manual page” (terminates the process immediately without flushing stdio buffers or running exit handlers; async-signal-safe). <a href="https://man7.org/linux/man-pages/man2/_exit.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/_exit.2.html</a></li>
+      <li id="ref-8">“System Interfaces — 2.4 Signal Concepts / Async-Signal-Safe functions”, The Open Group Base Specifications (POSIX.1-2017 / SUSv4). <a href="https://pubs.opengroup.org/onlinepubs/9699919799/functions/V2_chap02.html" target="_blank" rel="noopener noreferrer">pubs.opengroup.org/onlinepubs/9699919799/functions/V2_chap02.html</a></li>
+      <li id="ref-9">“signal(7) — Linux manual page” (interruption of system calls and library functions by handlers; EINTR; which calls restart with SA_RESTART and which never do). <a href="https://man7.org/linux/man-pages/man7/signal.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/signal.7.html</a></li>
+      <li id="ref-10">“siginterrupt(3) — Linux manual page” (changing per-signal restart behavior; marked obsolete in SUSv4 in favor of the SA_RESTART flag of sigaction). <a href="https://man7.org/linux/man-pages/man3/siginterrupt.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/siginterrupt.3.html</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-20-signals-fundamental-concepts.html">chapter 20</a>
+      <a href="chapter-24-process-creation.html">chapter 24</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('tlpi-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('tlpi-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('tlpi-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

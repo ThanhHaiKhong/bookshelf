@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 29 · Luồng: Giới thiệu — The Linux Programming Interface</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 29 “Threads: Introduction” trong The Linux Programming Interface (Michael Kerrisk, No Starch Press, 2010): tổng quan về luồng (thread) và so sánh với tiến trình — những gì luồng dùng chung (bộ nhớ ảo, bộ mô tả tệp, dispositions tín hiệu) và những gì mỗi luồng giữ riêng (ngăn xếp, errno, mặt nạ tín hiệu); API Pthreads và biên dịch với -pthread; tạo luồng với pthread_create(); kết thúc với pthread_exit() và giá trị trả về; thread ID (pthread_self, pthread_equal); nối một luồng với pthread_join(); tách luồng với pthread_detach(); thuộc tính luồng pthread_attr_t; ưu và nhược điểm của luồng so với tiến trình. Ba mức đọc, mọi khẳng định đều có nguồn.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('tlpi-reading-mode'),
+l=localStorage.getItem('tlpi-lang'),
+t=localStorage.getItem('tlpi-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   THE LINUX PROGRAMMING INTERFACE — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"TLPI · CH.29";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+/* soon = chapter not yet on disk; rendered as a non-link cell. */
+.chapter-path .soon{
+  display:block;padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--tint);border:1px dashed var(--line);opacity:.6;
+}
+.chapter-path .soon .soon-tag{
+  display:inline-block;font-family:var(--sans);font-size:.6rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:.1rem .45rem;margin-top:.4rem;
+}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.series-links .soon{margin-right:.5rem;color:var(--muted);opacity:.55;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+
+/* ---------- whole-book mind map banner ---------- */
+.mindmap-banner{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  gap:clamp(1rem,3vw,2rem);align-items:center;
+  margin:3rem 0 0;padding:1.35rem clamp(1.15rem,3vw,2rem);
+  border:1px solid var(--line);border-left:4px solid var(--teal);
+  border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);
+  color:var(--ink);text-decoration:none;
+  transition:border-color .15s,transform .15s;
+}
+a.mindmap-banner:hover{border-color:var(--teal);transform:translateY(-2px);}
+a.mindmap-banner:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.mindmap-banner.soon{opacity:.5;cursor:default;}
+.mindmap-icon{font-size:1.9rem;line-height:1;}
+.mindmap-banner h3{margin:0 0 .3rem;font-size:1.05rem;}
+.mindmap-banner p{margin:0;max-width:48rem;font-size:.88rem;color:var(--muted);}
+.mindmap-banner .result{margin-top:0;color:var(--teal);font-weight:600;white-space:nowrap;}
+.mindmap-banner.soon .result{color:var(--muted);}
+@media (max-width:860px){
+  .mindmap-banner{grid-template-columns:auto minmax(0,1fr);}
+  .mindmap-banner .result{grid-column:2;white-space:normal;}
+}
+@media (max-width:460px){
+  .mindmap-banner{margin-left:0;margin-right:0;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    The Linux Programming Interface
+    <span>Chương 29 · Threads: Introduction</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 29 · Luồng: Giới thiệu</span>
+      <span class="en-only" lang="en">Chapter 29 · Threads: Introduction</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Nhiều dòng thực thi trong cùng một tiến trình</span>
+      <span class="easy-only">Nhiều việc chạy song song bên trong một tiến trình</span>
+      <span class="en-only" lang="en">Many lines of execution inside one process</span>
+    </h1>
+
+    <p class="standard-copy">Kerrisk mở đầu loạt chương về luồng bằng một ý then chốt: một <b>luồng</b> (thread) là một dòng thực thi độc lập <i>bên trong</i> một tiến trình, và một tiến trình có thể chứa nhiều luồng cùng chạy.<span class="cite"><a href="#ref-1">1</a></span> Điểm phân biệt lớn so với tiến trình là các luồng <b>chia sẻ cùng một không gian địa chỉ ảo</b> — cùng bộ nhớ toàn cục, cùng heap, cùng bảng bộ mô tả tệp, cùng các disposition tín hiệu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Chương đi qua: API <b>Pthreads</b> và cách biên dịch với <code>-pthread</code>; tạo luồng bằng <code>pthread_create()</code>; kết thúc luồng bằng <code>pthread_exit()</code> và giá trị trả về; thread ID (<code>pthread_self()</code>, <code>pthread_equal()</code>); nối một luồng đã kết thúc bằng <code>pthread_join()</code>; tách luồng bằng <code>pthread_detach()</code>; thuộc tính luồng (<code>pthread_attr_t</code>); và cuối cùng là ưu — nhược điểm của luồng so với tiến trình.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hãy hình dung một tiến trình là một văn phòng, còn mỗi luồng là một nhân viên trong đó. Nhiều nhân viên cùng làm việc trong <i>một</i> văn phòng, dùng chung tủ hồ sơ và bảng thông báo — nên trao đổi với nhau rất nhanh. Nhưng mỗi người vẫn có bàn làm việc riêng. Chương này dạy cách thuê thêm nhân viên (tạo luồng), cho họ nghỉ việc (kết thúc luồng), gọi tên họ (thread ID), và chờ họ làm xong một việc (nối luồng). <b>Nhớ nhé: tiến trình là văn phòng, luồng là các nhân viên dùng chung văn phòng đó.</b></p>
+    <p class="en-only" lang="en">Kerrisk opens the thread chapters with a key idea: a <b>thread</b> is an independent line of execution <i>within</i> a process, and a single process can hold several threads running at once.<span class="cite"><a href="#ref-1">1</a></span> The great distinction from processes is that threads <b>share the same virtual address space</b> — the same global memory, the same heap, the same file-descriptor table, the same signal dispositions.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> The chapter walks through: the <b>Pthreads</b> API and compiling with <code>-pthread</code>; creating a thread with <code>pthread_create()</code>; terminating one with <code>pthread_exit()</code> and the thread return value; thread IDs (<code>pthread_self()</code>, <code>pthread_equal()</code>); joining a terminated thread with <code>pthread_join()</code>; detaching one with <code>pthread_detach()</code>; thread attributes (<code>pthread_attr_t</code>); and finally the advantages and disadvantages of threads versus processes.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only deep-bilingual"><span class="vi-only">Góc nhìn thực thi: tất cả các luồng của một tiến trình cùng thực thi <i>một chương trình</i> và cùng ở trong một không gian địa chỉ, nhưng mỗi luồng có ngăn xếp riêng để chạy hàm của mình một cách độc lập. Vì bộ nhớ toàn cục là chung, một luồng có thể để lại dữ liệu cho luồng khác đọc chỉ bằng cách ghi vào một biến toàn cục — nhanh hơn nhiều so với các cơ chế liên tiến trình (IPC) mà tiến trình buộc phải dùng. Đổi lại, sự chia sẻ ấy đòi hỏi <b>đồng bộ hóa</b> cẩn thận, chủ đề của chương kế tiếp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span><span class="en-only" lang="en">The execution view: all the threads of a process run <i>one program</i> and live in a single address space, yet each thread has its own stack for running its functions independently. Because global memory is shared, one thread can leave data for another simply by writing a global variable — far faster than the inter-process communication (IPC) that separate processes must use. In exchange, that sharing demands careful <b>synchronization</b>, the subject of the next chapter.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> luồng là cách để một tiến trình có <i>nhiều dòng thực thi song song cùng chia sẻ bộ nhớ</i>; hiểu đúng ranh giới giữa cái <b>dùng chung</b> (bộ nhớ ảo, bộ mô tả tệp, disposition tín hiệu) và cái <b>riêng từng luồng</b> (ngăn xếp, <code>errno</code>, mặt nạ tín hiệu, thread ID), cùng với bộ API Pthreads tối thiểu để tạo, kết thúc, nối và tách luồng — là nền tảng cho mọi lập trình đa luồng về sau.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> luồng giúp một chương trình làm nhiều việc cùng lúc mà vẫn dùng chung một kho dữ liệu. Biết cái gì dùng chung, cái gì riêng, và vài lệnh cơ bản để tạo và chờ luồng — là đủ để bắt đầu. <b>Nhớ nhé: luồng = làm song song + dùng chung bộ nhớ.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> threads let one process have <i>several parallel lines of execution sharing memory</i>; grasping the boundary between what is <b>shared</b> (virtual memory, file descriptors, signal dispositions) and what is <b>per-thread</b> (the stack, <code>errno</code>, the signal mask, the thread ID), together with the minimal Pthreads API to create, terminate, join and detach threads, is the foundation of all later multithreaded programming.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: một tiến trình chứa nhiều luồng cùng chia sẻ không gian địa chỉ ảo, bộ mô tả tệp và disposition tín hiệu, trong khi mỗi luồng giữ riêng ngăn xếp, errno, mặt nạ tín hiệu và thread ID; API Pthreads cung cấp các hàm tạo, kết thúc, nối và tách luồng. Diagram: a process holds many threads sharing the virtual address space, file descriptors and signal dispositions, while each thread keeps its own stack, errno, signal mask and thread ID; the Pthreads API provides functions to create, terminate, join and detach threads.">
+    <div class="core">
+      <b>thread</b>
+      <small class="standard-copy">Một dòng thực thi độc lập bên trong một tiến trình</small>
+      <small class="easy-only">Một "nhân viên" chạy song song trong tiến trình</small>
+      <small class="en-only" lang="en">An independent line of execution within a process</small>
+    </div>
+
+    <div class="node">
+      <b>dùng chung · shared</b>
+      <small class="standard-copy">Bộ nhớ ảo (data, heap), bộ mô tả tệp, disposition tín hiệu, PID</small>
+      <small class="easy-only">Dùng chung: bộ nhớ, tệp đang mở, cách xử lý tín hiệu</small>
+      <small class="en-only" lang="en">Virtual memory (data, heap), file descriptors, signal dispositions, PID</small>
+    </div>
+
+    <div class="node">
+      <b>riêng từng luồng · per-thread</b>
+      <small class="standard-copy">Ngăn xếp, errno, mặt nạ tín hiệu, thread ID, độ ưu tiên</small>
+      <small class="easy-only">Riêng mỗi luồng: ngăn xếp, errno, mặt nạ tín hiệu, tên gọi</small>
+      <small class="en-only" lang="en">Stack, errno, signal mask, thread ID, scheduling priority</small>
+    </div>
+
+    <div class="node">
+      <b>API · Pthreads</b>
+      <small class="standard-copy">pthread_create / pthread_exit / pthread_join / pthread_detach</small>
+      <small class="easy-only">Các lệnh để tạo, kết thúc, chờ và tách luồng</small>
+      <small class="en-only" lang="en">pthread_create / pthread_exit / pthread_join / pthread_detach</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#shared-vs-private">
+    <span>01</span>
+    <b class="standard-copy">Cái gì luồng dùng chung, cái gì giữ riêng</b>
+    <b class="easy-only">Luồng dùng chung gì và giữ riêng gì</b>
+    <b class="en-only" lang="en">What threads share and keep private</b>
+  </a>
+  <a href="#create-terminate">
+    <span>02</span>
+    <b class="standard-copy">Tạo và kết thúc luồng: pthread_create, pthread_exit</b>
+    <b class="easy-only">Tạo và kết thúc một luồng</b>
+    <b class="en-only" lang="en">Creating and terminating: pthread_create, pthread_exit</b>
+  </a>
+  <a href="#id-join-detach">
+    <span>03</span>
+    <b class="standard-copy">Thread ID, nối (join), tách (detach) và thuộc tính</b>
+    <b class="easy-only">Tên luồng, chờ luồng, tách luồng</b>
+    <b class="en-only" lang="en">Thread IDs, joining, detaching, attributes</b>
+  </a>
+  <a href="#threads-vs-processes">
+    <span>04</span>
+    <b class="standard-copy">Luồng so với tiến trình: ưu và nhược điểm</b>
+    <b class="easy-only">Luồng và tiến trình: hơn thua ở đâu</b>
+    <b class="en-only" lang="en">Threads versus processes: pros and cons</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="shared-vs-private" aria-labelledby="shared-vs-private-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="shared-vs-private-title">
+      <span class="standard-copy">Luồng chia sẻ không gian địa chỉ — nhưng mỗi luồng vẫn có ngăn xếp và errno riêng</span>
+      <span class="easy-only">Luồng dùng chung bộ nhớ, nhưng mỗi luồng vẫn có vài thứ riêng</span>
+      <span class="en-only" lang="en">Threads share the address space — yet each keeps its own stack and errno</span>
+    </h2>
+    <p class="standard-copy">Các luồng của một tiến trình <i>cùng chia sẻ</i> nhiều thuộc tính: cùng PID và PPID, cùng bộ nhớ toàn cục và heap, cùng bảng bộ mô tả tệp đang mở, cùng các <b>disposition tín hiệu</b> (signal dispositions), cùng thư mục làm việc hiện tại, và cùng ID người dùng/nhóm.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Nhưng mỗi luồng lại giữ <i>riêng</i> một số thuộc tính thiết yếu: thread ID của nó, <b>ngăn xếp</b> riêng (nơi chứa biến cục bộ), biến <code>errno</code> riêng, <b>mặt nạ tín hiệu</b> (signal mask) riêng, cùng chính sách và độ ưu tiên định thời riêng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    <p class="easy-only">Trong một văn phòng (tiến trình), mọi nhân viên (luồng) dùng chung tủ hồ sơ, bảng thông báo, và danh sách điện thoại đang mở — nên ai cũng thấy được thay đổi của người khác ngay. Nhưng mỗi người vẫn có bàn làm việc riêng, cuốn sổ nháp riêng, và cách nhận thông báo riêng. <b>Nhớ nhé: đồ chung để trao đổi, đồ riêng để làm việc độc lập.</b></p>
+    <p class="en-only" lang="en">The threads of a process <i>share</i> many attributes: the same PID and PPID, the same global memory and heap, the same table of open file descriptors, the same <b>signal dispositions</b>, the same current working directory, and the same user and group IDs.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> But each thread keeps certain essentials to <i>itself</i>: its thread ID, its own <b>stack</b> (holding local variables), its own <code>errno</code>, its own <b>signal mask</b>, and its own scheduling policy and priority.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Một <b>luồng</b> là một đơn vị thực thi được định thời độc lập, cùng chia sẻ không gian địa chỉ với các luồng anh em trong cùng tiến trình. Vì bộ nhớ toàn cục là chung, một luồng ghi vào một biến toàn cục thì mọi luồng khác đều thấy ngay — đây là cách trao đổi dữ liệu chính giữa các luồng, không cần cơ chế IPC.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Luồng là một "người làm" trong tiến trình. Vì tất cả cùng nhìn chung một kho dữ liệu, một người ghi gì lên đó thì những người kia đọc được liền. <b>Nhớ nhé: ghi vào biến chung là cách luồng "nói chuyện" với nhau.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A <b>thread</b> is an independently scheduled unit of execution that shares its address space with sibling threads in the same process. Because global memory is shared, one thread writing a global variable is immediately visible to every other — the primary way threads exchange data, needing no IPC.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">DÙNG CHUNG: text, data, heap,<br>&nbsp;&nbsp;bộ mô tả tệp, signal dispositions,<br>&nbsp;&nbsp;PID/PPID, cwd, UID/GID<br>RIÊNG&nbsp;&nbsp;&nbsp;: thread ID, ngăn xếp,<br>&nbsp;&nbsp;errno, signal mask, ưu tiên</p>
+      <p class="easy-only">CHUNG: bộ nhớ, tệp mở, tín hiệu<br>RIÊNG: ngăn xếp, errno,<br>&nbsp;&nbsp;mặt nạ tín hiệu, tên luồng</p>
+      <p class="en-only" lang="en">SHARED : text, data, heap,<br>&nbsp;&nbsp;file descriptors, signal dispositions,<br>&nbsp;&nbsp;PID/PPID, cwd, UID/GID<br>PRIVATE: thread ID, stack,<br>&nbsp;&nbsp;errno, signal mask, priority</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">shared memory</span>
+      <h3>
+        <span class="standard-copy">Bộ nhớ toàn cục là chung — tiện lợi và nguy hiểm</span>
+        <span class="easy-only">Dữ liệu toàn cục dùng chung cho mọi luồng</span>
+        <span class="en-only" lang="en">Global memory is shared — convenient and dangerous</span>
+      </h3>
+      <p class="standard-copy">Mọi luồng cùng thấy các biến toàn cục và tĩnh, cùng vùng heap. Điều này làm việc trao đổi dữ liệu trở nên dễ dàng: chỉ cần ghi vào một con trỏ hay một biến toàn cục.<span class="cite"><a href="#ref-1">1</a></span> Nhưng cũng chính vì thế, hai luồng cùng sửa một dữ liệu mà không có trật tự sẽ gây ra <b>điều kiện tranh đua</b> (race condition) — lý do vì sao chương kế tiếp dành trọn cho đồng bộ hóa.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mọi luồng cùng nhìn một kho dữ liệu chung, nên gửi đồ cho nhau chỉ việc đặt lên kho. Nhưng nếu hai người cùng sửa một món một lúc, mọi thứ có thể rối tung. <b>Nhớ nhé: dùng chung thì nhanh, nhưng phải xếp hàng khi cùng sửa.</b></p>
+      <p class="en-only" lang="en">Every thread sees the same global and static variables and the same heap. This makes data exchange easy: just write a pointer or a global variable.<span class="cite"><a href="#ref-1">1</a></span> But for the same reason, two threads modifying one datum without ordering produce a <b>race condition</b> — which is why the next chapter is devoted entirely to synchronization.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một luồng điền kết quả vào một mảng toàn cục rồi luồng khác đọc ra — không cần đường ống hay vùng nhớ chia sẻ như giữa các tiến trình.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi một luồng để kết quả lên biến chung và luồng kia lấy ra — không cần cơ chế gì phức tạp.</span>
+        <span class="en-only" lang="en">When one thread fills a global array and another reads it out — no pipe or shared-memory segment needed as between processes.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">So với tiến trình</span><span class="en-only" lang="en">Versus processes</span></h4>
+          <p><span class="vi-only">Các tiến trình riêng biệt <i>không</i> chia sẻ bộ nhớ (trừ khi cố ý lập vùng nhớ chia sẻ); để trao đổi, chúng phải dùng IPC như đường ống, hàng đợi thông điệp hay socket. Luồng bỏ qua toàn bộ chi phí đó vì mặc định đã chung bộ nhớ.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">Separate processes do <i>not</i> share memory (unless they deliberately set up a shared-memory region); to communicate they must use IPC such as pipes, message queues, or sockets. Threads skip all that cost because they share memory by default.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Hệ quả thiết kế</span><span class="en-only" lang="en">A design consequence</span></h4>
+          <p><span class="vi-only">Vì heap là chung, một luồng có thể <code>malloc()</code> rồi trao con trỏ cho luồng khác <code>free()</code>. Sự linh hoạt này đòi hỏi quy ước rõ ràng về "ai sở hữu" vùng nhớ để tránh giải phóng hai lần hay rò rỉ.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">Because the heap is shared, one thread can <code>malloc()</code> and hand the pointer to another to <code>free()</code>. This flexibility demands a clear convention about who "owns" memory to avoid double frees or leaks.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">per-thread errno</span>
+      <h3>
+        <span class="standard-copy">errno là riêng mỗi luồng — nếu không thì vô dụng</span>
+        <span class="easy-only">Mỗi luồng có errno riêng của mình</span>
+        <span class="en-only" lang="en">errno is per-thread — otherwise it would be useless</span>
+      </h3>
+      <p class="standard-copy">Trong chương trình đa luồng, <code>errno</code> được duy trì <b>riêng cho từng luồng</b>. Nếu nó là một biến toàn cục dùng chung, một luồng đặt <code>errno</code> rồi luồng khác có thể ghi đè trước khi luồng đầu kịp kiểm tra — biến nó thành vô nghĩa.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Vì vậy trong UNIX hỗ trợ luồng, <code>errno</code> được định nghĩa lại thành một biểu thức trỏ tới một ô nhớ riêng của luồng gọi.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mỗi luồng có một "ô báo lỗi" riêng tên là <code>errno</code>. Nhờ vậy, lỗi của người này không ghi đè lỗi của người kia. Nếu dùng chung một ô thì chẳng ai biết lỗi của mình còn nguyên hay đã bị thay. <b>Nhớ nhé: errno riêng từng luồng, nên lỗi không lẫn vào nhau.</b></p>
+      <p class="en-only" lang="en">In a multithreaded program, <code>errno</code> is maintained <b>per-thread</b>. If it were one shared global, one thread could set <code>errno</code> and another overwrite it before the first checked — making it meaningless.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> So on threads-capable UNIX, <code>errno</code> is redefined as an expression pointing to a storage location private to the calling thread.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi gọi một system call trong một luồng và kiểm tra <code>errno</code> ngay sau đó — kết quả luôn là lỗi của chính luồng đó, không bị luồng khác làm nhiễu.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi kiểm tra lỗi ngay sau một lời gọi trong luồng — đó luôn là lỗi của riêng luồng đó.</span>
+        <span class="en-only" lang="en">Whenever you call a system call in a thread and check <code>errno</code> right after — the result is always that thread's own error, undisturbed by others.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">signal mask</span>
+      <h3>
+        <span class="standard-copy">Disposition tín hiệu thì chung, mặt nạ tín hiệu thì riêng</span>
+        <span class="easy-only">Cách xử lý tín hiệu chung, nhưng chặn tín hiệu thì riêng</span>
+        <span class="en-only" lang="en">Dispositions are shared, the signal mask is private</span>
+      </h3>
+      <p class="standard-copy">Đây là một ranh giới dễ nhầm. Các <b>disposition tín hiệu</b> — handler nào gắn với tín hiệu nào — là thuộc tính <i>chung</i> toàn tiến trình: mọi luồng cùng dùng một bộ handler.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Nhưng <b>mặt nạ tín hiệu</b> — tín hiệu nào đang bị chặn — lại là thuộc tính <i>riêng</i> của mỗi luồng, điều chỉnh bằng <code>pthread_sigmask()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Cách phản ứng với một tiếng chuông báo (ai sẽ chạy ra xử lý) là quy định chung cho cả văn phòng. Nhưng việc một nhân viên cụ thể có "bịt tai" tạm thời để khỏi bị làm phiền hay không thì tùy từng người. <b>Nhớ nhé: luật xử lý tín hiệu là chung, còn ai bịt tai là chuyện riêng.</b></p>
+      <p class="en-only" lang="en">This is an easy boundary to confuse. The <b>signal dispositions</b> — which handler is attached to which signal — are a <i>process-wide</i> attribute: all threads share one set of handlers.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> But the <b>signal mask</b> — which signals are currently blocked — is a <i>per-thread</i> attribute, adjusted with <code>pthread_sigmask()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một thiết kế dùng một luồng chuyên trách nhận tín hiệu: luồng đó mở (bỏ chặn) các tín hiệu cần, còn mọi luồng khác chặn chúng trong mặt nạ riêng.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi một luồng được giao chuyên nhận tín hiệu, còn các luồng khác thì "bịt tai" lại.</span>
+        <span class="en-only" lang="en">When a design dedicates one thread to receiving signals: that thread unblocks the needed signals while all others block them in their private masks.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Tín hiệu và luồng là chủ đề tinh tế</span><span class="en-only" lang="en">Signals and threads are subtle</span></h4>
+          <p><span class="vi-only">Kerrisk lưu ý mô hình tín hiệu UNIX và mô hình luồng vốn không ăn khớp dễ dàng; sự tương tác giữa chúng phức tạp đến mức được dành riêng một phần sâu hơn ở chương về luồng và tín hiệu sau này.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">Kerrisk notes that the UNIX signal model and the thread model do not fit together easily; their interaction is intricate enough to warrant its own deeper treatment in a later chapter on threads and signals.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Một tín hiệu gửi tới tiến trình</span><span class="en-only" lang="en">A signal sent to the process</span></h4>
+          <p><span class="vi-only">Khi một tín hiệu được gửi tới cả tiến trình (chứ không nhắm một luồng cụ thể), nhân chọn <i>một</i> luồng bất kỳ đang không chặn tín hiệu đó để chuyển tới — nên mặt nạ riêng của từng luồng quyết định ai có thể là người nhận.<span class="cite"><a href="#ref-2">2</a></span></span><span class="en-only" lang="en">When a signal is sent to the whole process (not aimed at a particular thread), the kernel picks <i>one</i> arbitrary thread that is not blocking it to deliver to — so each thread's private mask decides who can be the recipient.<span class="cite"><a href="#ref-2">2</a></span></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đã rõ ranh giới chung — riêng, câu hỏi thực hành đầu tiên là: làm sao <i>sinh</i> ra một luồng mới, và làm sao cho nó <i>kết thúc</i> gọn gàng? Đó là lúc gặp bộ API Pthreads và hai hàm cốt lõi <code>pthread_create()</code> cùng <code>pthread_exit()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Biết rồi cái gì chung cái gì riêng, giờ ta học cách tạo một luồng mới và cho nó dừng lại đúng cách.</p>
+    <p class="en-only" lang="en">With the shared-versus-private boundary clear, the first practical question is: how do we <i>create</i> a new thread, and how does it <i>terminate</i> cleanly? That is where the Pthreads API and its two core calls, <code>pthread_create()</code> and <code>pthread_exit()</code>, come in.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="create-terminate" aria-labelledby="create-terminate-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="create-terminate-title">
+      <span class="standard-copy">Tạo luồng với pthread_create(), kết thúc với pthread_exit() — và biên dịch với -pthread</span>
+      <span class="easy-only">Tạo một luồng mới và cho nó kết thúc</span>
+      <span class="en-only" lang="en">Create with pthread_create(), end with pthread_exit() — and compile with -pthread</span>
+    </h2>
+    <p class="standard-copy">API <b>Pthreads</b> (POSIX threads) là bộ giao diện chuẩn để lập trình luồng, gồm các hàm và kiểu dữ liệu định nghĩa trong <code>&lt;pthread.h&gt;</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Một đặc điểm quan trọng: khác với system call thông thường, các hàm Pthreads <i>không</i> trả về −1 và đặt <code>errno</code>; thay vào đó chúng trả về <b>0 khi thành công</b> hoặc một <b>số lỗi dương</b> khi thất bại.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Chương trình dùng luồng phải được biên dịch với tùy chọn <code>-pthread</code> của trình biên dịch.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Hàm <code>pthread_create()</code> tạo một luồng mới bắt đầu chạy từ một hàm cho trước.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    <p class="easy-only">Để lập trình luồng, ta dùng một bộ công cụ chuẩn tên là <b>Pthreads</b>. Khi dịch chương trình, nhớ thêm cờ <code>-pthread</code> để báo cho trình dịch biết. Có một điểm lạ cần nhớ: các hàm này không báo lỗi theo kiểu cũ (trả về −1); chúng trả về 0 nếu ổn, hoặc một con số lỗi dương nếu hỏng. <b>Nhớ nhé: Pthreads trả về 0 là ổn, số dương là có lỗi — và luôn dịch với -pthread.</b></p>
+    <p class="en-only" lang="en">The <b>Pthreads</b> API (POSIX threads) is the standard interface for thread programming, a set of functions and types declared in <code>&lt;pthread.h&gt;</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> One important trait: unlike ordinary system calls, Pthreads functions do <i>not</i> return −1 and set <code>errno</code>; instead they return <b>0 on success</b> or a <b>positive error number</b> on failure.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> A program that uses threads must be compiled with the compiler's <code>-pthread</code> option.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> The <code>pthread_create()</code> function creates a new thread that begins in a given function.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>pthread_create()</code> nhận bốn đối số: con trỏ <code>thread</code> để nhận thread ID mới; con trỏ <code>attr</code> tới các thuộc tính (hoặc NULL cho mặc định); <code>start</code> — hàm mà luồng mới sẽ chạy đầu tiên; và <code>arg</code> — một đối số <code>void *</code> duy nhất truyền cho hàm đó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Luồng mới kết thúc khi hàm <code>start</code> trả về, hoặc khi nó gọi <code>pthread_exit()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> <code>pthread_create</code> giống như giao cho một nhân viên mới một tờ việc (<code>start</code>) và một món đồ cần thiết (<code>arg</code>), rồi bảo "bắt đầu đi". Làm xong việc, nhân viên nghỉ. <b>Nhớ nhé: tạo luồng = giao một hàm để chạy cùng một món đầu vào.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>pthread_create()</code> takes four arguments: a <code>thread</code> pointer to receive the new thread ID; an <code>attr</code> pointer to attributes (or NULL for defaults); <code>start</code> — the function the new thread runs first; and <code>arg</code> — a single <code>void *</code> argument passed to it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> The new thread ends when <code>start</code> returns, or when it calls <code>pthread_exit()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#include &lt;pthread.h&gt;<br>int pthread_create(pthread_t *thread,<br>&nbsp;&nbsp;const pthread_attr_t *attr,<br>&nbsp;&nbsp;void *(*start)(void *), void *arg);<br>void pthread_exit(void *retval);<br>/* trả về 0 = ổn, &gt;0 = số lỗi */</p>
+      <p class="easy-only">pthread_create(&amp;t, NULL,<br>&nbsp;&nbsp;start, arg); /* tạo luồng */<br>pthread_exit(retval); /* luồng nghỉ */<br>// dịch với: cc -pthread ...</p>
+      <p class="en-only" lang="en">#include &lt;pthread.h&gt;<br>int pthread_create(pthread_t *thread,<br>&nbsp;&nbsp;const pthread_attr_t *attr,<br>&nbsp;&nbsp;void *(*start)(void *), void *arg);<br>void pthread_exit(void *retval);<br>/* returns 0 = ok, &gt;0 = error number */</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">pthread_create</span>
+      <h3>
+        <span class="standard-copy">Một đối số void * — và trật tự thực thi không xác định</span>
+        <span class="easy-only">Chỉ truyền được một món, và ai chạy trước không chắc</span>
+        <span class="en-only" lang="en">One void * argument — and unspecified execution order</span>
+      </h3>
+      <p class="standard-copy">Vì <code>start</code> chỉ nhận <i>một</i> đối số <code>void *</code>, muốn truyền nhiều giá trị ta gói chúng vào một struct rồi truyền con trỏ tới struct đó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Một điểm dễ sai: sau <code>pthread_create()</code>, chuẩn <i>không</i> quy định luồng nào chạy trước — luồng gọi hay luồng mới; đừng viết mã dựa vào một thứ tự cụ thể.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Chỉ gửi được một món cho luồng mới; muốn gửi nhiều thứ thì bỏ chung vào một "hộp" (struct) rồi gửi cái hộp. Và đừng đoán ai chạy trước: luồng cũ hay luồng mới đều có thể. <b>Nhớ nhé: gói nhiều thứ vào một hộp, và đừng tin vào thứ tự chạy.</b></p>
+      <p class="en-only" lang="en">Because <code>start</code> takes just <i>one</i> <code>void *</code> argument, to pass several values you wrap them in a struct and pass a pointer to it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> An easy mistake: after <code>pthread_create()</code>, the standard does <i>not</i> specify which thread runs first — the caller or the new one; never write code that depends on a particular order.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi khởi một nhóm luồng trong vòng lặp: mỗi lần truyền một struct riêng cho từng luồng, tránh dùng chung một biến vòng lặp mà mọi luồng cùng đọc.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi tạo nhiều luồng trong vòng lặp — mỗi luồng cần một hộp riêng, đừng để chúng dùng chung một biến đếm.</span>
+        <span class="en-only" lang="en">When starting a group of threads in a loop: pass each a separate struct, avoiding a shared loop variable all threads read.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Kiểu trả về void *</span><span class="en-only" lang="en">The void * return type</span></h4>
+          <p><span class="vi-only">Hàm <code>start</code> có kiểu <code>void *(*)(void *)</code>: nhận một con trỏ void và trả về một con trỏ void. Giá trị trả về này chính là "kết quả" của luồng, có thể lấy lại qua <code>pthread_join()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span><span class="en-only" lang="en">The <code>start</code> function has type <code>void *(*)(void *)</code>: it takes a void pointer and returns a void pointer. That return value is the thread's "result," retrievable later via <code>pthread_join()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Lỗi khi tạo</span><span class="en-only" lang="en">On creation error</span></h4>
+          <p><span class="vi-only">Nếu không đủ tài nguyên, <code>pthread_create()</code> trả về số lỗi dương (ví dụ <code>EAGAIN</code> khi chạm giới hạn số luồng) — nhớ kiểm tra giá trị trả về chứ không phải <code>errno</code>.<span class="cite"><a href="#ref-3">3</a></span></span><span class="en-only" lang="en">On insufficient resources, <code>pthread_create()</code> returns a positive error number (for example <code>EAGAIN</code> at the thread limit) — check the return value, not <code>errno</code>.<span class="cite"><a href="#ref-3">3</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">return vs errno</span>
+      <h3>
+        <span class="standard-copy">Bẫy kiểm lỗi: Pthreads không đặt errno</span>
+        <span class="easy-only">Kiểm lỗi khác với system call thường</span>
+        <span class="en-only" lang="en">The error-check trap: Pthreads does not set errno</span>
+      </h3>
+      <p class="standard-copy">Đây là một thay đổi thói quen quan trọng. Với system call thường, ta kiểm tra <code>if (call() == -1)</code> rồi đọc <code>errno</code>. Với Pthreads thì khác: hàm <i>trả thẳng</i> số lỗi, nên mẫu đúng là lưu giá trị trả về vào một biến rồi so sánh, ví dụ <code>s = pthread_create(...); if (s != 0) ...</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Các mã lỗi mang cùng ý nghĩa như những mã trong <code>errno</code> (chẳng hạn <code>EINVAL</code>, <code>EAGAIN</code>), chỉ là đường trả về khác.<span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Với lệnh cũ, ta xem nó có trả về −1 không rồi mới đọc ô báo lỗi. Với Pthreads, con số lỗi nằm ngay trong giá trị trả về — nên hãy xem thẳng cái nó trả về. <b>Nhớ nhé: Pthreads đưa lỗi ra ngay chỗ trả về, đừng đi tìm errno.</b></p>
+      <p class="en-only" lang="en">This is an important habit change. With ordinary system calls you check <code>if (call() == -1)</code> then read <code>errno</code>. With Pthreads it differs: the function <i>returns</i> the error number directly, so the correct pattern saves the return value and compares it, e.g. <code>s = pthread_create(...); if (s != 0) ...</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> The error codes carry the same meanings as those in <code>errno</code> (such as <code>EINVAL</code>, <code>EAGAIN</code>), just via a different path.<span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi bọc một lời gọi Pthreads trong mã kiểm lỗi — dùng giá trị trả về làm đối số cho <code>strerror()</code>, không phải <code>errno</code>.<span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Khi in thông báo lỗi của một hàm Pthreads — lấy số nó trả về mà tra, đừng tra errno.</span>
+        <span class="en-only" lang="en">Whenever you wrap a Pthreads call in error-checking — feed the return value to <code>strerror()</code>, not <code>errno</code>.<span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">pthread_exit</span>
+      <h3>
+        <span class="standard-copy">pthread_exit() kết thúc một luồng, không phải cả tiến trình</span>
+        <span class="easy-only">Một luồng nghỉ việc, văn phòng vẫn mở</span>
+        <span class="en-only" lang="en">pthread_exit() ends a thread, not the process</span>
+      </h3>
+      <p class="standard-copy">Một luồng chấm dứt theo vài cách: hàm <code>start</code> của nó <code>return</code>; nó gọi <code>pthread_exit()</code>; nó bị hủy (cancel); hoặc bất kỳ luồng nào gọi <code>exit()</code> (kết thúc cả tiến trình).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> Khác biệt mấu chốt: <code>pthread_exit()</code> chỉ kết thúc <i>luồng gọi</i>, các luồng khác vẫn chạy; còn <code>return</code> từ <code>main()</code> hay gọi <code>exit()</code> làm <i>mọi</i> luồng dừng ngay.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> Giá trị <code>retval</code> truyền cho <code>pthread_exit()</code> trở thành kết quả trả về của luồng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only">Một nhân viên có thể tự xin nghỉ bằng <code>pthread_exit()</code> mà văn phòng vẫn mở, người khác vẫn làm. Nhưng nếu ai đó gọi <code>exit()</code> thì cả văn phòng đóng cửa, mọi người nghỉ hết. <b>Nhớ nhé: pthread_exit chỉ cho một luồng nghỉ; exit đóng cửa cả tiến trình.</b></p>
+      <p class="en-only" lang="en">A thread terminates in several ways: its <code>start</code> function <code>return</code>s; it calls <code>pthread_exit()</code>; it is cancelled; or any thread calls <code>exit()</code> (ending the whole process).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> The crucial difference: <code>pthread_exit()</code> ends only the <i>calling thread</i>, others keep running; whereas a <code>return</code> from <code>main()</code> or a call to <code>exit()</code> stops <i>all</i> threads at once.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> The <code>retval</code> passed to <code>pthread_exit()</code> becomes the thread's return value.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi luồng chính muốn kết thúc phần việc của mình mà vẫn để các luồng khác chạy tiếp — nó gọi <code>pthread_exit()</code> thay vì <code>return</code> từ <code>main()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+        <span class="easy-only">Khi luồng chính làm xong việc nhưng muốn các luồng khác chạy tiếp — dùng pthread_exit, đừng return khỏi main.</span>
+        <span class="en-only" lang="en">When the main thread finishes its own work but wants the others to continue — it calls <code>pthread_exit()</code> instead of <code>return</code>ing from <code>main()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Cẩn thận với retval trỏ vào ngăn xếp</span><span class="en-only" lang="en">Beware a retval into the stack</span></h4>
+          <p><span class="vi-only">Không nên cho <code>retval</code> trỏ tới một biến cục bộ trên ngăn xếp của luồng đang kết thúc, vì ngăn xếp đó bị thu hồi — con trỏ sẽ treo. Hãy trỏ tới bộ nhớ toàn cục hoặc heap.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span><span class="en-only" lang="en"><code>retval</code> should not point to a local variable on the terminating thread's stack, since that stack is reclaimed — the pointer would dangle. Point it at global or heap memory.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Luồng chính là một trường hợp đặc biệt</span><span class="en-only" lang="en">The main thread is special</span></h4>
+          <p><span class="vi-only">Nếu luồng chính gọi <code>pthread_exit()</code> thay vì <code>exit()</code> hay <code>return</code>, các luồng còn lại vẫn tiếp tục; tiến trình chỉ thật sự kết thúc khi luồng cuối cùng chấm dứt.<span class="cite"><a href="#ref-4">4</a></span></span><span class="en-only" lang="en">If the main thread calls <code>pthread_exit()</code> rather than <code>exit()</code> or <code>return</code>, the remaining threads continue; the process only truly ends when the last thread terminates.<span class="cite"><a href="#ref-4">4</a></span></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Tạo được luồng rồi, hai nhu cầu lập tức nảy sinh: làm sao <i>gọi tên</i> một luồng, và làm sao <i>chờ</i> nó làm xong để lấy kết quả — hoặc buông nó ra để tự dọn dẹp. Đó là thread ID, <code>pthread_join()</code> và <code>pthread_detach()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Đã biết tạo luồng, giờ cần biết cách gọi tên nó, chờ nó xong, hoặc để nó tự lo liệu.</p>
+    <p class="en-only" lang="en">Once you can create threads, two needs arise at once: how to <i>name</i> a thread, and how to <i>wait</i> for it to finish and collect its result — or release it to clean up after itself. That is thread IDs, <code>pthread_join()</code>, and <code>pthread_detach()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="id-join-detach" aria-labelledby="id-join-detach-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="id-join-detach-title">
+      <span class="standard-copy">Gọi tên luồng, nối luồng đã kết thúc, tách luồng — và thuộc tính luồng</span>
+      <span class="easy-only">Tên luồng, chờ luồng xong, và tách luồng</span>
+      <span class="en-only" lang="en">Naming a thread, joining a finished one, detaching — and thread attributes</span>
+    </h2>
+    <p class="standard-copy">Mỗi luồng có một <b>thread ID</b> kiểu <code>pthread_t</code>, dùng để nhận diện nó trong các lời gọi Pthreads. Một luồng lấy ID của chính mình bằng <code>pthread_self()</code>, và so sánh hai ID bằng <code>pthread_equal()</code> — <i>không</i> dùng toán tử <code>==</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Để chờ một luồng khác kết thúc và lấy giá trị trả về của nó, ta gọi <code>pthread_join()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> Nếu không quan tâm tới kết quả và muốn hệ thống tự thu hồi tài nguyên của luồng khi nó kết thúc, ta <b>tách</b> nó bằng <code>pthread_detach()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Các thuộc tính của luồng (như kích thước ngăn xếp hay trạng thái tách) được gói trong một đối tượng <code>pthread_attr_t</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+    <p class="easy-only">Mỗi luồng có một "tên gọi" (thread ID). Luồng tự hỏi tên mình bằng <code>pthread_self</code>, và muốn so hai tên thì dùng <code>pthread_equal</code> chứ không so bằng dấu <code>==</code>. Muốn chờ một luồng làm xong thì gọi <code>pthread_join</code>. Còn nếu "thả" luồng tự lo liệu thì dùng <code>pthread_detach</code>. <b>Nhớ nhé: join là đứng chờ, detach là buông tay.</b></p>
+    <p class="en-only" lang="en">Each thread has a <b>thread ID</b> of type <code>pthread_t</code>, used to identify it in Pthreads calls. A thread gets its own ID with <code>pthread_self()</code>, and compares two IDs with <code>pthread_equal()</code> — <i>not</i> the <code>==</code> operator.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> To wait for another thread to terminate and collect its return value, you call <code>pthread_join()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> If you do not care about the result and want the system to reclaim the thread's resources automatically when it ends, you <b>detach</b> it with <code>pthread_detach()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> A thread's attributes (such as stack size or detach state) are bundled in a <code>pthread_attr_t</code> object.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>pthread_join(thread, retval)</code> chặn luồng gọi cho tới khi luồng <code>thread</code> kết thúc; nếu <code>retval</code> khác NULL, nó nhận giá trị trả về của luồng đó. Nối một luồng vừa trả về cả giá trị kết quả vừa cho phép hệ thống thu hồi tài nguyên của luồng. Nối một luồng <i>đã bị tách</i>, hoặc nối hai lần cùng một luồng, là lỗi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> <code>pthread_join</code> là đứng chờ trước cửa cho tới khi một luồng làm xong việc, rồi nhận "sản phẩm" nó đưa ra. Chờ một luồng đã bị thả ra (detach) là không được. <b>Nhớ nhé: join vừa để chờ, vừa để nhận kết quả, vừa để dọn dẹp.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>pthread_join(thread, retval)</code> blocks the caller until <code>thread</code> terminates; if <code>retval</code> is non-NULL, it receives that thread's return value. Joining a thread both returns its result and lets the system reclaim the thread's resources. Joining a thread that has <i>already been detached</i>, or joining the same thread twice, is an error.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">pthread_t pthread_self(void);<br>int pthread_equal(pthread_t, pthread_t);<br>int pthread_join(pthread_t, void **retval);<br>int pthread_detach(pthread_t);<br>/* join XOR detach — chọn một */</p>
+      <p class="easy-only">pthread_self()&nbsp;--&gt; tên của tôi<br>pthread_equal(a,b) --&gt; so hai tên<br>pthread_join(t,&amp;r) --&gt; chờ + nhận<br>pthread_detach(t) --&gt; buông tay</p>
+      <p class="en-only" lang="en">pthread_t pthread_self(void);<br>int pthread_equal(pthread_t, pthread_t);<br>int pthread_join(pthread_t, void **retval);<br>int pthread_detach(pthread_t);<br>/* join XOR detach — pick one */</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">pthread_equal</span>
+      <h3>
+        <span class="standard-copy">Thread ID là mờ đục — so sánh bằng pthread_equal()</span>
+        <span class="easy-only">Đừng so hai tên luồng bằng dấu bằng</span>
+        <span class="en-only" lang="en">Thread IDs are opaque — compare with pthread_equal()</span>
+      </h3>
+      <p class="standard-copy">Kiểu <code>pthread_t</code> được quy định là một kiểu <b>mờ đục</b> (opaque): chuẩn không cho giả định nó là một số nguyên. Vì vậy, không được so sánh hai thread ID bằng <code>==</code>, cũng không nên in nó bằng <code>%d</code>; phải dùng <code>pthread_equal()</code> để so.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Trên Linux/NPTL <code>pthread_t</code> tình cờ là một số nguyên, nhưng dựa vào điều đó làm chương trình mất tính khả chuyển.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">"Tên gọi" của luồng là một thứ bí ẩn — ta không được coi nó như một con số thường. Muốn biết hai tên có trùng không thì dùng <code>pthread_equal</code>, đừng dùng dấu <code>==</code>. <b>Nhớ nhé: so tên luồng thì dùng pthread_equal, không dùng ==.</b></p>
+      <p class="en-only" lang="en">The <code>pthread_t</code> type is specified as an <b>opaque</b> type: the standard forbids assuming it is an integer. So two thread IDs must not be compared with <code>==</code>, nor printed with <code>%d</code>; you must use <code>pthread_equal()</code> to compare them.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> On Linux/NPTL <code>pthread_t</code> happens to be an integer, but relying on that makes a program nonportable.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một luồng cần kiểm tra xem một thread ID có phải chính nó không: so <code>pthread_self()</code> với ID kia bằng <code>pthread_equal()</code>.<span class="cite"><a href="#ref-5">5</a></span></span>
+        <span class="easy-only">Khi một luồng muốn biết "có phải chính mình không" — so tên mình với tên kia bằng pthread_equal.</span>
+        <span class="en-only" lang="en">When a thread checks whether a thread ID is itself: compare <code>pthread_self()</code> with the other via <code>pthread_equal()</code>.<span class="cite"><a href="#ref-5">5</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">pthread_join</span>
+      <h3>
+        <span class="standard-copy">Nối luồng không giống waitpid() — không có thứ bậc</span>
+        <span class="easy-only">Chờ luồng khác chờ con: luồng nào cũng nối được</span>
+        <span class="en-only" lang="en">Joining is unlike waitpid() — there is no hierarchy</span>
+      </h3>
+      <p class="standard-copy">Kerrisk nhấn mạnh <code>pthread_join()</code> khác <code>waitpid()</code> ở vài điểm. Giữa các luồng <i>không có quan hệ cha–con</i>: bất kỳ luồng nào trong tiến trình cũng có thể nối bất kỳ luồng nào khác, không chỉ luồng "tạo" ra nó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> Ngoài ra không có cách "nối bất kỳ luồng nào kết thúc" (không có tương đương của <code>wait(NULL)</code>), và không thể nối theo kiểu không chặn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Chờ một luồng xong thì khác với chờ một tiến trình con. Luồng không có "cha con" — bất kỳ luồng nào cũng chờ được một luồng khác bất kỳ. Nhưng không thể nói "chờ đứa nào xong trước cũng được". <b>Nhớ nhé: luồng nào cũng nối được luồng khác, nhưng phải chỉ đích danh.</b></p>
+      <p class="en-only" lang="en">Kerrisk stresses that <code>pthread_join()</code> differs from <code>waitpid()</code> in several ways. Among threads there is <i>no parent–child relationship</i>: any thread in the process can join any other, not just the one that "created" it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> There is also no way to "join any terminated thread" (no equivalent of <code>wait(NULL)</code>), and no nonblocking join.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Cuối một chương trình chia việc cho nhiều luồng: luồng chính nối lần lượt từng luồng để chắc chắn tất cả đã xong trước khi tổng hợp kết quả.<span class="cite"><a href="#ref-6">6</a></span></span>
+        <span class="easy-only">Khi chia việc cho nhiều luồng — luồng chính chờ (join) từng luồng xong rồi mới gom kết quả.</span>
+        <span class="en-only" lang="en">At the end of a program that split work across threads: the main thread joins each in turn to be sure all are done before combining results.<span class="cite"><a href="#ref-6">6</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Không nối sẽ rò rỉ</span><span class="en-only" lang="en">Not joining leaks</span></h4>
+          <p><span class="vi-only">Nếu một luồng <i>có thể nối</i> (joinable) kết thúc mà không ai nối, nó trở thành "thây ma" (zombie) tương tự tiến trình: tài nguyên không được thu hồi. Vì vậy mỗi luồng joinable cuối cùng phải được nối, hoặc phải được tách.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span><span class="en-only" lang="en">If a <i>joinable</i> thread terminates and no one joins it, it becomes a "zombie" analogous to a process: its resources are not reclaimed. So every joinable thread must eventually be joined, or must be detached.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Lấy giá trị trả về</span><span class="en-only" lang="en">Collecting the return value</span></h4>
+          <p><span class="vi-only">Đối số thứ hai của <code>pthread_join()</code> là <code>void **</code>: nó nhận con trỏ <code>void *</code> mà luồng đã trả về (qua <code>return</code> hoặc <code>pthread_exit()</code>). Nếu không cần kết quả, truyền NULL.<span class="cite"><a href="#ref-6">6</a></span></span><span class="en-only" lang="en">The second argument to <code>pthread_join()</code> is a <code>void **</code>: it receives the <code>void *</code> the thread returned (via <code>return</code> or <code>pthread_exit()</code>). If the result is not needed, pass NULL.<span class="cite"><a href="#ref-6">6</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">pthread_detach / attr</span>
+      <h3>
+        <span class="standard-copy">Tách luồng, và chỉnh thuộc tính qua pthread_attr_t</span>
+        <span class="easy-only">Thả luồng tự lo, và tùy chỉnh luồng từ đầu</span>
+        <span class="en-only" lang="en">Detaching, and tuning attributes via pthread_attr_t</span>
+      </h3>
+      <p class="standard-copy"><code>pthread_detach(thread)</code> đánh dấu một luồng là <b>đã tách</b>: khi nó kết thúc, tài nguyên được tự động thu hồi, và ta không thể (và không cần) nối nó nữa.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Một luồng đã tách không thể quay lại thành joinable. Thay vì chỉnh sau, ta có thể quy định trạng thái tách — cùng các thuộc tính như kích thước và địa chỉ ngăn xếp — ngay từ lúc tạo, thông qua một đối tượng <code>pthread_attr_t</code> truyền vào <code>pthread_create()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <p class="easy-only">Nếu không muốn đứng chờ một luồng, ta "thả" nó bằng <code>pthread_detach</code> — xong việc nó tự dọn dẹp. Nhưng đã thả thì không chờ lại được nữa. Muốn đặt trước các tính chất của luồng (như độ lớn bàn làm việc) thì dùng một "phiếu cấu hình" là <code>pthread_attr_t</code>. <b>Nhớ nhé: đã detach thì khỏi join; muốn tùy chỉnh thì dùng pthread_attr_t.</b></p>
+      <p class="en-only" lang="en"><code>pthread_detach(thread)</code> marks a thread as <b>detached</b>: when it terminates, its resources are reclaimed automatically, and you cannot (and need not) join it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> A detached thread cannot be made joinable again. Instead of adjusting afterward, you can specify the detach state — along with attributes such as stack size and address — at creation time, via a <code>pthread_attr_t</code> object passed to <code>pthread_create()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Với các luồng "chạy rồi quên" — ví dụ mỗi kết nối mạng một luồng phục vụ — tách chúng để khỏi phải nối và khỏi rò rỉ tài nguyên.<span class="cite"><a href="#ref-7">7</a></span></span>
+        <span class="easy-only">Với luồng kiểu "làm xong là xong, không cần kết quả" — hãy tách nó ra để khỏi phải chờ.</span>
+        <span class="en-only" lang="en">For "fire-and-forget" threads — say, one server thread per network connection — detach them so you need not join and do not leak resources.<span class="cite"><a href="#ref-7">7</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Vòng đời của một pthread_attr_t</span><span class="en-only" lang="en">A pthread_attr_t's life cycle</span></h4>
+          <p><span class="vi-only">Khởi tạo bằng <code>pthread_attr_init()</code>, đặt từng thuộc tính bằng các hàm <code>pthread_attr_set*()</code> (ví dụ <code>pthread_attr_setdetachstate()</code>), rồi hủy bằng <code>pthread_attr_destroy()</code> sau khi đã dùng xong để tạo luồng.<span class="cite"><a href="#ref-8">8</a></span></span><span class="en-only" lang="en">Initialize with <code>pthread_attr_init()</code>, set each attribute with <code>pthread_attr_set*()</code> functions (e.g. <code>pthread_attr_setdetachstate()</code>), then destroy with <code>pthread_attr_destroy()</code> once you have used it to create the thread.<span class="cite"><a href="#ref-8">8</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Tách không chấm dứt luồng</span><span class="en-only" lang="en">Detaching does not end a thread</span></h4>
+          <p><span class="vi-only">Lưu ý: <code>pthread_detach()</code> chỉ thay đổi <i>cách dọn dẹp</i> sau này, nó <b>không</b> làm luồng dừng lại; luồng đã tách vẫn chạy tiếp cho tới khi tự kết thúc hoặc tiến trình kết thúc.<span class="cite"><a href="#ref-7">7</a></span></span><span class="en-only" lang="en">Note: <code>pthread_detach()</code> only changes <i>how cleanup</i> happens later; it does <b>not</b> stop the thread. A detached thread runs on until it terminates itself or the process ends.<span class="cite"><a href="#ref-7">7</a></span></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Có đủ công cụ để tạo, đặt tên, chờ và tách luồng, câu hỏi cuối của chương là câu hỏi thiết kế: <i>khi nào</i> nên chọn luồng thay vì nhiều tiến trình? Mỗi hướng có cái giá của nó.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Đủ công cụ rồi, câu hỏi cuối là: khi nào nên dùng luồng, khi nào nên dùng tiến trình?</p>
+    <p class="en-only" lang="en">With the tools to create, name, wait for and detach threads in hand, the chapter's last question is a design one: <i>when</i> should you choose threads over multiple processes? Each path has its price.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="threads-vs-processes" aria-labelledby="threads-vs-processes-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="threads-vs-processes-title">
+      <span class="standard-copy">Luồng so với tiến trình: nhanh và dễ chia sẻ, nhưng mong manh hơn</span>
+      <span class="easy-only">Luồng và tiến trình: mỗi bên mạnh yếu khác nhau</span>
+      <span class="en-only" lang="en">Threads versus processes: fast and sharing, but more fragile</span>
+    </h2>
+    <p class="standard-copy">Kerrisk khép chương bằng một cân nhắc thẳng thắn về việc chọn luồng thay vì tạo nhiều tiến trình bằng <code>fork()</code>. <b>Ưu điểm</b>: chia sẻ dữ liệu giữa các luồng dễ và nhanh (chỉ cần bộ nhớ chung), còn việc tạo luồng và chuyển ngữ cảnh giữa các luồng thường <i>rẻ hơn</i> so với tiến trình.<span class="cite"><a href="#ref-1">1</a></span> <b>Nhược điểm</b>: lập trình luồng đòi hỏi code phải an toàn với luồng (thread-safe); một lỗi trong một luồng — như làm hỏng bộ nhớ — có thể hạ gục <i>toàn bộ</i> tiến trình vì mọi luồng chung một không gian địa chỉ; và các luồng phải cạnh tranh cùng một không gian địa chỉ hữu hạn.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Nên dùng nhiều luồng hay nhiều tiến trình? Luồng thắng ở chỗ: chia sẻ dữ liệu dễ, tạo ra nhanh, đổi qua đổi lại nhẹ nhàng. Nhưng luồng cũng mong manh hơn: một người làm sai có thể kéo sập cả văn phòng, vì tất cả ngồi chung một phòng. <b>Nhớ nhé: luồng nhanh và gần gũi, nhưng cùng chung một mái nên cùng chịu rủi ro.</b></p>
+    <p class="en-only" lang="en">Kerrisk closes the chapter with a candid weighing of choosing threads over creating multiple processes with <code>fork()</code>. <b>Advantages</b>: sharing data between threads is easy and fast (just shared memory), and creating threads and switching between them is usually <i>cheaper</i> than with processes.<span class="cite"><a href="#ref-1">1</a></span> <b>Disadvantages</b>: thread programming demands thread-safe code; a bug in one thread — such as corrupting memory — can bring down the <i>entire</i> process because all threads share one address space; and threads must compete for one finite address space.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Lựa chọn luồng hay tiến trình là một sự đánh đổi giữa <i>tốc độ và sự gần gũi</i> (luồng) với <i>sự cô lập và an toàn</i> (tiến trình). Không có câu trả lời đúng tuyệt đối — nó phụ thuộc vào mức độ chia sẻ dữ liệu và mức độ chịu đựng rủi ro của bài toán.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Chọn luồng khi cần nhanh và chia sẻ nhiều; chọn tiến trình khi cần mỗi phần việc được cách ly an toàn khỏi phần khác. <b>Nhớ nhé: cần gần gũi chọn luồng, cần an toàn chọn tiến trình.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Choosing threads or processes is a trade-off between <i>speed and closeness</i> (threads) and <i>isolation and safety</i> (processes). There is no absolute right answer — it depends on how much data is shared and how much risk the problem can tolerate.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">LUỒNG&nbsp;&nbsp;: + chia sẻ dễ, tạo rẻ<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;− một lỗi sập cả tiến trình<br>TIẾN TRÌNH: + cô lập, an toàn<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;− chia sẻ phải qua IPC</p>
+      <p class="easy-only">LUỒNG: nhanh + chung đồ<br>&nbsp;&nbsp;nhưng cùng chịu rủi ro<br>TIẾN TRÌNH: an toàn, cách ly<br>&nbsp;&nbsp;nhưng chia sẻ khó hơn</p>
+      <p class="en-only" lang="en">THREADS&nbsp;&nbsp;: + easy sharing, cheap<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;− one bug sinks the process<br>PROCESSES: + isolation, safety<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;− sharing needs IPC</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">advantages</span>
+      <h3>
+        <span class="standard-copy">Vì sao chọn luồng: chia sẻ dễ và tạo rẻ</span>
+        <span class="easy-only">Điểm mạnh của luồng</span>
+        <span class="en-only" lang="en">Why choose threads: easy sharing, cheap creation</span>
+      </h3>
+      <p class="standard-copy">Hai lợi thế lớn nhất của luồng. Thứ nhất, <b>chia sẻ dữ liệu</b> giữa các luồng là chuyện đương nhiên — chúng dùng chung bộ nhớ, nên không cần những cơ chế IPC tốn kém và phức tạp mà các tiến trình buộc phải dùng.<span class="cite"><a href="#ref-1">1</a></span> Thứ hai, tạo một luồng <i>nhanh hơn</i> tạo một tiến trình, và chuyển ngữ cảnh giữa các luồng của cùng tiến trình thường rẻ hơn giữa các tiến trình.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Luồng mạnh ở hai chỗ: chia đồ cho nhau rất dễ (vì chung kho), và "thuê" một luồng mới nhanh hơn, nhẹ hơn so với mở một tiến trình mới. <b>Nhớ nhé: luồng được chọn vì chia sẻ dễ và tạo nhanh.</b></p>
+      <p class="en-only" lang="en">The two biggest advantages of threads. First, <b>sharing data</b> between threads is a given — they share memory, so none of the costly, complex IPC that separate processes must use.<span class="cite"><a href="#ref-1">1</a></span> Second, creating a thread is <i>faster</i> than creating a process, and context-switching between threads of one process is usually cheaper than between processes.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong các bài toán xử lý song song trên một tập dữ liệu lớn chung — nhiều luồng cùng cày trên một mảng trong bộ nhớ mà không cần sao chép dữ liệu.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi nhiều luồng cùng xử lý một kho dữ liệu lớn — không cần chép dữ liệu qua lại.</span>
+        <span class="en-only" lang="en">In parallel work over one large shared dataset — many threads grind on one in-memory array without copying data around.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">disadvantages</span>
+      <h3>
+        <span class="standard-copy">Cái giá: một lỗi có thể hạ cả tiến trình</span>
+        <span class="easy-only">Điểm yếu: cùng chung nên cùng sập</span>
+        <span class="en-only" lang="en">The price: one bug can sink the whole process</span>
+      </h3>
+      <p class="standard-copy">Mặt trái của chia sẻ. Vì mọi luồng chung một không gian địa chỉ, một luồng viết lầm vào bộ nhớ có thể làm hỏng dữ liệu của luồng khác và khiến <i>cả tiến trình</i> sụp đổ — trong khi với các tiến trình tách biệt, một tiến trình chết không kéo theo các tiến trình khác.<span class="cite"><a href="#ref-1">1</a></span> Hơn nữa, lập trình luồng đòi hỏi mọi hàm được gọi phải <b>an toàn với luồng</b> (thread-safe), một ràng buộc không nhỏ.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Chung kho có cái dở: một người làm đổ mực lên hồ sơ chung là hỏng cho tất cả, thậm chí sập cả văn phòng. Với các văn phòng riêng (tiến trình) thì một nơi cháy không lan sang nơi khác. <b>Nhớ nhé: chung một phòng nghĩa là cùng chịu khi một luồng gây họa.</b></p>
+      <p class="en-only" lang="en">The flip side of sharing. Because all threads share one address space, a thread that writes wrongly into memory can corrupt another thread's data and crash <i>the entire process</i> — whereas with separate processes, one dying process does not take the others with it.<span class="cite"><a href="#ref-1">1</a></span> Moreover, thread programming requires every function called to be <b>thread-safe</b>, no small constraint.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một thư viện cũ dùng bộ nhớ tĩnh nội bộ (không khả tái nhập) khiến một chương trình đa luồng thỉnh thoảng hỏng khó lần — đó là cái giá của việc chia sẻ địa chỉ.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi một chương trình đa luồng thỉnh thoảng hỏng khó hiểu — thường vì dùng một hàm không an toàn với luồng.</span>
+        <span class="en-only" lang="en">When an old library using internal static storage (nonreentrant) makes a multithreaded program fail intermittently and hard to trace — the price of a shared address space.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Các điểm so sánh khác</span><span class="en-only" lang="en">Other points of comparison</span></h4>
+          <p><span class="vi-only">Kerrisk còn nêu: xử lý tín hiệu trong chương trình đa luồng phức tạp hơn nhiều; mọi luồng buộc phải chạy <i>cùng một chương trình</i> (khác với các tiến trình có thể chạy chương trình khác nhau sau <code>exec()</code>); và các luồng chia nhau một không gian địa chỉ hữu hạn.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">Kerrisk also notes: signal handling is far more complex in a multithreaded program; all threads must run <i>the same program</i> (unlike processes, which can run different programs after <code>exec()</code>); and threads share one finite address space.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Không chỉ có hai lựa chọn</span><span class="en-only" lang="en">Not only two choices</span></h4>
+          <p><span class="vi-only">Tác giả lưu ý còn các mô hình khác ngoài "luồng thuần" và "tiến trình thuần" — chẳng hạn dùng tiến trình kèm bộ nhớ chia sẻ, hay các khung xử lý sự kiện — tùy bài toán mà cân nhắc.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">The author notes there are models beyond "pure threads" and "pure processes" — such as processes plus shared memory, or event-driven frameworks — to weigh per problem.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">NPTL</span>
+      <h3>
+        <span class="standard-copy">Trên Linux, Pthreads hiện đại là NPTL</span>
+        <span class="easy-only">Bản cài Pthreads trên Linux ngày nay</span>
+        <span class="en-only" lang="en">On Linux, modern Pthreads is NPTL</span>
+      </h3>
+      <p class="standard-copy">Kerrisk giải thích Linux có hai hiện thực Pthreads theo thời gian: <b>LinuxThreads</b> cũ và <b>NPTL</b> (Native POSIX Threads Library) mới hơn, bám sát chuẩn SUSv3 hơn và có hiệu năng tốt hơn. Trên các hệ thống Linux hiện đại, NPTL là hiện thực được dùng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Trên Linux có hai "bản cài" của Pthreads qua các thời kỳ; bản mới và tốt hơn tên là NPTL, và đó là bản bạn gặp trên máy Linux ngày nay. <b>Nhớ nhé: Pthreads trên Linux hiện đại chính là NPTL.</b></p>
+      <p class="en-only" lang="en">Kerrisk explains that Linux has had two Pthreads implementations over time: the older <b>LinuxThreads</b> and the newer <b>NPTL</b> (Native POSIX Threads Library), which conforms more closely to SUSv3 and performs better. On modern Linux systems, NPTL is the implementation in use.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi đọc tài liệu hay mã cũ nhắc tới LinuxThreads với các khác biệt hành vi — hầu hết đã lỗi thời trên hệ thống dùng NPTL ngày nay.<span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Khi gặp tài liệu cũ nói về LinuxThreads — phần lớn không còn đúng với NPTL hiện nay.</span>
+        <span class="en-only" lang="en">When reading old docs or code mentioning LinuxThreads with behavioral quirks — most are obsolete on today's NPTL systems.<span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="section-heading">
+      <h2 id="ngo-nhan-title">
+        <span class="standard-copy">Ba ngộ nhận thường gặp</span>
+        <span class="en-only" lang="en">Three common misconceptions</span>
+      </h2>
+    </div>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Mỗi luồng có bộ nhớ riêng như một tiến trình nhỏ”</span>
+          <span class="en-only" lang="en">“Each thread has its own memory like a mini-process”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> luồng giống tiến trình, mỗi luồng một không gian bộ nhớ riêng.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> các luồng <i>chia sẻ</i> cùng một không gian địa chỉ — chung bộ nhớ toàn cục, heap, bộ mô tả tệp. Chỉ ngăn xếp, <code>errno</code>, mặt nạ tín hiệu và thread ID là riêng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> a thread is like a process, each with its own memory space.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> threads <i>share</i> one address space — common global memory, heap, file descriptors. Only the stack, <code>errno</code>, signal mask and thread ID are private.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Hàm Pthreads đặt errno khi lỗi”</span>
+          <span class="en-only" lang="en">“Pthreads functions set errno on error”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> kiểm lỗi Pthreads bằng cách xem <code>−1</code> rồi đọc <code>errno</code>, như system call.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> hàm Pthreads trả về <b>0 khi thành công</b> hoặc một <b>số lỗi dương</b>; chúng không đặt <code>errno</code>. Hãy kiểm tra giá trị trả về.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> check Pthreads errors by looking for <code>−1</code> and reading <code>errno</code>, like a system call.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> Pthreads functions return <b>0 on success</b> or a <b>positive error number</b>; they do not set <code>errno</code>. Check the return value.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Luồng đã tách vẫn nối được để lấy kết quả”</span>
+          <span class="en-only" lang="en">“A detached thread can still be joined for its result”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> cứ <code>pthread_detach()</code> rồi vẫn <code>pthread_join()</code> sau để lấy giá trị trả về.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> join và detach <b>loại trừ nhau</b>. Nối một luồng đã tách là lỗi; luồng đã tách tự thu hồi tài nguyên và không trả kết quả cho ai.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> you can <code>pthread_detach()</code> and still <code>pthread_join()</code> later for the return value.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> join and detach are <b>mutually exclusive</b>. Joining a detached thread is an error; a detached thread reclaims its own resources and returns a result to no one.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm nền tảng về luồng</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped the basics of threads</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã nắm bản chất của luồng, ranh giới chung — riêng, và bộ API Pthreads cốt lõi — nền cho chương về đồng bộ hóa luồng.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you grasp what a thread is, the shared-versus-private boundary, and the core Pthreads API — the groundwork for the chapter on thread synchronization.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Kể những thuộc tính mà các luồng của một tiến trình dùng chung, và những thuộc tính mỗi luồng giữ riêng. Vì sao <code>errno</code> phải là riêng từng luồng?</p>
+        <p class="deep-only">Gợi ý sâu hơn: disposition tín hiệu và mặt nạ tín hiệu — cái nào chung, cái nào riêng?</p>
+      </li>
+      <li>
+        <p><code>pthread_create()</code> nhận những đối số nào? Một luồng mới bắt đầu và kết thúc như thế nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao không nên cho giá trị trả về của luồng trỏ vào biến cục bộ trên ngăn xếp của nó?</p>
+      </li>
+      <li>
+        <p>Các hàm Pthreads báo lỗi khác system call thông thường ra sao? Viết mẫu kiểm lỗi đúng cho một lời gọi Pthreads.</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao in một <code>pthread_t</code> bằng <code>%d</code> hoặc so bằng <code>==</code> là không khả chuyển?</p>
+      </li>
+      <li>
+        <p><code>pthread_join()</code> làm gì, và nó khác <code>waitpid()</code> ở những điểm nào? Điều gì xảy ra nếu một luồng joinable không bao giờ được nối?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao join và detach loại trừ nhau?</p>
+      </li>
+      <li>
+        <p>Nêu một ưu điểm và một nhược điểm của luồng so với tiến trình. Khi nào bạn sẽ chọn tiến trình thay vì luồng?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao một lỗi bộ nhớ trong một luồng lại nguy hiểm cho cả tiến trình?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Các luồng dùng chung gì, và mỗi luồng giữ riêng gì?</p></li>
+      <li><p>Làm sao để tạo một luồng mới, và cho nó kết thúc?</p></li>
+      <li><p>Hàm Pthreads báo thành công hay lỗi bằng cách nào?</p></li>
+      <li><p>Khi nào thì "chờ" một luồng (join), khi nào thì "thả" nó (detach)?</p></li>
+      <li><p>Luồng mạnh hơn tiến trình ở điểm nào, và yếu hơn ở điểm nào?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>Name the attributes the threads of a process share, and those each thread keeps private. Why must <code>errno</code> be per-thread?</p></li>
+      <li><p>What arguments does <code>pthread_create()</code> take? How does a new thread begin and end?</p></li>
+      <li><p>How do Pthreads functions report errors differently from ordinary system calls? Write the correct error-check pattern for a Pthreads call.</p></li>
+      <li><p>What does <code>pthread_join()</code> do, and how does it differ from <code>waitpid()</code>? What happens if a joinable thread is never joined?</p></li>
+      <li><p>Give one advantage and one disadvantage of threads versus processes. When would you choose processes over threads?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Một luồng là <span class="closing-accent">một dòng thực thi trong một tiến trình</span>, cùng anh em chia sẻ bộ nhớ nhưng giữ riêng ngăn xếp và <code>errno</code>. Với vài lời gọi Pthreads — <span class="closing-accent">tạo, kết thúc, nối và tách</span> — ta đã có đủ bộ xương để dựng chương trình đa luồng. Nhưng chính sự chia sẻ bộ nhớ ấy đặt ra câu hỏi lớn kế tiếp: làm sao để nhiều luồng chạm vào cùng một dữ liệu mà <i>không giẫm chân nhau</i>. Đó là <span class="closing-accent">đồng bộ hóa</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Luồng là <span class="closing-accent">một việc chạy song song trong một tiến trình</span>, dùng chung bộ nhớ nhưng mỗi luồng có góc riêng. Biết tạo, kết thúc, chờ và thả luồng là đủ để bắt đầu. Câu hỏi tiếp theo: làm sao để nhiều luồng dùng chung dữ liệu mà không rối. <b>Nhớ nhé: chia sẻ xong là phải học cách xếp hàng — đó là đồng bộ hóa.</b></p>
+    <p class="en-only" lang="en">A thread is <span class="closing-accent">a line of execution within a process</span>, sharing memory with its siblings yet keeping its own stack and <code>errno</code>. With a handful of Pthreads calls — <span class="closing-accent">create, terminate, join and detach</span> — you have the skeleton for building multithreaded programs. But that very memory sharing poses the next big question: how do many threads touch the same data <i>without stepping on each other</i>. That is <span class="closing-accent">synchronization</span>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-27-program-execution.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 27 · Thực thi chương trình</span>
+    <span class="nav-title en-only" lang="en">Chapter 27 · Program Execution</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-30-threads-thread-synchronization.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 30 · Luồng: Đồng bộ hóa</span>
+    <span class="nav-title en-only" lang="en">Chapter 30 · Threads: Thread Synchronization</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chương 29, “Threads: Introduction”, trang 617–630.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chapter 29, “Threads: Introduction”, pp. 617–630.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Michael Kerrisk, <i>The Linux Programming Interface</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3), ch. 29 “Threads: Introduction”, pp. 617–630. — <a href="https://man7.org/tlpi/" target="_blank" rel="noopener noreferrer">man7.org/tlpi</a></li>
+      <li id="ref-2">“pthreads(7) — Linux manual page” (overview of POSIX threads: attributes shared across threads vs distinct per-thread such as stack, errno and signal mask; functions return 0 or a positive error number; compile with -pthread; LinuxThreads vs NPTL). Linux man-pages project, maintained by Michael Kerrisk. <a href="https://man7.org/linux/man-pages/man7/pthreads.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/pthreads.7.html</a></li>
+      <li id="ref-3">“pthread_create(3) — Linux manual page” (creating a new thread; the thread, attr, start_routine and arg arguments; return 0 on success or an error number). <a href="https://man7.org/linux/man-pages/man3/pthread_create.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/pthread_create.3.html</a></li>
+      <li id="ref-4">“pthread_exit(3) — Linux manual page” (terminating the calling thread with a return value; relationship to returning from the start routine and to exit()). <a href="https://man7.org/linux/man-pages/man3/pthread_exit.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/pthread_exit.3.html</a></li>
+      <li id="ref-5">“pthread_self(3) / pthread_equal(3) — Linux manual pages” (obtaining the calling thread's ID; comparing thread IDs; the opaque pthread_t type). <a href="https://man7.org/linux/man-pages/man3/pthread_self.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/pthread_self.3.html</a></li>
+      <li id="ref-6">“pthread_join(3) — Linux manual page” (waiting for a thread to terminate and retrieving its return value; no hierarchy; joining is required or the thread leaks). <a href="https://man7.org/linux/man-pages/man3/pthread_join.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/pthread_join.3.html</a></li>
+      <li id="ref-7">“pthread_detach(3) — Linux manual page” (marking a thread detached so its resources are reclaimed automatically; join and detach are mutually exclusive). <a href="https://man7.org/linux/man-pages/man3/pthread_detach.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/pthread_detach.3.html</a></li>
+      <li id="ref-8">“pthread_attr_init(3) — Linux manual page” (the pthread_attr_t object: initializing, setting attributes such as detach state and stack size, and destroying it). <a href="https://man7.org/linux/man-pages/man3/pthread_attr_init.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/pthread_attr_init.3.html</a></li>
+      <li id="ref-9">“pthread_create — The Open Group Base Specifications (POSIX.1-2017)” (the standard definition of thread creation, the start routine, and the return-value error convention). <a href="https://pubs.opengroup.org/onlinepubs/9699919799/functions/pthread_create.html" target="_blank" rel="noopener noreferrer">pubs.opengroup.org — pthread_create</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-27-program-execution.html">chapter 27</a>
+      <a href="chapter-30-threads-thread-synchronization.html">chapter 30</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('tlpi-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('tlpi-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('tlpi-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>
