@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 41 · Nền tảng thư viện dùng chung — The Linux Programming Interface</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 41 “Fundamentals of Shared Libraries” trong The Linux Programming Interface (Michael Kerrisk, No Starch Press, 2010): thư viện đối tượng, thư viện tĩnh và hạn chế của chúng, tổng quan thư viện dùng chung, tạo và dùng thư viện dùng chung (mã độc lập vị trí với -fPIC, dựng bằng cc -shared, liên kết với -l/-L, cách tìm thư viện lúc chạy), soname cùng tên thật và tên liên kết, cài đặt thư viện và chạy ldconfig, biến LD_LIBRARY_PATH và trình liên kết động ld.so, và các công cụ ldd, objdump, readelf, nm. Ba mức đọc, mọi khẳng định đều có nguồn.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('tlpi-reading-mode'),
+l=localStorage.getItem('tlpi-lang'),
+t=localStorage.getItem('tlpi-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   THE LINUX PROGRAMMING INTERFACE — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"TLPI · CH.41";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+/* soon = chapter not yet on disk; rendered as a non-link cell. */
+.chapter-path .soon{
+  display:block;padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--tint);border:1px dashed var(--line);opacity:.6;
+}
+.chapter-path .soon .soon-tag{
+  display:inline-block;font-family:var(--sans);font-size:.6rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:.1rem .45rem;margin-top:.4rem;
+}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.series-links .soon{margin-right:.5rem;color:var(--muted);opacity:.55;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+
+/* ---------- whole-book mind map banner ---------- */
+.mindmap-banner{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  gap:clamp(1rem,3vw,2rem);align-items:center;
+  margin:3rem 0 0;padding:1.35rem clamp(1.15rem,3vw,2rem);
+  border:1px solid var(--line);border-left:4px solid var(--teal);
+  border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);
+  color:var(--ink);text-decoration:none;
+  transition:border-color .15s,transform .15s;
+}
+a.mindmap-banner:hover{border-color:var(--teal);transform:translateY(-2px);}
+a.mindmap-banner:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.mindmap-banner.soon{opacity:.5;cursor:default;}
+.mindmap-icon{font-size:1.9rem;line-height:1;}
+.mindmap-banner h3{margin:0 0 .3rem;font-size:1.05rem;}
+.mindmap-banner p{margin:0;max-width:48rem;font-size:.88rem;color:var(--muted);}
+.mindmap-banner .result{margin-top:0;color:var(--teal);font-weight:600;white-space:nowrap;}
+.mindmap-banner.soon .result{color:var(--muted);}
+@media (max-width:860px){
+  .mindmap-banner{grid-template-columns:auto minmax(0,1fr);}
+  .mindmap-banner .result{grid-column:2;white-space:normal;}
+}
+@media (max-width:460px){
+  .mindmap-banner{margin-left:0;margin-right:0;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    The Linux Programming Interface
+    <span>Chương 41 · Fundamentals of Shared Libraries</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 41 · Nền tảng thư viện dùng chung</span>
+      <span class="en-only" lang="en">Chapter 41 · Fundamentals of Shared Libraries</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Một bản mã, chia sẻ cho mọi chương trình — giải phẫu thư viện dùng chung</span>
+      <span class="easy-only">Một bản mã dùng chung cho nhiều chương trình</span>
+      <span class="en-only" lang="en">One copy of the code, shared by every program — the anatomy of shared libraries</span>
+    </h1>
+
+    <p class="standard-copy">Kerrisk mở đầu bằng <b>thư viện đối tượng</b> (object library) — một tập hợp các mô-đun đối tượng đã biên dịch, gom lại thành một đơn vị để nhiều chương trình liên kết tới. Linux có hai loại: <b>thư viện tĩnh</b> (static library, hay <i>archive</i>, tên dạng <code>libname.a</code>) và <b>thư viện dùng chung</b> (shared library, tên dạng <code>libname.so</code>).<span class="cite"><a href="#ref-1">1</a></span> Chương đi qua: vì sao thư viện tĩnh lãng phí; ý tưởng cốt lõi của thư viện dùng chung; cách tạo và dùng nó (mã độc lập vị trí với <code>-fPIC</code>, dựng bằng <code>cc -shared</code>, liên kết với <code>-l</code>/<code>-L</code>, cách tìm thư viện lúc chạy); <b>soname</b> cùng tên thật và tên liên kết; cài đặt và chạy <code>ldconfig</code>; biến <code>LD_LIBRARY_PATH</code> với trình liên kết động <code>ld.so</code>; và các công cụ <code>ldd</code>, <code>objdump</code>, <code>readelf</code>, <code>nm</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hãy hình dung một công thức nấu ăn mà nhiều đầu bếp cùng cần. Thay vì ai cũng chép lại cả cuốn vào sổ của mình (tốn giấy, khó sửa), ta treo <i>một</i> tấm bảng công thức chung giữa bếp để mọi người cùng nhìn. Thư viện dùng chung là tấm bảng ấy: một bản mã nằm trong bộ nhớ, mọi chương trình cùng dùng. <b>Nhớ nhé: thư viện dùng chung là một bản mã treo chung cho nhiều chương trình.</b></p>
+    <p class="en-only" lang="en">Kerrisk opens with the <b>object library</b> — a collection of compiled object modules gathered into one unit that many programs can link against. Linux provides two types: the <b>static library</b> (or <i>archive</i>, named <code>libname.a</code>) and the <b>shared library</b> (named <code>libname.so</code>).<span class="cite"><a href="#ref-1">1</a></span> The chapter covers: why static libraries are wasteful; the core idea of a shared library; how to create and use one (position-independent code with <code>-fPIC</code>, building with <code>cc -shared</code>, linking with <code>-l</code>/<code>-L</code>, the run-time search); the <b>soname</b> together with the real name and the linker name; installing and running <code>ldconfig</code>; the <code>LD_LIBRARY_PATH</code> variable and the dynamic linker <code>ld.so</code>; and the tools <code>ldd</code>, <code>objdump</code>, <code>readelf</code>, and <code>nm</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only deep-bilingual"><span class="vi-only">Điểm mấu chốt để cả chương sáng tỏ: khi liên kết với thư viện <i>tĩnh</i>, bản sao các mô-đun đối tượng được chép thẳng vào tệp thực thi; khi liên kết với thư viện <i>dùng chung</i>, tệp thực thi chỉ ghi lại <i>tên</i> thư viện nó cần (thẻ <code>DT_NEEDED</code> trong ELF), còn một bản duy nhất của thư viện được <b>trình liên kết động</b> nạp vào bộ nhớ lúc chạy, khi chương trình đầu tiên cần tới nó khởi động.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span><span class="en-only" lang="en">The hinge that makes the whole chapter cohere: linking against a <i>static</i> library copies the object modules straight into the executable; linking against a <i>shared</i> library records only the <i>name</i> of the library the executable needs (the <code>DT_NEEDED</code> tag in ELF), while a single copy of the library is loaded into memory at run time by the <b>dynamic linker</b>, when the first program needing it starts.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> một thư viện dùng chung tách <i>mã</i> khỏi <i>tệp thực thi</i> — thay vì chép mã vào từng chương trình, ta để một bản duy nhất trong bộ nhớ và cho mọi chương trình dùng chung lúc chạy. Hiểu được <code>-fPIC</code>, bộ ba tên (tên thật / soname / tên liên kết), cách <code>ld.so</code> tìm thư viện, và vai trò của <code>ldconfig</code> — là nắm được cơ chế liên kết động làm nền cho gần như mọi phần mềm Linux hiện đại.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> đừng chép mã vào từng chương trình; hãy để một bản dùng chung và cho mọi chương trình mượn lúc chạy. Vừa tiết kiệm đĩa và bộ nhớ, vừa dễ vá lỗi. <b>Nhớ nhé: một bản mã, nhiều người dùng, sửa một chỗ là xong.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> a shared library separates the <i>code</i> from the <i>executable</i> — instead of copying code into each program, a single copy lives in memory and every program shares it at run time. Grasping <code>-fPIC</code>, the triad of names (real name / soname / linker name), how <code>ld.so</code> finds libraries, and the role of <code>ldconfig</code> — is grasping the dynamic-linking machinery that underpins nearly all modern Linux software.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: một thư viện dùng chung là một bản mã duy nhất nằm trong bộ nhớ; tệp thực thi chỉ ghi tên nó cần qua thẻ DT_NEEDED; trình liên kết động ld.so tìm và nạp thư viện lúc chạy; bộ ba tên gồm tên thật, soname và tên liên kết điều phối việc chọn phiên bản. Diagram: a shared library is a single in-memory copy of the code; the executable records only the name it needs via a DT_NEEDED tag; the dynamic linker ld.so finds and loads the library at run time; the triad of real name, soname and linker name governs version selection.">
+    <div class="core">
+      <b>shared library</b>
+      <small class="standard-copy">Một bản mã, nạp một lần, mọi chương trình dùng chung</small>
+      <small class="easy-only">Một bản mã treo chung cho nhiều chương trình</small>
+      <small class="en-only" lang="en">One copy of the code, loaded once, shared by all</small>
+    </div>
+
+    <div class="node">
+      <b>tệp thực thi · DT_NEEDED</b>
+      <small class="standard-copy">Chỉ ghi tên thư viện cần, không chép mã vào</small>
+      <small class="easy-only">Chỉ ghi tên thư viện, không chép mã</small>
+      <small class="en-only" lang="en">Records the library name needed, not the code</small>
+    </div>
+
+    <div class="node">
+      <b>lúc chạy · ld.so</b>
+      <small class="standard-copy">Trình liên kết động tìm và nạp .so vào bộ nhớ</small>
+      <small class="easy-only">Trình liên kết động đi tìm và nạp thư viện</small>
+      <small class="en-only" lang="en">The dynamic linker finds and loads the .so</small>
+    </div>
+
+    <div class="node">
+      <b>bộ ba tên · real / soname / linker</b>
+      <small class="standard-copy">tên thật, soname, tên liên kết — điều phối phiên bản</small>
+      <small class="easy-only">Ba cái tên giúp chọn đúng phiên bản thư viện</small>
+      <small class="en-only" lang="en">real name, soname, linker name — govern versioning</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#static-vs-shared">
+    <span>01</span>
+    <b class="standard-copy">Thư viện đối tượng: tĩnh và dùng chung</b>
+    <b class="easy-only">Hai loại thư viện: tĩnh và dùng chung</b>
+    <b class="en-only" lang="en">Object libraries: static vs shared</b>
+  </a>
+  <a href="#building-shared">
+    <span>02</span>
+    <b class="standard-copy">Tạo và dùng: -fPIC, cc -shared, liên kết</b>
+    <b class="easy-only">Cách tạo và dùng một thư viện dùng chung</b>
+    <b class="en-only" lang="en">Creating and using: -fPIC, cc -shared, linking</b>
+  </a>
+  <a href="#soname-names">
+    <span>03</span>
+    <b class="standard-copy">Soname và ba cái tên của một thư viện</b>
+    <b class="easy-only">Soname và ba cái tên của thư viện</b>
+    <b class="en-only" lang="en">The soname and a library's three names</b>
+  </a>
+  <a href="#install-tools">
+    <span>04</span>
+    <b class="standard-copy">Cài đặt, ldconfig, LD_LIBRARY_PATH và công cụ</b>
+    <b class="easy-only">Cài đặt, ldconfig và các công cụ</b>
+    <b class="en-only" lang="en">Installing, ldconfig, LD_LIBRARY_PATH, and tools</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="static-vs-shared" aria-labelledby="static-vs-shared-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="static-vs-shared-title">
+      <span class="standard-copy">Thư viện tĩnh gom mã lại — thư viện dùng chung thì chia sẻ nó</span>
+      <span class="easy-only">Thư viện tĩnh chép mã vào từng chương trình; thư viện dùng chung thì để chung một bản</span>
+      <span class="en-only" lang="en">A static library bundles the code — a shared library shares it</span>
+    </h2>
+    <p class="standard-copy">Một <b>thư viện đối tượng</b> là một đơn vị gom nhiều mô-đun đối tượng đã biên dịch, để tránh phải biên dịch lại mã nguồn hay liệt kê hàng loạt tệp <code>.o</code> mỗi lần dựng chương trình. Loại đầu tiên trên UNIX là <b>thư viện tĩnh</b> — thực chất là một tệp lưu trữ (archive) chứa bản sao các tệp đối tượng, tạo và bảo trì bằng lệnh <code>ar(1)</code>, tên theo quy ước <code>libname.a</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Khi liên kết với thư viện tĩnh, trình liên kết chỉ <i>trích</i> những mô-đun chương trình thực sự cần và <i>chép</i> chúng vào tệp thực thi.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Thư viện là một "hộp" chứa sẵn nhiều mẩu mã đã dịch, để ta khỏi phải dịch lại hay gõ lại tên từng mẩu mỗi lần. Kiểu cũ nhất — thư viện tĩnh — giống như photo từng mẩu cần dùng rồi dán thẳng vào chương trình. Chương trình nào cũng tự mang theo một bản photo riêng. <b>Nhớ nhé: thư viện tĩnh là chép mã dán thẳng vào chương trình.</b></p>
+    <p class="en-only" lang="en">An <b>object library</b> is a unit that gathers many compiled object modules, so you need not recompile source or list a long series of <code>.o</code> files each time you build a program. The first type on UNIX is the <b>static library</b> — essentially an archive holding copies of the object files, created and maintained with the <code>ar(1)</code> command and named by convention <code>libname.a</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> When you link against a static library, the linker only <i>extracts</i> the modules the program actually needs and <i>copies</i> them into the executable.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <b>Thư viện dùng chung</b> (shared library) dựa trên một ý tưởng: <i>một bản duy nhất</i> của các mô-đun đối tượng được mọi chương trình cần tới dùng chung. Các mô-đun <b>không</b> được chép vào tệp thực thi; thay vào đó, một bản của thư viện được nạp vào bộ nhớ lúc chạy, khi chương trình đầu tiên cần nó khởi động. Các chương trình chạy sau dùng lại chính bản đã nạp đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Thay vì mỗi chương trình mang một bản photo, ta để <i>một</i> bản gốc trong bộ nhớ và cho mọi chương trình cùng dùng. <b>Nhớ nhé: một bản gốc dùng chung, không ai phải photo riêng.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A <b>shared library</b> rests on one idea: <i>a single copy</i> of the object modules is shared by all programs requiring them. The modules are <b>not</b> copied into the executable; instead, one copy of the library is loaded into memory at run time, when the first program needing it starts. Later programs reuse that already-loaded copy.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy"># thư viện tĩnh (archive)<br>$ cc -g -c mod1.c mod2.c mod3.c<br>$ ar r libdemo.a mod1.o mod2.o mod3.o<br>$ cc -g -o prog prog.o -ldemo<br>/* mã được chép vào prog */</p>
+      <p class="easy-only">ar r libdemo.a *.o&nbsp;&nbsp;--&gt; gom vào hộp<br>cc -o prog prog.o -ldemo<br>(mã dán thẳng vào prog)</p>
+      <p class="en-only" lang="en"># static library (archive)<br>$ cc -g -c mod1.c mod2.c mod3.c<br>$ ar r libdemo.a mod1.o mod2.o mod3.o<br>$ cc -g -o prog prog.o -ldemo<br>/* code copied into prog */</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">ar / libname.a</span>
+      <h3>
+        <span class="standard-copy">Thư viện tĩnh là một archive của các tệp .o</span>
+        <span class="easy-only">Thư viện tĩnh là một hộp chứa các tệp .o</span>
+        <span class="en-only" lang="en">A static library is an archive of .o files</span>
+      </h3>
+      <p class="standard-copy">Lệnh <code>ar(1)</code> tạo và bảo trì archive; đối số <code>options</code> gồm một mã thao tác kèm các chữ bổ nghĩa. Thường dùng: <code>r</code> (replace) để chèn hoặc thay một tệp đối tượng, <code>t</code> (table of contents) để liệt kê nội dung — thêm <code>v</code> sẽ hiện cả quyền, user/group ID, kích thước, thời điểm sửa — và <code>d</code> (delete) để xóa một mô-đun.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Dù archive chứa nhiều mô-đun, trình liên kết chỉ lấy những mô-đun chương trình cần.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Lệnh <code>ar</code> giống như quản lý một hộp đồ: <code>r</code> để bỏ thêm hay thay một món, <code>t</code> để xem danh sách món trong hộp, <code>d</code> để lấy một món ra. Khi dựng chương trình, hệ thống chỉ lấy đúng những món cần. <b>Nhớ nhé: ar quản lý cái hộp .o, chương trình chỉ lấy món nó cần.</b></p>
+      <p class="en-only" lang="en">The <code>ar(1)</code> command creates and maintains the archive; its <code>options</code> argument holds one operation code plus modifier letters. Common ones: <code>r</code> (replace) to insert or replace an object file, <code>t</code> (table of contents) to list its contents — adding <code>v</code> shows permissions, user/group IDs, size, and modification time — and <code>d</code> (delete) to remove a module.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Though the archive holds many modules, the linker pulls in only those the program needs.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Có thể liên kết theo hai cách: nêu tên tệp archive trực tiếp (<code>cc -o prog prog.o libdemo.a</code>), hoặc đặt nó vào thư mục chuẩn rồi dùng <code>-ldemo</code>, thêm <code>-Lmylibdir</code> nếu nó ở thư mục khác.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi dựng chương trình, bạn chỉ cần nói tên thư viện bằng <code>-ldemo</code> thay vì liệt kê từng tệp .o.</span>
+        <span class="en-only" lang="en">You can link in two ways: name the archive directly (<code>cc -o prog prog.o libdemo.a</code>), or place it in a standard directory and use <code>-ldemo</code>, adding <code>-Lmylibdir</code> if it lives elsewhere.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Chi tiết của tác giả</span><span class="en-only" lang="en">The author's detail</span></h4>
+          <p><span class="vi-only">Archive còn lưu các thuộc tính của từng tệp đối tượng thành phần: quyền tệp, user/group ID dạng số, và thời điểm sửa lần cuối. Sau khi đã dựng thư viện, có thể xóa các tệp <code>.o</code> gốc vì chúng không còn cần nữa.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">The archive also records each component object file's attributes: file permissions, numeric user and group IDs, and last-modification time. After building the library you may delete the original <code>.o</code> files, since they are no longer required.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Vì sao chọn -g</span><span class="en-only" lang="en">Why -g</span></h4>
+          <p><span class="vi-only">Tác giả khuyên luôn biên dịch với cờ <code>-g</code> để kèm thông tin gỡ lỗi; đây là thói quen tốt khi dựng cả chương trình lẫn thư viện.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span><span class="en-only" lang="en">The author advises always compiling with <code>-g</code> to include debugging information; it is a good habit when building both programs and libraries.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">static redundancy</span>
+      <h3>
+        <span class="standard-copy">Vì sao thư viện tĩnh lãng phí: đĩa, bộ nhớ, và việc vá lỗi</span>
+        <span class="easy-only">Thư viện tĩnh tốn chỗ và khó vá lỗi</span>
+        <span class="en-only" lang="en">Why static wastes: disk, memory, and patching</span>
+      </h3>
+      <p class="standard-copy">Vì mỗi tệp thực thi mang bản sao riêng của các mô-đun, sự dư thừa này có ba nhược điểm: <b>tốn đĩa</b> vì lưu nhiều bản của cùng mô-đun; <b>tốn bộ nhớ ảo</b> vì nhiều chương trình chạy cùng lúc mỗi bên giữ bản riêng; và <b>khó vá</b> vì mỗi khi một mô-đun cần sửa (vá bảo mật hay sửa lỗi), mọi tệp thực thi dùng nó phải được liên kết lại.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ba cái tốn khi ai cũng mang bản photo riêng: tốn chỗ chứa, tốn bộ nhớ lúc chạy, và mỗi lần sửa một mẩu mã phải sửa lại tất cả các bản photo. <b>Nhớ nhé: chép mã khắp nơi thì sửa một lỗi phải đi sửa khắp nơi.</b></p>
+      <p class="en-only" lang="en">Because each executable carries its own copy of the modules, this redundancy has three drawbacks: <b>wasted disk</b> storing many copies of the same module; <b>wasted virtual memory</b> as several running programs each hold their own copy; and <b>hard patching</b>, since each time a module needs a change (a security or bug fix), every executable using it must be relinked.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi bản vá bảo mật cho một thư viện C nền tảng: với thư viện dùng chung, chỉ cần thay một tệp; với thư viện tĩnh, phải liên kết lại mọi ứng dụng dùng nó.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi có lỗ hổng bảo mật trong một thư viện lớn: dùng chung thì vá một chỗ là xong cho tất cả.</span>
+        <span class="en-only" lang="en">Every security patch to a core C library: with a shared library you replace one file; with a static library you must relink every application that uses it.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">code shared, data not</span>
+      <h3>
+        <span class="standard-copy">Mã thì dùng chung — nhưng biến thì không</span>
+        <span class="easy-only">Dùng chung mã, nhưng mỗi chương trình có biến riêng</span>
+        <span class="en-only" lang="en">Code is shared — but variables are not</span>
+      </h3>
+      <p class="standard-copy">Một điểm dễ nhầm: tuy mã của thư viện dùng chung được chia sẻ giữa nhiều tiến trình, các <i>biến</i> của nó thì không. Mỗi tiến trình dùng thư viện có bản sao riêng của các biến toàn cục và tĩnh được định nghĩa trong thư viện.<span class="cite"><a href="#ref-1">1</a></span> Thư viện dùng chung còn có lợi ích phụ: do kích thước chương trình nhỏ hơn, trong một số trường hợp chương trình được nạp và khởi động nhanh hơn — nhưng chỉ đúng khi thư viện lớn đã được một chương trình khác dùng sẵn; chương trình <i>đầu tiên</i> nạp nó thì lại khởi động chậm hơn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Dùng chung là dùng chung phần <i>mã lệnh</i> — còn các biến (dữ liệu) thì mỗi chương trình giữ riêng một bộ, không lẫn vào nhau. Giống như nhiều người đọc chung một cuốn công thức, nhưng ai nấu nồi của người đó. <b>Nhớ nhé: chung công thức, riêng nồi.</b></p>
+      <p class="en-only" lang="en">A common confusion: although a shared library's code is shared among processes, its <i>variables</i> are not. Each process using the library has its own copies of the global and static variables defined within the library.<span class="cite"><a href="#ref-1">1</a></span> Shared libraries bring a side benefit too: since program size is smaller, in some cases a program loads and starts faster — but only when a large library is already in use by another program; the <i>first</i> program to load it actually starts more slowly.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Chi phí kèm theo: thư viện dùng chung phức tạp hơn, phải biên dịch bằng mã độc lập vị trí (có phí tổn hiệu năng), và cần <i>tái định vị ký hiệu</i> lúc chạy.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Đổi lại sự tiện lợi, thư viện dùng chung phức tạp hơn và chạy có thể chậm hơn một chút do phải sắp chỗ lúc chạy.</span>
+        <span class="en-only" lang="en">The costs: shared libraries are more complex, must be compiled as position-independent code (a performance overhead), and require <i>symbol relocation</i> at run time.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đã rõ vì sao nên dùng chung, câu hỏi thực hành tiếp theo là: <i>làm sao dựng</i> một thư viện dùng chung và liên kết chương trình vào nó? Hai chi tiết mới xuất hiện — mã phải <b>độc lập vị trí</b> (<code>-fPIC</code>), và việc liên kết tách thành hai pha: tĩnh lúc dựng, động lúc chạy.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Biết lợi ích rồi, giờ tới phần làm: tạo thư viện dùng chung thế nào và gắn chương trình vào ra sao? Có hai điều mới cần nhớ — mã phải "đi đâu cũng chạy được", và có hai bước liên kết.</p>
+    <p class="en-only" lang="en">Having seen why sharing is worthwhile, the next practical question is: how do you <i>build</i> a shared library and link a program against it? Two new details appear — the code must be <b>position-independent</b> (<code>-fPIC</code>), and linking splits into two phases: static at build time, dynamic at run time.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="building-shared" aria-labelledby="building-shared-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="building-shared-title">
+      <span class="standard-copy">Dựng một thư viện dùng chung: -fPIC, cc -shared, rồi liên kết hai pha</span>
+      <span class="easy-only">Dựng thư viện dùng chung và gắn chương trình vào</span>
+      <span class="en-only" lang="en">Building a shared library: -fPIC, cc -shared, then two-phase linking</span>
+    </h2>
+    <p class="standard-copy">Chỉ cần hai lệnh để có một thư viện dùng chung. Trước hết, biên dịch các mô-đun bằng cờ <code>-fPIC</code> để sinh <b>mã độc lập vị trí</b>; sau đó dùng <code>cc -shared</code> gom chúng thành tệp <code>.so</code>. Theo quy ước, thư viện dùng chung mang tiền tố <code>lib</code> và hậu tố <code>.so</code> (shared object).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> Chương chỉ bàn thư viện định dạng <b>ELF</b> — định dạng cho tệp thực thi và thư viện dùng chung trên Linux hiện đại, thay cho <i>a.out</i> và <i>COFF</i> cũ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+    <p class="easy-only">Chỉ cần hai bước: dịch mã với cờ <code>-fPIC</code> (để mã "đi đâu cũng chạy được"), rồi gộp lại bằng <code>cc -shared</code> thành một tệp đuôi <code>.so</code>. Tên thư viện bắt đầu bằng <code>lib</code> và kết thúc bằng <code>.so</code>. <b>Nhớ nhé: -fPIC để dịch, -shared để gộp, đuôi .so để nhận ra.</b></p>
+    <p class="en-only" lang="en">Just two commands produce a shared library. First, compile the modules with the <code>-fPIC</code> flag to generate <b>position-independent code</b>; then use <code>cc -shared</code> to gather them into a <code>.so</code> file. By convention, shared libraries carry the prefix <code>lib</code> and the suffix <code>.so</code> (shared object).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> The chapter deals only with <b>ELF</b> shared libraries — the format used for executables and shared libraries on modern Linux, superseding the older <i>a.out</i> and <i>COFF</i>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <b>Mã độc lập vị trí</b> (position-independent code, PIC) là mã được sinh sao cho có thể đặt ở <i>bất kỳ</i> địa chỉ ảo nào lúc chạy. Điều này cần cho thư viện dùng chung, vì lúc liên kết không thể biết trước thư viện sẽ nằm ở đâu trong bộ nhớ — vị trí đó phụ thuộc vào bộ nhớ chương trình đã dùng và các thư viện khác đã nạp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Mã độc lập vị trí là mã "đi đâu cũng chạy được" — đặt ở chỗ nào trong bộ nhớ nó cũng hoạt động. Cần thế vì lúc dựng ta chưa biết thư viện sẽ nằm ở đâu lúc chạy. <b>Nhớ nhé: -fPIC làm mã chạy được dù nằm ở bất cứ đâu.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <b>Position-independent code</b> (PIC) is code generated so it can be placed at <i>any</i> virtual address at run time. This is necessary for a shared library, since at link time there is no way to know where it will sit in memory — that location depends on the memory already used by the program and which other libraries are already loaded.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy"># 1) biên dịch độc lập vị trí<br>$ gcc -g -c -fPIC -Wall mod1.c mod2.c mod3.c<br># 2) gộp thành thư viện dùng chung<br>$ gcc -g -shared -o libfoo.so mod1.o mod2.o mod3.o<br># 3) liên kết chương trình<br>$ gcc -g -Wall -o prog prog.c libfoo.so</p>
+      <p class="easy-only">gcc -c -fPIC *.c&nbsp;&nbsp;--&gt; dịch<br>gcc -shared -o libfoo.so *.o --&gt; gộp<br>gcc -o prog prog.c libfoo.so</p>
+      <p class="en-only" lang="en"># 1) compile position-independent<br>$ gcc -g -c -fPIC -Wall mod1.c mod2.c mod3.c<br># 2) gather into a shared library<br>$ gcc -g -shared -o libfoo.so mod1.o mod2.o mod3.o<br># 3) link the program<br>$ gcc -g -Wall -o prog prog.c libfoo.so</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">-fPIC</span>
+      <h3>
+        <span class="standard-copy">-fPIC: mã chạy được ở bất kỳ địa chỉ nào</span>
+        <span class="easy-only">-fPIC: mã đặt đâu cũng chạy</span>
+        <span class="en-only" lang="en">-fPIC: code that runs at any address</span>
+      </h3>
+      <p class="standard-copy">Cờ <code>-fPIC</code> đổi cách trình biên dịch sinh mã cho các thao tác như truy cập biến toàn cục/tĩnh/ngoài, truy cập hằng chuỗi, và lấy địa chỉ hàm — nhờ đó mã đặt được ở bất kỳ đâu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> Để kiểm tra một tệp đối tượng có được biên dịch với <code>-fPIC</code> không, tìm ký hiệu <code>_GLOBAL_OFFSET_TABLE_</code> trong bảng ký hiệu bằng <code>nm</code> hoặc <code>readelf -s</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+      <p class="easy-only">Cờ <code>-fPIC</code> bảo trình dịch sinh ra loại mã không gắn cứng vào một địa chỉ cố định, nên đặt chỗ nào trong bộ nhớ cũng chạy. Muốn biết một tệp đã dịch kiểu này chưa, tìm cái tên <code>_GLOBAL_OFFSET_TABLE_</code> trong nó. <b>Nhớ nhé: thấy _GLOBAL_OFFSET_TABLE_ là biết mã đã độc lập vị trí.</b></p>
+      <p class="en-only" lang="en">The <code>-fPIC</code> flag changes how the compiler generates code for operations such as accessing global/static/external variables, string constants, and taking function addresses — so the code can be located anywhere.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> To check whether an object file was compiled with <code>-fPIC</code>, look for the symbol <code>_GLOBAL_OFFSET_TABLE_</code> in its symbol table using <code>nm</code> or <code>readelf -s</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Nếu <code>objdump --all-headers libfoo.so | grep TEXTREL</code> (hay <code>readelf -d</code>) có kết xuất, thư viện chứa ít nhất một mô-đun <i>không</i> biên dịch bằng <code>-fPIC</code> — segment text của nó cần tái định vị lúc chạy.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span>
+        <span class="easy-only">Nếu lệnh kiểm tra tìm thấy chữ TEXTREL, nghĩa là trong thư viện còn mẩu mã quên dùng -fPIC.</span>
+        <span class="en-only" lang="en">If <code>objdump --all-headers libfoo.so | grep TEXTREL</code> (or <code>readelf -d</code>) yields output, the library contains at least one module <i>not</i> compiled with <code>-fPIC</code> — its text segment needs run-time relocation.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Phí tổn</span><span class="en-only" lang="en">The overhead</span></h4>
+          <p><span class="vi-only">Trên hầu hết kiến trúc, mã độc lập vị trí có phí tổn hiệu năng vì cần một thanh ghi phụ. Trên Linux/x86-32, vẫn dựng được thư viện dùng chung từ mô-đun không <code>-fPIC</code>, nhưng mất đi lợi ích chia sẻ (các trang text chứa tham chiếu phụ thuộc vị trí không dùng chung được giữa các tiến trình); trên một số kiến trúc khác thì bắt buộc phải có <code>-fPIC</code>.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">On most architectures, position-independent code carries a performance cost because it needs an extra register. On Linux/x86-32 you can still build a shared library from non-<code>-fPIC</code> modules, but you lose the sharing benefit (text pages with position-dependent references cannot be shared across processes); on some other architectures <code>-fPIC</code> is mandatory.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Cờ phụ thuộc trình dịch</span><span class="en-only" lang="en">Compiler-dependent flags</span></h4>
+          <p><span class="vi-only">Tác giả dùng <code>gcc</code> (không phải <code>cc</code>) để nhấn mạnh rằng các cờ dựng thư viện dùng chung phụ thuộc trình biên dịch; một trình dịch C khác trên UNIX khác có thể cần cờ khác.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span><span class="en-only" lang="en">The author uses <code>gcc</code> (not <code>cc</code>) to stress that the flags for building shared libraries are compiler-dependent; a different C compiler on another UNIX may need different options.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">cc -shared</span>
+      <h3>
+        <span class="standard-copy">cc -shared dựng tệp .so — và nó là một khối liền</span>
+        <span class="easy-only">cc -shared gộp lại thành một tệp .so</span>
+        <span class="en-only" lang="en">cc -shared builds the .so — as one unit</span>
+      </h3>
+      <p class="standard-copy">Lệnh <code>cc -shared</code> tạo một thư viện dùng chung chứa các mô-đun đối tượng. Khác với thư viện tĩnh, <i>không</i> thể thêm hay bớt từng mô-đun khỏi một thư viện dùng chung đã dựng: như với tệp thực thi thường, các tệp đối tượng bên trong không còn giữ danh tính riêng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only">Khi đã gộp bằng <code>cc -shared</code>, các mẩu mã hòa làm một khối — không tách ra hay thêm từng mẩu được nữa, khác với cái hộp .o của thư viện tĩnh. <b>Nhớ nhé: tĩnh là hộp tháo lắp được, dùng chung là khối liền.</b></p>
+      <p class="en-only" lang="en">The <code>cc -shared</code> command creates a shared library containing the object modules. Unlike a static library, you <i>cannot</i> add or remove individual modules from a shared library once built: as with an ordinary executable, the object files inside no longer keep distinct identities.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Có thể gộp biên dịch và dựng thư viện trong một lệnh (<code>gcc -g -fPIC -Wall mod1.c mod2.c mod3.c -shared -o libfoo.so</code>), nhưng tách hai bước cho rõ ràng hơn.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Có thể làm cả hai bước trong một lệnh, nhưng tách ra cho dễ theo dõi.</span>
+        <span class="en-only" lang="en">You can combine compiling and building into one command (<code>gcc -g -fPIC -Wall mod1.c mod2.c mod3.c -shared -o libfoo.so</code>), but separating the two steps is clearer.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">static vs dynamic linking</span>
+      <h3>
+        <span class="standard-copy">Liên kết hai pha: tĩnh lúc dựng, động lúc chạy</span>
+        <span class="easy-only">Hai bước liên kết: lúc dựng và lúc chạy</span>
+        <span class="en-only" lang="en">Two-phase linking: static at build, dynamic at run</span>
+      </h3>
+      <p class="standard-copy">Dùng thư viện dùng chung cần hai việc mà thư viện tĩnh không có. Thứ nhất, lúc liên kết, tên thư viện cần được <i>nhúng</i> vào tệp thực thi (trong ELF là thẻ <code>DT_NEEDED</code>; toàn bộ gọi là <i>dynamic dependency list</i>). Thứ hai, lúc chạy, phải có cơ chế <b>giải tên</b> đó — tìm tệp thư viện tương ứng và nạp vào bộ nhớ nếu chưa có — do <b>trình liên kết động</b> đảm nhận.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> Mọi chương trình đều qua pha liên kết tĩnh (bằng <code>ld</code>); chương trình dùng thư viện dùng chung còn qua thêm pha liên kết động lúc chạy.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only">Thư viện dùng chung cần hai bước: lúc dựng, ghi vào chương trình <i>tên</i> thư viện nó cần; lúc chạy, có một "người giao hàng" đi tìm đúng tệp thư viện đó rồi nạp vào. Người giao hàng ấy là trình liên kết động. <b>Nhớ nhé: lúc dựng ghi tên, lúc chạy đi tìm và nạp.</b></p>
+      <p class="en-only" lang="en">Using a shared library needs two things a static library does not. First, at link time the library's name is <i>embedded</i> in the executable (in ELF, the <code>DT_NEEDED</code> tag; the whole set is the <i>dynamic dependency list</i>). Second, at run time there must be a mechanism to <b>resolve</b> that name — find the matching library file and load it into memory if not already present — performed by the <b>dynamic linker</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> Every program goes through a static-linking phase (via <code>ld</code>); a program using shared libraries additionally undergoes dynamic linking at run time.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lỗi quen thuộc <code>error while loading shared libraries: ... cannot open shared object file</code> xảy ra khi trình liên kết động không tìm thấy thư viện trong các thư mục chuẩn — ví dụ thư viện nằm ở thư mục làm việc hiện tại.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Lỗi "cannot open shared object file" nghĩa là chương trình chạy nhưng không tìm thấy thư viện nó cần.</span>
+        <span class="en-only" lang="en">The familiar <code>error while loading shared libraries: ... cannot open shared object file</code> happens when the dynamic linker cannot find the library in the standard directories — for example, when it sits in the current working directory.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Trình liên kết động là ai</span><span class="en-only" lang="en">Who the dynamic linker is</span></h4>
+          <p><span class="vi-only">Bản thân trình liên kết động là một thư viện dùng chung, tên <code>/lib/ld-linux.so.2</code> — thường là liên kết tượng trưng tới tệp thực thi <code>ld-version.so</code> (với <i>version</i> là phiên bản glibc cài trên máy, ví dụ <code>ld-2.11.so</code>). Mọi tệp thực thi ELF dùng thư viện dùng chung đều nhờ nó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span><span class="en-only" lang="en">The dynamic linker is itself a shared library, named <code>/lib/ld-linux.so.2</code> — usually a symbolic link to the executable file <code>ld-version.so</code> (where <i>version</i> is the installed glibc version, e.g. <code>ld-2.11.so</code>). Every ELF executable using shared libraries relies on it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">32-bit và 64-bit</span><span class="en-only" lang="en">32-bit and 64-bit</span></h4>
+          <p><span class="vi-only">Trên các kiến trúc chạy được cả chương trình 32-bit lẫn 64-bit (như x86-64), thư viện 32-bit nằm trong các thư mục con <code>*/lib</code>, còn thư viện 64-bit nằm trong <code>*/lib64</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span><span class="en-only" lang="en">On architectures that run both 32-bit and 64-bit programs (such as x86-64), 32-bit libraries live in <code>*/lib</code> subdirectories and 64-bit libraries in <code>*/lib64</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Trong ví dụ đơn giản trên, tên nhúng vào tệp thực thi chính là tên tệp thật của thư viện. Nhưng thực tế thường dùng một bí danh gọi là <b>soname</b> — và đó là chìa khóa để nhiều phiên bản thư viện cùng tồn tại và để nâng cấp mà không phải liên kết lại.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Ở ví dụ vừa rồi, chương trình ghi đúng tên tệp thư viện. Nhưng thực tế người ta hay dùng một "biệt danh" gọi là soname, giúp đổi phiên bản thư viện mà không phải dựng lại chương trình.</p>
+    <p class="en-only" lang="en">In the simple example above, the name embedded in the executable is the library's actual filename. But in practice one usually uses an alias called the <b>soname</b> — the key to letting multiple library versions coexist and to upgrading without relinking.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="soname-names" aria-labelledby="soname-names-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="soname-names-title">
+      <span class="standard-copy">Một thư viện, ba cái tên: tên thật, soname, và tên liên kết</span>
+      <span class="easy-only">Một thư viện có ba cái tên khác nhau</span>
+      <span class="en-only" lang="en">One library, three names: real name, soname, and linker name</span>
+    </h2>
+    <p class="standard-copy">Cơ chế đặt tên theo quy ước là phần tinh tế nhất của chương. Một thư viện dùng chung có thể mang một bí danh gọi là <b>soname</b> (thẻ <code>DT_SONAME</code> trong ELF). Khi thư viện có soname, lúc liên kết tĩnh chính <i>soname</i> — chứ không phải tên tệp thật — được nhúng vào tệp thực thi, rồi dùng để tìm thư viện lúc chạy. Soname tạo một <b>lớp gián tiếp</b>: tệp thực thi gắn với soname, còn soname lại là một liên kết tượng trưng trỏ tới tên tệp thật hiện hành.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+    <p class="easy-only">Đây là phần tinh tế nhất. Một thư viện có thể có một "biệt danh" (soname). Khi dựng chương trình, ta ghi vào chương trình cái biệt danh ấy, chứ không ghi tên tệp cụ thể. Lúc chạy, biệt danh đó chỉ đường tới tệp thật đang dùng. <b>Nhớ nhé: chương trình nhớ biệt danh, biệt danh chỉ tới tệp thật.</b></p>
+    <p class="en-only" lang="en">The conventional naming scheme is the subtlest part of the chapter. A shared library may carry an alias called a <b>soname</b> (the <code>DT_SONAME</code> tag in ELF). When a library has a soname, at static-link time the <i>soname</i> — not the real filename — is embedded in the executable, then used to find the library at run time. The soname provides a <b>level of indirection</b>: the executable binds to the soname, while the soname is itself a symbolic link pointing to the current real filename.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Theo quy ước phiên bản: <b>tên thật</b> (real name) có dạng <code>libname.so.major.minor</code> — tệp chứa mã, mỗi phiên bản major+minor một bản. <b>Soname</b> có dạng <code>libname.so.major</code> — mỗi major một bản, nhúng vào tệp thực thi, và là liên kết trỏ tới tên thật mới nhất. <b>Tên liên kết</b> (linker name) có dạng <code>libname.so</code> — không số phiên bản, dùng khi liên kết, là liên kết trỏ tới tên thật hoặc (thường hơn) tới soname mới nhất.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Ba cái tên: tên thật có đủ số (<code>libfoo.so.1.0.1</code>) là tệp mã thật; soname chỉ có số lớn (<code>libfoo.so.1</code>) là biệt danh theo phiên bản lớn; tên liên kết không có số (<code>libfoo.so</code>) dùng lúc dựng chương trình. <b>Nhớ nhé: càng nhiều số thì càng cụ thể, không số thì để dựng.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> By the versioning convention: the <b>real name</b> has the form <code>libname.so.major.minor</code> — the file holding the code, one per major+minor version. The <b>soname</b> has the form <code>libname.so.major</code> — one per major version, embedded in the executable, and a symbolic link pointing to the latest real name. The <b>linker name</b> has the form <code>libname.so</code> — no version numbers, used when linking, a link to the real name or (more usually) the latest soname.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy"># dựng với soname<br>$ gcc -g -shared -Wl,-soname,libdemo.so.1 \<br>&nbsp;&nbsp;&nbsp;&nbsp;-o libdemo.so.1.0.1 mod1.o mod2.o mod3.o<br># chuỗi liên kết tượng trưng<br>$ ln -s libdemo.so.1.0.1 libdemo.so.1&nbsp;&nbsp;# soname<br>$ ln -s libdemo.so.1&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;libdemo.so&nbsp;&nbsp;&nbsp;# linker<br>$ gcc -g -o prog prog.c -L. -ldemo</p>
+      <p class="easy-only">libdemo.so&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;--&gt; libdemo.so.1<br>libdemo.so.1&nbsp;&nbsp;&nbsp;--&gt; libdemo.so.1.0.1<br>libdemo.so.1.0.1 (tệp mã thật)</p>
+      <p class="en-only" lang="en"># build with a soname<br>$ gcc -g -shared -Wl,-soname,libdemo.so.1 \<br>&nbsp;&nbsp;&nbsp;&nbsp;-o libdemo.so.1.0.1 mod1.o mod2.o mod3.o<br># the symbolic-link chain<br>$ ln -s libdemo.so.1.0.1 libdemo.so.1&nbsp;&nbsp;# soname<br>$ ln -s libdemo.so.1&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;libdemo.so&nbsp;&nbsp;&nbsp;# linker<br>$ gcc -g -o prog prog.c -L. -ldemo</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">-Wl,-soname</span>
+      <h3>
+        <span class="standard-copy">Gắn soname lúc dựng, kiểm tra bằng objdump/readelf</span>
+        <span class="easy-only">Đặt biệt danh cho thư viện khi dựng</span>
+        <span class="en-only" lang="en">Set the soname at build, check with objdump/readelf</span>
+      </h3>
+      <p class="standard-copy">Để gắn soname, truyền tùy chọn <code>-Wl,-soname,libbar.so</code> — một chỉ thị cho trình liên kết <code>ld</code> đánh dấu thư viện với soname đó. Có thể đọc soname của một thư viện có sẵn bằng <code>objdump -p libfoo.so | grep SONAME</code> hoặc <code>readelf -d libfoo.so | grep SONAME</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span><span class="cite"><a href="#ref-10">10</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+      <p class="easy-only">Khi dựng, thêm <code>-Wl,-soname,...</code> để đặt biệt danh cho thư viện. Muốn xem biệt danh của một thư viện có sẵn, dùng <code>objdump -p</code> hay <code>readelf -d</code> rồi tìm dòng SONAME. <b>Nhớ nhé: -Wl,-soname để đặt, grep SONAME để xem.</b></p>
+      <p class="en-only" lang="en">To set a soname, pass the option <code>-Wl,-soname,libbar.so</code> — an instruction to the linker <code>ld</code> to mark the library with that soname. You can read an existing library's soname with <code>objdump -p libfoo.so | grep SONAME</code> or <code>readelf -d libfoo.so | grep SONAME</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span><span class="cite"><a href="#ref-10">10</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi dùng soname, cần thêm một bước: tạo liên kết tượng trưng từ soname tới tên thật, nếu không trình liên kết động sẽ không tìm thấy thư viện lúc chạy.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Dùng soname thì phải tạo một liên kết trỏ từ biệt danh sang tệp thật, nếu không lúc chạy sẽ không tìm được.</span>
+        <span class="en-only" lang="en">When using a soname, one more step is required: create a symbolic link from the soname to the real name, or the dynamic linker will not find the library at run time.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">real / soname / linker</span>
+      <h3>
+        <span class="standard-copy">Chuỗi liên kết: tên liên kết → soname → tên thật</span>
+        <span class="easy-only">Dây chuyền: tên không số → biệt danh → tệp thật</span>
+        <span class="en-only" lang="en">The chain: linker name → soname → real name</span>
+      </h3>
+      <p class="standard-copy">Ba cái tên được xâu thành một chuỗi liên kết tượng trưng: tên liên kết <code>libdemo.so</code> trỏ tới soname <code>libdemo.so.1</code>, soname trỏ tới tên thật <code>libdemo.so.1.0.1</code>. Nhờ tên liên kết (không số phiên bản), lệnh liên kết trở nên <i>độc lập phiên bản</i>: <code>gcc -o prog prog.c -L. -ldemo</code> không hề nhắc tới số phiên bản.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ba cái tên móc nối nhau như dây chuyền: tên không số chỉ tới biệt danh, biệt danh chỉ tới tệp thật. Nhờ vậy khi dựng chương trình ta chỉ cần gọi <code>-ldemo</code>, không phải nhớ số phiên bản. <b>Nhớ nhé: dây chuyền tên giúp dựng mà khỏi lo số phiên bản.</b></p>
+      <p class="en-only" lang="en">The three names form a chain of symbolic links: the linker name <code>libdemo.so</code> points to the soname <code>libdemo.so.1</code>, which points to the real name <code>libdemo.so.1.0.1</code>. Thanks to the linker name (no version numbers), the link command becomes <i>version-independent</i>: <code>gcc -o prog prog.c -L. -ldemo</code> mentions no version number.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Chạy <code>ls -l libdemo.so*</code> trên một máy Linux: bạn sẽ thấy đúng chuỗi này — hai liên kết tượng trưng và một tệp thật, ví dụ <code>libreadline.so -&gt; libreadline.so.5</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Gõ <code>ls -l</code> trong thư mục thư viện, bạn sẽ thấy các mũi tên nối tên này sang tên kia — đó chính là dây chuyền.</span>
+        <span class="en-only" lang="en">Run <code>ls -l libdemo.so*</code> on a Linux box: you will see exactly this chain — two symbolic links and one real file, e.g. <code>libreadline.so -&gt; libreadline.so.5</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Vì sao tên liên kết nên trỏ tới soname</span><span class="en-only" lang="en">Why the linker name should point at the soname</span></h4>
+          <p><span class="vi-only">Tên liên kết thường được tạo trong cùng thư mục với tệp nó trỏ tới, và nên trỏ tới <i>soname</i> (chứ không phải thẳng tên thật), để khi soname đổi thì tên liên kết tự động phản ánh theo — một việc mà <code>ldconfig</code> tự lo nếu ta theo đúng quy ước.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span><span class="en-only" lang="en">The linker name is usually created in the same directory as the file it refers to, and should point at the <i>soname</i> (not straight at the real name), so that changes to the soname are automatically reflected in the linker name — a job <code>ldconfig</code> handles for us if we follow the convention.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Liên kết với phiên bản major cũ</span><span class="en-only" lang="en">Linking against an older major version</span></h4>
+          <p><span class="vi-only">Nếu muốn liên kết với một phiên bản major <i>cũ</i>, không dùng được tên liên kết; phải chỉ rõ một tên thật hoặc soname cụ thể trong lệnh liên kết.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">If you want to link against an <i>older</i> major version, you cannot use the linker name; you must name a specific real name or soname in the link command.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">compatible vs incompatible</span>
+      <h3>
+        <span class="standard-copy">Major đổi khi phá vỡ tương thích, minor đổi khi vẫn tương thích</span>
+        <span class="easy-only">Số lớn đổi khi "vỡ", số nhỏ đổi khi vẫn hợp</span>
+        <span class="en-only" lang="en">Major changes break compatibility, minor keeps it</span>
+      </h3>
+      <p class="standard-copy">Sơ đồ phiên bản cho phép chương trình tự động dùng phiên bản minor mới nhất của thư viện mà không cần liên kết lại, đồng thời cho nhiều phiên bản major <i>không tương thích</i> cùng tồn tại. Một thay đổi là <b>tương thích</b> (chỉ tăng minor) nếu ngữ nghĩa mọi hàm/biến công khai giữ nguyên, không xóa hàm/biến nào khỏi API công khai, và các cấu trúc công khai không đổi; ngược lại phải định nghĩa một major mới.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Khi sửa thư viện mà không làm hỏng cách dùng cũ, chỉ tăng số nhỏ (minor). Khi sửa làm thay đổi cách dùng, phải tăng số lớn (major) và coi như một phiên bản khác hẳn. <b>Nhớ nhé: còn dùng được như cũ thì tăng số nhỏ, không thì tăng số lớn.</b></p>
+      <p class="en-only" lang="en">The versioning scheme lets a program automatically use the latest minor version without relinking, while letting multiple <i>incompatible</i> major versions coexist. A change is <b>compatible</b> (only the minor rises) if the semantics of every public function/variable stay the same, no public function/variable is removed, and public structures are unchanged; otherwise a new major version must be defined.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Có thể nâng cấp lên phiên bản minor hoặc major mới ngay cả khi các chương trình đang chạy vẫn dùng phiên bản cũ; chúng chỉ chuyển sang bản mới khi được khởi động lại.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Có thể cài phiên bản mới ngay cả khi chương trình cũ đang chạy; chương trình chỉ dùng bản mới sau khi khởi động lại.</span>
+        <span class="en-only" lang="en">You can upgrade to a new minor or major version even while running programs use the old one; they switch to the new version only when restarted.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Quy ước tên đẹp đến mấy cũng vô dụng nếu các liên kết tượng trưng không được dựng và cập nhật đúng, và nếu trình liên kết động không biết tìm thư viện ở đâu. Đó là lúc <code>ldconfig</code>, các thư mục chuẩn, biến <code>LD_LIBRARY_PATH</code>, và các công cụ chẩn đoán bước vào.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Tên đặt khéo đến đâu cũng vô ích nếu các "mũi tên" liên kết không được tạo đúng và máy không biết tìm thư viện ở đâu. Phần tiếp theo lo đúng chuyện đó: cài đặt, ldconfig, và nơi tìm kiếm.</p>
+    <p class="en-only" lang="en">However elegant, the naming convention is useless if the symbolic links are not built and kept current, and if the dynamic linker does not know where to look. Enter <code>ldconfig</code>, the standard directories, the <code>LD_LIBRARY_PATH</code> variable, and the diagnostic tools.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="install-tools" aria-labelledby="install-tools-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="install-tools-title">
+      <span class="standard-copy">Cài đặt đúng chỗ, để ldconfig và ld.so lo phần còn lại</span>
+      <span class="easy-only">Cài đúng chỗ, dùng ldconfig, và các công cụ soi thư viện</span>
+      <span class="en-only" lang="en">Install in the right place, let ldconfig and ld.so do the rest</span>
+    </h2>
+    <p class="standard-copy">Ở các ví dụ trước, thư viện nằm trong thư mục riêng của người dùng và được tìm thấy nhờ <code>LD_LIBRARY_PATH</code> — tiện cho học tập nhưng <i>không nên</i> dùng cho ứng dụng thật. Thông thường, thư viện cùng các liên kết tượng trưng của nó được cài vào một thư mục chuẩn: <code>/usr/lib</code> (phần lớn thư viện chuẩn), <code>/lib</code> (thư viện cần lúc khởi động hệ thống), <code>/usr/local/lib</code> (thư viện phi chuẩn hay thử nghiệm), hoặc một thư mục liệt kê trong <code>/etc/ld.so.conf</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Thường cần quyền siêu người dùng để chép vào các thư mục này.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Trước đó ta để thư viện ở thư mục riêng và dùng <code>LD_LIBRARY_PATH</code> để máy tìm thấy — cách này tiện để học nhưng không dùng cho sản phẩm thật. Cách đúng là chép thư viện vào các thư mục chuẩn như <code>/usr/lib</code> hay <code>/lib</code> (cần quyền quản trị). <b>Nhớ nhé: học thì dùng LD_LIBRARY_PATH, làm thật thì cài vào thư mục chuẩn.</b></p>
+    <p class="en-only" lang="en">In earlier examples the library sat in a user-private directory and was found via <code>LD_LIBRARY_PATH</code> — handy for learning but <i>not</i> for production applications. Normally the library and its symbolic links are installed in a standard directory: <code>/usr/lib</code> (most standard libraries), <code>/lib</code> (libraries needed at system startup), <code>/usr/local/lib</code> (nonstandard or experimental libraries), or a directory listed in <code>/etc/ld.so.conf</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Copying into these directories usually requires superuser privilege.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>ldconfig(8)</code> giải hai vấn đề của thư viện dùng chung. (1) Nó duyệt một tập thư mục chuẩn và tạo/cập nhật tệp bộ đệm <code>/etc/ld.so.cache</code> — danh sách các phiên bản major mới nhất — để trình liên kết động tra cứu nhanh lúc chạy. (2) Nó xét phiên bản minor mới nhất của mỗi major, đọc soname nhúng trong đó, rồi tạo/cập nhật liên kết tượng trưng cho mỗi soname trong cùng thư mục.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> <code>ldconfig</code> làm hai việc: lập một danh bạ để máy tìm thư viện cho nhanh, và tự dựng/sửa các "mũi tên" soname cho đúng. Chạy nó mỗi khi cài, cập nhật hay gỡ một thư viện. <b>Nhớ nhé: cài xong thư viện thì chạy ldconfig để máy nhận ra.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>ldconfig(8)</code> solves two problems of shared libraries. (1) It scans a standard set of directories and creates/updates the cache file <code>/etc/ld.so.cache</code> — a list of the latest major versions — so the dynamic linker can resolve names quickly at run time. (2) It examines the latest minor version of each major, reads the embedded soname, and creates/updates a symbolic link for each soname in the same directory.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy"># cập nhật bộ đệm + soname symlinks<br>$ sudo ldconfig -v | grep libdemo<br>$ ldconfig -p&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# xem /etc/ld.so.cache<br># tìm thư viện (cách tạm cho học)<br>$ LD_LIBRARY_PATH=. ./prog<br># xem phụ thuộc động<br>$ ldd prog</p>
+      <p class="easy-only">ldconfig&nbsp;&nbsp;&nbsp;--&gt; cập nhật danh bạ<br>ldconfig -p --&gt; xem danh bạ<br>ldd prog&nbsp;&nbsp;&nbsp;--&gt; xem thư viện cần</p>
+      <p class="en-only" lang="en"># update cache + soname symlinks<br>$ sudo ldconfig -v | grep libdemo<br>$ ldconfig -p&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# view /etc/ld.so.cache<br># find the library (learning shortcut)<br>$ LD_LIBRARY_PATH=. ./prog<br># view dynamic dependencies<br>$ ldd prog</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">ldconfig</span>
+      <h3>
+        <span class="standard-copy">ldconfig: danh bạ bộ đệm cộng với các soname symlink</span>
+        <span class="easy-only">ldconfig lập danh bạ và dựng mũi tên soname</span>
+        <span class="en-only" lang="en">ldconfig: the cache plus the soname symlinks</span>
+      </h3>
+      <p class="standard-copy">Để dựng bộ đệm, <code>ldconfig</code> duyệt các thư mục trong <code>/etc/ld.so.conf</code> rồi tới <code>/lib</code> và <code>/usr/lib</code>. Nên chạy nó mỗi khi cài, cập nhật hay gỡ thư viện, hoặc khi danh sách thư mục thay đổi. Các cờ: <code>-v</code> hiện chi tiết, <code>-N</code> không dựng lại bộ đệm, <code>-X</code> không tạo soname symlink, và <code>-n</code> chỉ xử lý thư mục trên dòng lệnh (hữu ích cho thư viện riêng, không chạm bộ đệm).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only"><code>ldconfig</code> đi khắp các thư mục thư viện chuẩn để cập nhật danh bạ và dựng các mũi tên soname. Nhớ chạy nó sau mỗi lần cài hay gỡ thư viện. Thêm <code>-v</code> để xem nó làm gì. <b>Nhớ nhé: cài/gỡ thư viện xong là chạy ldconfig.</b></p>
+      <p class="en-only" lang="en">To build the cache, <code>ldconfig</code> scans the directories in <code>/etc/ld.so.conf</code>, then <code>/lib</code> and <code>/usr/lib</code>. Run it whenever you install, update, or remove a library, or when the directory list changes. Flags: <code>-v</code> for verbose output, <code>-N</code> to skip rebuilding the cache, <code>-X</code> to skip creating soname symlinks, and <code>-n</code> to process only command-line directories (useful for a private library, leaving the cache untouched).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Vì tên liên kết trỏ tới soname mới nhất, khi cài một bản minor 2.x mới, <code>ldconfig</code> cập nhật soname và nhờ đó cũng giữ tên liên kết đúng — nhưng tên liên kết cho một major <i>mới</i> vẫn phải tạo tay.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi lên bản minor mới, ldconfig tự lo giúp; nhưng lên một phiên bản lớn mới thì bạn phải tự tạo lại mũi tên tên liên kết.</span>
+        <span class="en-only" lang="en">Because the linker name points at the latest soname, installing a new 2.x minor lets <code>ldconfig</code> update the soname and thereby keep the linker name correct too — but the linker name for a <i>new</i> major must still be created by hand.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">LD_LIBRARY_PATH / ld.so</span>
+      <h3>
+        <span class="standard-copy">LD_LIBRARY_PATH và thứ tự tìm kiếm của ld.so</span>
+        <span class="easy-only">Nơi máy đi tìm thư viện lúc chạy</span>
+        <span class="en-only" lang="en">LD_LIBRARY_PATH and ld.so's search order</span>
+      </h3>
+      <p class="standard-copy">Biến <code>LD_LIBRARY_PATH</code> là danh sách thư mục ngăn cách bằng dấu hai chấm; nếu được đặt, trình liên kết động tìm trong các thư mục này <i>trước</i> các thư mục chuẩn. Thứ tự tìm của <code>ld.so</code> lúc chạy: (1) danh sách <code>DT_RPATH</code> trong tệp (nếu không có <code>DT_RUNPATH</code>); (2) <code>LD_LIBRARY_PATH</code>; (3) danh sách <code>DT_RUNPATH</code>; (4) <code>/etc/ld.so.cache</code>; (5) <code>/lib</code> rồi <code>/usr/lib</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"><code>LD_LIBRARY_PATH</code> là cách nói với máy "tìm thư viện trong các thư mục này trước". Lúc chạy, máy lần lượt soi theo một thứ tự cố định cho tới khi thấy thư viện. <b>Nhớ nhé: LD_LIBRARY_PATH được soi trước các thư mục hệ thống.</b></p>
+      <p class="en-only" lang="en">The <code>LD_LIBRARY_PATH</code> variable is a colon-separated list of directories; if set, the dynamic linker searches them <i>before</i> the standard directories. The run-time search order of <code>ld.so</code>: (1) the <code>DT_RPATH</code> list in the file (if there is no <code>DT_RUNPATH</code>); (2) <code>LD_LIBRARY_PATH</code>; (3) the <code>DT_RUNPATH</code> list; (4) <code>/etc/ld.so.cache</code>; (5) <code>/lib</code> then <code>/usr/lib</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Một lý do an toàn khiến không nên dựa vào <code>LD_LIBRARY_PATH</code> trong sản phẩm: với chương trình set-user-ID hay set-group-ID, trình liên kết động <i>bỏ qua</i> biến này, để người dùng không lừa nó nạp một thư viện giả cùng tên.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Với các chương trình đặc quyền (set-UID), máy cố tình bỏ qua LD_LIBRARY_PATH để tránh bị lừa nạp thư viện giả.</span>
+        <span class="en-only" lang="en">A security reason not to rely on <code>LD_LIBRARY_PATH</code> in production: for set-user-ID or set-group-ID programs, the dynamic linker <i>ignores</i> it, so users cannot trick it into loading a fake library of the same name.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">rpath nhúng trong tệp</span><span class="en-only" lang="en">rpath embedded in the file</span></h4>
+          <p><span class="vi-only">Có thể nhúng sẵn thư mục tìm kiếm vào tệp thực thi bằng tùy chọn liên kết <code>-rpath</code>, tạo danh sách rpath. Đặc tả ELF cũ dùng thẻ <code>DT_RPATH</code> (ưu tiên cao hơn <code>LD_LIBRARY_PATH</code>); đặc tả mới dùng <code>DT_RUNPATH</code> (ưu tiên thấp hơn), bật bằng <code>--enable-new-dtags</code>. Hỗ trợ <code>DT_RUNPATH</code> được thêm từ glibc 2.2.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span><span class="en-only" lang="en">Search directories can be embedded in the executable with the <code>-rpath</code> linker option, forming an rpath list. The old ELF spec used the <code>DT_RPATH</code> tag (higher precedence than <code>LD_LIBRARY_PATH</code>); newer specs use <code>DT_RUNPATH</code> (lower precedence), enabled with <code>--enable-new-dtags</code>. Support for <code>DT_RUNPATH</code> was added in glibc 2.2.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">$ORIGIN cho ứng dụng "cắm là chạy"</span><span class="en-only" lang="en">$ORIGIN for turn-key apps</span></h4>
+          <p><span class="vi-only">Trình liên kết động hiểu chuỗi đặc biệt <code>$ORIGIN</code> trong rpath, nghĩa là "thư mục chứa ứng dụng". Nhờ đó, dựng với <code>-Wl,-rpath,'$ORIGIN'/lib</code> cho phép người dùng giải nén và chạy ứng dụng ở bất kỳ đâu mà không phải cài thư viện vào thư mục chuẩn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span><span class="en-only" lang="en">The dynamic linker understands the special string <code>$ORIGIN</code> in an rpath, meaning "the directory containing the application." So building with <code>-Wl,-rpath,'$ORIGIN'/lib</code> lets a user unpack and run the application anywhere without installing libraries into a standard directory.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">ldd / nm / objdump / readelf</span>
+      <h3>
+        <span class="standard-copy">Bộ công cụ soi thư viện: ldd, nm, objdump, readelf</span>
+        <span class="easy-only">Công cụ để xem bên trong thư viện</span>
+        <span class="en-only" lang="en">The inspection toolkit: ldd, nm, objdump, readelf</span>
+      </h3>
+      <p class="standard-copy"><code>ldd(1)</code> (list dynamic dependencies) liệt kê các thư viện dùng chung mà một chương trình cần, giải mỗi tên thành đường dẫn theo đúng quy ước tìm của trình liên kết động; với phần lớn tệp ELF, nó liệt kê ít nhất <code>ld-linux.so.2</code> và <code>libc.so.6</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> <code>nm(1)</code> liệt kê ký hiệu định nghĩa trong một thư viện hay chương trình — ví dụ tìm thư viện nào định nghĩa <code>crypt()</code>. <code>objdump</code> và <code>readelf</code> hiển thị thông tin từ các section ELF (và <code>objdump</code> còn gỡ hợp ngữ), mỗi lệnh một định dạng khác nhau.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span><span class="cite"><a href="#ref-10">10</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+      <p class="easy-only">Bốn công cụ để "soi" thư viện: <code>ldd</code> cho biết một chương trình cần những thư viện nào; <code>nm</code> cho biết thư viện nào chứa một hàm; còn <code>objdump</code> và <code>readelf</code> cho xem các phần bên trong tệp ELF. <b>Nhớ nhé: ldd xem cần gì, nm xem có gì, objdump/readelf xem bên trong.</b></p>
+      <p class="en-only" lang="en"><code>ldd(1)</code> (list dynamic dependencies) lists the shared libraries a program requires, resolving each name to a path using the same conventions as the dynamic linker; for most ELF files it lists at least <code>ld-linux.so.2</code> and <code>libc.so.6</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> <code>nm(1)</code> lists the symbols defined in a library or program — for example, to find which library defines <code>crypt()</code>. <code>objdump</code> and <code>readelf</code> display information from the ELF sections (and <code>objdump</code> can disassemble), each in a different format.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span><span class="cite"><a href="#ref-10">10</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một chương trình báo thiếu thư viện, <code>ldd prog</code> là lệnh đầu tiên nên chạy: những dòng <code>not found</code> chỉ ra đúng thư viện mà trình liên kết động không giải được.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></span>
+        <span class="easy-only">Khi chương trình kêu thiếu thư viện, chạy <code>ldd prog</code> để xem nó đang thiếu thư viện nào.</span>
+        <span class="en-only" lang="en">When a program complains about a missing library, <code>ldd prog</code> is the first command to run: the <code>not found</code> lines point to exactly the library the dynamic linker could not resolve.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Mẹo dùng nm</span><span class="en-only" lang="en">An nm tip</span></h4>
+          <p><span class="vi-only">Cờ <code>-A</code> của <code>nm</code> in tên thư viện ở đầu mỗi dòng ký hiệu — cần thiết để lọc, ví dụ <code>nm -A /usr/lib/lib*.so 2&gt; /dev/null | grep ' crypt$'</code> cho thấy <code>crypt()</code> được định nghĩa trong <code>libcrypt</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span><span class="en-only" lang="en">The <code>-A</code> flag to <code>nm</code> prints the library name at the start of each symbol line — needed for filtering, e.g. <code>nm -A /usr/lib/lib*.so 2&gt; /dev/null | grep ' crypt$'</code> shows that <code>crypt()</code> is defined in <code>libcrypt</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Đọc thêm</span><span class="en-only" lang="en">Further reading</span></h4>
+          <p><span class="vi-only">Phần "Further information" của chương dẫn tới các trang man <code>ar(1)</code>, <code>gcc(1)</code>, <code>ld(1)</code>, <code>ldconfig(8)</code>, <code>ld.so(8)</code>, <code>dlopen(3)</code>, <code>objdump(1)</code> cùng tài liệu info của <code>ld</code> và <code>readelf</code> — đúng bộ nguồn sơ cấp cho mọi chi tiết ở đây.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></span><span class="en-only" lang="en">The chapter's "Further information" points to the <code>ar(1)</code>, <code>gcc(1)</code>, <code>ld(1)</code>, <code>ldconfig(8)</code>, <code>ld.so(8)</code>, <code>dlopen(3)</code>, <code>objdump(1)</code> manual pages and the info documentation for <code>ld</code> and <code>readelf</code> — exactly the primary sources for every detail here.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="section-heading">
+      <h2 id="ngo-nhan-title">
+        <span class="standard-copy">Ba ngộ nhận thường gặp</span>
+        <span class="en-only" lang="en">Three common misconceptions</span>
+      </h2>
+    </div>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Dùng chung nghĩa là các tiến trình chia sẻ cả biến”</span>
+          <span class="en-only" lang="en">“Sharing means processes share the variables too”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> nếu nhiều tiến trình dùng chung một thư viện thì chúng cũng dùng chung các biến của thư viện đó.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> chỉ <i>mã</i> được chia sẻ; mỗi tiến trình có bản sao riêng của các biến toàn cục và tĩnh định nghĩa trong thư viện.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> if several processes share a library, they also share that library's variables.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> only the <i>code</i> is shared; each process has its own copies of the global and static variables defined in the library.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Tên nhúng trong tệp thực thi là tên tệp thật”</span>
+          <span class="en-only" lang="en">“The name embedded in the executable is the real filename”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> tệp thực thi luôn ghi tên tệp thật của thư viện (<code>libfoo.so.1.0.1</code>).</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> khi thư viện có soname, chính <i>soname</i> (<code>libfoo.so.1</code>) được nhúng vào — đó là lớp gián tiếp cho phép đổi bản minor mà không liên kết lại.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> the executable always records the library's real filename (<code>libfoo.so.1.0.1</code>).</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> when the library has a soname, the <i>soname</i> (<code>libfoo.so.1</code>) is embedded instead — the indirection that lets the minor version change without relinking.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“LD_LIBRARY_PATH là cách đúng để tìm thư viện trong sản phẩm”</span>
+          <span class="en-only" lang="en">“LD_LIBRARY_PATH is the right way to find libraries in production”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> cứ đặt <code>LD_LIBRARY_PATH</code> là xong, dùng mãi cũng được.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> ứng dụng sản phẩm <i>không nên</i> dựa vào nó; nó bị bỏ qua với chương trình set-UID/GID. Hãy cài vào thư mục chuẩn và chạy <code>ldconfig</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> just set <code>LD_LIBRARY_PATH</code> and you are done, forever.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> production applications should <i>not</i> rely on it; it is ignored for set-UID/GID programs. Install into a standard directory and run <code>ldconfig</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm cơ chế thư viện dùng chung</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped shared libraries</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã nắm vì sao có thư viện dùng chung, cách dựng và dùng nó, cùng cơ chế tên và tìm kiếm lúc chạy — nền cho các chủ đề nâng cao như nạp động với <code>dlopen()</code>.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you grasp why shared libraries exist, how to build and use them, and the naming and run-time search machinery — the groundwork for advanced topics such as dynamic loading with <code>dlopen()</code>.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Phân biệt thư viện tĩnh và thư viện dùng chung. Nêu ba nhược điểm của sự dư thừa trong liên kết tĩnh.</p>
+        <p class="deep-only">Gợi ý sâu hơn: khi liên kết dùng chung, thứ gì được ghi vào tệp thực thi thay cho bản sao mã, và thẻ ELF nào biểu diễn nó?</p>
+      </li>
+      <li>
+        <p><code>-fPIC</code> làm gì, và vì sao mã độc lập vị trí lại cần cho thư viện dùng chung? Làm sao kiểm tra một tệp đã dùng <code>-fPIC</code> chưa?</p>
+        <p class="deep-only">Gợi ý sâu hơn: phí tổn của mã độc lập vị trí là gì, và chuỗi TEXTREL cho biết điều gì?</p>
+      </li>
+      <li>
+        <p>Phân biệt liên kết tĩnh và liên kết động. Trình liên kết động là ai và nằm ở đâu?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao mọi chương trình đều qua pha liên kết tĩnh, nhưng chỉ chương trình dùng thư viện dùng chung mới qua pha liên kết động?</p>
+      </li>
+      <li>
+        <p>Nêu ba cái tên của một thư viện (tên thật, soname, tên liên kết) và vai trò từng cái. Cái nào được nhúng vào tệp thực thi?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao tên liên kết nên trỏ tới soname chứ không trỏ thẳng tên thật?</p>
+      </li>
+      <li>
+        <p><code>ldconfig</code> làm hai việc gì? Vì sao không nên dựa vào <code>LD_LIBRARY_PATH</code> cho ứng dụng sản phẩm?</p>
+        <p class="deep-only">Gợi ý sâu hơn: nêu thứ tự năm bước mà <code>ld.so</code> dùng để tìm một thư viện lúc chạy.</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Thư viện tĩnh và thư viện dùng chung khác nhau chỗ nào?</p></li>
+      <li><p>Cờ <code>-fPIC</code> dùng để làm gì?</p></li>
+      <li><p>Khi chạy, ai đi tìm và nạp thư viện cho chương trình?</p></li>
+      <li><p>Một thư viện có ba cái tên nào?</p></li>
+      <li><p>Chạy lệnh gì sau khi cài một thư viện mới?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>Distinguish static from shared libraries. Give the three drawbacks of static-linking redundancy.</p></li>
+      <li><p>What does <code>-fPIC</code> do, and why does a shared library need position-independent code? How do you check whether a file used <code>-fPIC</code>?</p></li>
+      <li><p>Distinguish static from dynamic linking. Who is the dynamic linker and where does it live?</p></li>
+      <li><p>Name a library's three names (real name, soname, linker name) and each one's role. Which is embedded in the executable?</p></li>
+      <li><p>What two tasks does <code>ldconfig</code> perform? Why should production applications not rely on <code>LD_LIBRARY_PATH</code>?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Một thư viện dùng chung là <span class="closing-accent">một bản mã duy nhất, nạp một lần, dùng chung bởi mọi chương trình</span>: tệp thực thi chỉ ghi <i>tên</i> nó cần, và <span class="closing-accent">trình liên kết động tìm rồi nạp thư viện lúc chạy</span>. Bộ ba tên — tên thật, soname, tên liên kết — cùng <code>ldconfig</code> điều phối việc chọn phiên bản và nâng cấp không cần liên kết lại. Nắm được nền tảng này, bạn đã sẵn sàng cho các tính năng nâng cao — nạp thư viện tùy ý lúc chạy bằng <code>dlopen()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+    <p class="easy-only">Thư viện dùng chung là <span class="closing-accent">một bản mã treo chung</span> cho nhiều chương trình: chương trình chỉ nhớ tên, còn <span class="closing-accent">máy đi tìm và nạp lúc chạy</span>. Ba cái tên và <code>ldconfig</code> lo chuyện phiên bản. <b>Nhớ nhé: một bản mã, nhiều người dùng, máy tự tìm.</b></p>
+    <p class="en-only" lang="en">A shared library is <span class="closing-accent">a single copy of the code, loaded once, shared by every program</span>: the executable records only the <i>name</i> it needs, and <span class="closing-accent">the dynamic linker finds and loads the library at run time</span>. The triad of names — real name, soname, linker name — together with <code>ldconfig</code> governs version selection and relink-free upgrades. Grasp this foundation and you are ready for the advanced features — loading libraries on demand at run time with <code>dlopen()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-12">12</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <div class="nav-cell nav-prev disabled" aria-disabled="true">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 37 · Daemon · sắp có</span>
+    <span class="nav-title en-only" lang="en">Chapter 37 · Daemons · coming soon</span>
+  </div>
+  <a class="nav-cell nav-next" href="chapter-44-pipes-and-fifos.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 44 · Pipe và FIFO</span>
+    <span class="nav-title en-only" lang="en">Chapter 44 · Pipes and FIFOs</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chương 41, “Fundamentals of Shared Libraries”, trang 833–857.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chapter 41, “Fundamentals of Shared Libraries”, pp. 833–857.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Michael Kerrisk, <i>The Linux Programming Interface</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3), ch. 41 “Fundamentals of Shared Libraries”, pp. 833–857. — <a href="https://man7.org/tlpi/" target="_blank" rel="noopener noreferrer">man7.org/tlpi</a></li>
+      <li id="ref-2">“ld.so(8) — Linux manual page” (the dynamic linker/loader ld-linux.so; LD_LIBRARY_PATH; the run-time search order; set-UID handling; DT_RPATH / DT_RUNPATH; $ORIGIN). Linux man-pages project, maintained by Michael Kerrisk. <a href="https://man7.org/linux/man-pages/man8/ld.so.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/ld.so.8.html</a></li>
+      <li id="ref-3">“ldconfig(8) — Linux manual page” (configure dynamic linker run-time bindings; /etc/ld.so.cache; /etc/ld.so.conf; soname symbolic links; -v, -N, -X, -n, -p options). <a href="https://man7.org/linux/man-pages/man8/ldconfig.8.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man8/ldconfig.8.html</a></li>
+      <li id="ref-4">“gcc(1) — GNU C compiler manual page” (-fPIC position-independent code, -shared, -g, -c, -Wall). <a href="https://man7.org/linux/man-pages/man1/gcc.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/gcc.1.html</a></li>
+      <li id="ref-5">“ld(1) — GNU linker manual page” (static link editing; -soname, -rpath, --enable-new-dtags, -Bsymbolic linker options passed via -Wl). <a href="https://man7.org/linux/man-pages/man1/ld.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/ld.1.html</a></li>
+      <li id="ref-6">“elf(5) — Linux manual page” (the Executable and Linking Format; DT_SONAME, DT_NEEDED, DT_RPATH dynamic tags). <a href="https://man7.org/linux/man-pages/man5/elf.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/elf.5.html</a></li>
+      <li id="ref-7">“ar(1) — GNU binutils manual page” (create, modify and extract from static library archives; r, t, d operation codes). <a href="https://man7.org/linux/man-pages/man1/ar.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/ar.1.html</a></li>
+      <li id="ref-8">“ldd(1) — Linux manual page” (print the shared-object dependencies of a program or shared library). <a href="https://man7.org/linux/man-pages/man1/ldd.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/ldd.1.html</a></li>
+      <li id="ref-9">“nm(1) — GNU binutils manual page” (list symbols from object files; -A to prefix each symbol with its file name). <a href="https://man7.org/linux/man-pages/man1/nm.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/nm.1.html</a></li>
+      <li id="ref-10">“objdump(1) — GNU binutils manual page” (display information from object files; -p private headers showing SONAME/RPATH; --all-headers; disassembly). <a href="https://man7.org/linux/man-pages/man1/objdump.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/objdump.1.html</a></li>
+      <li id="ref-11">“readelf(1) — GNU binutils manual page” (display ELF file headers and sections; -d dynamic section, -s symbol table). <a href="https://man7.org/linux/man-pages/man1/readelf.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/readelf.1.html</a></li>
+      <li id="ref-12">“dlopen(3) — Linux manual page” (load and link a shared object at run time; the advanced counterpart to static dynamic-linking, covered in TLPI Chapter 42). <a href="https://man7.org/linux/man-pages/man3/dlopen.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/dlopen.3.html</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <span class="soon">chapter 37</span>
+      <a href="chapter-44-pipes-and-fifos.html">chapter 44</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('tlpi-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('tlpi-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('tlpi-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

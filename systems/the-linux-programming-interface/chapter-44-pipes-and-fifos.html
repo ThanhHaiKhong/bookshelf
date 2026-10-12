@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 44 · Đường ống và FIFO — The Linux Programming Interface</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 44 “Pipes and FIFOs” trong The Linux Programming Interface (Michael Kerrisk, No Starch Press, 2010): pipe là một byte stream một chiều với trần dung lượng và bảo đảm ghi nguyên tử ≤ PIPE_BUF; tạo và dùng pipe với pipe(); truyền dữ liệu giữa cha và con (đóng bộ mô tả không dùng); nối các filter bằng dup2(); nói chuyện với lệnh shell qua popen()/pclose(); pipe và vùng đệm stdio; FIFO (named pipe tạo bằng mkfifo(), ngữ nghĩa khi mở); ứng dụng client–server dùng FIFO; nhập/xuất không chặn O_NONBLOCK; ngữ nghĩa read()/write() với SIGPIPE/EPIPE. Ba mức đọc, mọi khẳng định đều có nguồn.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('tlpi-reading-mode'),
+l=localStorage.getItem('tlpi-lang'),
+t=localStorage.getItem('tlpi-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   THE LINUX PROGRAMMING INTERFACE — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"TLPI · CH.44";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+/* soon = chapter not yet on disk; rendered as a non-link cell. */
+.chapter-path .soon{
+  display:block;padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--tint);border:1px dashed var(--line);opacity:.6;
+}
+.chapter-path .soon .soon-tag{
+  display:inline-block;font-family:var(--sans);font-size:.6rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:.1rem .45rem;margin-top:.4rem;
+}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.series-links .soon{margin-right:.5rem;color:var(--muted);opacity:.55;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+
+/* ---------- whole-book mind map banner ---------- */
+.mindmap-banner{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  gap:clamp(1rem,3vw,2rem);align-items:center;
+  margin:3rem 0 0;padding:1.35rem clamp(1.15rem,3vw,2rem);
+  border:1px solid var(--line);border-left:4px solid var(--teal);
+  border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);
+  color:var(--ink);text-decoration:none;
+  transition:border-color .15s,transform .15s;
+}
+a.mindmap-banner:hover{border-color:var(--teal);transform:translateY(-2px);}
+a.mindmap-banner:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.mindmap-banner.soon{opacity:.5;cursor:default;}
+.mindmap-icon{font-size:1.9rem;line-height:1;}
+.mindmap-banner h3{margin:0 0 .3rem;font-size:1.05rem;}
+.mindmap-banner p{margin:0;max-width:48rem;font-size:.88rem;color:var(--muted);}
+.mindmap-banner .result{margin-top:0;color:var(--teal);font-weight:600;white-space:nowrap;}
+.mindmap-banner.soon .result{color:var(--muted);}
+@media (max-width:860px){
+  .mindmap-banner{grid-template-columns:auto minmax(0,1fr);}
+  .mindmap-banner .result{grid-column:2;white-space:normal;}
+}
+@media (max-width:460px){
+  .mindmap-banner{margin-left:0;margin-right:0;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    The Linux Programming Interface
+    <span>Chương 44 · Pipes and FIFOs</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 44 · Đường ống và FIFO</span>
+      <span class="en-only" lang="en">Chapter 44 · Pipes and FIFOs</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Một dòng byte chảy từ tiến trình này sang tiến trình khác</span>
+      <span class="easy-only">Một cái ống dẫn dữ liệu từ chương trình này sang chương trình khác</span>
+      <span class="en-only" lang="en">A stream of bytes flowing from one process to another</span>
+    </h1>
+
+    <p class="standard-copy">Kerrisk mở chương bằng nhận xét rằng <b>pipe</b> (đường ống) là phương pháp liên lạc liên tiến trình (IPC) <i>lâu đời nhất</i> trên UNIX, xuất hiện từ bản UNIX phiên bản ba (Third Edition) đầu thập niên 1970.<span class="cite"><a href="#ref-1">1</a></span> Ông trình bày: pipe là một <b>byte stream</b> một chiều, dung lượng có hạn, với bảo đảm ghi <i>nguyên tử</i> cho khối ≤ <code>PIPE_BUF</code>; cách tạo pipe bằng lời gọi <code>pipe()</code>; cách nối cha–con và nối các <b>filter</b> bằng <code>dup2()</code>; cách nói chuyện với một lệnh shell qua <code>popen()</code>/<code>pclose()</code>; <b>FIFO</b> (named pipe) tạo bằng <code>mkfifo()</code> với ngữ nghĩa mở đặc biệt; một ứng dụng client–server dùng FIFO; nhập/xuất không chặn <code>O_NONBLOCK</code>; và ngữ nghĩa <code>read()</code>/<code>write()</code> cùng tín hiệu <code>SIGPIPE</code>/lỗi <code>EPIPE</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Khi bạn gõ <code>ls | wc -l</code> trong shell, dấu gạch đứng ấy chính là một cái <i>ống</i>: đầu ra của lệnh trái chảy thẳng sang đầu vào của lệnh phải, như nước chảy qua ống nước. Chương này mổ xẻ cái ống đó — nó chở dữ liệu ra sao, ai dựng được nó, và người anh em "có tên gọi" của nó là FIFO. <b>Nhớ nhé: pipe là cái ống dẫn dữ liệu từ chương trình này sang chương trình kia.</b></p>
+    <p class="en-only" lang="en">Kerrisk opens by noting that the <b>pipe</b> is the <i>oldest</i> method of interprocess communication (IPC) on UNIX, having appeared in Third Edition UNIX in the early 1970s.<span class="cite"><a href="#ref-1">1</a></span> He presents: a pipe as a unidirectional, limited-capacity <b>byte stream</b> with an <i>atomicity</i> guarantee for blocks of ≤ <code>PIPE_BUF</code> bytes; creating a pipe with the <code>pipe()</code> system call; connecting parent and child and chaining <b>filters</b> with <code>dup2()</code>; talking to a shell command via <code>popen()</code>/<code>pclose()</code>; <b>FIFOs</b> (named pipes) created with <code>mkfifo()</code> and their peculiar open semantics; a client–server application using FIFOs; nonblocking I/O with <code>O_NONBLOCK</code>; and the semantics of <code>read()</code>/<code>write()</code> with the <code>SIGPIPE</code> signal and <code>EPIPE</code> error.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only deep-bilingual"><span class="vi-only">Góc nhìn của nhân: một pipe đơn giản là một <i>vùng đệm duy trì trong bộ nhớ nhân</i>, truy cập qua một cặp bộ mô tả tệp. Chính vì sống trong nhân chứ không có tên trên hệ thống tệp, một pipe không tên chỉ nối được những tiến trình <i>họ hàng</i> — những tiến trình cùng thừa kế cặp bộ mô tả từ một tổ tiên chung đã gọi <code>pipe()</code> trước khi <code>fork()</code>. FIFO khắc phục đúng hạn chế đó: nó có một <i>đường dẫn</i> trên hệ thống tệp nên bất kỳ tiến trình nào có quyền cũng mở được.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span><span class="en-only" lang="en">The kernel's view: a pipe is simply a <i>buffer maintained in kernel memory</i>, reached through a pair of file descriptors. Because it lives in the kernel with no name on the file system, an unnamed pipe can only connect <i>related</i> processes — ones that inherit the descriptor pair from a common ancestor that called <code>pipe()</code> before <code>fork()</code>. A FIFO fixes exactly that limitation: it has a <i>pathname</i> on the file system, so any process with suitable permissions can open it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> pipe và FIFO là cùng một ý tưởng — một <i>byte stream một chiều, dung lượng có hạn</i> do nhân giữ — chỉ khác ở chỗ FIFO có tên trên hệ thống tệp nên nối được cả những tiến trình không họ hàng. Nắm được ngữ nghĩa đóng bộ mô tả, trần <code>PIPE_BUF</code>, cách mở FIFO có thể chặn, và cặp <code>SIGPIPE</code>/<code>EPIPE</code> — là nắm được kênh IPC đơn giản nhất mà cả shell lẫn vô số chương trình vẫn dùng mỗi ngày.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> pipe và FIFO đều là một cái "ống" một chiều để chở dữ liệu giữa các chương trình. Pipe thường dùng cho các chương trình có họ hàng; FIFO có tên nên ai cũng gọi được. Hiểu cái ống này là hiểu cách shell nối các lệnh với nhau. <b>Nhớ nhé: pipe là ống không tên cho người nhà, FIFO là ống có tên cho tất cả.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> pipes and FIFOs are the same idea — a <i>unidirectional, limited-capacity byte stream</i> held by the kernel — differing only in that a FIFO has a name on the file system, so it can connect unrelated processes too. Grasping the descriptor-closing discipline, the <code>PIPE_BUF</code> limit, the FIFO's blocking open, and the <code>SIGPIPE</code>/<code>EPIPE</code> pair is grasping the simplest IPC channel that the shell and countless programs still use every day.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: pipe và FIFO đều là một byte stream một chiều do nhân giữ, có một đầu ghi và một đầu đọc; pipe không tên nối các tiến trình họ hàng qua pipe(), còn FIFO có tên trên hệ thống tệp tạo bằng mkfifo() nối được bất kỳ tiến trình nào. Diagram: pipes and FIFOs are both a unidirectional byte stream held by the kernel, with a write end and a read end; an unnamed pipe connects related processes via pipe(), while a named FIFO created with mkfifo() connects any processes.">
+    <div class="core">
+      <b>pipe / FIFO</b>
+      <small class="standard-copy">Byte stream một chiều do nhân giữ: một đầu ghi, một đầu đọc</small>
+      <small class="easy-only">Một cái ống một chiều: một đầu đổ vào, một đầu lấy ra</small>
+      <small class="en-only" lang="en">A unidirectional kernel byte stream: one write end, one read end</small>
+    </div>
+
+    <div class="node">
+      <b>bản chất · byte stream</b>
+      <small class="standard-copy">Không có ranh giới thông điệp; ghi nguyên tử nếu ≤ PIPE_BUF; dung lượng hữu hạn</small>
+      <small class="easy-only">Dữ liệu chảy thành dòng, không chia gói; ống đầy thì phải chờ</small>
+      <small class="en-only" lang="en">No message boundaries; atomic writes if ≤ PIPE_BUF; finite capacity</small>
+    </div>
+
+    <div class="node">
+      <b>pipe() · không tên</b>
+      <small class="standard-copy">filedes[0] đầu đọc, filedes[1] đầu ghi; chỉ nối tiến trình họ hàng</small>
+      <small class="easy-only">Ống không tên, chỉ dùng được giữa các tiến trình cùng nhà</small>
+      <small class="en-only" lang="en">filedes[0] read, filedes[1] write; connects only related processes</small>
+    </div>
+
+    <div class="node">
+      <b>FIFO · có tên</b>
+      <small class="standard-copy">mkfifo() tạo đường dẫn trên hệ thống tệp; mở có thể chặn tới khi đủ hai đầu</small>
+      <small class="easy-only">Ống có tên trên đĩa, ai có quyền cũng mở được</small>
+      <small class="en-only" lang="en">mkfifo() makes a file-system pathname; open may block until both ends present</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#pipe-basics">
+    <span>01</span>
+    <b class="standard-copy">Pipe là gì: byte stream, một chiều, có trần dung lượng</b>
+    <b class="easy-only">Pipe là cái ống một chiều, có lúc đầy</b>
+    <b class="en-only" lang="en">What a pipe is: a byte stream, unidirectional, bounded</b>
+  </a>
+  <a href="#pipe-plumbing">
+    <span>02</span>
+    <b class="standard-copy">Dựng pipe: pipe(), cha–con, nối filter, popen()</b>
+    <b class="easy-only">Cách tạo và nối ống: pipe(), cha–con, popen()</b>
+    <b class="en-only" lang="en">Plumbing pipes: pipe(), parent–child, filters, popen()</b>
+  </a>
+  <a href="#fifos">
+    <span>03</span>
+    <b class="standard-copy">FIFO: pipe có tên và ứng dụng client–server</b>
+    <b class="easy-only">FIFO: cái ống có tên và kiểu client–server</b>
+    <b class="en-only" lang="en">FIFOs: named pipes and a client–server app</b>
+  </a>
+  <a href="#io-semantics">
+    <span>04</span>
+    <b class="standard-copy">Không chặn và ngữ nghĩa read()/write()</b>
+    <b class="easy-only">Chế độ không chờ và luật đọc/ghi</b>
+    <b class="en-only" lang="en">Nonblocking I/O and read()/write() semantics</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="pipe-basics" aria-labelledby="pipe-basics-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="pipe-basics-title">
+      <span class="standard-copy">Pipe là một dòng byte một chiều, do nhân giữ, với dung lượng hữu hạn</span>
+      <span class="easy-only">Pipe là một cái ống một chiều, chở dữ liệu thành dòng, có lúc đầy</span>
+      <span class="en-only" lang="en">A pipe is a unidirectional kernel byte stream with a finite capacity</span>
+    </h2>
+    <p class="standard-copy">Trước khi tạo một pipe, cần hiểu nó <i>là</i> gì. Kerrisk nêu một loạt đặc tính nền tảng. Pipe là một <b>byte stream</b>: không có khái niệm thông điệp hay ranh giới thông điệp — bên đọc có thể đọc khối bất kỳ kích thước nào, bất kể bên ghi đã ghi thành từng khối to nhỏ ra sao, và dữ liệu đi qua theo <i>đúng thứ tự</i> được ghi, không thể truy cập ngẫu nhiên bằng <code>lseek()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Pipe là <b>một chiều</b>: dữ liệu chỉ chảy một hướng, một đầu để ghi và đầu kia để đọc.<span class="cite"><a href="#ref-1">1</a></span> Và pipe <b>có dung lượng giới hạn</b>: nó chỉ là một vùng đệm trong bộ nhớ nhân, đầy rồi thì lời ghi tiếp theo bị chặn cho tới khi bên đọc lấy bớt dữ liệu ra.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hãy hình dung một ống nước thật: nước chỉ chảy một chiều, bạn đổ vào một đầu và hứng ở đầu kia. Nước không "chia thành gói" — nó là một dòng liên tục, ai hứng bao nhiêu tùy ca lớn ca nhỏ. Và ống chỉ chứa được chừng ấy nước: đổ nhanh quá mà chưa ai hứng thì phải chờ. Pipe trong máy tính đúng như vậy, chỉ thay nước bằng byte. <b>Nhớ nhé: pipe là ống một chiều, chở byte thành dòng, và có lúc đầy phải chờ.</b></p>
+    <p class="en-only" lang="en">Before creating a pipe, you need to know what it <i>is</i>. Kerrisk lists several foundational properties. A pipe is a <b>byte stream</b>: there is no concept of messages or message boundaries — the reader may read blocks of any size regardless of how the writer wrote them, and the data passes through in exactly the <i>order</i> it was written, with no random access via <code>lseek()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> A pipe is <b>unidirectional</b>: data flows in only one direction, one end for writing and the other for reading.<span class="cite"><a href="#ref-1">1</a></span> And a pipe has a <b>limited capacity</b>: it is just a buffer in kernel memory, and once full, further writes block until the reader removes some data.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Một <b>pipe</b> là một kênh IPC một chiều: một vùng đệm vòng trong bộ nhớ nhân, truy cập qua hai bộ mô tả tệp — một cho <i>đầu đọc</i>, một cho <i>đầu ghi</i>. Bên đọc một pipe rỗng bị chặn tới khi có ít nhất một byte được ghi; khi đầu ghi đóng lại, bên đọc thấy <b>cuối tệp</b> (<code>read()</code> trả về 0) sau khi đã đọc hết dữ liệu còn lại.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Pipe là cái ống có hai đầu: một đầu đổ vào, một đầu lấy ra. Lấy ở ống rỗng thì phải đứng chờ tới khi có người đổ vào. Khi không còn ai đổ nữa và ống đã cạn, người lấy nhận tín hiệu "hết rồi". <b>Nhớ nhé: ống rỗng thì đợi, hết người đổ thì báo hết.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A <b>pipe</b> is a unidirectional IPC channel: a circular buffer in kernel memory, reached through two file descriptors — one for the <i>read end</i>, one for the <i>write end</i>. A reader of an empty pipe blocks until at least one byte is written; when the write end is closed, the reader sees <b>end-of-file</b> (<code>read()</code> returns 0) once it has read all remaining data.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">ghi ──► [ b y t e   s t r e a m ] ──► đọc<br>• không ranh giới thông điệp<br>• đọc đúng thứ tự đã ghi<br>• không lseek()<br>• ghi ≤ PIPE_BUF là nguyên tử<br>• ống đầy ⇒ ghi bị chặn</p>
+      <p class="easy-only">đổ vào ──► [ ống byte ] ──► lấy ra<br>• một chiều<br>• dòng liên tục, không chia gói<br>• đầy thì phải chờ</p>
+      <p class="en-only" lang="en">write ──► [ b y t e   s t r e a m ] ──► read<br>• no message boundaries<br>• read in write order<br>• no lseek()<br>• writes ≤ PIPE_BUF are atomic<br>• full pipe ⇒ write blocks</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">byte stream</span>
+      <h3>
+        <span class="standard-copy">Không có "thông điệp" — chỉ có dòng byte</span>
+        <span class="easy-only">Dữ liệu là một dòng liền, không phải từng gói</span>
+        <span class="en-only" lang="en">There are no "messages" — only a byte stream</span>
+      </h3>
+      <p class="standard-copy">Nếu bên ghi gọi <code>write()</code> ba lần, bên đọc <i>không</i> nhất thiết nhận lại thành ba khối tương ứng — nó có thể gộp cả ba vào một lần <code>read()</code>, hoặc đọc nhỏ giọt từng chút. Pipe không ghi nhớ ranh giới giữa các lần ghi. Muốn có khái niệm "thông điệp rời rạc", ứng dụng phải tự dựng lấy; nếu không, tốt hơn nên dùng cơ chế khác như hàng thông điệp hoặc datagram socket.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Đổ ba ca nước vào ống, người hứng ở đầu kia có thể hứng gọn vào một ca to, hoặc hứng làm năm lần nhỏ — ống không nhớ bạn đã đổ thành mấy lần. Byte cũng vậy. <b>Nhớ nhé: pipe không chia dữ liệu thành gói, bạn muốn gói thì tự đóng gói lấy.</b></p>
+      <p class="en-only" lang="en">If the writer calls <code>write()</code> three times, the reader does <i>not</i> necessarily get three matching blocks back — it may gather all three into one <code>read()</code>, or sip them a little at a time. The pipe keeps no record of boundaries between writes. To get discrete "messages," the application must build that itself; otherwise a mechanism such as a message queue or datagram socket is preferable.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi gửi các bản ghi có kích thước khác nhau qua pipe mà bên nhận đọc sai ranh giới — đó là lúc bạn cần tự thêm độ dài hay dấu phân cách vào mỗi bản ghi.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bạn gửi nhiều mẩu tin qua ống mà bên kia đọc lẫn vào nhau — hãy tự đánh dấu đâu là hết một mẩu.</span>
+        <span class="en-only" lang="en">When sending variable-sized records through a pipe and the receiver reads the boundaries wrong — that is when you add a length or delimiter to each record yourself.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">unidirectional</span>
+      <h3>
+        <span class="standard-copy">Một chiều — muốn hai chiều thì tạo hai pipe</span>
+        <span class="easy-only">Chỉ chảy một hướng; cần hai hướng thì dùng hai ống</span>
+        <span class="en-only" lang="en">One direction — for two-way, make two pipes</span>
+      </h3>
+      <p class="standard-copy">Dữ liệu chỉ đi một hướng qua pipe. Trên vài hiện thực UNIX khác — đáng chú ý là các bản dẫn xuất từ System V Release 4 — pipe là <i>hai chiều</i> (gọi là stream pipe), nhưng tính chất này không có trong bất kỳ chuẩn UNIX nào, nên tốt nhất đừng dựa vào.<span class="cite"><a href="#ref-1">1</a></span> Nếu cần liên lạc hai chiều, giải pháp đơn giản là tạo <i>hai</i> pipe, mỗi cái một hướng; hoặc dùng cặp UNIX domain stream socket qua <code>socketpair()</code>, vốn hai chiều một cách chuẩn mực.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Một cái ống nước chỉ cho nước chảy một chiều. Muốn trò chuyện qua lại hai bên thì lắp hai ống: một ống "tôi nói cho bạn", một ống "bạn nói cho tôi". <b>Nhớ nhé: một ống một chiều, cần qua lại thì bắc hai ống.</b></p>
+      <p class="en-only" lang="en">Data travels in only one direction through a pipe. On some other UNIX implementations — notably those derived from System V Release 4 — pipes are <i>bidirectional</i> (so-called stream pipes), but this is not specified by any UNIX standard, so it is best not to rely on it.<span class="cite"><a href="#ref-1">1</a></span> If you need two-way communication, the simple answer is to create <i>two</i> pipes, one per direction; or use a UNIX domain stream socket pair via <code>socketpair()</code>, which is bidirectional in a standardized way.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi dựng hai pipe cho liên lạc qua lại — hãy đề phòng <i>deadlock</i>: cả hai tiến trình cùng chặn vì đang chờ đọc từ ống rỗng hoặc chờ ghi vào ống đã đầy.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi dùng hai ống để nói qua lại — coi chừng cả hai cùng đứng chờ nhau mà không ai nhúc nhích.</span>
+        <span class="en-only" lang="en">When wiring two pipes for two-way talk — beware <i>deadlock</i>: both processes blocking because each waits to read an empty pipe or write a full one.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">PIPE_BUF</span>
+      <h3>
+        <span class="standard-copy">Ghi ≤ PIPE_BUF byte được bảo đảm nguyên tử</span>
+        <span class="easy-only">Đổ một lượng vừa đủ nhỏ thì không bị trộn lẫn</span>
+        <span class="en-only" lang="en">Writes of ≤ PIPE_BUF bytes are guaranteed atomic</span>
+      </h3>
+      <p class="standard-copy">Nếu nhiều tiến trình cùng ghi vào một pipe, dữ liệu của chúng <i>không bị trộn lẫn</i> miễn là mỗi lần ghi không quá <code>PIPE_BUF</code> byte. SUSv3 đòi <code>PIPE_BUF</code> ít nhất bằng <code>_POSIX_PIPE_BUF</code> (512); giá trị thực khác nhau giữa các hệ — ví dụ 512 byte trên FreeBSD 6.0, 4096 byte trên Tru64 5.1, 5120 byte trên Solaris 8. Trên <b>Linux, <code>PIPE_BUF</code> bằng 4096</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Khi ghi khối lớn hơn <code>PIPE_BUF</code>, nhân có thể chia thành nhiều mẩu nhỏ và, nếu có nhiều bên ghi, các mẩu đó có thể bị xen kẽ với dữ liệu của tiến trình khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Tưởng tượng nhiều người cùng đổ nước vào một ống. Nếu mỗi người chỉ đổ một ca nhỏ vừa đủ, nước của mỗi người vào gọn một mạch, không lẫn với người khác. Nhưng nếu ai đó đổ cả xô to, xô ấy có thể bị chia nhỏ và xen giữa những ca của người bên cạnh. <b>Nhớ nhé: đổ ít một lần thì gọn, đổ quá nhiều thì dễ bị trộn.</b></p>
+      <p class="en-only" lang="en">If multiple processes write to one pipe, their data is <i>not intermingled</i> as long as each write is no more than <code>PIPE_BUF</code> bytes. SUSv3 requires <code>PIPE_BUF</code> to be at least <code>_POSIX_PIPE_BUF</code> (512); the actual value varies — e.g. 512 bytes on FreeBSD 6.0, 4096 on Tru64 5.1, 5120 on Solaris 8. On <b>Linux, <code>PIPE_BUF</code> is 4096</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> When writing a block larger than <code>PIPE_BUF</code>, the kernel may split it into smaller pieces and, if there are several writers, those pieces may be interleaved with other processes' data.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi nhiều tiến trình cùng ghi log vào một pipe — giữ mỗi bản ghi ≤ <code>PIPE_BUF</code> byte để các dòng không bị cắt xén chồng lên nhau.<span class="cite"><a href="#ref-7">7</a></span></span>
+        <span class="easy-only">Khi nhiều chương trình cùng ghi vào một ống — giữ mỗi lần ghi đủ nhỏ để các dòng không lẫn vào nhau.</span>
+        <span class="en-only" lang="en">When several processes log into one pipe — keep each record ≤ <code>PIPE_BUF</code> bytes so the lines are not chopped and mixed.<span class="cite"><a href="#ref-7">7</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Khác biệt giữa các phiên bản nhân</span><span class="en-only" lang="en">A kernel-version difference</span></h4>
+          <p><span class="vi-only">Kerrisk lưu ý: trên Linux 2.2, mọi lời ghi vào pipe — bất kể kích thước — đều nguyên tử, trừ khi bị ngắt bởi một trình xử lý tín hiệu. Từ Linux 2.4 trở đi, bất kỳ lời ghi lớn hơn <code>PIPE_BUF</code> byte đều có thể bị xen kẽ với lời ghi của tiến trình khác, vì phần mã hiện thực pipe đã thay đổi lớn giữa hai dòng nhân 2.2 và 2.4.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">Kerrisk notes: on Linux 2.2, pipe writes of any size were atomic unless interrupted by a signal handler. From Linux 2.4 onward, any write larger than <code>PIPE_BUF</code> bytes may be interleaved with other processes' writes, because the pipe implementation code changed substantially between the 2.2 and 2.4 kernels.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Trần ảnh hưởng tới lúc nào dữ liệu được chuyển</span><span class="en-only" lang="en">The limit shapes when data moves</span></h4>
+          <p><span class="vi-only">Khi ghi tối đa <code>PIPE_BUF</code> byte, <code>write()</code> sẽ chặn nếu cần cho tới khi có đủ chỗ để hoàn tất <i>nguyên tử</i>. Khi ghi nhiều hơn <code>PIPE_BUF</code>, <code>write()</code> đổ được chừng nào hay chừng ấy rồi chặn chờ bên đọc lấy bớt; nếu bị tín hiệu ngắt giữa chừng, nó trả về số byte đã chuyển (một "partial write").<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">When writing up to <code>PIPE_BUF</code> bytes, <code>write()</code> blocks if needed until there is enough room to complete <i>atomically</i>. When writing more than <code>PIPE_BUF</code>, <code>write()</code> transfers as much as it can, then blocks until the reader drains some; if a signal interrupts it midway, it returns the count of bytes transferred (a "partial write").<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Dung lượng pipe không cố định như nhiều người tưởng: với nhân trước 2.6.11, nó bằng kích thước trang hệ thống (ví dụ 4096 byte trên x86-32); từ Linux 2.6.11, dung lượng mặc định là <b>65.536 byte</b>; và từ Linux 2.6.35, lời gọi <code>fcntl(fd, F_SETPIPE_SZ, size)</code> cho phép chỉnh dung lượng, với trần mặc định ghi ở <code>/proc/sys/fs/pipe-max-size</code> là 1.048.576 byte.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> Đã biết pipe <i>là</i> gì, câu hỏi kế là: làm sao <i>dựng</i> và <i>nối</i> nó?</p>
+    <p class="easy-only">Cái ống không phải lúc nào cũng cùng độ lớn: nhân Linux mới chứa được tới 65.536 byte, và còn chỉnh được nữa. Giờ ta biết ống là gì rồi; tiếp theo là học cách tự tay lắp và nối ống.</p>
+    <p class="en-only" lang="en">A pipe's capacity is not fixed as many assume: on kernels before 2.6.11 it equalled the system page size (e.g. 4096 bytes on x86-32); since Linux 2.6.11 the default is <b>65,536 bytes</b>; and since Linux 2.6.35, <code>fcntl(fd, F_SETPIPE_SZ, size)</code> can change it, with the default ceiling in <code>/proc/sys/fs/pipe-max-size</code> being 1,048,576 bytes.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> Having seen what a pipe <i>is</i>, the next question is how to <i>build</i> and <i>connect</i> one.</p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="pipe-plumbing" aria-labelledby="pipe-plumbing-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="pipe-plumbing-title">
+      <span class="standard-copy">Dựng ống: pipe(), nối cha–con, nối filter, và popen()</span>
+      <span class="easy-only">Tự tay lắp ống: tạo, nối cha–con, nối lệnh, nói với shell</span>
+      <span class="en-only" lang="en">Plumbing: pipe(), parent–child, connecting filters, and popen()</span>
+    </h2>
+    <p class="standard-copy">Lời gọi <code>pipe(int filedes[2])</code> tạo một pipe mới và trả về <i>hai</i> bộ mô tả tệp đang mở trong mảng <code>filedes</code>: <code>filedes[0]</code> cho đầu <b>đọc</b> và <code>filedes[1]</code> cho đầu <b>ghi</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Một pipe gần như vô dụng trong phạm vi một tiến trình đơn lẻ; sức mạnh của nó lộ ra khi phối hợp với <code>fork()</code>: tiến trình gọi <code>pipe()</code> rồi <code>fork()</code>, và vì con thừa kế bản sao các bộ mô tả của cha, hai bên lập tức có chung một pipe nối liền. Ngay sau đó, mỗi bên <b>đóng đầu không dùng</b>: bên đọc đóng <code>filedes[1]</code>, bên ghi đóng <code>filedes[0]</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hàm <code>pipe()</code> giao cho bạn hai đầu ống: một đầu để lấy ra (số 0), một đầu để đổ vào (số 1). Một mình thì ống chẳng để làm gì; nhưng khi một tiến trình đẻ ra tiến trình con, đứa con được chép lại hai đầu ống ấy — thế là hai cha con nối với nhau. Việc đầu tiên mỗi người làm là bịt cái đầu mình không dùng tới. <b>Nhớ nhé: tạo ống, sinh con, rồi ai cũng bịt bớt đầu thừa.</b></p>
+    <p class="en-only" lang="en">The call <code>pipe(int filedes[2])</code> creates a new pipe and returns <i>two</i> open file descriptors in the array <code>filedes</code>: <code>filedes[0]</code> for the <b>read</b> end and <code>filedes[1]</code> for the <b>write</b> end.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> A pipe is nearly useless within a single process; its power appears when combined with <code>fork()</code>: a process calls <code>pipe()</code> then <code>fork()</code>, and because the child inherits copies of the parent's descriptors, both sides immediately share one connected pipe. Right afterward, each side <b>closes the end it does not use</b>: the reader closes <code>filedes[1]</code>, the writer closes <code>filedes[0]</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Đóng bộ mô tả không dùng <i>không chỉ</i> để khỏi cạn hạn mức bộ mô tả — nó <b>thiết yếu</b> cho sự đúng đắn. Bên đọc phải đóng đầu ghi để, khi bên kia ghi xong và đóng đầu ghi của họ, nó mới thấy cuối tệp; nếu không, <code>read()</code> sẽ chặn mãi vì nhân biết vẫn còn một đầu ghi đang mở. Bên ghi phải đóng đầu đọc để nhận được <code>SIGPIPE</code>/<code>EPIPE</code> khi không còn ai đọc.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Phải bịt đầu ống mình không dùng, không phải cho gọn mà vì nếu không mọi thứ sẽ kẹt. Người lấy nước mà không bịt đầu đổ của chính mình thì sẽ đứng chờ mãi, tưởng vẫn còn người sắp đổ. <b>Nhớ nhé: không bịt đầu thừa thì chương trình treo.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Closing unused descriptors is <i>not merely</i> about not exhausting the descriptor limit — it is <b>essential</b> for correctness. The reader must close the write end so that, when the other side finishes and closes its write end, the reader sees end-of-file; otherwise <code>read()</code> blocks forever because the kernel knows a write end is still open. The writer must close the read end to receive <code>SIGPIPE</code>/<code>EPIPE</code> when no reader remains.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#include &lt;unistd.h&gt;<br>int pipe(int filedes[2]);<br>/* filedes[0] = đầu đọc */<br>/* filedes[1] = đầu ghi */<br>/* trả 0 nếu ok, -1 nếu lỗi */</p>
+      <p class="easy-only">pipe(filedes)<br>filedes[0] --&gt; lấy ra<br>filedes[1] --&gt; đổ vào<br>rồi fork() để chia cho con</p>
+      <p class="en-only" lang="en">#include &lt;unistd.h&gt;<br>int pipe(int filedes[2]);<br>/* filedes[0] = read end */<br>/* filedes[1] = write end */<br>/* returns 0 on success, -1 on error */</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">close()</span>
+      <h3>
+        <span class="standard-copy">Đóng đầu không dùng — quy tắc sống còn của pipe</span>
+        <span class="easy-only">Bịt đầu ống mình không dùng, nếu không sẽ kẹt</span>
+        <span class="en-only" lang="en">Close the unused end — the pipe's survival rule</span>
+      </h3>
+      <p class="standard-copy">Thông thường một pipe chỉ nên có một bên ghi. Lý do đóng đầu đọc ở bên ghi: khi một tiến trình ghi vào pipe mà <i>không còn</i> tiến trình nào mở đầu đọc, nhân gửi tín hiệu <code>SIGPIPE</code> (mặc định giết tiến trình); nếu bắt hoặc bỏ qua tín hiệu, <code>write()</code> thất bại với lỗi <code>EPIPE</code> ("broken pipe").<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Còn khi <i>tất cả</i> bộ mô tả trỏ tới pipe trong mọi tiến trình đều đóng, pipe mới bị hủy và tài nguyên được giải phóng — mọi dữ liệu chưa đọc bị mất.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nếu người lấy nước quên bịt đầu đổ của chính mình, họ sẽ chờ mãi vì nghĩ "biết đâu lát nữa có người đổ" — kể cả khi người đổ thật đã bỏ đi. Còn nếu đổ nước vào ống mà đầu kia chẳng còn ai hứng, hệ thống "đập vỡ ống" báo lỗi. <b>Nhớ nhé: bịt đầu thừa để thấy khi nào hết, và để biết khi nào không còn ai nghe.</b></p>
+      <p class="en-only" lang="en">Normally a pipe should have only one writer. Why the writer closes the read end: when a process writes to a pipe with <i>no</i> process holding the read end open, the kernel sends <code>SIGPIPE</code> (which by default kills the process); if you catch or ignore it, <code>write()</code> fails with <code>EPIPE</code> ("broken pipe").<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> And only when <i>all</i> descriptors referring to the pipe in every process are closed is the pipe destroyed and its resources freed — any unread data is lost.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi một chương trình "treo" ở <code>read()</code> trên pipe dù bên ghi đã xong — gần như chắc chắn là một đầu ghi còn mở đâu đó chưa được đóng.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi chương trình đứng im mãi lúc đọc ống dù bên kia đã xong — thường là vì còn một đầu đổ chưa bịt.</span>
+        <span class="en-only" lang="en">Whenever a program "hangs" on <code>read()</code> though the writer has finished — almost always a write end is still open somewhere, unclosed.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">pipe() và pipe2()</span><span class="en-only" lang="en">pipe() and pipe2()</span></h4>
+          <p><span class="vi-only">Từ nhân 2.6.27, Linux hỗ trợ lời gọi phi chuẩn <code>pipe2()</code>, giống <code>pipe()</code> nhưng thêm đối số <code>flags</code>. Cờ <code>O_CLOEXEC</code> bật close-on-exec cho hai bộ mô tả mới; cờ <code>O_NONBLOCK</code> đánh dấu chúng là không chặn, tiết kiệm các lời gọi <code>fcntl()</code> về sau.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span><span class="en-only" lang="en">Since kernel 2.6.27, Linux supports the nonstandard <code>pipe2()</code>, like <code>pipe()</code> but with an extra <code>flags</code> argument. The <code>O_CLOEXEC</code> flag sets close-on-exec on the two new descriptors; <code>O_NONBLOCK</code> marks them nonblocking, saving later <code>fcntl()</code> calls.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Tiến trình họ hàng, không chỉ cha–con</span><span class="en-only" lang="en">Related processes, not just parent–child</span></h4>
+          <p><span class="vi-only">Pipe dùng được giữa bất kỳ hai (hay nhiều) tiến trình <i>họ hàng</i>, miễn pipe được tạo bởi một tổ tiên chung trước chuỗi <code>fork()</code>. Ví dụ quen thuộc nhất là hai tiến trình <i>anh em</i> — cha tạo pipe rồi tạo hai con; đó chính là cách shell dựng một pipeline.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">A pipe works between any two (or more) <i>related</i> processes, as long as it was created by a common ancestor before the series of <code>fork()</code> calls. The most familiar case is two <i>sibling</i> processes — a parent creates the pipe then creates two children; that is exactly how the shell builds a pipeline.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">dup2()</span>
+      <h3>
+        <span class="standard-copy">Nối filter: bẻ stdin/stdout vào pipe bằng dup2()</span>
+        <span class="easy-only">Nối hai lệnh: cắm đầu ra lệnh này vào đầu vào lệnh kia</span>
+        <span class="en-only" lang="en">Connecting filters: bend stdin/stdout into a pipe with dup2()</span>
+      </h3>
+      <p class="standard-copy">Để tái tạo <code>ls | wc -l</code>, shell phải làm cho <i>đầu ra chuẩn</i> của <code>ls</code> chảy vào đầu ghi của pipe và <i>đầu vào chuẩn</i> của <code>wc</code> lấy từ đầu đọc — mà không sửa mã của chính hai lệnh đó. Thủ thuật là nhân bản bộ mô tả: <code>dup2(pfd[1], STDOUT_FILENO)</code> làm bộ mô tả 1 trỏ tới đầu ghi của pipe, rồi đóng bản thừa.<span class="cite"><a href="#ref-1">1</a></span> Kerrisk minh họa bằng chương trình nối <code>ls</code> với <code>wc -l</code>; chạy nó cho ra cùng con số với khi gõ <code>ls | wc -l</code> trực tiếp trong shell.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Cái hay của shell là nó khiến <code>ls</code> tưởng mình vẫn in ra màn hình, còn <code>wc</code> tưởng mình vẫn đọc từ bàn phím — trong khi thực ra chúng đang nói chuyện qua một cái ống giấu kín. Mẹo nằm ở chỗ "tráo" đầu ra chuẩn và đầu vào chuẩn sang hai đầu ống. <b>Nhớ nhé: nối lệnh là lừa cho mỗi lệnh tưởng nó vẫn nói với màn hình và bàn phím.</b></p>
+      <p class="en-only" lang="en">To recreate <code>ls | wc -l</code>, the shell must make <code>ls</code>'s <i>standard output</i> flow into the pipe's write end and <code>wc</code>'s <i>standard input</i> come from the read end — without touching the two commands' code. The trick is descriptor duplication: <code>dup2(pfd[1], STDOUT_FILENO)</code> makes descriptor 1 refer to the pipe's write end, then closes the surplus copy.<span class="cite"><a href="#ref-1">1</a></span> Kerrisk illustrates this with a program wiring <code>ls</code> to <code>wc -l</code>; running it produces the same count as typing <code>ls | wc -l</code> directly in the shell.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi dấu <code>|</code> bạn gõ trong shell là một lần dàn dựng đúng chuỗi <code>pipe()</code> → <code>fork()</code> → <code>dup2()</code> → <code>exec()</code> này cho bạn.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mỗi dấu gạch đứng trong shell chính là lúc nó âm thầm lắp và nối ống giúp bạn.</span>
+        <span class="en-only" lang="en">Every <code>|</code> you type in the shell stages exactly this <code>pipe()</code> → <code>fork()</code> → <code>dup2()</code> → <code>exec()</code> dance for you.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Vì sao dùng dup2() thay close()+dup()</span><span class="en-only" lang="en">Why dup2() over close()+dup()</span></h4>
+          <p><span class="vi-only">Cách cũ là <code>close(STDOUT_FILENO)</code> rồi <code>dup(pfd[1])</code> — dựa vào việc <code>dup()</code> dùng bộ mô tả rảnh nhỏ nhất. Nhưng nếu bộ mô tả 1 vốn đã đóng, ta có thể vô tình gán nhầm. <code>dup2(pfd[1], STDOUT_FILENO)</code> nói rõ đích, tránh được bẫy đó; sau đó nên bọc lời gọi trong <code>if (pfd[1] != STDOUT_FILENO)</code> để phòng trường hợp chúng vốn trùng nhau.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">The old way is <code>close(STDOUT_FILENO)</code> then <code>dup(pfd[1])</code> — relying on <code>dup()</code> using the lowest free descriptor. But if descriptor 1 was already closed, you can bind the wrong thing. <code>dup2(pfd[1], STDOUT_FILENO)</code> names the target explicitly, avoiding that trap; afterwards bracket the calls in <code>if (pfd[1] != STDOUT_FILENO)</code> in case they already coincide.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">FIFO + tee(1) tạo pipeline rẽ nhánh</span><span class="en-only" lang="en">FIFO + tee(1) forks a pipeline</span></h4>
+          <p><span class="vi-only">Pipeline shell vốn tuyến tính, nhưng dùng một FIFO cùng lệnh <code>tee</code> ta có thể <i>rẽ đôi</i> luồng: <code>ls -l | tee myfifo | sort -k5n</code> gửi một bản sao đầu ra qua FIFO cho một tiến trình khác đọc song song.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">A shell pipeline is linear, but with a FIFO plus the <code>tee</code> command you can <i>fork</i> the stream: <code>ls -l | tee myfifo | sort -k5n</code> sends a duplicate of the output through the FIFO for another process to read in parallel.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">popen()</span>
+      <h3>
+        <span class="standard-copy">popen()/pclose(): nói chuyện với một lệnh shell</span>
+        <span class="easy-only">popen(): chạy một lệnh shell rồi đọc hoặc gửi dữ liệu</span>
+        <span class="en-only" lang="en">popen()/pclose(): talk to a shell command</span>
+      </h3>
+      <p class="standard-copy">Một việc thường gặp là chạy một lệnh shell rồi đọc đầu ra hoặc gửi đầu vào cho nó. <code>popen(command, mode)</code> làm gọn: nó tạo một pipe, <code>fork()</code> một con để <code>exec()</code> một shell chạy chuỗi <code>command</code>, rồi trả về một luồng <code>FILE *</code>. Nếu <code>mode</code> là <code>"r"</code>, lời gọi đọc <i>đầu ra chuẩn</i> của lệnh; nếu là <code>"w"</code>, nó ghi vào <i>đầu vào chuẩn</i> của lệnh. Vì pipe một chiều, không thể giao tiếp hai chiều. Kết thúc bằng <code>pclose()</code>, hàm này đợi shell chạy xong và trả về trạng thái kết thúc.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <p class="easy-only"><code>popen()</code> giống như bạn nhờ shell chạy giùm một lệnh rồi đưa cho bạn một cái phễu: phễu "r" để hứng những gì lệnh in ra, phễu "w" để rót dữ liệu cho lệnh ăn. Xong việc thì gọi <code>pclose()</code> để dọn dẹp. <b>Nhớ nhé: popen là nhờ shell chạy lệnh và trao cho bạn một cái phễu đọc hoặc ghi.</b></p>
+      <p class="en-only" lang="en">A common need is to run a shell command and read its output or feed it input. <code>popen(command, mode)</code> makes this tidy: it creates a pipe, <code>fork()</code>s a child to <code>exec()</code> a shell running <code>command</code>, and returns a <code>FILE *</code> stream. If <code>mode</code> is <code>"r"</code>, the caller reads the command's <i>standard output</i>; if <code>"w"</code>, it writes to the command's <i>standard input</i>. Because pipes are unidirectional, two-way talk is impossible. Finish with <code>pclose()</code>, which waits for the shell to finish and returns its termination status.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Nguy hiểm thật sự: nếu <code>command</code> được dựng từ đầu vào người dùng, một chuỗi như <code>; rm *</code> có thể bị shell thực thi — luôn phải kiểm tra kỹ đầu vào trước khi đưa vào <code>popen()</code> hay <code>system()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span>
+        <span class="easy-only">Coi chừng: nếu lệnh được ghép từ chữ người dùng gõ, kẻ xấu có thể lén chèn lệnh phá hoại. Luôn kiểm tra đầu vào trước.</span>
+        <span class="en-only" lang="en">The real danger: if <code>command</code> is built from user input, a string like <code>; rm *</code> may be executed by the shell — always check input carefully before passing it to <code>popen()</code> or <code>system()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Một cái bẫy tinh vi đi kèm <code>popen()</code> và pipe nói chung: vì luồng không trỏ tới một terminal, thư viện stdio áp dụng <b>đệm theo khối</b> (block buffering). Dữ liệu ghi bằng <code>printf()</code> chỉ thực sự sang bên kia khi vùng đệm đầy hoặc khi đóng luồng — muốn nó đi ngay, phải gọi <code>fflush()</code> hoặc tắt đệm bằng <code>setbuf(fp, NULL)</code>.<span class="cite"><a href="#ref-1">1</a></span> Pipe nối được tiến trình họ hàng; còn khi hai tiến trình <i>không</i> họ hàng — như một client và một server độc lập — ta cần người anh em có tên: FIFO.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Một lưu ý: khi dùng <code>printf()</code> để gửi qua ống, chữ có thể nằm chờ trong bộ đệm chứ chưa đi ngay. Muốn nó sang liền thì phải "xả" bộ đệm. Và pipe chỉ nối người cùng nhà; muốn nối hai chương trình xa lạ, ta cần cái ống có tên — đó là FIFO.</p>
+    <p class="en-only" lang="en">A subtle trap rides along with <code>popen()</code> and pipes in general: because the stream does not refer to a terminal, the stdio library applies <b>block buffering</b>. Data written with <code>printf()</code> only crosses when the buffer fills or the stream closes — to send it at once, call <code>fflush()</code> or disable buffering with <code>setbuf(fp, NULL)</code>.<span class="cite"><a href="#ref-1">1</a></span> Pipes connect related processes; when two processes are <i>unrelated</i> — like an independent client and server — we need the named sibling: the FIFO.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="fifos" aria-labelledby="fifos-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="fifos-title">
+      <span class="standard-copy">FIFO: một pipe có tên trên hệ thống tệp — và một ứng dụng client–server</span>
+      <span class="easy-only">FIFO: cái ống có tên, ai cũng gọi được, dùng cho client–server</span>
+      <span class="en-only" lang="en">FIFOs: a pipe with a name on the file system — and a client–server app</span>
+    </h2>
+    <p class="standard-copy">Về ngữ nghĩa, FIFO <i>giống</i> pipe; khác biệt chính là FIFO có một <b>tên</b> trong hệ thống tệp và được mở như một tệp thường. Nhờ đó, FIFO nối được cả những tiến trình <i>không họ hàng</i> — chẳng hạn một client và một server.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> Tên "FIFO" đến từ "first in, first out": dữ liệu được đọc đúng thứ tự được ghi; FIFO cũng thường được gọi là <b>named pipe</b>. Tạo FIFO từ shell bằng lệnh <code>mkfifo</code>, hoặc trong chương trình bằng hàm <code>mkfifo(pathname, mode)</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    <p class="easy-only">FIFO cũng là cái ống một chiều như pipe, chỉ khác là nó có <i>tên</i> và nằm trên đĩa như một tệp. Vì có tên, hai chương trình chẳng quen biết gì nhau cũng có thể hẹn "gặp nhau ở cái ống tên này". Tên FIFO nghĩa là "vào trước, ra trước" — đổ vào trước thì lấy ra trước. <b>Nhớ nhé: FIFO là pipe có tên, nên người lạ cũng gặp nhau được.</b></p>
+    <p class="en-only" lang="en">Semantically a FIFO is <i>like</i> a pipe; the chief difference is that a FIFO has a <b>name</b> in the file system and is opened like a regular file. This lets a FIFO connect even <i>unrelated</i> processes — such as a client and a server.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> The name "FIFO" comes from "first in, first out": data is read in the order it was written; FIFOs are also called <b>named pipes</b>. Create one from the shell with the <code>mkfifo</code> command, or in a program with <code>mkfifo(pathname, mode)</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Mở một FIFO có ngữ nghĩa khác thường. Vì cách dùng hợp lý duy nhất là có một bên đọc và một bên ghi ở hai đầu, nên mặc định mở FIFO để <i>đọc</i> (<code>O_RDONLY</code>) sẽ <b>chặn</b> cho tới khi một tiến trình khác mở nó để <i>ghi</i> (<code>O_WRONLY</code>), và ngược lại. Nói cách khác, việc mở FIFO <b>đồng bộ hóa</b> hai bên. Nếu đầu kia đã mở sẵn, <code>open()</code> thành công ngay.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Khi bạn mở một đầu FIFO, bạn phải đứng chờ tới khi có người mở đầu kia — như hai người hẹn nhau ở quán, ai tới trước thì ngồi đợi. Chỉ khi đủ cả hai, cuộc nói chuyện mới bắt đầu. <b>Nhớ nhé: mở FIFO một mình thì phải đợi bạn mình tới.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Opening a FIFO has unusual semantics. Since the only sensible use is a reader on one end and a writer on the other, by default opening a FIFO for <i>reading</i> (<code>O_RDONLY</code>) <b>blocks</b> until another process opens it for <i>writing</i> (<code>O_WRONLY</code>), and vice versa. In other words, opening a FIFO <b>synchronizes</b> the two sides. If the opposite end is already open, <code>open()</code> succeeds immediately.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">$ mkfifo myfifo&nbsp;&nbsp;# tạo từ shell<br><br>#include &lt;sys/stat.h&gt;<br>int mkfifo(const char *path,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mode_t mode);<br># ls -l: kiểu 'p'; ls -F: thêm '|'</p>
+      <p class="easy-only">$ mkfifo myfifo<br>mkfifo("đường/dẫn", quyền)<br>ls -l thấy chữ 'p' ở đầu dòng</p>
+      <p class="en-only" lang="en">$ mkfifo myfifo&nbsp;&nbsp;# from the shell<br><br>#include &lt;sys/stat.h&gt;<br>int mkfifo(const char *path,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mode_t mode);<br># ls -l: type 'p'; ls -F: appends '|'</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">mkfifo()</span>
+      <h3>
+        <span class="standard-copy">mkfifo() tạo một FIFO với quyền như một tệp</span>
+        <span class="easy-only">mkfifo() tạo ống có tên, có quyền như tệp thường</span>
+        <span class="en-only" lang="en">mkfifo() creates a FIFO with file-like permissions</span>
+      </h3>
+      <p class="standard-copy">Hàm <code>mkfifo(pathname, mode)</code> tạo một FIFO mới với quyền cho bởi <code>mode</code> (đã lọc qua umask). Khi dùng <code>stat()</code> trên một FIFO, kiểu tệp trả về là <code>S_IFIFO</code>; khi liệt kê bằng <code>ls -l</code>, FIFO hiện chữ <b>p</b> ở cột đầu, còn <code>ls -F</code> thêm ký hiệu ống <code>|</code> vào sau tên.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Về lịch sử, FIFO được tạo bằng <code>mknod(pathname, S_IFIFO, 0)</code>; POSIX.1-1990 đưa ra <code>mkfifo()</code> như một API gọn hơn, tránh sự tổng quát của <code>mknod()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+      <p class="easy-only">Gõ <code>mkfifo myfifo</code> là bạn đã tạo một cái ống có tên nằm ngay trong thư mục, giống như tạo một tệp. Khi liệt kê thư mục, nó hiện chữ <b>p</b> ở đầu để báo "đây là một ống, không phải tệp thường". <b>Nhớ nhé: mkfifo đặt một cái ống có tên lên đĩa cho mọi người dùng chung.</b></p>
+      <p class="en-only" lang="en">The function <code>mkfifo(pathname, mode)</code> creates a new FIFO with permissions given by <code>mode</code> (masked by the umask). Running <code>stat()</code> on a FIFO returns file type <code>S_IFIFO</code>; listing with <code>ls -l</code> shows a <b>p</b> in the first column, and <code>ls -F</code> appends the pipe symbol <code>|</code> to the name.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Historically FIFOs were made with <code>mknod(pathname, S_IFIFO, 0)</code>; POSIX.1-1990 introduced <code>mkfifo()</code> as a simpler API avoiding the generality of <code>mknod()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi cần một kênh IPC đơn giản giữa các chương trình khởi chạy độc lập mà không chia sẻ tổ tiên — một FIFO đặt ở đường dẫn ai cũng biết là đủ.<span class="cite"><a href="#ref-4">4</a></span></span>
+        <span class="easy-only">Khi hai chương trình chạy riêng cần trao dữ liệu — hẹn nhau ở một FIFO có tên cố định là xong.</span>
+        <span class="en-only" lang="en">When you need a simple IPC channel between independently launched programs with no shared ancestor — a FIFO at a known path is enough.<span class="cite"><a href="#ref-4">4</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">open()</span>
+      <h3>
+        <span class="standard-copy">Mở FIFO chặn tới khi đủ cả hai đầu</span>
+        <span class="easy-only">Mở một đầu phải chờ đầu kia có người mở</span>
+        <span class="en-only" lang="en">Opening a FIFO blocks until both ends are present</span>
+      </h3>
+      <p class="standard-copy">Đây là điểm dễ gây bất ngờ nhất với người mới. Mở một FIFO để đọc sẽ <i>đứng im</i> ở lời gọi <code>open()</code> cho tới khi một tiến trình khác mở nó để ghi — và đối xứng cho chiều ngược lại. Kerrisk tóm tắt bốn trường hợp trong Bảng 44-1. Hành vi chặn này chính là một cơ chế đồng bộ tiện lợi: hai tiến trình "gặp nhau" tại FIFO.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only">Nếu bạn là người tới quán trước, bạn ngồi đợi; cửa chỉ "mở thông" khi cả hai người cùng có mặt. FIFO cũng thế: mở một đầu thì chờ, tới khi đầu kia có người mở mới bắt đầu chạy tiếp. <b>Nhớ nhé: mở FIFO là một cuộc hẹn — ai tới trước thì đợi.</b></p>
+      <p class="en-only" lang="en">This is the point that most surprises newcomers. Opening a FIFO for reading <i>stalls</i> at the <code>open()</code> call until another process opens it for writing — and symmetrically the other way. Kerrisk summarizes the four cases in Table 44-1. This blocking is a handy synchronization mechanism: two processes "meet" at the FIFO.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một chương trình "treo" ngay tại <code>open()</code> trên FIFO — nó không hỏng, chỉ đang kiên nhẫn chờ đầu kia xuất hiện.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi chương trình đứng im lúc mở FIFO — yên tâm, nó đang đợi người ở đầu kia.</span>
+        <span class="en-only" lang="en">When a program "hangs" right at <code>open()</code> on a FIFO — it is not broken, just patiently waiting for the other end to appear.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Cái bẫy O_RDWR</span><span class="en-only" lang="en">The O_RDWR trap</span></h4>
+          <p><span class="vi-only">Trên hầu hết hiện thực (gồm Linux), có thể lách chặn bằng cách mở FIFO với cờ <code>O_RDWR</code>, nhưng SUSv3 nói rõ hành vi này là <i>không xác định</i> — nên tránh để bảo đảm khả chuyển. Muốn không chặn một cách chuẩn mực, hãy dùng <code>O_NONBLOCK</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span><span class="en-only" lang="en">On most implementations (including Linux) you can circumvent the blocking by opening the FIFO with <code>O_RDWR</code>, but SUSv3 explicitly calls this <i>unspecified</i> — so avoid it for portability. For a standardized non-blocking open, use <code>O_NONBLOCK</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Dữ liệu còn lại bị bỏ</span><span class="en-only" lang="en">Leftover data is discarded</span></h4>
+          <p><span class="vi-only">Như với pipe, khi mọi bộ mô tả trỏ tới một FIFO đều đóng, dữ liệu chưa đọc còn lại bị bỏ đi. FIFO vẫn tồn tại như một mục trên hệ thống tệp, nhưng nội dung trong "ống" thì mất.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">As with pipes, when all descriptors referring to a FIFO are closed, any outstanding unread data is discarded. The FIFO still exists as a file-system entry, but the contents in the "pipe" are gone.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">client-server</span>
+      <h3>
+        <span class="standard-copy">Một server, nhiều client: tên quen biết và FIFO riêng</span>
+        <span class="easy-only">Một người phục vụ, nhiều người gọi, ai cũng có ống riêng</span>
+        <span class="en-only" lang="en">One server, many clients: a well-known name and per-client FIFOs</span>
+      </h3>
+      <p class="standard-copy">Kerrisk dựng một ứng dụng client–server minh họa: server cấp các số thứ tự duy nhất cho mỗi client. Mọi client gửi yêu cầu qua một <b>server FIFO</b> tên cố định (<code>/tmp/seqnum_sv</code>) mà ai cũng biết. Nhưng không thể dùng chung một FIFO cho hồi đáp, vì các client sẽ <i>tranh nhau đọc</i> và có thể đọc nhầm hồi đáp của nhau; vậy nên <b>mỗi client tạo một FIFO riêng</b>, tên dựng từ PID của nó, để server trả lời đúng địa chỉ.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Hãy hình dung một quầy phát số thứ tự. Ai cũng bỏ phiếu yêu cầu vào một hộp chung đặt ở chỗ quen thuộc (server FIFO). Nhưng khi nhận kết quả, mỗi người phải có hộp thư riêng mang tên mình, kẻo lấy nhầm số của người khác. <b>Nhớ nhé: hỏi thì dùng hộp chung, trả lời thì mỗi người một hộp riêng.</b></p>
+      <p class="en-only" lang="en">Kerrisk builds an illustrative client–server application: a server hands out unique sequence numbers to each client. Every client sends its request through one <b>server FIFO</b> at a fixed, well-known name (<code>/tmp/seqnum_sv</code>). But a single FIFO cannot carry the replies, because clients would <i>race to read</i> and might read each other's responses; so <b>each client creates its own FIFO</b>, named from its PID, for the server to reply to the right address.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mẫu "địa chỉ quen biết + kênh phản hồi riêng cho mỗi client" lặp lại trong thiết kế server — từ FIFO tới socket; học nó ở đây là nền cho các chương về socket sau này.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Kiểu "một chỗ chung để hỏi, mỗi người một chỗ riêng để nghe trả lời" sẽ gặp lại hoài trong lập trình mạng.</span>
+        <span class="en-only" lang="en">The "well-known address + a private reply channel per client" pattern recurs in server design — from FIFOs to sockets; learning it here grounds the later socket chapters.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Ứng dụng client–server nêu bật một nhu cầu thực tế: không phải lúc nào ta cũng muốn <code>open()</code> hay <code>read()</code> đứng chờ vô hạn. Nếu một client chết giữa chừng, server không nên bị treo theo. Đó là lúc cần tới nhập/xuất <b>không chặn</b> và hiểu rõ ngữ nghĩa của <code>read()</code>/<code>write()</code> trên pipe và FIFO — cụm khái niệm cuối cùng.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Từ ví dụ trên nảy ra một câu hỏi: nếu người ở đầu kia không bao giờ tới thì sao, chẳng lẽ đứng chờ mãi? Có cách bảo "chờ một chút thôi, không được thì thôi" — đó là chế độ không chờ, phần cuối cùng ta xem.</p>
+    <p class="en-only" lang="en">The client–server app highlights a real need: we do not always want <code>open()</code> or <code>read()</code> to wait forever. If a client dies midway, the server should not hang with it. That is when <b>nonblocking</b> I/O matters, and when you must understand the <code>read()</code>/<code>write()</code> semantics on pipes and FIFOs — the final cluster.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="io-semantics" aria-labelledby="io-semantics-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="io-semantics-title">
+      <span class="standard-copy">Không chặn, và ngữ nghĩa chính xác của read() và write()</span>
+      <span class="easy-only">Chế độ không chờ, và luật đọc/ghi trên pipe và FIFO</span>
+      <span class="en-only" lang="en">Nonblocking, and the exact semantics of read() and write()</span>
+    </h2>
+    <p class="standard-copy">Khi mở một FIFO, mặc định tiến trình bị chặn nếu đầu kia chưa được mở. Muốn không chặn, truyền cờ <code>O_NONBLOCK</code> cho <code>open()</code>. Cờ này bất đối xứng: nếu mở để <i>đọc</i> mà chưa ai mở đầu ghi, <code>open()</code> vẫn <b>thành công ngay</b>; nhưng nếu mở để <i>ghi</i> mà chưa ai mở đầu đọc, <code>open()</code> <b>thất bại</b> với <code>errno</code> đặt thành <code>ENXIO</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> Sự bất đối xứng ấy hợp lý: đọc khi chưa có người ghi thì chỉ là không có dữ liệu, còn ghi khi chưa có người đọc sẽ sinh <code>SIGPIPE</code> và lỗi <code>EPIPE</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Mặc định, mở FIFO là phải đứng chờ đầu kia. Thêm cờ <code>O_NONBLOCK</code> nghĩa là "đừng bắt tôi chờ". Nhưng có một điểm lạ: mở để <i>đọc</i> thì được vào ngay dù chưa ai ghi; còn mở để <i>ghi</i> mà chưa ai đọc thì bị từ chối luôn. <b>Nhớ nhé: không chờ thì người đọc được vào ngay, người ghi thì bị đuổi nếu chưa có ai nghe.</b></p>
+    <p class="en-only" lang="en">When opening a FIFO, a process blocks by default if the other end is not yet open. To avoid blocking, pass the <code>O_NONBLOCK</code> flag to <code>open()</code>. The flag is asymmetric: opening for <i>reading</i> with no writer yet <b>succeeds immediately</b>; but opening for <i>writing</i> with no reader yet <b>fails</b> with <code>errno</code> set to <code>ENXIO</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> The asymmetry makes sense: reading with no writer just yields no data, while writing with no reader would raise <code>SIGPIPE</code> and the <code>EPIPE</code> error.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Cờ <code>O_NONBLOCK</code> không chỉ đổi ngữ nghĩa của <code>open()</code> mà — vì nó bám theo <i>open file description</i> — còn đổi ngữ nghĩa các <code>read()</code>/<code>write()</code> sau đó. Khác biệt duy nhất khi đọc là: khi pipe rỗng mà đầu ghi vẫn mở, <code>read()</code> thường sẽ chặn, còn <code>read()</code> không chặn thất bại ngay với lỗi <code>EAGAIN</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Khi đã bật chế độ "không chờ", việc đọc và ghi về sau cũng không chờ nữa. Đọc ống rỗng mà vẫn còn người ghi: bình thường thì đứng đợi, còn ở chế độ không chờ thì bị báo "chưa có gì, thử lại sau". <b>Nhớ nhé: không chờ nghĩa là chưa sẵn thì báo lỗi ngay chứ không đứng đợi.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> The <code>O_NONBLOCK</code> flag changes not only <code>open()</code> but — because it stays set on the <i>open file description</i> — the semantics of later <code>read()</code>/<code>write()</code> too. The only difference when reading is: with an empty pipe and the write end open, a normal <code>read()</code> blocks, while a nonblocking <code>read()</code> fails at once with <code>EAGAIN</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">open("fifo", O_RDONLY | O_NONBLOCK)<br>mở để đọc, chưa ai ghi → OK ngay<br>mở để ghi, chưa ai đọc → lỗi ENXIO<br><br>read() ống rỗng, đầu ghi mở:<br>&nbsp;&nbsp;chặn ↔ không chặn: EAGAIN</p>
+      <p class="easy-only">O_NONBLOCK = "đừng bắt tôi chờ"<br>đọc: vào ngay<br>ghi mà chưa ai đọc: bị từ chối<br>đọc ống rỗng: báo "thử lại sau"</p>
+      <p class="en-only" lang="en">open("fifo", O_RDONLY | O_NONBLOCK)<br>open for read, no writer → OK now<br>open for write, no reader → ENXIO<br><br>read() empty pipe, write end open:<br>&nbsp;&nbsp;block ↔ nonblock: EAGAIN</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">O_NONBLOCK</span>
+      <h3>
+        <span class="standard-copy">O_NONBLOCK: không chờ, và một bất đối xứng đọc/ghi</span>
+        <span class="easy-only">O_NONBLOCK: đọc được vào ngay, ghi thì có thể bị đuổi</span>
+        <span class="en-only" lang="en">O_NONBLOCK: don't wait, and a read/write asymmetry</span>
+      </h3>
+      <p class="standard-copy">Dùng <code>O_NONBLOCK</code> khi mở FIFO phục vụ hai mục đích chính: cho phép <i>một</i> tiến trình mở cả hai đầu FIFO (mở đọc với <code>O_NONBLOCK</code> trước, rồi mở ghi), và ngăn <b>deadlock</b> giữa các tiến trình cùng mở hai FIFO.<span class="cite"><a href="#ref-1">1</a></span> Nếu đầu kia đã mở sẵn, cờ này không có tác dụng gì với <code>open()</code> — nó mở thành công ngay như thường.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Chế độ "không chờ" có hai cái lợi: một mình bạn mở được cả hai đầu ống, và tránh được cảnh hai bên cùng đứng chờ nhau mãi. Nếu đầu kia vốn đã có người mở rồi thì cờ này chẳng thay đổi gì cả. <b>Nhớ nhé: không chờ giúp một mình mở hai đầu và tránh kẹt cứng.</b></p>
+      <p class="en-only" lang="en">Using <code>O_NONBLOCK</code> when opening a FIFO serves two main purposes: it lets a <i>single</i> process open both ends of a FIFO (open for reading with <code>O_NONBLOCK</code> first, then open for writing), and it prevents <b>deadlock</b> between processes that each open two FIFOs.<span class="cite"><a href="#ref-1">1</a></span> If the other end is already open, the flag has no effect on <code>open()</code> — it opens successfully at once as usual.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong một server dùng FIFO: mở đầu đọc với <code>O_NONBLOCK</code> để server khởi động được mà không phải chờ client đầu tiên xuất hiện.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Trong server dùng FIFO: mở kiểu không chờ để khởi động được ngay, khỏi đợi client đầu tiên.</span>
+        <span class="en-only" lang="en">In a FIFO-based server: open the read end with <code>O_NONBLOCK</code> so the server can start without waiting for the first client to appear.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Đổi O_NONBLOCK trên bộ mô tả đã mở</span><span class="en-only" lang="en">Toggling O_NONBLOCK on an open descriptor</span></h4>
+          <p><span class="vi-only">Với bộ mô tả do <code>pipe()</code> trả về (không qua <code>open()</code>, nên không truyền cờ lúc tạo được), ta bật/tắt chế độ không chặn bằng <code>fcntl()</code>: lấy cờ hiện tại bằng <code>F_GETFL</code>, bật bit <code>O_NONBLOCK</code>, rồi đặt lại bằng <code>F_SETFL</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></span><span class="en-only" lang="en">For descriptors returned by <code>pipe()</code> (not via <code>open()</code>, so no flag can be passed at creation), toggle nonblocking mode with <code>fcntl()</code>: fetch the current flags with <code>F_GETFL</code>, set the <code>O_NONBLOCK</code> bit, then store them back with <code>F_SETFL</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Bảng 44-1 trong sách</span><span class="en-only" lang="en">The book's Table 44-1</span></h4>
+          <p><span class="vi-only">Kerrisk gom bốn trường hợp mở FIFO vào một bảng: mở đọc/ghi × đầu kia mở/đóng. Chỉ một ô duy nhất là thất bại — mở <i>ghi</i> không chặn khi đầu kia đóng, trả <code>ENXIO</code>; ba ô còn lại hoặc thành công ngay hoặc (ở chế độ chặn) đứng chờ.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">Kerrisk collects the four FIFO-open cases into one table: open for reading/writing × other end open/closed. Only one cell fails — a nonblocking open for <i>writing</i> when the other end is closed, returning <code>ENXIO</code>; the other three either succeed at once or (in blocking mode) wait.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">SIGPIPE</span>
+      <h3>
+        <span class="standard-copy">Ghi khi không còn ai đọc: SIGPIPE rồi EPIPE</span>
+        <span class="easy-only">Ghi vào ống không còn ai nghe: bị báo "ống vỡ"</span>
+        <span class="en-only" lang="en">Writing with no reader: SIGPIPE then EPIPE</span>
+      </h3>
+      <p class="standard-copy">Khi ghi vào một pipe hay FIFO mà <i>không</i> còn tiến trình nào mở đầu đọc, nhân gửi <code>SIGPIPE</code> cho bên ghi; mặc định tín hiệu này giết tiến trình. Nếu bắt hoặc bỏ qua <code>SIGPIPE</code>, lời <code>write()</code> thất bại với lỗi <code>EPIPE</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Kerrisk khuyên: cách dễ nhất thường là cho ứng dụng bỏ qua <code>SIGPIPE</code> rồi phát hiện "ống vỡ" qua lỗi <code>EPIPE</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Rót nước vào ống mà đầu kia chẳng còn ai hứng thì vô nghĩa — hệ thống "đập vỡ ống" và báo cho người rót biết. Mặc định cú báo ấy giết luôn chương trình; nhưng bạn có thể chọn "bỏ qua tiếng chuông" để tự xử lý lỗi cho êm. <b>Nhớ nhé: ghi mà không ai nghe thì ống vỡ, chương trình có thể chết nếu không lo trước.</b></p>
+      <p class="en-only" lang="en">When writing to a pipe or FIFO with <i>no</i> process holding the read end open, the kernel sends <code>SIGPIPE</code> to the writer; by default this signal kills the process. If you catch or ignore <code>SIGPIPE</code>, the <code>write()</code> fails with <code>EPIPE</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Kerrisk advises: it is usually easiest to have the application ignore <code>SIGPIPE</code> and detect a "broken" pipe via the <code>EPIPE</code> error.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi <code>yes | head</code> kết thúc êm: <code>head</code> đọc đủ rồi đóng, <code>yes</code> nhận <code>SIGPIPE</code> và dừng — đó là cơ chế này đang vận hành.<span class="cite"><a href="#ref-7">7</a></span></span>
+        <span class="easy-only">Khi một lệnh trong pipeline tự dừng đúng lúc vì lệnh sau đã đọc đủ — đó là nhờ tín hiệu "ống vỡ".</span>
+        <span class="en-only" lang="en">When <code>yes | head</code> ends cleanly: <code>head</code> reads enough then closes, <code>yes</code> gets <code>SIGPIPE</code> and stops — this mechanism at work.<span class="cite"><a href="#ref-7">7</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">EAGAIN</span>
+      <h3>
+        <span class="standard-copy">Ngữ nghĩa write(): nguyên tử ≤ PIPE_BUF, nếu không là partial</span>
+        <span class="easy-only">Luật ghi: ít thì trọn vẹn, nhiều thì ghi được chừng nào hay chừng ấy</span>
+        <span class="en-only" lang="en">write() semantics: atomic if ≤ PIPE_BUF, else partial</span>
+      </h3>
+      <p class="standard-copy">Kerrisk gom ngữ nghĩa <code>write()</code> vào Bảng 44-3. Ở chế độ chặn: ghi ≤ <code>PIPE_BUF</code> byte là <i>nguyên tử</i> (có thể chặn tới khi đủ chỗ); ghi &gt; <code>PIPE_BUF</code> thì không bảo đảm nguyên tử và có thể bị xen kẽ. Ở chế độ <code>O_NONBLOCK</code>: nếu ghi ≤ <code>PIPE_BUF</code> mà không đủ chỗ, <code>write()</code> thất bại ngay với <code>EAGAIN</code> (vì không thể ghi một phần mà vẫn giữ tính nguyên tử); nếu ghi &gt; <code>PIPE_BUF</code>, nó ghi được bao nhiêu hay bấy nhiêu (partial write) rồi trả về số byte đã chuyển, hoặc <code>EAGAIN</code> nếu không chuyển nổi một byte.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <p class="easy-only">Khi ghi: nếu lượng đủ nhỏ (≤ PIPE_BUF) thì hoặc ghi trọn một mạch, hoặc chờ tới khi có chỗ. Nếu lượng lớn thì ghi được tới đâu hay tới đó. Ở chế độ không chờ, không ghi được ngay thì nó báo "thử lại sau" (EAGAIN) chứ không đứng đợi. <b>Nhớ nhé: ít thì trọn vẹn, nhiều thì ghi dần, không chờ thì báo thử lại sau.</b></p>
+      <p class="en-only" lang="en">Kerrisk collects <code>write()</code> semantics into Table 44-3. In blocking mode: a write of ≤ <code>PIPE_BUF</code> bytes is <i>atomic</i> (it may block until there is room); a write of &gt; <code>PIPE_BUF</code> is not guaranteed atomic and may be interleaved. In <code>O_NONBLOCK</code> mode: if a ≤ <code>PIPE_BUF</code> write lacks room, <code>write()</code> fails at once with <code>EAGAIN</code> (it cannot do a partial write while keeping atomicity); if &gt; <code>PIPE_BUF</code>, it writes as much as it can (a partial write) and returns the byte count, or <code>EAGAIN</code> if it cannot move even one byte.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi code không chặn trả <code>EAGAIN</code> — đó không phải lỗi thật sự, chỉ là "chưa sẵn, hãy thử lại", thường được dùng cùng một vòng lặp sự kiện (ví dụ <code>select()</code>/<code>poll()</code>).<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi thấy <code>EAGAIN</code> ở chế độ không chờ — đừng hoảng, nó chỉ bảo "lát nữa thử lại nhé".</span>
+        <span class="en-only" lang="en">When nonblocking code returns <code>EAGAIN</code> — that is not a real error, just "not ready, try again," usually paired with an event loop (e.g. <code>select()</code>/<code>poll()</code>).<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="section-heading">
+      <h2 id="ngo-nhan-title">
+        <span class="standard-copy">Ba ngộ nhận thường gặp</span>
+        <span class="en-only" lang="en">Three common misconceptions</span>
+      </h2>
+    </div>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Mỗi write() tương ứng một read() ở đầu kia”</span>
+          <span class="en-only" lang="en">“Each write() matches one read() at the other end”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> ghi ba lần thì đọc được đúng ba khối tương ứng.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> pipe là byte stream, không giữ ranh giới thông điệp — ba lần ghi có thể gộp thành một lần đọc, hoặc tách thành nhiều lần. Muốn có "gói", ứng dụng phải tự đóng khung.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> three writes yield exactly three matching blocks when read.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> a pipe is a byte stream with no message boundaries — three writes may merge into one read, or split into several. For "messages," the application must frame them itself.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Ghi bao nhiêu vào pipe cũng là một thao tác nguyên tử”</span>
+          <span class="en-only" lang="en">“Any write to a pipe is atomic, whatever its size”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> mọi <code>write()</code> vào pipe đều không bị trộn với bên ghi khác.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> chỉ ghi ≤ <code>PIPE_BUF</code> (trên Linux là 4096) mới được bảo đảm nguyên tử; ghi lớn hơn có thể bị chia nhỏ và xen kẽ khi có nhiều bên ghi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> every <code>write()</code> to a pipe is immune to interleaving with other writers.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> only writes of ≤ <code>PIPE_BUF</code> (4096 on Linux) are guaranteed atomic; larger writes may be split and interleaved when there are several writers.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Mở một FIFO giống hệt mở một tệp thường”</span>
+          <span class="en-only" lang="en">“Opening a FIFO is just like opening a regular file”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> <code>open()</code> trên FIFO trả về ngay như với tệp thường.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> mặc định mở để đọc <b>chặn</b> tới khi có bên mở để ghi (và ngược lại) — việc mở FIFO đồng bộ hai bên; muốn không chặn phải dùng <code>O_NONBLOCK</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> <code>open()</code> on a FIFO returns at once like a regular file.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> by default opening for reading <b>blocks</b> until a writer opens it (and vice versa) — opening a FIFO synchronizes both sides; to avoid blocking, use <code>O_NONBLOCK</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm pipe và FIFO</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped pipes and FIFOs</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã nắm bản chất của pipe, cách dựng và nối nó, FIFO có tên, và ngữ nghĩa đọc/ghi — nền cho các chương IPC về sau.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you grasp what a pipe is, how to build and connect one, named FIFOs, and the read/write semantics — the groundwork for the later IPC chapters.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Nêu bốn đặc tính của một pipe: byte stream, một chiều, dung lượng hữu hạn, và bảo đảm nguyên tử. Trên Linux <code>PIPE_BUF</code> bằng bao nhiêu?</p>
+        <p class="deep-only">Gợi ý sâu hơn: điều gì thay đổi về tính nguyên tử của <code>write()</code> giữa nhân Linux 2.2 và 2.4?</p>
+      </li>
+      <li>
+        <p><code>pipe()</code> trả về gì trong <code>filedes</code>? Vì sao đóng bộ mô tả không dùng là <i>thiết yếu</i> chứ không chỉ để gọn?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao nếu bên đọc không đóng đầu ghi thì nó không bao giờ thấy cuối tệp?</p>
+      </li>
+      <li>
+        <p>Làm sao nối đầu ra của một lệnh vào đầu vào của lệnh khác mà không sửa mã chúng? Vai trò của <code>dup2()</code> là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: <code>popen()</code> làm giúp bạn những bước nào, và vì sao kiểm tra đầu vào lại quan trọng với nó?</p>
+      </li>
+      <li>
+        <p>FIFO khác pipe ở điểm nào? Mô tả ngữ nghĩa chặn khi mở một FIFO.</p>
+        <p class="deep-only">Gợi ý sâu hơn: trong ví dụ client–server, vì sao không thể dùng chung một FIFO cho mọi hồi đáp?</p>
+      </li>
+      <li>
+        <p><code>O_NONBLOCK</code> đổi hành vi <code>open()</code> ra sao khi mở để đọc so với khi mở để ghi? Khi nào bên ghi nhận <code>SIGPIPE</code>/<code>EPIPE</code>?</p>
+        <p class="deep-only">Gợi ý sâu hơn: ở chế độ không chặn, vì sao một lời ghi ≤ <code>PIPE_BUF</code> lại thất bại với <code>EAGAIN</code> thay vì ghi một phần?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Pipe là cái gì, và dữ liệu chảy theo mấy chiều?</p></li>
+      <li><p>Vì sao phải bịt đầu ống mình không dùng tới?</p></li>
+      <li><p>Dấu <code>|</code> trong shell làm việc gì bên dưới?</p></li>
+      <li><p>FIFO khác pipe ở chỗ nào?</p></li>
+      <li><p>Ghi vào một ống mà không còn ai đọc thì chuyện gì xảy ra?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>What is a pipe, and in how many directions does data flow?</p></li>
+      <li><p>Why must you close the pipe end you do not use?</p></li>
+      <li><p>What does the shell's <code>|</code> do under the hood?</p></li>
+      <li><p>How does a FIFO differ from a pipe?</p></li>
+      <li><p>What happens when you write to a pipe with no reader left?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Pipe và FIFO là <span class="closing-accent">kênh IPC đơn giản nhất của UNIX</span>: một <span class="closing-accent">byte stream một chiều, dung lượng có hạn</span> do nhân giữ, với ghi nguyên tử cho khối ≤ <code>PIPE_BUF</code>. Pipe nối người nhà, FIFO có tên nên nối cả người lạ; cả hai đòi kỷ luật đóng bộ mô tả để thấy cuối tệp và nhận <code>SIGPIPE</code>/<code>EPIPE</code>. Nắm được cái ống này, bạn đã sẵn sàng cho những kênh IPC mạnh hơn — hàng thông điệp, bộ nhớ chia sẻ, và socket.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Pipe và FIFO là <span class="closing-accent">cái ống đơn giản nhất</span> để các chương trình trao dữ liệu cho nhau: <span class="closing-accent">một chiều, chở byte thành dòng</span>. Pipe cho người cùng nhà, FIFO có tên cho tất cả. Hiểu cái ống này là bước đệm sang các kênh liên lạc lớn hơn. <b>Nhớ nhé: nắm được cái ống nhỏ này là mở đường tới mọi kênh liên lạc lớn hơn.</b></p>
+    <p class="en-only" lang="en">Pipes and FIFOs are <span class="closing-accent">UNIX's simplest IPC channel</span>: a <span class="closing-accent">unidirectional, limited-capacity byte stream</span> held by the kernel, with atomic writes for blocks of ≤ <code>PIPE_BUF</code>. Pipes join relatives; a named FIFO joins strangers too; both demand the descriptor-closing discipline to see end-of-file and receive <code>SIGPIPE</code>/<code>EPIPE</code>. Grasp this little pipe and you are ready for the stronger IPC channels — message queues, shared memory, and sockets.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-41-fundamentals-of-shared-libraries.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 41 · Căn bản về thư viện dùng chung</span>
+    <span class="nav-title en-only" lang="en">Chapter 41 · Fundamentals of Shared Libraries</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-49-memory-mappings.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 49 · Ánh xạ bộ nhớ</span>
+    <span class="nav-title en-only" lang="en">Chapter 49 · Memory Mappings</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chương 44, “Pipes and FIFOs”, trang 889–920.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chapter 44, “Pipes and FIFOs”, pp. 889–920.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Michael Kerrisk, <i>The Linux Programming Interface</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3), ch. 44 “Pipes and FIFOs”, pp. 889–920. — <a href="https://man7.org/tlpi/" target="_blank" rel="noopener noreferrer">man7.org/tlpi</a></li>
+      <li id="ref-2">“pipe(2) / pipe2(2) — Linux manual page” (pipe() returns filedes[0] read end, filedes[1] write end; pipe2() flags O_CLOEXEC, O_NONBLOCK, since kernel 2.6.27). Linux man-pages project, maintained by Michael Kerrisk. <a href="https://man7.org/linux/man-pages/man2/pipe.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/pipe.2.html</a></li>
+      <li id="ref-3">“pipe(7) — Linux manual page” (a pipe is a byte stream; PIPE_BUF atomicity; Linux PIPE_BUF = 4096; pipe capacity 65,536 bytes since Linux 2.6.11; F_SETPIPE_SZ/F_GETPIPE_SZ). <a href="https://man7.org/linux/man-pages/man7/pipe.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/pipe.7.html</a></li>
+      <li id="ref-4">“fifo(7) — Linux manual page” (a FIFO is a named pipe; opening for reading blocks until a writer opens it, and vice versa; O_NONBLOCK and ENXIO). <a href="https://man7.org/linux/man-pages/man7/fifo.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/fifo.7.html</a></li>
+      <li id="ref-5">“mkfifo(3) — Linux manual page” (creates a FIFO special file with the given mode, masked by the umask). <a href="https://man7.org/linux/man-pages/man3/mkfifo.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/mkfifo.3.html</a></li>
+      <li id="ref-6">“popen(3) / pclose(3) — Linux manual page” (opens a pipe to a shell command; mode "r"/"w"; pclose() returns the command's termination status). <a href="https://man7.org/linux/man-pages/man3/popen.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/popen.3.html</a></li>
+      <li id="ref-7">“write(2) — Linux manual page” (writing to a pipe or FIFO with no reader raises SIGPIPE; if caught/ignored, write() fails with EPIPE; EAGAIN in nonblocking mode). <a href="https://man7.org/linux/man-pages/man2/write.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/write.2.html</a></li>
+      <li id="ref-8">“fcntl(2) — Linux manual page” (F_GETFL/F_SETFL toggle the O_NONBLOCK status flag; F_SETPIPE_SZ/F_GETPIPE_SZ change and report pipe capacity, since Linux 2.6.35). <a href="https://man7.org/linux/man-pages/man2/fcntl.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/fcntl.2.html</a></li>
+      <li id="ref-9">“mkfifo — POSIX.1-2017 (The Open Group Base Specifications)” (make a FIFO special file; POSIX API over mknod()). <a href="https://pubs.opengroup.org/onlinepubs/9699919799/functions/mkfifo.html" target="_blank" rel="noopener noreferrer">pubs.opengroup.org — mkfifo</a></li>
+      <li id="ref-10">“dup, dup2(2) — Linux manual page” (duplicating a descriptor so a filter's standard input/output is bound to a pipe end). <a href="https://man7.org/linux/man-pages/man2/dup.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/dup.2.html</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-41-fundamentals-of-shared-libraries.html">chapter 41</a>
+      <a href="chapter-49-memory-mappings.html">chapter 49</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('tlpi-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('tlpi-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('tlpi-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

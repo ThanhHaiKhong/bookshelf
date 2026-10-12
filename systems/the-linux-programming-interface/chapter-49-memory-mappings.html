@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 49 · Ánh xạ bộ nhớ — The Linux Programming Interface</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 49 “Memory Mappings” trong The Linux Programming Interface (Michael Kerrisk, No Starch Press, 2010): tổng quan ánh xạ tệp và ánh xạ ẩn danh, riêng tư (MAP_PRIVATE) và chia sẻ (MAP_SHARED); tạo ánh xạ với mmap() (addr/length/prot/flags/fd/offset, PROT_READ/WRITE/EXEC); gỡ ánh xạ với munmap(); ánh xạ tệp, trường hợp biên và SIGSEGV/SIGBUS; đồng bộ với msync() (MS_SYNC/MS_ASYNC); sao chép khi ghi (copy-on-write); ánh xạ ẩn danh (MAP_ANONYMOUS, /dev/zero); mremap(); MAP_FIXED; ánh xạ phi tuyến remap_file_pages(); và mprotect(). Ba mức đọc, mọi khẳng định đều có nguồn.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('tlpi-reading-mode'),
+l=localStorage.getItem('tlpi-lang'),
+t=localStorage.getItem('tlpi-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   THE LINUX PROGRAMMING INTERFACE — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"TLPI · CH.49";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+/* soon = chapter not yet on disk; rendered as a non-link cell. */
+.chapter-path .soon{
+  display:block;padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--tint);border:1px dashed var(--line);opacity:.6;
+}
+.chapter-path .soon .soon-tag{
+  display:inline-block;font-family:var(--sans);font-size:.6rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:.1rem .45rem;margin-top:.4rem;
+}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.series-links .soon{margin-right:.5rem;color:var(--muted);opacity:.55;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+
+/* ---------- whole-book mind map banner ---------- */
+.mindmap-banner{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  gap:clamp(1rem,3vw,2rem);align-items:center;
+  margin:3rem 0 0;padding:1.35rem clamp(1.15rem,3vw,2rem);
+  border:1px solid var(--line);border-left:4px solid var(--teal);
+  border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);
+  color:var(--ink);text-decoration:none;
+  transition:border-color .15s,transform .15s;
+}
+a.mindmap-banner:hover{border-color:var(--teal);transform:translateY(-2px);}
+a.mindmap-banner:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.mindmap-banner.soon{opacity:.5;cursor:default;}
+.mindmap-icon{font-size:1.9rem;line-height:1;}
+.mindmap-banner h3{margin:0 0 .3rem;font-size:1.05rem;}
+.mindmap-banner p{margin:0;max-width:48rem;font-size:.88rem;color:var(--muted);}
+.mindmap-banner .result{margin-top:0;color:var(--teal);font-weight:600;white-space:nowrap;}
+.mindmap-banner.soon .result{color:var(--muted);}
+@media (max-width:860px){
+  .mindmap-banner{grid-template-columns:auto minmax(0,1fr);}
+  .mindmap-banner .result{grid-column:2;white-space:normal;}
+}
+@media (max-width:460px){
+  .mindmap-banner{margin-left:0;margin-right:0;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    The Linux Programming Interface
+    <span>Chương 49 · Memory Mappings</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 49 · Ánh xạ bộ nhớ</span>
+      <span class="en-only" lang="en">Chapter 49 · Memory Mappings</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Đưa tệp và vùng nhớ trống thẳng vào không gian địa chỉ với mmap()</span>
+      <span class="easy-only">Dùng mmap() để coi một tệp (hoặc vùng nhớ trống) như một mảng trong bộ nhớ</span>
+      <span class="en-only" lang="en">Mapping files and blank memory straight into the address space with mmap()</span>
+    </h1>
+
+    <p class="standard-copy">Kerrisk mở đầu bằng lời gọi hệ thống <code>mmap()</code>, thứ tạo một <b>ánh xạ bộ nhớ</b> (memory mapping) mới trong không gian địa chỉ ảo của tiến trình gọi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Một ánh xạ có hai trục phân loại: nó là <b>ánh xạ tệp</b> (file mapping — đưa một vùng của tệp thẳng vào bộ nhớ) hay <b>ánh xạ ẩn danh</b> (anonymous mapping — không gắn với tệp, các trang được khởi tạo về 0); và nó <b>riêng tư</b> (<code>MAP_PRIVATE</code>) hay <b>chia sẻ</b> (<code>MAP_SHARED</code>). Chương đi qua: tạo ánh xạ bằng <code>mmap()</code>, gỡ bằng <code>munmap()</code>; các trường hợp biên khi tệp nhỏ hơn ánh xạ; đồng bộ với <code>msync()</code>; sao chép khi ghi (copy-on-write); ánh xạ ẩn danh; đổi kích thước bằng <code>mremap()</code>; cờ <code>MAP_FIXED</code>; ánh xạ phi tuyến; và thay đổi bảo vệ bằng <code>mprotect()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Thường để đọc một tệp, bạn gọi <code>read()</code> để bê từng khúc dữ liệu vào một ô nhớ. <code>mmap()</code> làm khác hẳn: nó bảo hệ điều hành "hãy để nguyên tệp đó <i>xuất hiện</i> như một mảng trong bộ nhớ của tôi". Từ đó bạn chỉ việc đọc/ghi các ô nhớ như biến bình thường, còn nhân lo chuyện trang nào cần nạp từ đĩa. Bạn cũng có thể xin một vùng nhớ trống, toàn số 0, mà không cần tệp nào. <b>Nhớ nhé: mmap() biến một tệp (hoặc vùng nhớ trống) thành một mảng mà bạn truy cập trực tiếp.</b></p>
+    <p class="en-only" lang="en">Kerrisk opens with the <code>mmap()</code> system call, which creates a new <b>memory mapping</b> in the calling process's virtual address space.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> A mapping has two classification axes: it is a <b>file mapping</b> (mapping a region of a file directly into memory) or an <b>anonymous mapping</b> (no backing file, pages initialized to 0); and it is <b>private</b> (<code>MAP_PRIVATE</code>) or <b>shared</b> (<code>MAP_SHARED</code>). The chapter covers: creating mappings with <code>mmap()</code>, removing them with <code>munmap()</code>; boundary cases where the file is smaller than the mapping; synchronizing with <code>msync()</code>; copy-on-write; anonymous mappings; resizing with <code>mremap()</code>; the <code>MAP_FIXED</code> flag; nonlinear mappings; and changing protection with <code>mprotect()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only deep-bilingual"><span class="vi-only">Góc nhìn hệ thống: bộ nhớ của một ánh xạ trong tiến trình này có thể được <i>chia sẻ</i> với ánh xạ trong tiến trình khác — các mục trong bảng trang của mỗi tiến trình cùng trỏ về một trang RAM. Điều này xảy ra theo hai cách: khi hai tiến trình cùng ánh xạ một vùng của cùng một tệp, hoặc khi một tiến trình con sinh ra bởi <code>fork()</code> thừa kế bản sao các ánh xạ của cha. Ánh xạ bị mất khi tiến trình gọi <code>exec()</code> nhưng được thừa kế qua <code>fork()</code>; kiểu ánh xạ (<code>MAP_PRIVATE</code> hay <code>MAP_SHARED</code>) cũng được thừa kế. Mọi ánh xạ của một tiến trình đều hiện ra trong tệp đặc thù Linux <code>/proc/PID/maps</code>.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">A system view: the memory of one process's mapping may be <i>shared</i> with another process's mapping — each process's page-table entries point to the same page of RAM. This happens in two ways: when two processes map the same region of the same file, or when a child created by <code>fork()</code> inherits copies of its parent's mappings. Mappings are lost when a process performs <code>exec()</code> but are inherited across <code>fork()</code>; the mapping type (<code>MAP_PRIVATE</code> or <code>MAP_SHARED</code>) is inherited too. All of a process's mappings are visible in the Linux-specific <code>/proc/PID/maps</code> file.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> <code>mmap()</code> cho phép đặt một tệp — hoặc một vùng nhớ trống khởi tạo về 0 — thẳng vào không gian địa chỉ ảo, để truy cập <i>bằng phép toán trên bộ nhớ</i> thay vì <code>read()</code>/<code>write()</code>; hai cặp thuộc tính (tệp/ẩn danh × riêng tư/chia sẻ) sinh ra bốn loại ánh xạ, trong đó <b>ánh xạ tệp chia sẻ</b> phục vụ hai mục đích đinh: <i>I/O ánh xạ bộ nhớ</i> và <i>IPC</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> <code>mmap()</code> biến tệp hoặc vùng nhớ trống thành một mảng bạn truy cập trực tiếp. Có bốn kiểu, nhưng kiểu đáng nhớ nhất là "ánh xạ tệp chia sẻ": vừa để đọc/ghi tệp qua bộ nhớ, vừa để nhiều tiến trình nói chuyện với nhau. <b>Nhớ nhé: ánh xạ tệp chia sẻ dùng cho I/O qua bộ nhớ và cho giao tiếp giữa các tiến trình.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> <code>mmap()</code> lets you place a file — or a zero-initialized blank region — directly into the virtual address space, to be accessed <i>by memory operations</i> rather than <code>read()</code>/<code>write()</code>; the two attribute pairs (file/anonymous × private/shared) yield four mapping types, of which the <b>shared file mapping</b> serves the two headline purposes: <i>memory-mapped I/O</i> and <i>IPC</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: mmap() tạo một ánh xạ bộ nhớ, phân loại theo hai trục — ánh xạ tệp hay ẩn danh, và riêng tư MAP_PRIVATE hay chia sẻ MAP_SHARED; bốn tổ hợp phục vụ khởi tạo bộ nhớ từ tệp, cấp phát bộ nhớ, I/O ánh xạ bộ nhớ và IPC. Diagram: mmap() creates a memory mapping, classified on two axes — file or anonymous, and private MAP_PRIVATE or shared MAP_SHARED; the four combinations serve initializing memory from a file, memory allocation, memory-mapped I/O, and IPC.">
+    <div class="core">
+      <b>mmap()</b>
+      <small class="standard-copy">Tạo một ánh xạ bộ nhớ trong không gian địa chỉ ảo</small>
+      <small class="easy-only">Đưa tệp hay vùng nhớ trống vào bộ nhớ của tiến trình</small>
+      <small class="en-only" lang="en">Creates a mapping in the virtual address space</small>
+    </div>
+
+    <div class="node">
+      <b>trục 1 · tệp vs ẩn danh</b>
+      <small class="standard-copy">File mapping gắn với một vùng tệp; anonymous mapping toàn số 0</small>
+      <small class="easy-only">Hoặc ánh xạ một tệp có thật, hoặc xin vùng nhớ trống</small>
+      <small class="en-only" lang="en">File mapping backs a file region; anonymous is all zeros</small>
+    </div>
+
+    <div class="node">
+      <b>trục 2 · riêng tư vs chia sẻ</b>
+      <small class="standard-copy">MAP_PRIVATE (sao chép khi ghi) · MAP_SHARED (thấy được chung)</small>
+      <small class="easy-only">Sửa riêng mình thấy, hay sửa ai cũng thấy và ghi vào tệp</small>
+      <small class="en-only" lang="en">MAP_PRIVATE (copy-on-write) · MAP_SHARED (visible to all)</small>
+    </div>
+
+    <div class="node">
+      <b>hai công dụng đinh</b>
+      <small class="standard-copy">Ánh xạ tệp chia sẻ → I/O ánh xạ bộ nhớ và IPC</small>
+      <small class="easy-only">Đọc/ghi tệp qua bộ nhớ, và cho các tiến trình nói chuyện</small>
+      <small class="en-only" lang="en">Shared file mapping → memory-mapped I/O and IPC</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#overview-mappings">
+    <span>01</span>
+    <b class="standard-copy">Tổng quan: tệp/ẩn danh × riêng tư/chia sẻ</b>
+    <b class="easy-only">Bốn kiểu ánh xạ và ý nghĩa của chúng</b>
+    <b class="en-only" lang="en">Overview: file/anonymous × private/shared</b>
+  </a>
+  <a href="#mmap-munmap">
+    <span>02</span>
+    <b class="standard-copy">Tạo ánh xạ với mmap(), gỡ với munmap()</b>
+    <b class="easy-only">Sáu đối số của mmap() và cách gỡ ánh xạ</b>
+    <b class="en-only" lang="en">Creating with mmap(), removing with munmap()</b>
+  </a>
+  <a href="#file-mappings-msync">
+    <span>03</span>
+    <b class="standard-copy">Ánh xạ tệp: trường hợp biên và msync()</b>
+    <b class="easy-only">Ánh xạ tệp, SIGSEGV/SIGBUS và đồng bộ ra đĩa</b>
+    <b class="en-only" lang="en">File mappings: boundary cases and msync()</b>
+  </a>
+  <a href="#anon-remap-fixed">
+    <span>04</span>
+    <b class="standard-copy">Ẩn danh, mremap(), MAP_FIXED, mprotect()</b>
+    <b class="easy-only">Vùng nhớ trống, đổi kích thước và đổi quyền</b>
+    <b class="en-only" lang="en">Anonymous, mremap(), MAP_FIXED, mprotect()</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="overview-mappings" aria-labelledby="overview-mappings-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="overview-mappings-title">
+      <span class="standard-copy">Hai trục phân loại sinh ra bốn kiểu ánh xạ — mỗi kiểu một công dụng</span>
+      <span class="easy-only">Tệp hay trống, riêng hay chung: bốn kiểu ánh xạ bộ nhớ</span>
+      <span class="en-only" lang="en">Two axes yield four mapping types — each with its own purpose</span>
+    </h2>
+    <p class="standard-copy">Một ánh xạ có thể thuộc một trong hai kiểu. <b>Ánh xạ tệp</b> đưa một vùng của tệp thẳng vào bộ nhớ ảo của tiến trình; sau khi ánh xạ, nội dung tệp được truy cập qua các byte trong vùng nhớ tương ứng, và các trang của ánh xạ được nhân nạp từ tệp <i>khi cần</i>. <b>Ánh xạ ẩn danh</b> không có tệp đi kèm — các trang được khởi tạo về 0 (có thể hình dung nó như ánh xạ của một "tệp ảo" mà nội dung luôn là số 0).<span class="cite"><a href="#ref-1">1</a></span> Trục thứ hai quyết định ai thấy các thay đổi: <code>MAP_PRIVATE</code> giữ thay đổi riêng cho mỗi tiến trình (và với ánh xạ tệp thì <i>không</i> ghi ngược ra tệp), còn <code>MAP_SHARED</code> cho các tiến trình cùng ánh xạ thấy nhau và (với ánh xạ tệp) ghi ngược ra tệp.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Tưởng tượng mmap() cho bạn hai câu hỏi. Thứ nhất: "Bạn muốn một tệp có thật, hay chỉ muốn một tờ giấy trắng toàn số 0?" — đó là <i>tệp</i> hay <i>ẩn danh</i>. Thứ hai: "Khi bạn viết lên đó, chỉ mình bạn thấy hay mọi người cùng thấy?" — đó là <i>riêng tư</i> hay <i>chia sẻ</i>. Hai câu hỏi, bốn tổ hợp. <b>Nhớ nhé: tệp hay trống là một câu hỏi, riêng hay chung là câu hỏi kia.</b></p>
+    <p class="en-only" lang="en">A mapping can be one of two kinds. A <b>file mapping</b> maps a region of a file directly into the process's virtual memory; afterward the file's contents are accessed through the bytes of the corresponding memory region, and the mapping's pages are loaded by the kernel from the file <i>as required</i>. An <b>anonymous mapping</b> has no backing file — its pages are initialized to 0 (think of it as mapping a "virtual file" whose contents are always zero).<span class="cite"><a href="#ref-1">1</a></span> The second axis decides who sees changes: <code>MAP_PRIVATE</code> keeps modifications private to each process (and, for a file mapping, does <i>not</i> carry them through to the file), while <code>MAP_SHARED</code> makes them visible to other processes sharing the mapping and (for a file mapping) carries them through to the file.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Khi từ hai tiến trình trở lên cùng chia sẻ các trang (do cùng ánh xạ một tệp, hoặc do <code>fork()</code> thừa kế), mỗi tiến trình <i>có thể</i> thấy thay đổi của tiến trình khác — <b>tùy</b> ánh xạ là riêng tư hay chia sẻ. Với <code>MAP_PRIVATE</code>, các trang ban đầu được chia sẻ, nhưng khi một tiến trình <i>ghi</i>, nhân dùng kỹ thuật <b>sao chép khi ghi</b> (copy-on-write) tạo một bản riêng cho tiến trình đó.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Nhiều tiến trình có thể cùng dùng chung một trang nhớ để tiết kiệm. Nếu là kiểu "riêng tư" thì ngay khi ai đó định sửa, hệ thống lặng lẽ photo riêng cho người đó một bản — nên không ai dẫm chân nhau. <b>Nhớ nhé: riêng tư = ai sửa thì được photo một bản riêng.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> When two or more processes share pages (because they map the same file, or inherited them via <code>fork()</code>), each <i>can</i> see the others' changes — <b>depending</b> on whether the mapping is private or shared. With <code>MAP_PRIVATE</code> the pages are initially shared, but when a process <i>writes</i>, the kernel uses the <b>copy-on-write</b> technique to make a separate copy for that process.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">Bảng 49-1 · công dụng<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ Tệp&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ Ẩn danh<br>riêng&nbsp;│ nạp từ tệp│ cấp bộ nhớ<br>chung│ I/O + IPC│ IPC (cùng họ)</p>
+      <p class="easy-only">4 ô:<br>riêng+tệp → nạp dữ liệu từ tệp<br>riêng+trống → xin bộ nhớ<br>chung+tệp → đọc/ghi + nói chuyện<br>chung+trống → nói chuyện (cùng họ)</p>
+      <p class="en-only" lang="en">Table 49-1 · purposes<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ File&nbsp;&nbsp;&nbsp;&nbsp;│ Anonymous<br>priv&nbsp;│ init mem&nbsp;│ allocation<br>shar&nbsp;│ I/O + IPC│ IPC (related)</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">file vs anonymous</span>
+      <h3>
+        <span class="standard-copy">Ánh xạ tệp có "kho giấy" là tệp; ẩn danh thì không</span>
+        <span class="easy-only">Một kiểu gắn với tệp thật, một kiểu là giấy trắng</span>
+        <span class="en-only" lang="en">A file mapping is backed by a file; an anonymous one is not</span>
+      </h3>
+      <p class="standard-copy">Với ánh xạ tệp, tệp đóng vai trò nơi lưu trữ các trang: trang được nạp từ tệp khi lần đầu chạm tới, và (nếu chia sẻ) thay đổi được ghi ngược ra tệp. Với ánh xạ ẩn danh, không có tệp — các trang đơn giản là vùng nhớ khởi tạo về 0.<span class="cite"><a href="#ref-1">1</a></span> Một công dụng khác của <code>mmap()</code> là với đối tượng bộ nhớ chia sẻ POSIX, cho phép chia sẻ một vùng nhớ giữa các tiến trình <i>không</i> cùng họ mà không cần tệp trên đĩa (xem Chương 54 trong sách).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Ánh xạ tệp giống như mở một quyển sổ có sẵn chữ: đọc được chữ cũ, viết thêm thì lưu lại vào sổ. Ánh xạ ẩn danh giống như lấy một tờ giấy trắng mới tinh: không có chữ cũ, viết gì thì đó, và không lưu vào sổ nào. <b>Nhớ nhé: ánh xạ tệp có sổ để lưu, ẩn danh chỉ là giấy nháp.</b></p>
+      <p class="en-only" lang="en">For a file mapping, the file acts as the paging store: pages load from the file on first access and (if shared) changes are written back to it. For an anonymous mapping there is no file — the pages are simply a zero-initialized region of memory.<span class="cite"><a href="#ref-1">1</a></span> Another use of <code>mmap()</code> is with POSIX shared memory objects, which let <i>unrelated</i> processes share a region without a disk file (see the book's Chapter 54).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Dòng mã khởi động của mọi chương trình: bộ nạp và trình liên kết động dùng ánh xạ tệp riêng tư để nạp segment text và data từ tệp thực thi và thư viện chia sẻ.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mỗi lần chạy một chương trình — hệ thống đã lặng lẽ dùng ánh xạ tệp để nạp mã lệnh vào bộ nhớ.</span>
+        <span class="en-only" lang="en">At the start of every program: the loader and dynamic linker use private file mappings to load the text and data segments from the executable and shared libraries.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">MAP_PRIVATE / MAP_SHARED</span>
+      <h3>
+        <span class="standard-copy">Riêng tư là sao chép khi ghi; chia sẻ là cùng thấy</span>
+        <span class="easy-only">Sửa riêng mình biết, hay sửa ai cũng biết</span>
+        <span class="en-only" lang="en">Private is copy-on-write; shared is seen by all</span>
+      </h3>
+      <p class="standard-copy">Với <code>MAP_PRIVATE</code>, thay đổi không hiện ra với tiến trình khác và (với ánh xạ tệp) không ghi ngược ra tệp — vì thế nó còn gọi là ánh xạ <i>riêng tư, sao chép khi ghi</i>. Với <code>MAP_SHARED</code>, thay đổi hiện ra với mọi tiến trình cùng ánh xạ vùng đó bằng <code>MAP_SHARED</code>, và (với ánh xạ tệp) được ghi ngược ra tệp — tuy việc cập nhật tệp <i>không</i> đảm bảo tức thì (xem <code>msync()</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Kiểu "riêng tư": bạn viết lên bản photo của mình, không ai khác thấy, tệp gốc giữ nguyên. Kiểu "chia sẻ": mọi người viết lên cùng một tờ, ai cũng thấy, và với tệp thì những gì viết sẽ được lưu lại. <b>Nhớ nhé: riêng tư thì một mình bạn thấy, chia sẻ thì cả nhóm cùng thấy.</b></p>
+      <p class="en-only" lang="en">With <code>MAP_PRIVATE</code>, modifications are invisible to other processes and (for a file mapping) are not carried through to the file — hence it is called a <i>private, copy-on-write</i> mapping. With <code>MAP_SHARED</code>, modifications are visible to all processes mapping that region with <code>MAP_SHARED</code>, and (for a file mapping) are carried through to the file — though updates to the file are <i>not</i> guaranteed to be immediate (see <code>msync()</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đúng <i>một</i> trong hai cờ <code>MAP_PRIVATE</code> hoặc <code>MAP_SHARED</code> <b>bắt buộc</b> có mặt trong đối số <code>flags</code> của mọi lời gọi <code>mmap()</code> — quên là lỗi lập trình.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Mỗi lần gọi mmap() đều phải chọn đúng một trong hai: riêng tư hay chia sẻ — không được bỏ trống.</span>
+        <span class="en-only" lang="en">Exactly <i>one</i> of <code>MAP_PRIVATE</code> or <code>MAP_SHARED</code> <b>must</b> appear in the <code>flags</code> argument of every <code>mmap()</code> call — omitting it is a programming error.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Cơ chế sao chép khi ghi</span><span class="en-only" lang="en">The copy-on-write mechanism</span></h4>
+          <p><span class="vi-only">Trang của ánh xạ <code>MAP_PRIVATE</code> ban đầu được chia sẻ. Khi một tiến trình định sửa nội dung một trang, nhân trước tiên tạo một bản sao mới, riêng biệt của trang đó cho tiến trình (và chỉnh lại bảng trang của nó). Vì vậy thay đổi vẫn riêng với mỗi tiến trình dù ban đầu các trang được dùng chung.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">The pages of a <code>MAP_PRIVATE</code> mapping are initially shared. When a process attempts to modify a page's contents, the kernel first makes a new, separate copy of that page for the process (and adjusts its page tables). So changes stay private to each process even though the pages were initially shared.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Thừa kế qua fork()</span><span class="en-only" lang="en">Inheritance across fork()</span></h4>
+          <p><span class="vi-only">Một tiến trình con sinh ra bởi <code>fork()</code> thừa kế bản sao các ánh xạ của cha, trỏ về cùng các trang RAM. Với ánh xạ ẩn danh <code>MAP_SHARED</code>, cha và con dùng chung chính các trang đó (không sao chép khi ghi), nên thấy thay đổi của nhau — nền cho IPC giữa các tiến trình cùng họ.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">A child created by <code>fork()</code> inherits copies of its parent's mappings, referring to the same RAM pages. For a <code>MAP_SHARED</code> anonymous mapping, parent and child share those very pages (not copied-on-write), so each sees the other's changes — the basis for IPC between related processes.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">the four combinations</span>
+      <h3>
+        <span class="standard-copy">Bốn ô của Bảng 49-1 và công dụng của từng ô</span>
+        <span class="easy-only">Bốn tổ hợp, bốn việc khác nhau</span>
+        <span class="en-only" lang="en">Table 49-1's four cells and what each is for</span>
+      </h3>
+      <p class="standard-copy"><b>Ánh xạ tệp riêng tư</b>: khởi tạo một vùng nhớ từ nội dung tệp (ví dụ nạp segment text và data). <b>Ánh xạ ẩn danh riêng tư</b>: cấp vùng nhớ mới toàn số 0 (ví dụ <code>malloc()</code> dùng khi cấp khối lớn). <b>Ánh xạ tệp chia sẻ</b>: cho <i>I/O ánh xạ bộ nhớ</i> và cho <i>IPC</i> giữa các tiến trình không cùng họ. <b>Ánh xạ ẩn danh chia sẻ</b>: cho IPC nhưng chỉ giữa các tiến trình cùng họ.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Bốn ô như bốn công cụ: nạp dữ liệu từ tệp; xin bộ nhớ trống; đọc/ghi tệp qua bộ nhớ và cho các chương trình nói chuyện; và cho các chương trình cùng họ nói chuyện qua vùng nhớ chung. <b>Nhớ nhé: bốn tổ hợp phục vụ bốn việc, nhớ nhất là ô "tệp + chia sẻ".</b></p>
+      <p class="en-only" lang="en"><b>Private file mapping</b>: initialize a memory region from a file's contents (e.g. load text and data segments). <b>Private anonymous mapping</b>: allocate new zero-filled memory (e.g. <code>malloc()</code> for large blocks). <b>Shared file mapping</b>: for <i>memory-mapped I/O</i> and for <i>IPC</i> between unrelated processes. <b>Shared anonymous mapping</b>: for IPC but only between related processes.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Điểm phân biệt IPC qua ánh xạ tệp chia sẻ với bộ nhớ chia sẻ System V (Chương 48): nội dung được ghi ngược ra tệp, nên <i>tồn tại qua các lần khởi động lại</i> ứng dụng hay hệ thống.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khác với bộ nhớ chia sẻ thông thường: dùng tệp chia sẻ thì dữ liệu còn nguyên cả sau khi tắt rồi bật lại.</span>
+        <span class="en-only" lang="en">What distinguishes shared-file-mapping IPC from System V shared memory (Chapter 48): contents are carried through to the file, so they <i>persist across restarts</i> of the application or system.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đã nắm bốn kiểu ánh xạ và công dụng của chúng, câu hỏi tiếp là: ta <i>gọi</i> chúng ra sao? Toàn bộ quyền năng này gói trong một lời gọi hệ thống với sáu đối số — <code>mmap()</code> — và người anh em đối ngẫu của nó, <code>munmap()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    <p class="easy-only">Giờ ta đã biết có những kiểu ánh xạ nào. Câu hỏi kế: làm sao tạo ra chúng? Tất cả nằm trong một hàm tên <code>mmap()</code>, và hàm gỡ bỏ tên <code>munmap()</code>.</p>
+    <p class="en-only" lang="en">Having grasped the four mapping types and their purposes, the next question is: how do we <i>call</i> them up? All this power is packed into one six-argument system call — <code>mmap()</code> — and its converse, <code>munmap()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="mmap-munmap" aria-labelledby="mmap-munmap-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="mmap-munmap-title">
+      <span class="standard-copy">Sáu đối số của mmap(), quyền bảo vệ PROT_*, và phép gỡ munmap()</span>
+      <span class="easy-only">Gọi mmap() với sáu đối số, và gỡ bằng munmap()</span>
+      <span class="en-only" lang="en">The six arguments of mmap(), the PROT_* protections, and munmap()</span>
+    </h2>
+    <p class="standard-copy"><code>mmap()</code> nhận sáu đối số: <code>addr</code> (địa chỉ gợi ý, nên để NULL để nhân tự chọn), <code>length</code> (kích thước ánh xạ tính theo byte), <code>prot</code> (mặt nạ bit quyền bảo vệ), <code>flags</code> (tùy chọn, bắt buộc có <code>MAP_PRIVATE</code> hoặc <code>MAP_SHARED</code>), <code>fd</code> (bộ mô tả tệp — chỉ dùng cho ánh xạ tệp), và <code>offset</code> (điểm bắt đầu trong tệp, phải là bội của kích thước trang). Thành công trả về địa chỉ bắt đầu của ánh xạ; thất bại trả về <code>MAP_FAILED</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+    <p class="easy-only">Hãy coi <code>mmap()</code> như một phiếu đặt chỗ gồm sáu ô cần điền: đặt ở đâu (thường để trống cho hệ thống chọn), đặt bao lớn, cho phép làm gì (đọc/ghi/chạy), kiểu gì (riêng hay chung), từ tệp nào, và bắt đầu từ chỗ nào trong tệp. Điền xong, hệ thống trả về địa chỉ bắt đầu. <b>Nhớ nhé: mmap() là phiếu đặt chỗ sáu ô; để ô địa chỉ trống cho hệ thống tự lo.</b></p>
+    <p class="en-only" lang="en"><code>mmap()</code> takes six arguments: <code>addr</code> (a hint address, best left NULL so the kernel chooses), <code>length</code> (the mapping size in bytes), <code>prot</code> (a bit mask of protections), <code>flags</code> (options, requiring <code>MAP_PRIVATE</code> or <code>MAP_SHARED</code>), <code>fd</code> (a file descriptor — used only for file mappings), and <code>offset</code> (the starting point in the file, which must be a multiple of the page size). On success it returns the mapping's start address; on failure it returns <code>MAP_FAILED</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>length</code> <i>không</i> cần là bội của kích thước trang hệ thống (lấy qua <code>sysconf(_SC_PAGESIZE)</code>), nhưng nhân tạo ánh xạ theo đơn vị trang, nên <code>length</code> trên thực tế được <i>làm tròn lên</i> bội kế tiếp của kích thước trang. Riêng <code>offset</code> thì <i>bắt buộc</i> là bội của kích thước trang.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Bộ nhớ được quản lý theo từng "trang" bằng nhau (thường 4096 byte). Dù bạn xin một con số lẻ, hệ thống vẫn làm tròn lên cho đủ trang. <b>Nhớ nhé: mọi thứ ở đây đều tính theo trang, số lẻ sẽ được làm tròn lên.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>length</code> need <i>not</i> be a multiple of the system page size (from <code>sysconf(_SC_PAGESIZE)</code>), but the kernel creates mappings in page-sized units, so <code>length</code> is effectively <i>rounded up</i> to the next multiple of the page size. The <code>offset</code>, however, <i>must</i> be a multiple of the page size.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#include &lt;sys/mman.h&gt;<br>void *mmap(void *addr, size_t length,<br>&nbsp;&nbsp;int prot, int flags, int fd, off_t offset);<br>/* PROT_NONE | PROT_READ |<br>&nbsp;&nbsp;&nbsp;PROT_WRITE | PROT_EXEC */<br>int munmap(void *addr, size_t length);</p>
+      <p class="easy-only">mmap(địa_chỉ, cỡ, quyền,<br>&nbsp;&nbsp;kiểu, tệp, điểm_bắt_đầu)<br>quyền: đọc / ghi / chạy / cấm<br>munmap(địa_chỉ, cỡ) → gỡ bỏ</p>
+      <p class="en-only" lang="en">#include &lt;sys/mman.h&gt;<br>void *mmap(void *addr, size_t length,<br>&nbsp;&nbsp;int prot, int flags, int fd, off_t offset);<br>/* PROT_NONE | PROT_READ |<br>&nbsp;&nbsp;&nbsp;PROT_WRITE | PROT_EXEC */<br>int munmap(void *addr, size_t length);</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">addr = NULL</span>
+      <h3>
+        <span class="standard-copy">Hãy để nhân chọn địa chỉ — đừng ép</span>
+        <span class="easy-only">Để trống ô địa chỉ cho hệ thống tự chọn</span>
+        <span class="en-only" lang="en">Let the kernel pick the address — don't force it</span>
+      </h3>
+      <p class="standard-copy">Nếu <code>addr</code> là NULL, nhân chọn một địa chỉ phù hợp — đây là cách <i>nên dùng</i>. Nếu đưa giá trị khác NULL, nhân chỉ coi đó là <i>gợi ý</i> và ít nhất sẽ làm tròn về biên trang gần đó; trong cả hai trường hợp nhân chọn địa chỉ không đụng độ với ánh xạ sẵn có. (Nếu có <code>MAP_FIXED</code> trong <code>flags</code> thì <code>addr</code> phải căn theo biên trang và được hiểu đúng y nguyên.)<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Giống đặt bàn ở quán: bạn cứ để nhân viên xếp chỗ còn trống, đừng khăng khăng "tôi phải ngồi đúng bàn số 7". Để hệ thống chọn địa chỉ thì an toàn và dễ mang đi máy khác. <b>Nhớ nhé: để NULL cho nhân chọn chỗ — đó là cách đúng.</b></p>
+      <p class="en-only" lang="en">If <code>addr</code> is NULL, the kernel chooses a suitable address — this is the <i>preferred</i> way. If you pass a non-NULL value, the kernel takes it only as a <i>hint</i> and will at least round it to a nearby page boundary; in either case it chooses an address that doesn't conflict with an existing mapping. (If <code>MAP_FIXED</code> is in <code>flags</code>, <code>addr</code> must be page-aligned and is taken exactly.)<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trên Linux (và hầu hết UNIX), <code>MAP_FAILED</code> bằng <code>((void *) -1)</code>; SUSv3 vẫn định nghĩa hằng này vì chuẩn C không đảm bảo <code>((void *) -1)</code> khác mọi giá trị trả về hợp lệ.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Luôn kiểm tra kết quả: nếu bằng <code>MAP_FAILED</code> thì ánh xạ hỏng, đừng dùng tiếp.</span>
+        <span class="en-only" lang="en">On Linux (and most UNIX), <code>MAP_FAILED</code> equals <code>((void *) -1)</code>; SUSv3 still defines the constant because C can't guarantee <code>((void *) -1)</code> differs from every valid return value.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">PROT_* · SIGSEGV / SIGBUS</span>
+      <h3>
+        <span class="standard-copy">Quyền bảo vệ: đọc, ghi, chạy — hoặc cấm tiệt</span>
+        <span class="easy-only">Mỗi vùng được gắn quyền: đọc, ghi, chạy, hay cấm</span>
+        <span class="en-only" lang="en">Protections: read, write, execute — or none at all</span>
+      </h3>
+      <p class="standard-copy">Đối số <code>prot</code> là mặt nạ bit: hoặc <code>PROT_NONE</code> (không được truy cập), hoặc tổ hợp OR của <code>PROT_READ</code>, <code>PROT_WRITE</code>, <code>PROT_EXEC</code>. Nếu một tiến trình truy cập trái với quyền đã đặt, nhân gửi tín hiệu <code>SIGSEGV</code> cho nó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Quyền nằm trong bảng bộ nhớ ảo <i>riêng</i> của mỗi tiến trình, nên các tiến trình khác nhau có thể ánh xạ cùng một vùng với quyền khác nhau.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mỗi vùng nhớ được dán một tấm biển: "được đọc", "được ghi", "được chạy", hoặc "cấm vào". Nếu chương trình làm trái tấm biển — ví dụ ghi vào vùng chỉ cho đọc — hệ thống lập tức báo lỗi và thường làm chương trình dừng. <b>Nhớ nhé: làm trái tấm biển quyền thì nhận ngay tín hiệu lỗi.</b></p>
+      <p class="en-only" lang="en">The <code>prot</code> argument is a bit mask: either <code>PROT_NONE</code> (no access) or an OR of <code>PROT_READ</code>, <code>PROT_WRITE</code>, <code>PROT_EXEC</code>. If a process accesses the region in a way that violates its protection, the kernel delivers <code>SIGSEGV</code> to it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Protections live in each process's <i>private</i> virtual-memory tables, so different processes may map the same region with different protections.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Một công dụng của trang gắn <code>PROT_NONE</code> là làm <i>trang canh</i> (guard page) ở đầu hay cuối một vùng cấp phát: dẫm nhầm vào nó là nhận <code>SIGSEGV</code> ngay, giúp bắt lỗi tràn sớm.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Người ta hay đặt một trang "cấm vào" ở rìa vùng nhớ để bẫy lỗi: chạm vào là báo động ngay.</span>
+        <span class="en-only" lang="en">One use of <code>PROT_NONE</code> pages is as <i>guard pages</i> at the start or end of an allocation: stepping into one yields an immediate <code>SIGSEGV</code>, catching overruns early.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">SIGSEGV hay SIGBUS?</span><span class="en-only" lang="en">SIGSEGV or SIGBUS?</span></h4>
+          <p><span class="vi-only">SUSv3 quy định dùng <code>SIGSEGV</code> để báo vi phạm bảo vệ bộ nhớ, nhưng một số hệ dùng <code>SIGBUS</code> thay cho nó. Hành động mặc định của <code>SIGSEGV</code> là kết thúc tiến trình kèm kết xuất lõi (core dump).<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">SUSv3 specifies <code>SIGSEGV</code> for memory-protection violations, but some implementations use <code>SIGBUS</code> instead. The default action for <code>SIGSEGV</code> is to terminate the process with a core dump.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Độ mịn của phần cứng</span><span class="en-only" lang="en">Hardware granularity</span></h4>
+          <p><span class="vi-only">Trên vài kiến trúc (x86-32 đời cũ), độ mịn quyền hạn chế khiến <code>PROT_READ</code> kéo theo <code>PROT_EXEC</code> và ngược lại; ứng dụng không nên dựa vào điều đó mà hãy ghi đúng quyền cần. Từ nhân 2.6.8, Linux dùng bit NX của x86-32 hiện đại để tách bạch <code>PROT_READ</code> và <code>PROT_EXEC</code>.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">On some architectures (older x86-32), limited granularity made <code>PROT_READ</code> imply <code>PROT_EXEC</code> and vice versa; applications should not rely on that but specify exactly the protections needed. Since kernel 2.6.8, Linux uses modern x86-32's NX bit to properly separate <code>PROT_READ</code> and <code>PROT_EXEC</code>.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">munmap()</span>
+      <h3>
+        <span class="standard-copy">munmap() gỡ ánh xạ — và có thể cắt một phần</span>
+        <span class="easy-only">munmap() trả lại vùng nhớ đã ánh xạ</span>
+        <span class="en-only" lang="en">munmap() removes a mapping — and can cut a slice</span>
+      </h3>
+      <p class="standard-copy"><code>munmap()</code> làm điều ngược với <code>mmap()</code>: gỡ một ánh xạ khỏi không gian địa chỉ. <code>addr</code> phải căn theo biên trang; <code>length</code> được làm tròn lên bội kế tiếp của kích thước trang. Thường ta gỡ cả ánh xạ (truyền chính <code>addr</code> và <code>length</code> của lời <code>mmap()</code> trước), nhưng cũng có thể gỡ một <i>phần</i> — khi đó ánh xạ co lại hoặc bị cắt làm đôi tùy chỗ gỡ. Nếu khoảng chỉ ra không có ánh xạ nào, <code>munmap()</code> không làm gì và trả về 0.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Gỡ ánh xạ là trả lại chỗ đã mượn. Bạn có thể trả hết, hoặc chỉ trả một khúc ở giữa — khi đó phần còn lại có thể bị chia thành hai mảnh. Khi tiến trình kết thúc hay gọi <code>exec()</code>, mọi ánh xạ tự động được gỡ. <b>Nhớ nhé: munmap() trả lại chỗ; có thể trả cả hoặc trả một khúc.</b></p>
+      <p class="en-only" lang="en"><code>munmap()</code> does the converse of <code>mmap()</code>: it removes a mapping from the address space. <code>addr</code> must be page-aligned; <code>length</code> is rounded up to the next multiple of the page size. We usually unmap the whole mapping (passing the same <code>addr</code> and <code>length</code> as the earlier <code>mmap()</code>), but we can unmap <i>part</i> of one — the mapping then shrinks or is cut in two depending on where. If the range has no mappings, <code>munmap()</code> does nothing and returns 0.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Để chắc nội dung một ánh xạ tệp chia sẻ đã được ghi ra tệp, hãy gọi <code>msync()</code> <i>trước khi</i> gỡ bằng <code>munmap()</code> — gỡ không tự động buộc dữ liệu xuống đĩa.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Trước khi gỡ một ánh xạ tệp chia sẻ, nhớ gọi msync() để chắc dữ liệu đã lưu xuống đĩa.</span>
+        <span class="en-only" lang="en">To ensure a shared file mapping's contents reached the file, call <code>msync()</code> <i>before</i> unmapping with <code>munmap()</code> — unmapping does not force data to disk.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Lời gọi đã rõ. Nhưng ánh xạ tệp có vài góc khuất quan trọng: chuyện gì xảy ra khi tệp <i>nhỏ hơn</i> ánh xạ, vì sao có lúc nhận <code>SIGSEGV</code> và có lúc nhận <code>SIGBUS</code>, và làm sao buộc dữ liệu xuống đĩa đúng lúc. Đó là phần tiếp theo.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Đã biết cách gọi. Giờ xét kỹ ánh xạ tệp: nếu tệp ngắn hơn vùng ta xin thì sao, và làm sao chắc chắn dữ liệu được lưu xuống đĩa?</p>
+    <p class="en-only" lang="en">The calls are clear. But file mappings have important corners: what happens when the file is <i>smaller</i> than the mapping, why you sometimes get <code>SIGSEGV</code> and sometimes <code>SIGBUS</code>, and how to force data to disk on time. That is next.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="file-mappings-msync" aria-labelledby="file-mappings-msync-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="file-mappings-msync-title">
+      <span class="standard-copy">Ánh xạ tệp: căn trang, trường hợp biên, và đồng bộ với msync()</span>
+      <span class="easy-only">Tệp ngắn hơn vùng ánh xạ thì sao, và lưu xuống đĩa thế nào</span>
+      <span class="en-only" lang="en">File mappings: page alignment, boundary cases, and msync()</span>
+    </h2>
+    <p class="standard-copy">Tạo ánh xạ tệp gồm hai bước: mở tệp lấy bộ mô tả (thường qua <code>open()</code>), rồi truyền bộ mô tả đó làm <code>fd</code> cho <code>mmap()</code>. Sau khi <code>mmap()</code> được gọi, có thể <i>đóng</i> bộ mô tả tệp mà không ảnh hưởng ánh xạ.<span class="cite"><a href="#ref-1">1</a></span> Tệp phải được mở với quyền phù hợp: luôn phải mở để đọc; và nếu dùng <code>PROT_WRITE</code> cùng <code>MAP_SHARED</code> thì phải mở tệp để <i>cả đọc lẫn ghi</i>.<span class="cite"><a href="#ref-1">1</a></span> Công dụng lớn của <b>ánh xạ tệp chia sẻ</b> là <i>I/O ánh xạ bộ nhớ</i>: tệp được nạp vào một vùng bộ nhớ ảo, và sửa đổi vùng đó được tự động ghi ra tệp — một lựa chọn thay cho <code>read()</code>/<code>write()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Để ánh xạ một tệp: mở tệp ra, rồi đưa nó cho <code>mmap()</code>. Xong là bạn có thể đóng tệp mà ánh xạ vẫn sống. Nếu muốn <i>ghi</i> và cho người khác thấy, phải mở tệp ở chế độ đọc-ghi. Mẹo hay nhất: thay vì <code>read()</code> từng khúc, bạn chỉ việc đọc/ghi các ô nhớ, còn hệ thống lo chuyện lưu ra tệp. <b>Nhớ nhé: ánh xạ tệp chia sẻ cho phép đọc/ghi tệp như thể đọc/ghi một mảng.</b></p>
+    <p class="en-only" lang="en">Creating a file mapping takes two steps: obtain a descriptor for the file (usually via <code>open()</code>), then pass it as <code>fd</code> to <code>mmap()</code>. Once <code>mmap()</code> is called, you can <i>close</i> the descriptor without affecting the mapping.<span class="cite"><a href="#ref-1">1</a></span> The file must be opened with appropriate permissions: always for reading; and if you use <code>PROT_WRITE</code> with <code>MAP_SHARED</code>, the file must be opened for <i>both reading and writing</i>.<span class="cite"><a href="#ref-1">1</a></span> The big use of a <b>shared file mapping</b> is <i>memory-mapped I/O</i>: the file is loaded into a region of virtual memory, and modifications to it are automatically written to the file — an alternative to <code>read()</code>/<code>write()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Nhân tự động ghi sửa đổi của ánh xạ <code>MAP_SHARED</code> ra tệp, nhưng mặc định <i>không đảm bảo thời điểm</i>. <code>msync()</code> trao cho ứng dụng quyền kiểm soát tường minh thời điểm đồng bộ — ví dụ một ứng dụng cơ sở dữ liệu gọi <code>msync()</code> để buộc dữ liệu xuống đĩa nhằm đảm bảo toàn vẹn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Khi bạn sửa vùng nhớ chia sẻ, hệ thống <i>sẽ</i> lưu ra tệp, nhưng không nói trước lúc nào. Muốn chắc "lưu ngay bây giờ", hãy gọi <code>msync()</code>. <b>Nhớ nhé: msync() là nút "lưu ngay" cho ánh xạ tệp.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> The kernel automatically carries a <code>MAP_SHARED</code> mapping's modifications through to the file, but by default gives <i>no timing guarantee</i>. <code>msync()</code> gives the application explicit control over when synchronization happens — e.g. a database application calls <code>msync()</code> to force data to disk for integrity.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#include &lt;sys/mman.h&gt;<br>int msync(void *addr, size_t length,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int flags);<br>MS_SYNC&nbsp;&nbsp;&nbsp;→ ghi đồng bộ, chờ xong<br>MS_ASYNC&nbsp;&nbsp;→ ghi bất đồng bộ<br>MS_INVALIDATE → bỏ bản nhớ cũ</p>
+      <p class="easy-only">msync(địa_chỉ, cỡ, cờ)<br>MS_SYNC → lưu ngay, chờ xong<br>MS_ASYNC → lưu sau, không chờ</p>
+      <p class="en-only" lang="en">#include &lt;sys/mman.h&gt;<br>int msync(void *addr, size_t length,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int flags);<br>MS_SYNC&nbsp;&nbsp;&nbsp;→ synchronous write, blocks<br>MS_ASYNC&nbsp;&nbsp;→ asynchronous write<br>MS_INVALIDATE → drop cached copies</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">boundary cases</span>
+      <h3>
+        <span class="standard-copy">Quá cuối ánh xạ: SIGSEGV; quá cuối tệp: SIGBUS</span>
+        <span class="easy-only">Chạm ra ngoài vùng hay ngoài tệp đều bị báo lỗi</span>
+        <span class="en-only" lang="en">Past the mapping: SIGSEGV; past the file: SIGBUS</span>
+      </h3>
+      <p class="standard-copy">Vì ánh xạ tạo theo đơn vị trang, <code>length</code> được làm tròn lên. Khi ánh xạ <i>vượt quá</i> cuối tệp, các byte trong phần trang được làm tròn nhưng không có byte tương ứng trong tệp sẽ <i>truy cập được</i> và khởi tạo về 0 (SUSv3 yêu cầu vậy); sửa chúng không ghi ra tệp. Truy cập các trang <i>xa hơn</i> vùng làm tròn — vẫn trong ánh xạ nhưng không có vùng tệp tương ứng — sinh <code>SIGBUS</code>. Truy cập <i>vượt hẳn</i> cuối ánh xạ sinh <code>SIGSEGV</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Hình dung tệp dài 2200 byte nhưng bạn xin ánh xạ 8192 byte. Phần dư đến hết trang (tới byte 4095) là số 0, đọc/ghi được nhưng không lưu vào tệp. Chạm vào các trang xa hơn (từ 4096) mà không có trong tệp → lỗi SIGBUS. Chạm hẳn ra ngoài ánh xạ → lỗi SIGSEGV. <b>Nhớ nhé: ra ngoài tệp là một kiểu lỗi, ra ngoài ánh xạ là kiểu lỗi khác.</b></p>
+      <p class="en-only" lang="en">Because mappings are made in page units, <code>length</code> is rounded up. When a mapping <i>extends beyond</i> the end of the file, the bytes in the rounded-up page that have no corresponding file bytes are <i>accessible</i> and initialized to 0 (SUSv3 requires this); changes to them are not written to the file. Accessing pages <i>beyond</i> that rounded-up region — still within the mapping but with no corresponding file region — raises <code>SIGBUS</code>. Accessing <i>past</i> the end of the mapping raises <code>SIGSEGV</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Có vẻ vô nghĩa khi ánh xạ lớn hơn tệp, nhưng bằng cách <i>mở rộng</i> tệp sau đó (ví dụ <code>ftruncate()</code> hay <code>write()</code>), ta biến những phần trước đó không chạm được thành dùng được.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mẹo: ánh xạ sẵn vùng lớn, rồi nới tệp dài ra dần — phần mới sẽ tự dùng được.</span>
+        <span class="en-only" lang="en">Mapping larger than the file seems pointless, but by later <i>extending</i> the file (e.g. with <code>ftruncate()</code> or <code>write()</code>) you render previously inaccessible parts usable.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">memory-mapped I/O</span>
+      <h3>
+        <span class="standard-copy">Vì sao I/O qua ánh xạ đôi khi nhanh hơn</span>
+        <span class="easy-only">Đọc/ghi tệp qua bộ nhớ: khi nào lợi</span>
+        <span class="en-only" lang="en">Why mapped I/O can be faster — sometimes</span>
+      </h3>
+      <p class="standard-copy">Một lời <code>read()</code>/<code>write()</code> thường gồm <i>hai</i> lần chuyển: giữa tệp và bộ đệm nhân, rồi giữa bộ đệm nhân và bộ đệm không gian người dùng. <code>mmap()</code> loại bỏ lần chuyển thứ hai, và khi nhiều tiến trình cùng I/O trên một tệp, chúng có thể chia sẻ cùng bộ đệm nhân — tiết kiệm thêm bộ nhớ.<span class="cite"><a href="#ref-1">1</a></span> Lợi ích rõ nhất khi <i>truy cập ngẫu nhiên lặp lại</i> trong một tệp lớn; với truy cập tuần tự, <code>mmap()</code> thường lợi rất ít so với <code>read()</code>/<code>write()</code> dùng bộ đệm đủ lớn.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Cách thường: dữ liệu phải đi qua hai trạm trung chuyển mới tới tay bạn. Dùng ánh xạ bộ nhớ: bỏ bớt một trạm, nên có lúc nhanh hơn — nhất là khi bạn nhảy đọc lung tung khắp một tệp lớn. Nhưng đọc tuần tự từ đầu tới cuối thì gần như không lợi. <b>Nhớ nhé: ánh xạ bộ nhớ lợi nhất khi nhảy đọc ngẫu nhiên trong tệp lớn.</b></p>
+      <p class="en-only" lang="en">A <code>read()</code>/<code>write()</code> usually involves <i>two</i> transfers: between the file and the kernel buffer cache, and between that cache and a user-space buffer. <code>mmap()</code> eliminates the second, and when several processes do I/O on one file they can share the same kernel buffer — saving more memory.<span class="cite"><a href="#ref-1">1</a></span> The benefit is clearest for <i>repeated random access</i> in a large file; for sequential access, <code>mmap()</code> usually gains little over <code>read()</code>/<code>write()</code> with big enough buffers.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mục đích thứ hai của ánh xạ tệp chia sẻ là <i>IPC</i>: các tiến trình không cùng họ chia sẻ một vùng nhớ; khác với bộ nhớ chia sẻ System V ở chỗ nội dung được ghi ra tệp nên tồn tại lâu dài.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Ngoài đọc/ghi, ánh xạ tệp chia sẻ còn để các chương trình nói chuyện với nhau qua vùng nhớ chung.</span>
+        <span class="en-only" lang="en">A shared file mapping's second purpose is <i>IPC</i>: unrelated processes share a memory region; unlike System V shared memory, its contents go to the file and so persist.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Khi nào I/O ánh xạ bộ nhớ không lợi</span><span class="en-only" lang="en">When mapped I/O does not pay</span></h4>
+          <p><span class="vi-only">Với các I/O nhỏ, chi phí ánh xạ, lỗi trang, gỡ ánh xạ và cập nhật TLB của bộ quản lý bộ nhớ có thể cao hơn một <code>read()</code>/<code>write()</code> đơn giản. Ngoài ra, nhân đôi khi khó xử lý ghi-ngược hiệu quả cho các ánh xạ ghi được.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">For small I/Os, the cost of mapping, page faulting, unmapping, and updating the memory management unit's TLB can exceed a simple <code>read()</code>/<code>write()</code>. The kernel can also find it hard to handle write-back efficiently for writable mappings.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Bộ nhớ ảo hợp nhất</span><span class="en-only" lang="en">Unified virtual memory</span></h4>
+          <p><span class="vi-only">Linux dùng hệ bộ nhớ ảo <i>hợp nhất</i>: nơi nào có thể, ánh xạ bộ nhớ và các khối của bộ đệm nhân cùng chia sẻ một trang vật lý. Vì thế góc nhìn tệp qua ánh xạ và qua <code>read()</code>/<code>write()</code> luôn nhất quán, và <code>msync()</code> chỉ còn dùng để buộc dữ liệu xuống đĩa.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">Linux uses a <i>unified</i> virtual memory system: where possible, memory mappings and buffer-cache blocks share the same physical page. So the views of a file via a mapping and via <code>read()</code>/<code>write()</code> are always consistent, and <code>msync()</code>'s only remaining use is to force contents to disk.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">MS_SYNC / MS_ASYNC</span>
+      <h3>
+        <span class="standard-copy">msync(): đồng bộ chờ xong, hay bất đồng bộ</span>
+        <span class="easy-only">Lưu ngay và chờ, hay dặn lưu rồi đi tiếp</span>
+        <span class="en-only" lang="en">msync(): block until done, or fire and continue</span>
+      </h3>
+      <p class="standard-copy"><code>addr</code> của <code>msync()</code> phải căn trang, <code>length</code> được làm tròn lên. Đối số <code>flags</code> gồm một trong hai: <code>MS_SYNC</code> ghi <i>đồng bộ</i> — lời gọi chặn tới khi mọi trang đã sửa được ghi xuống đĩa; <code>MS_ASYNC</code> ghi <i>bất đồng bộ</i> — các trang sẽ được ghi xuống sau nhưng lập tức hiển thị cho tiến trình khác <code>read()</code> tệp. Nói cách khác: sau <code>MS_SYNC</code> vùng nhớ đã đồng bộ với đĩa, còn sau <code>MS_ASYNC</code> nó mới đồng bộ với bộ đệm nhân.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only">Hai kiểu lưu: <code>MS_SYNC</code> là "lưu xong tôi mới làm việc khác" — chờ đĩa ghi hẳn. <code>MS_ASYNC</code> là "cứ lưu đi, tôi đi tiếp" — không chờ. <b>Nhớ nhé: MS_SYNC thì chờ, MS_ASYNC thì không chờ.</b></p>
+      <p class="en-only" lang="en"><code>msync()</code>'s <code>addr</code> must be page-aligned and <code>length</code> is rounded up. The <code>flags</code> argument takes one of: <code>MS_SYNC</code> for a <i>synchronous</i> write — the call blocks until all modified pages are on disk; <code>MS_ASYNC</code> for an <i>asynchronous</i> write — pages are written later but are immediately visible to other processes that <code>read()</code> the file. Put differently: after <code>MS_SYNC</code> the region is synchronized with the disk, after <code>MS_ASYNC</code> merely with the kernel buffer cache.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Cờ thêm <code>MS_INVALIDATE</code> làm mất hiệu lực các bản nhớ cũ không khớp với tệp; lần truy cập sau sẽ nạp lại từ tệp — cách để thấy được cập nhật mà tiến trình khác đã ghi vào tệp.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Còn một cờ nữa, MS_INVALIDATE, bảo "quên bản cũ đi, đọc lại từ tệp" để thấy thay đổi của người khác.</span>
+        <span class="en-only" lang="en">The extra flag <code>MS_INVALIDATE</code> invalidates cached copies inconsistent with the file; the next access reloads from it — a way to see updates another process wrote to the file.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Mọi thứ đến giờ đều xoay quanh tệp. Nhưng còn một nửa kia của thế giới ánh xạ: vùng nhớ <i>không</i> tệp — ánh xạ ẩn danh, nền tảng cho <code>malloc()</code> và cho IPC giữa cha–con. Cùng với nó là những công cụ "nâng cao": <code>mremap()</code>, <code>MAP_FIXED</code> và <code>mprotect()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Nãy giờ toàn nói về tệp. Giờ sang nửa còn lại: vùng nhớ trống không cần tệp, cùng vài công cụ để đổi kích thước và đổi quyền.</p>
+    <p class="en-only" lang="en">Everything so far has revolved around files. But there is the other half of the mapping world: <i>fileless</i> memory — anonymous mappings, the basis of <code>malloc()</code> and of parent–child IPC. With them come the "advanced" tools: <code>mremap()</code>, <code>MAP_FIXED</code>, and <code>mprotect()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="anon-remap-fixed" aria-labelledby="anon-remap-fixed-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="anon-remap-fixed-title">
+      <span class="standard-copy">Ánh xạ ẩn danh, đổi kích thước mremap(), MAP_FIXED và mprotect()</span>
+      <span class="easy-only">Vùng nhớ trống, đổi kích thước, đặt địa chỉ và đổi quyền</span>
+      <span class="en-only" lang="en">Anonymous mappings, mremap(), MAP_FIXED, and mprotect()</span>
+    </h2>
+    <p class="standard-copy">Ánh xạ ẩn danh là ánh xạ không có tệp đi kèm. Trên Linux có hai cách tương đương để tạo: (1) đặt <code>MAP_ANONYMOUS</code> trong <code>flags</code> và đặt <code>fd</code> là −1; hoặc (2) mở tệp thiết bị <code>/dev/zero</code> rồi truyền bộ mô tả đó cho <code>mmap()</code>. Cả hai cách đều cho các byte khởi tạo về 0, và đối số <code>offset</code> bị bỏ qua.<span class="cite"><a href="#ref-1">1</a></span> Linux còn cung cấp <code>MAP_ANON</code> như tên đồng nghĩa của <code>MAP_ANONYMOUS</code> để tương thích với vài hệ UNIX khác.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Ánh xạ ẩn danh là xin một vùng nhớ trống tinh, toàn số 0, không dính tới tệp nào. Có hai cách gọi nhưng kết quả như nhau: một cách dùng cờ <code>MAP_ANONYMOUS</code>, một cách mở "vòi nước số 0" tên <code>/dev/zero</code> — thiết bị đọc ra lúc nào cũng toàn số 0. <b>Nhớ nhé: ánh xạ ẩn danh = xin vùng nhớ trống toàn số 0.</b></p>
+    <p class="en-only" lang="en">An anonymous mapping has no backing file. On Linux there are two equivalent ways to create one: (1) specify <code>MAP_ANONYMOUS</code> in <code>flags</code> and set <code>fd</code> to −1; or (2) open the <code>/dev/zero</code> device file and pass its descriptor to <code>mmap()</code>. Both give zero-initialized bytes, and the <code>offset</code> argument is ignored.<span class="cite"><a href="#ref-1">1</a></span> Linux also provides <code>MAP_ANON</code> as a synonym for <code>MAP_ANONYMOUS</code> for compatibility with some other UNIX systems.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Ánh xạ ẩn danh <code>MAP_PRIVATE</code> dùng để cấp các khối bộ nhớ riêng của tiến trình, khởi tạo về 0. Bản cài <code>malloc()</code> của glibc dùng chính loại ánh xạ này để cấp các khối lớn hơn <code>MMAP_THRESHOLD</code> byte (mặc định <b>128 kB</b>, chỉnh được qua <code>mallopt()</code>) — nhờ vậy có thể giải phóng gọn gàng bằng <code>munmap()</code> khi gọi <code>free()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Khi bạn xin một khối bộ nhớ thật lớn bằng <code>malloc()</code>, bên trong nó thường gọi <code>mmap()</code> để lấy một vùng ẩn danh riêng. Khối lớn thì trả lại dễ dàng. <b>Nhớ nhé: malloc() khối lớn thực ra là mmap() một vùng ẩn danh.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A <code>MAP_PRIVATE</code> anonymous mapping allocates blocks of process-private, zero-initialized memory. The glibc <code>malloc()</code> uses exactly this to allocate blocks larger than <code>MMAP_THRESHOLD</code> bytes (default <b>128 kB</b>, adjustable via <code>mallopt()</code>) — so they can be cleanly freed with <code>munmap()</code> on <code>free()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">/* IPC cha–con */<br>addr = mmap(NULL, len,<br>&nbsp;&nbsp;PROT_READ | PROT_WRITE,<br>&nbsp;&nbsp;MAP_SHARED | MAP_ANONYMOUS, -1, 0);<br>fork();&nbsp;/* con thừa kế → dùng chung */<br><br>void *mremap(old, old_sz, new_sz, flags);<br>int mprotect(addr, len, prot);</p>
+      <p class="easy-only">mmap(..., MAP_SHARED |<br>&nbsp;&nbsp;MAP_ANONYMOUS, -1, 0)<br>rồi fork() → cha con dùng chung<br>mremap → đổi kích thước<br>mprotect → đổi quyền</p>
+      <p class="en-only" lang="en">/* parent-child IPC */<br>addr = mmap(NULL, len,<br>&nbsp;&nbsp;PROT_READ | PROT_WRITE,<br>&nbsp;&nbsp;MAP_SHARED | MAP_ANONYMOUS, -1, 0);<br>fork();&nbsp;/* child inherits → shared */<br><br>void *mremap(old, old_sz, new_sz, flags);<br>int mprotect(addr, len, prot);</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">MAP_ANONYMOUS · /dev/zero</span>
+      <h3>
+        <span class="standard-copy">Vùng trống cho malloc() và cho IPC cha–con</span>
+        <span class="easy-only">Hai công dụng: cấp bộ nhớ và cho cha con nói chuyện</span>
+        <span class="en-only" lang="en">Blank memory for malloc() and parent-child IPC</span>
+      </h3>
+      <p class="standard-copy">Ánh xạ ẩn danh <code>MAP_SHARED</code> cho các tiến trình cùng họ (cha và con) chia sẻ một vùng nhớ mà không cần tệp. Nếu sau khi tạo ánh xạ ta gọi <code>fork()</code>, con thừa kế ánh xạ nên cả hai cùng dùng chung vùng nhớ — thay đổi của bên này bên kia thấy ngay (không sao chép khi ghi).<span class="cite"><a href="#ref-1">1</a></span> Ánh xạ ẩn danh <code>MAP_SHARED</code> chỉ có từ Linux 2.4 trở đi.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Hai lý do để dùng vùng trống: một là để <code>malloc()</code> lấy chỗ chứa dữ liệu; hai là để cha và con, sau khi tách ra bằng <code>fork()</code>, cùng viết lên một vùng nhớ chung và thấy được của nhau — như hai người cùng ghi lên một cái bảng. <b>Nhớ nhé: vùng ẩn danh chia sẻ là cái bảng chung cho cha và con.</b></p>
+      <p class="en-only" lang="en">A <code>MAP_SHARED</code> anonymous mapping lets related processes (parent and child) share a memory region without a file. If we <code>fork()</code> after creating the mapping, the child inherits it so both share the region — each sees the other's changes at once (not copied-on-write).<span class="cite"><a href="#ref-1">1</a></span> <code>MAP_SHARED</code> anonymous mappings exist only from Linux 2.4 onward.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lý do có hai cách tạo trùng ngữ nghĩa: <code>MAP_ANONYMOUS</code> bắt nguồn từ BSD, còn <code>/dev/zero</code> bắt nguồn từ System V. Cả hai đều không được SUSv3 quy định nhưng hầu hết UNIX đều hỗ trợ một hoặc cả hai.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Hai cách là do lịch sử: một kiểu từ dòng BSD, một kiểu từ dòng System V — nay đều dùng được.</span>
+        <span class="en-only" lang="en">Why two equivalent techniques: <code>MAP_ANONYMOUS</code> comes from BSD, <code>/dev/zero</code> from System V. Neither is specified by SUSv3, but most UNIX systems support one or both.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">mremap() · MAP_FIXED</span>
+      <h3>
+        <span class="standard-copy">Đổi kích thước ánh xạ, và ép địa chỉ chính xác</span>
+        <span class="easy-only">Nới/thu ánh xạ, và đặt đúng địa chỉ mong muốn</span>
+        <span class="en-only" lang="en">Resize a mapping, and pin an exact address</span>
+      </h3>
+      <p class="standard-copy">Trên hầu hết UNIX, đã tạo ánh xạ thì không đổi được vị trí và kích thước; Linux cung cấp <code>mremap()</code> (không khả chuyển) để nới hoặc thu. Khi đổi, nhân <i>có thể</i> di dời ánh xạ trong không gian địa chỉ — việc này do cờ điều khiển: <code>MREMAP_MAYMOVE</code> cho phép di dời (không có nó mà thiếu chỗ nới tại chỗ thì lỗi <code>ENOMEM</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Vì địa chỉ có thể đổi, ứng dụng dùng <code>mremap()</code> nên tham chiếu bằng <i>độ lệch</i> chứ không dùng con trỏ tuyệt đối.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Đã xin một vùng nhớ rồi mà muốn to hơn hay nhỏ đi? <code>mremap()</code> làm được. Nhưng coi chừng: hệ thống có thể <i>dời</i> cả vùng sang chỗ khác, nên mọi con trỏ cũ trỏ vào đó có thể hỏng. Cách an toàn là nhớ vị trí bằng "khoảng cách từ đầu" chứ đừng nhớ địa chỉ tuyệt đối. <b>Nhớ nhé: mremap() có thể dời vùng đi, đừng tin con trỏ cũ.</b></p>
+      <p class="en-only" lang="en">On most UNIX, a mapping's location and size can't change once created; Linux provides (nonportable) <code>mremap()</code> to grow or shrink one. The kernel <i>may</i> relocate the mapping in the address space, controlled by a flag: <code>MREMAP_MAYMOVE</code> permits relocation (without it, insufficient room to expand in place yields <code>ENOMEM</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Because the address may change, applications using <code>mremap()</code> should refer to the region by <i>offset</i>, not absolute pointers.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Cờ <code>MAP_FIXED</code> buộc nhân hiểu <code>addr</code> đúng y nguyên (phải căn trang); nếu vùng mới đè lên ánh xạ cũ, các trang bị đè được thay bằng ánh xạ mới. Ứng dụng khả chuyển nên tránh <code>MAP_FIXED</code> và để <code>addr</code> là NULL.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Cờ MAP_FIXED là "đặt đúng chỗ tôi chỉ, không xê dịch" — mạnh nhưng dễ gây lỗi, nên hạn chế dùng.</span>
+        <span class="en-only" lang="en">The <code>MAP_FIXED</code> flag forces the kernel to take <code>addr</code> exactly (must be page-aligned); if the new region overlaps an old mapping, the overlapped pages are replaced. Portable applications should avoid <code>MAP_FIXED</code> and leave <code>addr</code> NULL.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">realloc() dùng mremap()</span><span class="en-only" lang="en">realloc() uses mremap()</span></h4>
+          <p><span class="vi-only">Trên Linux, <code>realloc()</code> dùng <code>mremap()</code> để cấp lại hiệu quả các khối lớn mà <code>malloc()</code> từng cấp bằng <code>mmap()</code> MAP_ANONYMOUS — nhờ đó tránh phải sao chép từng byte khi đổi kích thước.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">On Linux, <code>realloc()</code> uses <code>mremap()</code> to efficiently reallocate large blocks that <code>malloc()</code> previously allocated with <code>mmap()</code> MAP_ANONYMOUS — avoiding a byte-by-byte copy on resize.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Dựng vùng liền nhau khả chuyển</span><span class="en-only" lang="en">Portable contiguous regions</span></h4>
+          <p><span class="vi-only">Một công dụng khả chuyển của <code>MAP_FIXED</code>: trước hết tạo một ánh xạ ẩn danh với <code>addr</code> NULL (để nhân chọn vùng liền nhau), rồi dùng loạt lời <code>mmap()</code> có <code>MAP_FIXED</code> để phủ nhiều phần tệp lên các phần khác nhau của vùng đó.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">One portable use of <code>MAP_FIXED</code>: first create an anonymous mapping with <code>addr</code> NULL (letting the kernel pick a contiguous region), then use a series of <code>MAP_FIXED</code> <code>mmap()</code> calls to overlay file regions onto different parts of it.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">remap_file_pages() · mprotect()</span>
+      <h3>
+        <span class="standard-copy">Ánh xạ phi tuyến (đã lỗi thời) và đổi quyền sau này</span>
+        <span class="easy-only">Sắp xếp trang theo thứ tự lạ, và đổi quyền về sau</span>
+        <span class="en-only" lang="en">Nonlinear mappings (deprecated) and changing protection later</span>
+      </h3>
+      <p class="standard-copy">Ánh xạ tệp của <code>mmap()</code> là <i>tuyến tính</i>: trang tệp ứng một-một theo thứ tự với trang bộ nhớ. Vài ứng dụng cần <b>ánh xạ phi tuyến</b> — các trang tệp xuất hiện theo thứ tự khác trong vùng nhớ liền nhau. Làm bằng nhiều lời <code>mmap()</code> MAP_FIXED thì không co giãn tốt, vì mỗi lời tạo một vùng VMA riêng tốn thời gian và bộ nhớ nhân. Từ nhân 2.6, Linux cung cấp <code>remap_file_pages()</code> để tạo ánh xạ phi tuyến mà không sinh nhiều VMA.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Thường các trang của tệp nằm trong bộ nhớ đúng thứ tự như trong tệp. Có cách xếp chúng lộn thứ tự ("phi tuyến") cho vài nhu cầu đặc biệt, nhưng cách đó nay đã cũ. Cái hay dùng hơn là đổi quyền một vùng về sau. <b>Nhớ nhé: xếp trang lộn thứ tự là chuyện hiếm và đã lỗi thời.</b></p>
+      <p class="en-only" lang="en"><code>mmap()</code>'s file mappings are <i>linear</i>: file pages correspond one-to-one, in order, with memory pages. Some applications need <b>nonlinear mappings</b> — file pages appearing in a different order within contiguous memory. Doing this with many <code>MAP_FIXED</code> <code>mmap()</code> calls scales poorly, since each creates a separate VMA that costs time and kernel memory. From kernel 2.6, Linux provided <code>remap_file_pages()</code> to create nonlinear mappings without many VMAs.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Quyền của một vùng đã ánh xạ đổi được bằng <code>mprotect()</code> (sách bàn ở Chương 50): truyền <code>addr</code> căn trang, <code>length</code>, và <code>prot</code> mới; vi phạm quyền mới vẫn sinh <code>SIGSEGV</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span>
+        <span class="easy-only">Muốn đổi "tấm biển quyền" của một vùng đã có? Dùng mprotect() để đổi sang đọc/ghi/chạy/cấm.</span>
+        <span class="en-only" lang="en">The protection of an already-mapped region is changed with <code>mprotect()</code> (the book's Chapter 50): pass a page-aligned <code>addr</code>, a <code>length</code>, and the new <code>prot</code>; violating the new protection still raises <code>SIGSEGV</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Vì sao phi tuyến nay nên tránh</span><span class="en-only" lang="en">Why nonlinear is now avoided</span></h4>
+          <p><span class="vi-only">Sách (2010) mô tả <code>remap_file_pages()</code> như công cụ còn dùng; nhưng theo trang man Linux, lời gọi này đã <i>lỗi thời kể từ Linux 3.16</i> và từ đó được mô phỏng bằng cơ chế chậm hơn — mã mới nên dùng nhiều ánh xạ riêng thay cho nó.<span class="cite"><a href="#ref-7">7</a></span></span><span class="en-only" lang="en">The book (2010) presents <code>remap_file_pages()</code> as a live tool; but per the Linux man page it has been <i>deprecated since Linux 3.16</i> and is since emulated by a slower mechanism — new code should use separate mappings instead.<span class="cite"><a href="#ref-7">7</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">mprotect() và độ mịn trang</span><span class="en-only" lang="en">mprotect() and page granularity</span></h4>
+          <p><span class="vi-only">Vì quyền đặt trên cả trang, <code>length</code> của <code>mprotect()</code> thực tế được làm tròn lên bội kế tiếp của kích thước trang; <code>prot</code> nhận cùng tập giá trị như <code>mmap()</code> (PROT_NONE hoặc OR của READ/WRITE/EXEC).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span><span class="en-only" lang="en">Because protections are set on whole pages, <code>mprotect()</code>'s <code>length</code> is effectively rounded up to the next page-size multiple; <code>prot</code> takes the same values as <code>mmap()</code> (PROT_NONE or an OR of READ/WRITE/EXEC).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="section-heading">
+      <h2 id="ngo-nhan-title">
+        <span class="standard-copy">Ba ngộ nhận thường gặp</span>
+        <span class="en-only" lang="en">Three common misconceptions</span>
+      </h2>
+    </div>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“mmap() nạp cả tệp vào RAM ngay”</span>
+          <span class="en-only" lang="en">“mmap() loads the whole file into RAM immediately”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> gọi <code>mmap()</code> là toàn bộ tệp được đọc vào bộ nhớ.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> trang của ánh xạ được nạp từ tệp <i>khi cần</i> — trên Linux là lúc lần đầu truy cập; chưa chạm thì chưa nạp.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> calling <code>mmap()</code> reads the entire file into memory.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> the mapping's pages are loaded from the file <i>as required</i> — on Linux, on first access; untouched pages are not loaded.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“MAP_SHARED ghi ra đĩa ngay lập tức”</span>
+          <span class="en-only" lang="en">“MAP_SHARED writes to disk instantly”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> sửa một ánh xạ <code>MAP_SHARED</code> là tệp trên đĩa cập nhật tức thì.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> nhân <i>sẽ</i> ghi ngược ra tệp nhưng không đảm bảo thời điểm; muốn chắc đã xuống đĩa phải gọi <code>msync(MS_SYNC)</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> modifying a <code>MAP_SHARED</code> mapping updates the on-disk file instantly.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> the kernel <i>will</i> carry changes through but gives no timing guarantee; to be sure it hit disk, call <code>msync(MS_SYNC)</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“SIGSEGV và SIGBUS là một”</span>
+          <span class="en-only" lang="en">“SIGSEGV and SIGBUS are the same”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> chạm sai chỗ trong ánh xạ thì luôn nhận <code>SIGSEGV</code>.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> chạm <i>vượt cuối ánh xạ</i> → <code>SIGSEGV</code>; nhưng chạm vùng trong ánh xạ mà <i>không có byte tệp tương ứng</i> → <code>SIGBUS</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> any bad access in a mapping always yields <code>SIGSEGV</code>.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> access <i>past the mapping's end</i> → <code>SIGSEGV</code>; but access within the mapping with <i>no corresponding file bytes</i> → <code>SIGBUS</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm ánh xạ bộ nhớ</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped memory mappings</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã nắm hai trục phân loại, lời gọi <code>mmap()</code>/<code>munmap()</code>, cơ chế đồng bộ và các công cụ ánh xạ ẩn danh — nền cho bộ nhớ chia sẻ POSIX và các thao tác bộ nhớ ảo ở Chương 50.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you grasp the two axes, the <code>mmap()</code>/<code>munmap()</code> calls, synchronization, and the anonymous-mapping tools — groundwork for POSIX shared memory and the Chapter 50 virtual-memory operations.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Phân biệt ánh xạ tệp với ánh xạ ẩn danh, và ánh xạ riêng tư với chia sẻ. Bốn tổ hợp phục vụ bốn mục đích nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao ánh xạ tệp chia sẻ phù hợp cho IPC cần dữ liệu tồn tại qua các lần khởi động lại?</p>
+      </li>
+      <li>
+        <p>Kể sáu đối số của <code>mmap()</code>. Vì sao nên để <code>addr</code> là NULL? Đối số nào bắt buộc là bội của kích thước trang?</p>
+        <p class="deep-only">Gợi ý sâu hơn: <code>length</code> có cần là bội của kích thước trang không, và chuyện gì xảy ra nếu không?</p>
+      </li>
+      <li>
+        <p>Khi một ánh xạ vượt quá cuối tệp, khi nào truy cập sinh <code>SIGBUS</code> và khi nào sinh <code>SIGSEGV</code>?</p>
+        <p class="deep-only">Gợi ý sâu hơn: các byte trong phần trang được làm tròn nhưng không có trong tệp mang giá trị gì, và sửa chúng có ghi ra tệp không?</p>
+      </li>
+      <li>
+        <p><code>msync()</code> dùng để làm gì? Phân biệt <code>MS_SYNC</code> và <code>MS_ASYNC</code>. Vì sao nên gọi nó trước <code>munmap()</code>?</p>
+        <p class="deep-only">Gợi ý sâu hơn: trên hệ bộ nhớ ảo hợp nhất của Linux, <code>msync()</code> còn lại công dụng gì?</p>
+      </li>
+      <li>
+        <p>Hai cách tạo ánh xạ ẩn danh là gì? Chúng phục vụ <code>malloc()</code> và IPC cha–con ra sao? <code>mremap()</code> và <code>mprotect()</code> làm gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao mã dùng <code>mremap()</code> nên tham chiếu bằng độ lệch thay vì con trỏ tuyệt đối?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Ánh xạ tệp và ánh xạ ẩn danh khác nhau chỗ nào?</p></li>
+      <li><p><code>mmap()</code> cần những gì, và vì sao nên để hệ thống tự chọn địa chỉ?</p></li>
+      <li><p>Nếu tệp ngắn hơn vùng bạn xin ánh xạ thì chuyện gì xảy ra?</p></li>
+      <li><p>Làm sao để chắc chắn dữ liệu đã được lưu xuống đĩa?</p></li>
+      <li><p>Vùng nhớ ẩn danh dùng để làm gì?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>Distinguish a file mapping from an anonymous one, and private from shared. What four purposes do the four combinations serve?</p></li>
+      <li><p>Name the six arguments of <code>mmap()</code>. Why leave <code>addr</code> NULL? Which argument must be a multiple of the page size?</p></li>
+      <li><p>When a mapping extends past the end of a file, when does access raise <code>SIGBUS</code> and when <code>SIGSEGV</code>?</p></li>
+      <li><p>What is <code>msync()</code> for? Distinguish <code>MS_SYNC</code> and <code>MS_ASYNC</code>. Why call it before <code>munmap()</code>?</p></li>
+      <li><p>What are the two ways to create an anonymous mapping? How do they serve <code>malloc()</code> and parent-child IPC? What do <code>mremap()</code> and <code>mprotect()</code> do?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy"><code>mmap()</code> cho ta đặt <span class="closing-accent">một tệp hoặc một vùng nhớ trống thẳng vào không gian địa chỉ</span>, rồi làm việc với nó bằng phép toán trên bộ nhớ; hai trục — <span class="closing-accent">tệp/ẩn danh và riêng tư/chia sẻ</span> — sinh ra bốn loại ánh xạ, với <code>munmap()</code> gỡ bỏ, <code>msync()</code> đồng bộ, và <code>mprotect()</code> đổi quyền. Hai công dụng đáng nhớ nhất vẫn là I/O ánh xạ bộ nhớ và IPC — cây cầu dẫn thẳng sang bộ nhớ chia sẻ POSIX và các thao tác bộ nhớ ảo tiếp theo.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only"><code>mmap()</code> biến <span class="closing-accent">tệp hoặc vùng nhớ trống thành một mảng</span> bạn truy cập trực tiếp; có bốn kiểu, và kiểu hay nhớ nhất là <span class="closing-accent">ánh xạ tệp chia sẻ</span> — vừa đọc/ghi tệp, vừa cho các chương trình nói chuyện. <b>Nhớ nhé: ánh xạ bộ nhớ là coi tệp hay vùng trống như một mảng trong tay bạn.</b></p>
+    <p class="en-only" lang="en"><code>mmap()</code> lets us place <span class="closing-accent">a file or a blank region straight into the address space</span>, then work with it by memory operations; two axes — <span class="closing-accent">file/anonymous and private/shared</span> — yield four mapping types, with <code>munmap()</code> to remove, <code>msync()</code> to synchronize, and <code>mprotect()</code> to change protection. The two most memorable uses remain memory-mapped I/O and IPC — the bridge straight to POSIX shared memory and the virtual-memory operations ahead.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-44-pipes-and-fifos.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 44 · Đường ống và FIFO</span>
+    <span class="nav-title en-only" lang="en">Chapter 44 · Pipes and FIFOs</span>
+  </a>
+  <div class="nav-cell nav-next disabled" aria-disabled="true">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 56 · Socket: giới thiệu · sắp có</span>
+    <span class="nav-title en-only" lang="en">Chapter 56 · Sockets: Introduction · coming soon</span>
+  </div>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chương 49, “Memory Mappings”, trang 1017–1044.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chapter 49, “Memory Mappings”, pp. 1017–1044.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Michael Kerrisk, <i>The Linux Programming Interface</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3), ch. 49 “Memory Mappings”, pp. 1017–1044. — <a href="https://man7.org/tlpi/" target="_blank" rel="noopener noreferrer">man7.org/tlpi</a></li>
+      <li id="ref-2">“mmap(2) — Linux manual page” (creating a mapping; addr/length/prot/flags/fd/offset; PROT_* protections; MAP_PRIVATE vs MAP_SHARED; MAP_ANONYMOUS; MAP_FIXED; MAP_FAILED). Linux man-pages project, maintained by Michael Kerrisk. <a href="https://man7.org/linux/man-pages/man2/mmap.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/mmap.2.html</a></li>
+      <li id="ref-3">“munmap(2) — Linux manual page” (removing a mapping; page-aligned addr; length rounding; partial unmapping). <a href="https://man7.org/linux/man-pages/man2/munmap.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/munmap.2.html</a></li>
+      <li id="ref-4">“msync(2) — Linux manual page” (synchronizing a mapped region; MS_SYNC, MS_ASYNC, MS_INVALIDATE). <a href="https://man7.org/linux/man-pages/man2/msync.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/msync.2.html</a></li>
+      <li id="ref-5">“mremap(2) — Linux manual page” (remapping a region; MREMAP_MAYMOVE, MREMAP_FIXED; nonportable). <a href="https://man7.org/linux/man-pages/man2/mremap.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/mremap.2.html</a></li>
+      <li id="ref-6">“mprotect(2) — Linux manual page” (changing memory protection; page-aligned addr; PROT_* values; SIGSEGV on violation). <a href="https://man7.org/linux/man-pages/man2/mprotect.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/mprotect.2.html</a></li>
+      <li id="ref-7">“remap_file_pages(2) — Linux manual page” (nonlinear mappings; deprecated since Linux 3.16). <a href="https://man7.org/linux/man-pages/man2/remap_file_pages.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/remap_file_pages.2.html</a></li>
+      <li id="ref-8">“mmap, munmap — map or unmap pages of memory”, POSIX.1-2017 / The Open Group Base Specifications (page-alignment of offset; MAP_FIXED). <a href="https://pubs.opengroup.org/onlinepubs/9699919799/functions/mmap.html" target="_blank" rel="noopener noreferrer">pubs.opengroup.org — mmap</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-44-pipes-and-fifos.html">chapter 44</a>
+      <span class="soon">chapter 56</span>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('tlpi-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('tlpi-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('tlpi-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>
