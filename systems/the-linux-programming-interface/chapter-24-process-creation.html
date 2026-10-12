@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 24 · Tạo tiến trình — The Linux Programming Interface</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 24 “Process Creation” trong The Linux Programming Interface (Michael Kerrisk, No Starch Press, 2010): tổng quan fork(), exit(), wait(), execve(); tạo tiến trình con bằng fork() và việc trả về hai lần; cha con dùng chung mô tả tệp; ngữ nghĩa bộ nhớ và copy-on-write; tránh sao chép bộ nhớ bằng vfork(); race condition sau fork và cách đồng bộ thứ tự thực thi. Ba mức đọc, mọi khẳng định đều có nguồn.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('tlpi-reading-mode'),
+l=localStorage.getItem('tlpi-lang'),
+t=localStorage.getItem('tlpi-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   THE LINUX PROGRAMMING INTERFACE — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"TLPI · CH.24";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+/* soon = chapter not yet on disk; rendered as a non-link cell. */
+.chapter-path .soon{
+  display:block;padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--tint);border:1px dashed var(--line);opacity:.6;
+}
+.chapter-path .soon .soon-tag{
+  display:inline-block;font-family:var(--sans);font-size:.6rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:.1rem .45rem;margin-top:.4rem;
+}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.series-links .soon{margin-right:.5rem;color:var(--muted);opacity:.55;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+
+/* ---------- whole-book mind map banner ---------- */
+.mindmap-banner{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  gap:clamp(1rem,3vw,2rem);align-items:center;
+  margin:3rem 0 0;padding:1.35rem clamp(1.15rem,3vw,2rem);
+  border:1px solid var(--line);border-left:4px solid var(--teal);
+  border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);
+  color:var(--ink);text-decoration:none;
+  transition:border-color .15s,transform .15s;
+}
+a.mindmap-banner:hover{border-color:var(--teal);transform:translateY(-2px);}
+a.mindmap-banner:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.mindmap-banner.soon{opacity:.5;cursor:default;}
+.mindmap-icon{font-size:1.9rem;line-height:1;}
+.mindmap-banner h3{margin:0 0 .3rem;font-size:1.05rem;}
+.mindmap-banner p{margin:0;max-width:48rem;font-size:.88rem;color:var(--muted);}
+.mindmap-banner .result{margin-top:0;color:var(--teal);font-weight:600;white-space:nowrap;}
+.mindmap-banner.soon .result{color:var(--muted);}
+@media (max-width:860px){
+  .mindmap-banner{grid-template-columns:auto minmax(0,1fr);}
+  .mindmap-banner .result{grid-column:2;white-space:normal;}
+}
+@media (max-width:460px){
+  .mindmap-banner{margin-left:0;margin-right:0;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    The Linux Programming Interface
+    <span>Chương 24 · Process Creation</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 24 · Tạo tiến trình</span>
+      <span class="en-only" lang="en">Chapter 24 · Process Creation</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Một lời gọi, hai tiến trình: cách Linux nhân bản một chương trình đang chạy</span>
+      <span class="easy-only">Gọi fork() một lần, tự nhiên có hai chương trình chạy song song</span>
+      <span class="en-only" lang="en">One call, two processes: how Linux clones a running program</span>
+    </h1>
+
+    <p class="standard-copy">Chương 24 mở ra cụm bốn chương về vòng đời tiến trình bằng một bộ tứ system call: <code>fork()</code> tạo tiến trình con, <code>exit()</code> kết thúc một tiến trình, <code>wait()</code> để cha chờ con, và <code>execve()</code> nạp một chương trình mới đè lên tiến trình hiện tại.<span class="cite"><a href="#ref-1">1</a></span> Trọng tâm của chương là <code>fork()</code>: nó trả về <i>hai lần</i>, tiến trình con là một bản sao gần như y hệt của cha, cha và con dùng chung các mô tả tệp, còn bộ nhớ thì không chép ngay mà dùng kỹ thuật <b>copy-on-write</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    <p class="easy-only">Hãy tưởng tượng chương trình của bạn tự tách làm đôi: từ một lệnh <code>fork()</code>, bỗng có hai chương trình giống hệt nhau cùng chạy tiếp — một "cha", một "con". Cả hai chia nhau các tệp đang mở, còn bộ nhớ thì Linux khéo léo chỉ chép khi thật sự cần. Chương này dạy bạn làm chuyện tách đôi đó và tránh những cái bẫy đi kèm. <b>Nhớ nhé: fork() biến một tiến trình thành hai.</b></p>
+    <p class="en-only" lang="en">Chapter 24 opens a cluster of chapters on the process life cycle with a quartet of system calls: <code>fork()</code> creates a child process, <code>exit()</code> terminates a process, <code>wait()</code> lets a parent wait for a child, and <code>execve()</code> loads a new program over the current process.<span class="cite"><a href="#ref-1">1</a></span> The chapter's heart is <code>fork()</code>: it returns <i>twice</i>, the child is an almost exact duplicate of the parent, parent and child share open file descriptors, and memory is not copied up front but handled by <b>copy-on-write</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    <p class="deep-only">Điểm phương pháp đáng chú ý: cách UNIX tách <i>tạo tiến trình</i> (fork) khỏi <i>nạp chương trình</i> (exec) thành hai bước riêng — khác với một số hệ điều hành gộp chúng thành một thao tác "spawn" duy nhất. Sự tách đôi này làm API đơn giản hơn (<code>fork()</code> không nhận đối số nào) và cho chương trình khoảng trống để làm việc giữa hai bước — ví dụ đóng/mở lại mô tả tệp trước khi <code>exec</code>. SUSv3 vẫn định nghĩa tùy chọn <code>posix_spawn()</code> gộp hiệu ứng của <code>fork()</code> và <code>exec()</code>, dành cho các kiến trúc phần cứng (thường là hệ nhúng) không có swap hay đơn vị quản lý bộ nhớ, nơi một <code>fork()</code> truyền thống khó hoặc không thể hiện thực.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> <code>fork()</code> tạo ra một bản sao gần như hoàn hảo của tiến trình gọi rồi trả về trong <i>cả hai</i> tiến trình — và chính sự nhân bản đó sinh ra ba bài toán cốt lõi: chia sẻ tài nguyên (mô tả tệp dùng chung), hiệu quả bộ nhớ (copy-on-write, và lối tắt <code>vfork()</code>), và tính bất định của thứ tự thực thi (<b>race condition</b> phải được đồng bộ một cách tường minh).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> tách một tiến trình thành hai thì dễ, nhưng đi kèm ba câu hỏi: hai bên dùng chung những gì, có tốn gấp đôi bộ nhớ không, và ai chạy trước? Chương này trả lời cả ba. <b>Nhớ nhé: nhân bản tiến trình kéo theo chuyện chia sẻ, chuyện bộ nhớ, và chuyện thứ tự.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> <code>fork()</code> makes a nearly perfect copy of the calling process and returns in <i>both</i> — and that duplication raises three core problems: resource sharing (shared file descriptors), memory efficiency (copy-on-write, plus the <code>vfork()</code> shortcut), and the indeterminacy of execution order (a <b>race condition</b> that must be synchronized explicitly).<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: lời gọi fork() biến một tiến trình thành hai tiến trình gần như y hệt; tiến trình con nhận bản sao của ngăn xếp, dữ liệu, heap, và dùng chung đoạn text; bộ nhớ áp dụng copy-on-write nên chỉ chép khi bị sửa; và thứ tự chạy của cha con là bất định. Diagram: the fork() call turns one process into two nearly identical processes; the child receives copies of the stack, data, and heap and shares the text segment; memory uses copy-on-write so pages are copied only on modification; and the scheduling order of parent and child is indeterminate.">
+    <div class="core">
+      <b>fork() → 2 tiến trình</b>
+      <small class="standard-copy">Một lời gọi, trả về hai lần — cha và con</small>
+      <small class="easy-only">Gọi một lần, thành hai chương trình</small>
+      <small class="en-only" lang="en">One call, returns twice — parent and child</small>
+    </div>
+
+    <div class="node">
+      <b>child = bản sao gần hệt</b>
+      <small class="standard-copy">Con nhận bản sao ngăn xếp, dữ liệu, heap; dùng chung đoạn text</small>
+      <small class="easy-only">Con giống hệt cha, chỉ khác số định danh</small>
+      <small class="en-only" lang="en">The child copies stack, data, heap; shares the text segment</small>
+    </div>
+
+    <div class="node">
+      <b>copy-on-write</b>
+      <small class="standard-copy">Bộ nhớ chưa chép ngay; chỉ chép trang khi một bên ghi vào</small>
+      <small class="easy-only">Chỉ chép bộ nhớ khi thật sự sửa</small>
+      <small class="en-only" lang="en">Memory is not copied up front; a page is copied on first write</small>
+    </div>
+
+    <div class="node">
+      <b>thứ tự chạy bất định</b>
+      <small class="standard-copy">Không biết cha hay con chạy trước — nguồn gốc của race condition</small>
+      <small class="easy-only">Không biết ai chạy trước; phải tự dàn xếp</small>
+      <small class="en-only" lang="en">Neither parent nor child is guaranteed first — the root of races</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#tong-quan">
+    <span>01</span>
+    <b class="standard-copy">Bộ tứ: fork(), exit(), wait(), execve()</b>
+    <b class="easy-only">Bốn lời gọi nền tảng</b>
+    <b class="en-only" lang="en">The quartet: fork(), exit(), wait(), execve()</b>
+  </a>
+  <a href="#fork">
+    <span>02</span>
+    <b class="standard-copy">Tạo tiến trình con và chia sẻ mô tả tệp</b>
+    <b class="easy-only">fork() và tệp dùng chung</b>
+    <b class="en-only" lang="en">Creating a child and sharing file descriptors</b>
+  </a>
+  <a href="#bo-nho">
+    <span>03</span>
+    <b class="standard-copy">Ngữ nghĩa bộ nhớ: copy-on-write và vfork()</b>
+    <b class="easy-only">Bộ nhớ: copy-on-write và vfork()</b>
+    <b class="en-only" lang="en">Memory semantics: copy-on-write and vfork()</b>
+  </a>
+  <a href="#dua-tranh">
+    <span>04</span>
+    <b class="standard-copy">Race condition sau fork và đồng bộ bằng signal</b>
+    <b class="easy-only">Thứ tự chạy và cách dàn xếp</b>
+    <b class="en-only" lang="en">Races after fork and synchronizing with signals</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="tong-quan" aria-labelledby="tong-quan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="tong-quan-title">
+      <span class="standard-copy">Bốn system call làm nên vòng đời của một tiến trình</span>
+      <span class="easy-only">Bốn lời gọi điều khiển cả đời một tiến trình</span>
+      <span class="en-only" lang="en">The four system calls that shape a process's life cycle</span>
+    </h2>
+    <p class="standard-copy">Trước khi đào sâu, Kerrisk giới thiệu ngắn gọn bốn lời gọi thường đi cùng nhau: <code>fork()</code> cho một tiến trình (cha) tạo ra một tiến trình mới (con) là bản sao gần như y hệt; <code>exit(status)</code> kết thúc một tiến trình và trả tài nguyên về cho nhân; <code>wait(&amp;status)</code> cho cha tạm dừng tới khi một con kết thúc và lấy về trạng thái kết thúc đó; và <code>execve(pathname, argv, envp)</code> nạp một chương trình mới vào bộ nhớ của tiến trình, vứt bỏ đoạn text cũ.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Tác giả mở đầu bằng bốn "động từ" của đời một tiến trình: <code>fork()</code> là <i>sinh con</i>, <code>exit()</code> là <i>qua đời</i>, <code>wait()</code> là cha <i>chờ con</i>, và <code>execve()</code> là <i>thay da đổi thịt</i> — khoác lên mình một chương trình hoàn toàn mới. Bốn động từ này quay vòng trong gần như mọi chương trình UNIX. <b>Nhớ nhé: sinh con, thay chương trình, chờ con, rồi kết thúc — đó là nhịp sống của tiến trình.</b></p>
+    <p class="en-only" lang="en">Before digging in, Kerrisk briefly introduces four calls that usually travel together: <code>fork()</code> lets one process (the parent) create a new process (the child) that is an almost exact duplicate; <code>exit(status)</code> terminates a process and returns its resources to the kernel; <code>wait(&amp;status)</code> suspends the parent until a child terminates and retrieves that termination status; and <code>execve(pathname, argv, envp)</code> loads a new program into the process's memory, discarding the old text.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> UNIX tách <i>tạo tiến trình</i> và <i>nạp chương trình</i> thành hai bước riêng biệt — khác với mô hình "spawn" của một số hệ khác. Nhờ đó <code>fork()</code> không nhận đối số nào, và chương trình có khoảng trống để thu xếp mọi thứ giữa <code>fork()</code> và <code>exec()</code>; đôi khi ta <code>fork()</code> mà <i>không</i> cần <code>exec()</code> theo sau.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Sinh con và đổi chương trình là hai việc tách rời, không gộp làm một. Vì tách rời nên bạn có thể fork rồi vẫn chạy chương trình cũ, hoặc fork rồi mới đổi sang chương trình khác. <b>Nhớ nhé: tạo tiến trình và nạp chương trình là hai bước, không phải một.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> UNIX separates <i>process creation</i> and <i>program loading</i> into two distinct steps — unlike the "spawn" model of some other systems. This is why <code>fork()</code> takes no arguments, and a program has room to arrange everything between <code>fork()</code> and <code>exec()</code>; sometimes we <code>fork()</code> with <i>no</i> following <code>exec()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">parent "A"<br>&nbsp;&nbsp;--fork()--&gt; child "A" (bản sao bộ nhớ)<br>&nbsp;&nbsp;child: execve("B") --&gt; chạy chương trình B<br>&nbsp;&nbsp;parent: wait(&amp;status) &lt;-- child: exit(status)</p>
+      <p class="easy-only">cha chạy "A"<br>&nbsp;&nbsp;--fork()--&gt; con cũng là "A"<br>&nbsp;&nbsp;con: đổi sang chạy "B"<br>&nbsp;&nbsp;cha: chờ con --- con: kết thúc</p>
+      <p class="en-only" lang="en">parent "A"<br>&nbsp;&nbsp;--fork()--&gt; child "A" (memory copy)<br>&nbsp;&nbsp;child: execve("B") --&gt; runs program B<br>&nbsp;&nbsp;parent: wait(&amp;status) &lt;-- child: exit(status)</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">fork()</span>
+      <h3>
+        <span class="standard-copy">fork() — nhân đôi tiến trình gọi</span>
+        <span class="easy-only">fork() — tách một thành hai</span>
+        <span class="en-only" lang="en">fork() — duplicate the calling process</span>
+      </h3>
+      <p class="standard-copy"><code>fork()</code> cho một tiến trình tạo một bản sao gần như y hệt chính nó. Tên "fork" (chạc cây) gợi hình ảnh tiến trình cha <i>tách nhánh</i> thành hai bản của chính mình. Con nhận bản sao các đoạn ngăn xếp, dữ liệu, heap và text của cha.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Hãy nghĩ tới việc photocopy một người đang làm việc: bản photo tiếp tục công việc từ đúng chỗ bản gốc dừng lại. <code>fork()</code> làm vậy với một tiến trình. <b>Nhớ nhé: fork() là bản photocopy một chương trình đang chạy.</b></p>
+      <p class="en-only" lang="en"><code>fork()</code> lets a process create a nearly exact copy of itself. The name "fork" evokes the parent <i>branching</i> into two copies of itself. The child obtains copies of the parent's stack, data, heap, and text segments.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Một máy chủ mạng nghe kết nối rồi <code>fork()</code> một tiến trình con để phục vụ mỗi khách — mẫu thiết kế kinh điển của chương.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Máy chủ web tạo một tiến trình con cho mỗi người truy cập — đó chính là fork().</span>
+        <span class="en-only" lang="en">A network server listens for connections then <code>fork()</code>s a child to serve each client — the chapter's classic design pattern.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">exit() / _exit()</span>
+      <h3>
+        <span class="standard-copy">exit() — kết thúc và trả tài nguyên</span>
+        <span class="easy-only">exit() — kết thúc một tiến trình</span>
+        <span class="en-only" lang="en">exit() — terminate and release resources</span>
+      </h3>
+      <p class="standard-copy">Hàm thư viện <code>exit(status)</code> kết thúc một tiến trình, khiến mọi tài nguyên (bộ nhớ, mô tả tệp…) được trả về cho nhân để tái cấp phát. Đối số <code>status</code> là một số nguyên định trạng thái kết thúc mà cha có thể lấy về qua <code>wait()</code>. <code>exit()</code> được xây trên system call <code>_exit()</code>; sau một <code>fork()</code>, thường chỉ một trong hai tiến trình gọi <code>exit()</code>, còn bên kia nên dùng <code>_exit()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only"><code>exit()</code> là cách một tiến trình "nói lời tạm biệt": nó trả lại mọi thứ đã mượn và để lại một con số cho cha biết nó kết thúc ra sao. <b>Nhớ nhé: exit() đóng cửa và trả chìa khoá lại cho nhân.</b></p>
+      <p class="en-only" lang="en">The library function <code>exit(status)</code> terminates a process, making all its resources (memory, open file descriptors, and so on) available to the kernel for reallocation. The <code>status</code> argument is an integer defining the termination status the parent can retrieve via <code>wait()</code>. <code>exit()</code> is layered on the <code>_exit()</code> system call; after a <code>fork()</code>, generally only one of the two processes should terminate by calling <code>exit()</code>, while the other uses <code>_exit()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Sự khác nhau giữa <code>exit()</code> và <code>_exit()</code> — nhất là chuyện xả vùng đệm <code>stdio</code> — được Chương 25 giải thích kỹ.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Vì sao có hai cách kết thúc (exit và _exit)? Chương 25 nói rõ.</span>
+        <span class="en-only" lang="en">The difference between <code>exit()</code> and <code>_exit()</code> — especially about flushing <code>stdio</code> buffers — is explained in Chapter 25.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">wait() / execve()</span>
+      <h3>
+        <span class="standard-copy">wait() chờ con, execve() thay chương trình</span>
+        <span class="easy-only">wait() chờ con, execve() đổi chương trình</span>
+        <span class="en-only" lang="en">wait() awaits a child, execve() replaces the program</span>
+      </h3>
+      <p class="standard-copy"><code>wait(&amp;status)</code> có hai vai trò: nếu một con chưa kết thúc, nó tạm dừng cha cho tới khi một con kết thúc; và nó trả về trạng thái kết thúc của con trong đối số <code>status</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> <code>execve(pathname, argv, envp)</code> nạp một chương trình mới vào bộ nhớ tiến trình: đoạn text cũ bị vứt bỏ, còn ngăn xếp, dữ liệu, heap được dựng lại mới cho chương trình mới. Nhiều hàm thư viện (<code>execlp()</code>, <code>execvp()</code>…) được xây trên nó; sách gọi chung cả họ là <code>exec()</code>, dù không có lời gọi nào mang đúng tên đó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <p class="easy-only"><code>wait()</code> là cha ngồi chờ con làm xong rồi hỏi "con kết thúc thế nào?". <code>execve()</code> là tiến trình lột xác: giữ nguyên "thân xác" nhưng thay toàn bộ "linh hồn" bằng một chương trình khác. <b>Nhớ nhé: wait() là chờ, execve() là thay toàn bộ chương trình.</b></p>
+      <p class="en-only" lang="en"><code>wait(&amp;status)</code> has two purposes: if a child has not yet terminated, it suspends the parent until one does; and it returns the child's termination status in the <code>status</code> argument.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> <code>execve(pathname, argv, envp)</code> loads a new program into the process's memory: the old text is discarded, while the stack, data, and heap are freshly created for the new program. Many library functions (<code>execlp()</code>, <code>execvp()</code>, …) are layered on it; the book refers to the whole family generically as <code>exec()</code>, though no call bears exactly that name.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Chi tiết của tác giả</h4>
+          <p>Hình 24-1 trong sách phác lại đúng vòng lặp của một shell: đọc lệnh, <code>fork()</code> một con, con <code>exec()</code> lệnh đó, còn cha <code>wait()</code> cho tới khi con xong rồi mới in dấu nhắc kế tiếp.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao điều này quan trọng</h4>
+          <p>Cả <code>wait()</code> lẫn <code>execve()</code> đều <i>tùy chọn</i> sau một <code>fork()</code>: cha có thể bỏ qua con và chạy tiếp; con có thể tiếp tục chạy chính chương trình của cha thay vì <code>exec()</code> chương trình mới.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Trong bốn lời gọi ấy, <code>fork()</code> là lời gọi "kỳ lạ" nhất — nó là system call duy nhất bạn gặp mà <i>trả về hai lần</i>. Hiểu được điều đó, và hiểu con thừa hưởng gì từ cha, là mảnh ghép tiếp theo.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Trong bốn lời gọi, <code>fork()</code> lạ nhất: gọi một lần mà "trả lời" hai lần. Ta xem kỹ nó ngay sau đây.</p>
+    <p class="en-only" lang="en">Of the four, <code>fork()</code> is the strangest — it is the one system call you will meet that <i>returns twice</i>. Grasping that, and what the child inherits from the parent, is the next piece.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="fork" aria-labelledby="fork-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="fork-title">
+      <span class="standard-copy">fork() trả về hai lần, và con thừa kế cả những tệp đang mở của cha</span>
+      <span class="easy-only">fork() trả lời hai lần, và con dùng chung tệp với cha</span>
+      <span class="en-only" lang="en">fork() returns twice, and the child inherits the parent's open files</span>
+    </h2>
+    <p class="standard-copy">Chìa khoá để hiểu <code>fork()</code> là: sau khi nó hoàn tất, có <i>hai</i> tiến trình, và trong mỗi tiến trình, dòng lệnh chạy tiếp từ ngay chỗ <code>fork()</code> trả về. Ta phân biệt hai tiến trình nhờ giá trị trả về: ở <b>cha</b>, <code>fork()</code> trả về PID của con mới; ở <b>con</b>, nó trả về <b>0</b>; nếu không tạo được con, nó trả về <b>−1</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    <p class="easy-only">Điều lạ của <code>fork()</code>: bạn gọi một lần nhưng nó "trả lời" hai lần — một lần trong cha, một lần trong con. Làm sao biết mình là ai? Nhìn con số nó trả về: cha nhận số định danh của con (một số dương), còn con nhận số 0. Lỗi thì nhận −1. <b>Nhớ nhé: con số 0 nghĩa là "tôi là con", số dương nghĩa là "tôi là cha".</b></p>
+    <p class="en-only" lang="en">The key to understanding <code>fork()</code> is that after it completes, there are <i>two</i> processes, and in each, execution continues from the point where <code>fork()</code> returned. We tell them apart by the return value: in the <b>parent</b>, <code>fork()</code> returns the PID of the new child; in the <b>child</b>, it returns <b>0</b>; if no child could be created, it returns <b>−1</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Hai tiến trình chạy cùng đoạn text nhưng có <i>bản sao riêng</i> của ngăn xếp, dữ liệu và heap. Sau <code>fork()</code>, mỗi bên sửa biến trong các đoạn này mà không ảnh hưởng bên kia. Con có thể tự hỏi PID của mình bằng <code>getpid()</code>, và PID của cha bằng <code>getppid()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Sau khi tách, con có "bản nháp" bộ nhớ riêng: sửa gì trong bản nháp của mình cũng không đụng tới bản của bên kia. <b>Nhớ nhé: cha con dùng bộ nhớ riêng, sửa ai nấy chịu.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> The two processes run the same program text but have <i>separate copies</i> of the stack, data, and heap. After <code>fork()</code>, each may modify variables in these segments without affecting the other. The child can learn its own PID via <code>getpid()</code> and its parent's via <code>getppid()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">pid_t childPid;<br>switch (childPid = fork()) {<br>case -1:&nbsp;&nbsp;/* fork lỗi */<br>case 0:&nbsp;&nbsp;&nbsp;/* con chạy ở đây */<br>default:&nbsp;/* cha chạy ở đây */<br>}</p>
+      <p class="easy-only">switch (childPid = fork()) {<br>case -1: /* lỗi */<br>case 0:&nbsp; /* là con */<br>default: /* là cha */<br>}</p>
+      <p class="en-only" lang="en">pid_t childPid;<br>switch (childPid = fork()) {<br>case -1:&nbsp;&nbsp;/* fork failed */<br>case 0:&nbsp;&nbsp;&nbsp;/* child runs here */<br>default:&nbsp;/* parent runs here */<br>}</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">returns twice</span>
+      <h3>
+        <span class="standard-copy">Giá trị trả về: cách duy nhất để biết mình là cha hay con</span>
+        <span class="easy-only">Nhìn con số trả về để biết mình là ai</span>
+        <span class="en-only" lang="en">The return value: the only way to know parent from child</span>
+      </h3>
+      <p class="standard-copy">Cha cần PID của con để về sau theo dõi nó (qua <code>wait()</code>), nên <code>fork()</code> trả PID đó cho cha; con thì không cần, nên nhận 0 — và nếu cần, con tự tra PID bằng <code>getpid()</code>. Nếu không tạo được tiến trình, <code>fork()</code> trả −1; lý do thường gặp là vượt giới hạn <code>RLIMIT_NPROC</code> về số tiến trình của người dùng, hoặc chạm trần số tiến trình toàn hệ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Cha phải nhớ "mặt" con để sau này còn chờ, nên nó nhận số định danh của con. Con thì tự biết mình nên chỉ nhận số 0. Nếu máy quá tải, không đẻ thêm được, fork trả về −1. <b>Nhớ nhé: luôn kiểm tra fork() có trả về −1 không.</b></p>
+      <p class="en-only" lang="en">The parent needs the child's PID to track it later (via <code>wait()</code>), so <code>fork()</code> returns it to the parent; the child does not, so it gets 0 — and if needed, it reads its PID with <code>getpid()</code>. If no process can be created, <code>fork()</code> returns −1; common reasons are exceeding the <code>RLIMIT_NPROC</code> limit on the user's process count, or hitting the system-wide process ceiling.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lỗi <code>EAGAIN</code> khi <code>fork()</code> thất bại dưới tải nặng chính là cái trần <code>RLIMIT_NPROC</code> (được bàn kỹ ở Phần 36.3) đang lên tiếng.<span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Khi máy báo không fork được vì quá nhiều tiến trình — đó là chạm trần giới hạn.</span>
+        <span class="en-only" lang="en">The <code>EAGAIN</code> error when <code>fork()</code> fails under heavy load is the <code>RLIMIT_NPROC</code> ceiling (discussed in Section 36.3) speaking up.<span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">separate memory</span>
+      <h3>
+        <span class="standard-copy">Bản sao bộ nhớ riêng — minh hoạ bằng t_fork</span>
+        <span class="easy-only">Mỗi bên có bộ nhớ riêng — ví dụ t_fork</span>
+        <span class="en-only" lang="en">Separate memory copies — shown by t_fork</span>
+      </h3>
+      <p class="standard-copy">Chương trình ví dụ <code>t_fork.c</code> (Listing 24-1) đặt một biến dữ liệu <code>idata = 111</code> và một biến ngăn xếp <code>istack = 222</code>, rồi trong con nhân cả hai lên ba lần. Khi chạy, kết quả là con in <code>idata=333 istack=666</code> còn cha vẫn <code>idata=111 istack=222</code> — bằng chứng rằng con có bản sao riêng và sửa được mà không đụng tới cha.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Sách thử nghiệm: cho hai con số là 111 và 222, rồi bảo con nhân ba. Kết quả: con khoe 333 và 666, còn cha vẫn giữ 111 và 222. Vậy là con sửa bản của mình thôi, không chạm vào cha. <b>Nhớ nhé: con sửa bộ nhớ của con, cha chẳng hề hấn gì.</b></p>
+      <p class="en-only" lang="en">The example <code>t_fork.c</code> (Listing 24-1) sets a data variable <code>idata = 111</code> and a stack variable <code>istack = 222</code>, then the child multiplies both by three. When run, the child prints <code>idata=333 istack=666</code> while the parent still shows <code>idata=111 istack=222</code> — proof the child has its own copy and can modify it without affecting the parent.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Ví dụ này dùng <code>sleep(3)</code> ở cha để con chạy trước — một cách <i>không chắc chắn</i> để sắp thứ tự, mà Phần 24.5 sẽ thay bằng cách đúng đắn.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Ví dụ bắt cha ngủ vài giây cho con chạy trước — mẹo tạm bợ, chưa chắc ăn.</span>
+        <span class="en-only" lang="en">This example uses <code>sleep(3)</code> in the parent so the child runs first — an <i>unreliable</i> way to order things, which Section 24.5 replaces with a correct one.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">shared file offset</span>
+      <h3>
+        <span class="standard-copy">Mô tả tệp dùng chung — và cùng một con trỏ đọc/ghi</span>
+        <span class="easy-only">Cha con dùng chung tệp và cùng vị trí đọc/ghi</span>
+        <span class="en-only" lang="en">Shared descriptors — and one shared file offset</span>
+      </h3>
+      <p class="standard-copy">Khi <code>fork()</code>, con nhận <i>bản sao</i> của mọi mô tả tệp của cha. Nhưng điều tinh tế: các mô tả bản sao trong con trỏ tới <i>cùng một bản ghi tệp mở</i> (open file description) như ở cha — nghĩa là chúng chia sẻ cả con trỏ vị trí tệp (file offset) lẫn các cờ trạng thái mở. Nếu con dịch con trỏ hoặc đổi cờ, cha nhìn thấy thay đổi đó qua mô tả tương ứng của mình.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Con "thừa kế" các tệp đang mở của cha, nhưng không phải bản sao tách rời: hai bên dùng chung một cây bút đánh dấu "đang đọc tới đâu". Con đọc tới dòng 1000 thì cha cũng thấy đã tới dòng 1000. <b>Nhớ nhé: cha con viết chung một cuốn sổ, lật trang bên này thì bên kia cũng thấy.</b></p>
+      <p class="en-only" lang="en">On <code>fork()</code>, the child receives <i>copies</i> of all the parent's file descriptors. The subtlety: those copied descriptors in the child refer to the <i>same open file description</i> as in the parent — so they share the file offset and the open file status flags. If the child moves the offset or changes a flag, the parent sees that change through its corresponding descriptor.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Ví dụ <code>fork_file_sharing.c</code> (Listing 24-2): con dịch offset tới 1000 và bật cờ <code>O_APPEND</code>; sau khi con thoát, cha in ra "File offset in parent: 1000" và "O_APPEND flag in parent is: on" — đúng những thay đổi con đã làm.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Trong ví dụ của sách, con dời vị trí tới 1000 rồi thoát; cha kiểm tra lại thấy đúng 1000 — vì dùng chung.</span>
+        <span class="en-only" lang="en">The example <code>fork_file_sharing.c</code> (Listing 24-2): the child moves the offset to 1000 and turns on <code>O_APPEND</code>; after the child exits, the parent prints "File offset in parent: 1000" and "O_APPEND flag in parent is: on" — exactly the child's changes.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Khi nào chia sẻ là có lợi</h4>
+          <p>Nếu cha và con cùng ghi vào một tệp, việc chia sẻ offset bảo đảm hai bên không ghi đè lên nhau — đây là lý do shell chờ (<code>wait()</code>) lệnh con xong rồi mới in dấu nhắc, trừ khi bạn chạy nền bằng dấu <code>&amp;</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Khi nào nên tách ra</h4>
+          <p>Nếu <i>không</i> muốn chia sẻ, mỗi bên nên đóng ngay những mô tả tệp mình không dùng sau <code>fork()</code>; khi một bên <code>exec()</code>, cờ close-on-exec (Phần 27.4) cũng hữu ích để tự động đóng.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Nếu con nhận <i>bản sao</i> ngăn xếp, dữ liệu và heap của cha, một câu hỏi tự nhiên nảy ra: chẳng lẽ mỗi <code>fork()</code> đều chép nguyên khối bộ nhớ của cha? Nếu vậy thì quá lãng phí — nhất là khi con <code>exec()</code> ngay sau đó và vứt bỏ hết. Lời giải là <b>copy-on-write</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Vậy mỗi lần fork có phải chép sạch bộ nhớ của cha không? Nếu thế thì phí quá. Phần sau cho thấy Linux né được chuyện đó.</p>
+    <p class="en-only" lang="en">If the child receives <i>copies</i> of the parent's stack, data, and heap, a natural question follows: does every <code>fork()</code> copy the parent's whole memory? That would be wasteful — especially when the child <code>exec()</code>s right after and discards it all. The answer is <b>copy-on-write</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="bo-nho" aria-labelledby="bo-nho-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="bo-nho-title">
+      <span class="standard-copy">Copy-on-write: chép bộ nhớ chỉ khi thật sự cần — và lối tắt vfork()</span>
+      <span class="easy-only">Chỉ chép bộ nhớ khi phải chép, và cách đi tắt vfork()</span>
+      <span class="en-only" lang="en">Copy-on-write: copy memory only when needed — and the vfork() shortcut</span>
+    </h2>
+    <p class="standard-copy">Về mặt khái niệm, có thể hình dung <code>fork()</code> tạo bản sao các đoạn text, dữ liệu, heap, ngăn xếp của cha. Nhưng chép nguyên khối bộ nhớ ảo vào con sẽ lãng phí — một phần vì <code>fork()</code> thường đi liền với <code>exec()</code>, thao tác sẽ vứt bỏ text cũ và dựng lại dữ liệu, heap, ngăn xếp. Nên các hiện thực UNIX hiện đại, gồm Linux, dùng hai mẹo để tránh chép thừa.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Nếu mỗi lần tách đôi đều chép sạch bộ nhớ thì vừa chậm vừa phí — nhất là khi con sắp đổi sang chương trình khác và bỏ hết. Vì vậy Linux dùng mẹo để khỏi chép khi chưa cần. <b>Nhớ nhé: Linux lười chép bộ nhớ một cách thông minh.</b></p>
+    <p class="en-only" lang="en">Conceptually, <code>fork()</code> can be seen as copying the parent's text, data, heap, and stack segments. But copying the whole virtual memory into the child would be wasteful — partly because <code>fork()</code> is often followed by <code>exec()</code>, which discards the old text and rebuilds data, heap, and stack. So modern UNIX implementations, including Linux, use two tricks to avoid needless copying.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Hai mẹo.</b> (1) Đoạn <b>text</b> được đánh dấu chỉ-đọc, nên cha và con dùng chung cùng các khung trang vật lý. (2) Với <b>dữ liệu, heap, ngăn xếp</b>, nhân dùng <b>copy-on-write</b>: ban đầu các trang được chia sẻ và đánh dấu chỉ-đọc; khi một bên định ghi, nhân bẫy lại, chép riêng trang đó cho tiến trình gây lỗi, rồi hai bên mới có bản riêng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"><b>Hai mẹo.</b> Phần mã lệnh thì dùng chung vì chẳng ai sửa. Phần dữ liệu thì để chung tạm thời; chỉ khi có ai định sửa, máy mới lặng lẽ chép riêng trang đó ra. <b>Nhớ nhé: dùng chung cho tới lúc có người cầm bút sửa.</b></p>
+      <p class="en-only" lang="en"><b>Two tricks.</b> (1) The <b>text</b> segment is marked read-only, so parent and child share the same physical page frames. (2) For <b>data, heap, and stack</b>, the kernel uses <b>copy-on-write</b>: initially the pages are shared and marked read-only; when either side tries to write, the kernel traps, copies just that page for the faulting process, and only then do the two have private copies.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">trước khi ghi: cha &amp; con --&gt; cùng Frame 1998 (RO)<br>con ghi vào trang 211:<br>&nbsp;&nbsp;nhân bẫy --&gt; chép ra Frame 2038<br>&nbsp;&nbsp;con --&gt; Frame 2038, cha --&gt; Frame 1998</p>
+      <p class="easy-only">ban đầu: chung một trang (chỉ đọc)<br>ai đó ghi:<br>&nbsp;&nbsp;máy chép riêng trang đó ra<br>&nbsp;&nbsp;từ đó mỗi bên một bản</p>
+      <p class="en-only" lang="en">before write: parent &amp; child --&gt; same Frame 1998 (RO)<br>child writes page 211:<br>&nbsp;&nbsp;kernel traps --&gt; copies to Frame 2038<br>&nbsp;&nbsp;child --&gt; Frame 2038, parent --&gt; Frame 1998</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">copy-on-write</span>
+      <h3>
+        <span class="standard-copy">Copy-on-write — vì sao fork() rẻ hơn ta tưởng</span>
+        <span class="easy-only">Copy-on-write — vì sao fork() không tốn kém</span>
+        <span class="en-only" lang="en">Copy-on-write — why fork() is cheaper than it looks</span>
+      </h3>
+      <p class="standard-copy">Nhờ copy-on-write, cái giá duy nhất của <code>fork()</code> trên Linux là thời gian và bộ nhớ để nhân đôi bảng trang (page tables) của cha, chứ không phải chép toàn bộ dữ liệu. Các trang chỉ được sao thực sự khi — và nếu — một bên ghi vào chúng. Cơ chế này được mô tả trong [Bach, 1986] và [Bovet &amp; Cesati, 2005].<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Vì chỉ chép khi sửa, nên fork gần như "miễn phí": máy chỉ phải dựng lại cái "bản đồ" trỏ tới bộ nhớ, chứ chưa chép nội dung. Phần lớn trang không bao giờ bị chép. <b>Nhớ nhé: fork chép bản đồ, không chép hàng.</b></p>
+      <p class="en-only" lang="en">Thanks to copy-on-write, the only penalty of <code>fork()</code> on Linux is the time and memory to duplicate the parent's page tables, not to copy all the data. Pages are truly copied only when — and if — one side writes to them. The mechanism is described in [Bach, 1986] and [Bovet &amp; Cesati, 2005].<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Có thể kết hợp <code>fork()</code> + <code>wait()</code> để "kiểm soát dấu chân bộ nhớ": cho một hàm hay rò rỉ bộ nhớ chạy trong con; khi con kết thúc, dấu chân bộ nhớ của cha trở về nguyên trạng (Listing 24-3).<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mẹo hay: cho một việc hay rò rỉ bộ nhớ chạy trong con; con xong thì cha lại sạch sẽ như cũ.</span>
+        <span class="en-only" lang="en">You can combine <code>fork()</code> + <code>wait()</code> to control a process's memory footprint: run a leaky function in the child; when it exits, the parent's footprint is back to what it was (Listing 24-3).<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">vfork()</span>
+      <h3>
+        <span class="standard-copy">vfork() — lối tắt nhanh nhưng đầy cạm bẫy</span>
+        <span class="easy-only">vfork() — nhanh hơn nhưng dễ sai</span>
+        <span class="en-only" lang="en">vfork() — a fast but trap-laden shortcut</span>
+      </h3>
+      <p class="standard-copy"><code>vfork()</code> (gốc từ BSD) nhanh hơn <code>fork()</code> cổ điển nhờ hai đặc điểm khác thường: (1) <i>không</i> nhân bản trang bộ nhớ ảo hay bảng trang — con dùng chung bộ nhớ của cha cho tới khi nó <code>exec()</code> hoặc <code>_exit()</code>; (2) cha bị <i>tạm dừng</i> cho tới khi con <code>exec()</code> hoặc <code>_exit()</code>. Nó được thiết kế riêng cho trường hợp con <code>exec()</code> ngay lập tức.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only"><code>vfork()</code> là bản fork "ăn gian cho nhanh": con mượn tạm bộ nhớ của cha và cha đứng yên chờ, cho tới khi con đổi chương trình hoặc kết thúc. Nhanh, nhưng dễ gây lỗi khó hiểu. <b>Nhớ nhé: vfork() nhanh nhưng nguy hiểm — chỉ dùng khi con sắp exec() ngay.</b></p>
+      <p class="en-only" lang="en"><code>vfork()</code> (originally from BSD) is faster than classic <code>fork()</code> thanks to two unusual features: (1) it does <i>not</i> duplicate virtual memory pages or page tables — the child shares the parent's memory until it <code>exec()</code>s or <code>_exit()</code>s; (2) the parent is <i>suspended</i> until the child <code>exec()</code>s or <code>_exit()</code>s. It is expressly designed for the case where the child immediately <code>exec()</code>s.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Ví dụ <code>t_vfork.c</code> (Listing 24-4): con đổi biến <code>istack</code> thành 666 rồi <code>_exit()</code>; vì dùng chung bộ nhớ, cha in ra đúng <code>istack=666</code> — thay đổi của con "lọt" sang cha.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Trong ví dụ, con sửa một biến rồi thoát; vì dùng chung bộ nhớ, cha thấy luôn thay đổi đó.</span>
+        <span class="en-only" lang="en">The example <code>t_vfork.c</code> (Listing 24-4): the child changes <code>istack</code> to 666 then <code>_exit()</code>s; because memory is shared, the parent prints exactly <code>istack=666</code> — the child's change leaks into the parent.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Luật chơi nghiêm ngặt</h4>
+          <p>SUSv3 nói hành vi là <i>không xác định</i> nếu con: sửa bất kỳ dữ liệu nào khác ngoài biến <code>pid_t</code> dùng để nhận giá trị trả về của <code>vfork()</code>; hoặc trở về khỏi hàm đã gọi <code>vfork()</code>; hoặc gọi bất kỳ hàm nào khác trước khi <code>_exit()</code> hay <code>exec()</code> thành công. Con còn phải <code>_exit()</code> chứ không <code>exit()</code>, vì <code>exit()</code> sẽ xả và đóng vùng đệm <code>stdio</code> của cha.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Một lưu ý về nguồn và chuẩn</h4>
+          <p>SUSv3 đánh dấu <code>vfork()</code> là lỗi thời (obsolete), còn SUSv4 gỡ bỏ hẳn phần đặc tả. Vì <code>fork()</code> dùng copy-on-write đã gần nhanh bằng <code>vfork()</code>, sách khuyên nên tránh <code>vfork()</code> trừ khi tốc độ là tuyệt đối thiết yếu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">text shared RO</span>
+      <h3>
+        <span class="standard-copy">Đoạn text dùng chung — vì mã lệnh không tự sửa</span>
+        <span class="easy-only">Mã lệnh dùng chung vì chẳng ai sửa nó</span>
+        <span class="en-only" lang="en">The text segment is shared — code does not modify itself</span>
+      </h3>
+      <p class="standard-copy">Nhân đánh dấu đoạn text của mỗi tiến trình là chỉ-đọc để một tiến trình không thể sửa mã lệnh của chính nó. Chính vì chỉ-đọc nên cha và con có thể an toàn dùng chung cùng các khung trang text: <code>fork()</code> chỉ dựng cho con các mục bảng trang trỏ tới đúng những khung trang vật lý mà cha đang dùng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Phần "công thức" (mã lệnh) của chương trình không bao giờ tự sửa, nên cha con cứ dùng chung một bản, khỏi tốn chỗ chép lại. <b>Nhớ nhé: công thức chung thì chép làm gì cho phí.</b></p>
+      <p class="en-only" lang="en">The kernel marks each process's text segment read-only so a process cannot modify its own code. Precisely because it is read-only, parent and child can safely share the same text page frames: <code>fork()</code> just builds page-table entries for the child that point at the very physical frames the parent already uses.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đây là lý do nhiều tiến trình chạy cùng một chương trình (ví dụ nhiều bản shell) chỉ tốn một bản mã lệnh trong RAM — một ý nối thẳng với chủ đề bộ nhớ ảo và thư viện chia sẻ.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Nhờ vậy, mở mười cửa sổ cùng một chương trình cũng chỉ tốn một bản mã trong bộ nhớ.</span>
+        <span class="en-only" lang="en">This is why many processes running the same program (say, many shells) cost only one copy of the code in RAM — an idea that connects straight to virtual memory and shared libraries.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Dù <code>fork()</code> hay <code>vfork()</code>, vẫn còn một điều cả hai <i>không</i> bảo đảm: cha hay con sẽ chạy trước. (<code>vfork()</code> thì có — con luôn chạy trước — nhưng <code>fork()</code> thì không.) Sự bất định này chính là nguồn gốc của race condition, chủ đề cuối cùng của chương.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Dù dùng cách nào, với <code>fork()</code> ta vẫn không biết ai chạy trước. Chính chỗ "không biết" này gây ra lỗi khó chịu — phần cuối sẽ bàn.</p>
+    <p class="en-only" lang="en">Whether <code>fork()</code> or <code>vfork()</code>, one thing neither <code>fork()</code> guarantees: whether parent or child runs first. (<code>vfork()</code> does — the child always runs first — but <code>fork()</code> does not.) That indeterminacy is the root of race conditions, the chapter's final theme.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="dua-tranh" aria-labelledby="dua-tranh-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="dua-tranh-title">
+      <span class="standard-copy">Sau fork(), thứ tự chạy là bất định — và ta phải tự dàn xếp</span>
+      <span class="easy-only">Sau fork() không biết ai chạy trước — phải tự sắp xếp</span>
+      <span class="en-only" lang="en">After fork(), order is indeterminate — and we must synchronize it ourselves</span>
+    </h2>
+    <p class="standard-copy">Sau một <code>fork()</code>, không thể biết trước cha hay con sẽ được nhân xếp lịch dùng CPU trước; trên hệ đa xử lý, cả hai có thể cùng chạy. Chương trình nào ngầm dựa vào một thứ tự thực thi nhất định sẽ dính <b>race condition</b> — lỗi khó tìm vì sự xuất hiện của nó phụ thuộc vào quyết định xếp lịch mà nhân đưa ra tùy tải hệ thống.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Khi một tiến trình tách đôi, cái máy có thể cho cha chạy trước, cũng có thể cho con chạy trước — không hứa hẹn gì cả. Nếu bạn lỡ cho rằng "chắc chắn cha chạy trước" thì thỉnh thoảng chương trình sẽ sai, và lỗi kiểu đó cực khó bắt. <b>Nhớ nhé: đừng bao giờ đoán ai chạy trước sau fork().</b></p>
+    <p class="en-only" lang="en">After a <code>fork()</code>, it is indeterminate whether the parent or the child will be scheduled onto the CPU first; on a multiprocessor, both may run at once. Any program that implicitly relies on a particular execution order suffers a <b>race condition</b> — a bug that is hard to find because its occurrence depends on scheduling decisions the kernel makes according to system load.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Quy tắc.</b> Không được giả định thứ tự. Nếu cần một thứ tự nhất định, phải dùng một kỹ thuật đồng bộ tường minh — semaphore, khoá tệp (file lock), gửi thông điệp qua pipe, hoặc gửi signal. Mẹo <code>sleep()</code> chỉ là may rủi, không phải bảo đảm.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Quy tắc.</b> Muốn ai chạy trước thì phải nói rõ bằng một "tín hiệu hẹn nhau", chứ đừng trông vào may mắn hay vào lệnh ngủ. <b>Nhớ nhé: cần thứ tự thì phải hẹn nhau rõ ràng.</b></p>
+      <p class="en-only" lang="en"><b>The rule.</b> Do not assume an order. If a specific order is needed, use an explicit synchronization technique — a semaphore, a file lock, messages over a pipe, or a signal. The <code>sleep()</code> trick is luck, not a guarantee.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">/* đồng bộ bằng signal, Listing 24-6 */<br>chặn SYNC_SIG <i>trước</i> fork()<br>fork()<br>con: làm việc --&gt; kill(getppid(), SYNC_SIG)<br>cha: sigsuspend(&amp;emptyMask) /* chờ tín hiệu */</p>
+      <p class="easy-only">chặn tín hiệu trước khi fork<br>fork()<br>con: xong việc thì báo cha<br>cha: ngồi chờ tới khi nghe báo</p>
+      <p class="en-only" lang="en">/* synchronize with a signal, Listing 24-6 */<br>block SYNC_SIG <i>before</i> fork()<br>fork()<br>child: do work --&gt; kill(getppid(), SYNC_SIG)<br>parent: sigsuspend(&amp;emptyMask) /* wait for signal */</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">race condition</span>
+      <h3>
+        <span class="standard-copy">Race condition — một thí nghiệm bằng con số</span>
+        <span class="easy-only">Race condition — thử bằng một triệu lần fork</span>
+        <span class="en-only" lang="en">The race condition — an experiment in numbers</span>
+      </h3>
+      <p class="standard-copy">Để minh hoạ, chương trình <code>fork_whos_on_first.c</code> (Listing 24-5) tạo nhiều con và ghi lại ai in thông điệp trước. Khi tạo <b>1 triệu</b> con trên một hệ Linux/x86-32 chạy nhân 2.2.19, cha in trước trong <i>tất cả trừ 332 lần</i> — tức 99,97% số lần. Nhưng không được dựa vào điều này: nó khác nhau giữa các bản nhân và các hệ UNIX.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only">Sách chạy thử một triệu lần tách đôi để xem ai nhanh tay in trước. Trên một máy cũ, cha thắng gần như mọi lần (chỉ thua 332 lần). Nhưng con số đó đổi theo từng máy, từng phiên bản — nên đừng tin vào nó. <b>Nhớ nhé: "thường thường đúng" không phải là "luôn luôn đúng".</b></p>
+      <p class="en-only" lang="en">To illustrate, the program <code>fork_whos_on_first.c</code> (Listing 24-5) creates many children and records who prints its message first. Creating <b>1 million</b> children on a Linux/x86-32 system running kernel 2.2.19, the parent printed first in <i>all but 332 cases</i> — that is, 99.97% of the time. But you must not rely on this: it varies across kernel versions and UNIX systems.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Nếu mã của bạn trông cậy "cha luôn chạy trước" mà đúng 2999/3000 lần, thì cái lần thứ 3000 sẽ sinh ra một lỗi gần như không thể tái hiện khi gỡ.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Lỗi chỉ xuất hiện một lần trong vài nghìn lần chạy là loại lỗi khổ sở nhất khi đi tìm.</span>
+        <span class="en-only" lang="en">If your code counts on "the parent always runs first" and is right 2999 times out of 3000, that 3000th time yields a bug that is nearly impossible to reproduce while debugging.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">sched_child_runs_first</span>
+      <h3>
+        <span class="standard-copy">Mặc định "ai chạy trước" đã đổi nhiều lần qua các nhân</span>
+        <span class="easy-only">Luật "ai chạy trước" từng đổi tới đổi lui</span>
+        <span class="en-only" lang="en">The "who runs first" default has flipped across kernels</span>
+      </h3>
+      <p class="standard-copy">Chính các nhà phát triển nhân cũng đổi ý nhiều lần. Trong loạt nhân 2.4 từng có bản thử "con chạy trước", rồi bị gỡ; 2.6 lại áp dụng nó. Một thử nghiệm 1 triệu con trên Linux/x86-32 nhân 2.6.30 cho thấy <b>con</b> in trước trong 99,98% số lần. Nhưng từ nhân <b>2.6.32</b>, mặc định quay lại là <b>cha</b> chạy trước; có thể đổi lại bằng cách gán giá trị khác 0 cho tệp <code>/proc/sys/kernel/sched_child_runs_first</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only">Chuyện "ai chạy trước" từng bị đổi qua đổi lại giữa các phiên bản Linux: lúc thì con trước, lúc thì cha trước. Từ nhân 2.6.32 thì mặc định là cha trước, nhưng người quản trị vẫn chỉnh được bằng một công tắc trong hệ thống. <b>Nhớ nhé: mặc định còn đổi được, nên đừng xây mã dựa trên nó.</b></p>
+      <p class="en-only" lang="en">Even the kernel developers changed their minds repeatedly. The 2.4 series briefly tried "child runs first," then dropped it; 2.6 adopted it. An experiment with 1 million children on Linux/x86-32 kernel 2.6.30 showed the <b>child</b> printed first in 99.98% of cases. But from kernel <b>2.6.32</b>, the default is once more that the <b>parent</b> runs first; it can be changed by writing a nonzero value to <code>/proc/sys/kernel/sched_child_runs_first</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hai lập luận trái chiều</h4>
+          <p>Lập luận cho "con trước": với copy-on-write, nếu con <code>exec()</code> ngay thì cho con chạy trước sẽ tránh được việc nhân phải chép các trang mà cha sắp sửa. Lập luận cho "cha trước" (thắng ở 2.6.32): trạng thái của cha vẫn đang nóng trong CPU và trong TLB của đơn vị quản lý bộ nhớ, nên cho cha chạy trước thường nhanh hơn một chút.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Kết luận thực dụng</h4>
+          <p>Sách nhấn mạnh chênh lệch hiệu năng giữa hai hành vi là <i>nhỏ</i> và không ảnh hưởng tới phần lớn ứng dụng — bài học rút ra không phải "chọn bên nào" mà là "đừng viết mã phụ thuộc vào bên nào".<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">signal sync</span>
+      <h3>
+        <span class="standard-copy">Đồng bộ bằng signal — cách làm đúng đắn</span>
+        <span class="easy-only">Dùng tín hiệu để hẹn nhau cho chắc</span>
+        <span class="en-only" lang="en">Synchronizing with signals — the correct way</span>
+      </h3>
+      <p class="standard-copy">Nếu một bên cần chờ bên kia làm xong một việc, bên đang làm có thể <i>gửi một signal</i> khi xong, còn bên kia chờ signal đó. Điểm mấu chốt trong <code>fork_sig_sync.c</code> (Listing 24-6): phải <b>chặn (block)</b> signal đồng bộ <i>trước</i> khi <code>fork()</code>. Nếu cha chặn sau <code>fork()</code>, nó lại dính đúng race condition ta đang muốn tránh — vì con có thể gửi signal trước khi cha kịp chặn và chờ.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Muốn chắc chắn ai xong trước thì hai bên hẹn nhau bằng một "tiếng còi": làm xong thì thổi còi, bên kia nghe còi mới đi tiếp. Quan trọng: phải chuẩn bị "cái tai nghe còi" <i>trước</i> khi tách đôi, kẻo lỡ mất tiếng còi. <b>Nhớ nhé: chuẩn bị nghe tín hiệu trước khi fork, đừng để lỡ.</b></p>
+      <p class="en-only" lang="en">If one side must wait for the other to finish an action, the active side can <i>send a signal</i> when done, and the other waits for it. The crucial point in <code>fork_sig_sync.c</code> (Listing 24-6): you must <b>block</b> the synchronization signal <i>before</i> the <code>fork()</code>. If the parent blocks it after <code>fork()</code>, it is exposed to the very race it is trying to avoid — the child might send the signal before the parent manages to block and wait.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">[Stevens &amp; Rago, 2005] đề xuất đóng gói các bước đồng bộ này (chặn, gửi, bắt signal) thành một bộ hàm chuẩn, để sau có thể thay signal bằng một cơ chế IPC khác mà không đổi logic.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Nên gói các bước "hẹn nhau" này thành hàm dùng lại, để sau đổi cách báo hiệu cũng dễ.</span>
+        <span class="en-only" lang="en">[Stevens &amp; Rago, 2005] suggests packaging these steps (block, send, catch the signal) into a standard set of functions, so you can later swap signals for another IPC mechanism without changing the logic.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="section-heading">
+      <h2 id="ngo-nhan-title">
+        <span class="standard-copy">Ba ngộ nhận thường gặp</span>
+        <span class="en-only" lang="en">Three common misconceptions</span>
+      </h2>
+    </div>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“fork() tạo ra con từ đầu chương trình”</span>
+          <span class="en-only" lang="en">“fork() starts the child from the top of the program”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> con bắt đầu chạy lại <code>main()</code> từ dòng đầu tiên.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> cả cha và con đều chạy tiếp từ <i>ngay sau</i> chỗ <code>fork()</code> trả về; chúng chỉ khác nhau ở giá trị trả về (PID của con cho cha, 0 cho con).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> the child re-runs <code>main()</code> from the first line.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> both parent and child continue <i>just after</i> the point where <code>fork()</code> returned; they differ only in the return value (child's PID to the parent, 0 to the child).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“fork() chép toàn bộ bộ nhớ nên rất tốn kém”</span>
+          <span class="en-only" lang="en">“fork() copies all memory, so it's expensive”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> mỗi <code>fork()</code> đều nhân đôi dữ liệu, heap, ngăn xếp của cha.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> Linux dùng copy-on-write; cái giá duy nhất là nhân đôi bảng trang, còn các trang chỉ được chép khi một bên thật sự ghi vào.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> every <code>fork()</code> duplicates the parent's data, heap, and stack.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> Linux uses copy-on-write; the only penalty is duplicating the page tables, and pages are copied only when a side actually writes.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“vfork() luôn nhanh hơn nên cứ dùng cho chắc”</span>
+          <span class="en-only" lang="en">“vfork() is always faster, so just use it”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> <code>vfork()</code> nhanh hơn thì luôn là lựa chọn tốt hơn.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> với copy-on-write, <code>fork()</code> đã gần nhanh bằng <code>vfork()</code>; SUSv3 đánh dấu <code>vfork()</code> lỗi thời và SUSv4 gỡ bỏ nó, nên chỉ nên dùng khi tốc độ là tuyệt đối thiết yếu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> <code>vfork()</code> is faster, so it is always the better choice.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> with copy-on-write, <code>fork()</code> is nearly as fast as <code>vfork()</code>; SUSv3 marks <code>vfork()</code> obsolete and SUSv4 removes it, so use it only where speed is absolutely critical.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm việc tạo tiến trình</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped process creation</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã nắm cơ chế <code>fork()</code> và các hệ quả của nó — nền cho bốn chương về tiến trình kế tiếp.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you have the <code>fork()</code> mechanism and its consequences — the basis for the next four chapters on processes.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Vì sao nói <code>fork()</code> "trả về hai lần"? Ở cha và ở con, giá trị trả về là gì, và bạn dùng nó thế nào để tách luồng xử lý?</p>
+        <p class="deep-only">Gợi ý sâu hơn: nếu <code>fork()</code> trả về −1 thì hai nguyên nhân thường gặp là gì?</p>
+      </li>
+      <li>
+        <p>Sau <code>fork()</code>, cha và con dùng chung gì về mặt mô tả tệp, và điều đó dẫn tới hệ quả gì nếu cả hai cùng đọc/ghi một tệp?</p>
+        <p class="deep-only">Gợi ý sâu hơn: ví dụ <code>fork_file_sharing</code> chứng minh điều này bằng những con số nào (offset, cờ O_APPEND)?</p>
+      </li>
+      <li>
+        <p>Copy-on-write là gì, và vì sao nó khiến <code>fork()</code> rẻ hơn nhiều so với việc chép toàn bộ bộ nhớ? Đoạn text được xử lý khác ra sao?</p>
+        <p class="deep-only">Gợi ý sâu hơn: cái giá thực sự còn lại của một <code>fork()</code> trên Linux là gì?</p>
+      </li>
+      <li>
+        <p>Hai đặc điểm nào khiến <code>vfork()</code> khác <code>fork()</code>, và vì sao con của <code>vfork()</code> phải gọi <code>_exit()</code> chứ không <code>exit()</code>?</p>
+        <p class="deep-only">Gợi ý sâu hơn: SUSv3 và SUSv4 nói gì về vị thế chuẩn của <code>vfork()</code>?</p>
+      </li>
+      <li>
+        <p>Vì sao không được giả định cha hay con chạy trước sau <code>fork()</code>, và một cách đúng đắn để ép thứ tự là gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: trong cách đồng bộ bằng signal, vì sao phải chặn signal <i>trước</i> khi <code>fork()</code>?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Sau khi gọi <code>fork()</code>, làm sao để biết mình đang là cha hay là con?</p></li>
+      <li><p>Cha và con có dùng chung các tệp đang mở không? Nếu con dời vị trí đọc, cha có thấy không?</p></li>
+      <li><p>Vì sao <code>fork()</code> không tốn gấp đôi bộ nhớ dù con là bản sao của cha?</p></li>
+      <li><p><code>vfork()</code> khác <code>fork()</code> ở chỗ nào, và vì sao nên cẩn thận khi dùng?</p></li>
+      <li><p>Sau <code>fork()</code>, ai chạy trước — cha hay con? Muốn chắc chắn thứ tự thì phải làm gì?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>Why does <code>fork()</code> "return twice"? What is the return value in the parent and in the child, and how do you use it to split the flow?</p></li>
+      <li><p>After <code>fork()</code>, what do parent and child share in terms of file descriptors, and what follows if both read/write one file?</p></li>
+      <li><p>What is copy-on-write, and why does it make <code>fork()</code> far cheaper than copying all memory? How is the text segment handled differently?</p></li>
+      <li><p>Which two features distinguish <code>vfork()</code> from <code>fork()</code>, and why must a <code>vfork()</code> child call <code>_exit()</code> rather than <code>exit()</code>?</p></li>
+      <li><p>Why must you not assume whether parent or child runs first after <code>fork()</code>, and what is a correct way to force an order?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy"><code>fork()</code> <span class="closing-accent">biến một tiến trình thành hai bằng một bản sao gần như hoàn hảo</span>, rồi trả về trong cả hai. Bộ nhớ không chép ngay mà <span class="closing-accent">chỉ copy-on-write khi bị sửa</span>; cha con dùng chung tệp đang mở; và vì <span class="closing-accent">không ai hứa ai chạy trước</span>, muốn một thứ tự nhất định thì phải đồng bộ tường minh. Nắm ba điều đó, bạn đã sẵn sàng cho exit, wait và exec ở các chương sau.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only"><code>fork()</code> <span class="closing-accent">tách một chương trình thành hai</span>, bộ nhớ <span class="closing-accent">chỉ chép khi thật sự sửa</span>, và <span class="closing-accent">không biết ai chạy trước</span> nên phải tự hẹn nhau. Hiểu vậy là đủ đi tiếp. <b>Nhớ nhé: tách đôi, lười chép, và tự dàn xếp thứ tự.</b></p>
+    <p class="en-only" lang="en"><code>fork()</code> <span class="closing-accent">turns one process into two by making a nearly perfect copy</span>, then returns in both. Memory is not copied up front but <span class="closing-accent">only copy-on-write when modified</span>; parent and child share open files; and because <span class="closing-accent">neither is promised to run first</span>, a specific order needs explicit synchronization. Grasp those three, and you are ready for exit, wait, and exec in the chapters ahead.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <div class="nav-cell nav-prev disabled" aria-disabled="true">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 21 · Tín hiệu: trình xử lý · sắp có</span>
+    <span class="nav-title en-only" lang="en">Chapter 21 · Signals: Signal Handlers · coming soon</span>
+  </div>
+  <a class="nav-cell nav-next" href="chapter-25-process-termination.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 25 · Kết thúc tiến trình</span>
+    <span class="nav-title en-only" lang="en">Chapter 25 · Process Termination</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chương 24, “Process Creation”, trang 513–530.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chapter 24, “Process Creation”, pp. 513–530.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Michael Kerrisk, <i>The Linux Programming Interface</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3), ch. 24 “Process Creation”, pp. 513–530. — <a href="https://man7.org/tlpi/" target="_blank" rel="noopener noreferrer">man7.org/tlpi</a></li>
+      <li id="ref-2">“fork(2) — Linux manual page” (fork return values; copy-on-write; child inherits copies of file descriptors sharing the same open file description). <a href="https://man7.org/linux/man-pages/man2/fork.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/fork.2.html</a></li>
+      <li id="ref-3">“vfork(2) — Linux manual page” (no page-table duplication, parent suspended until exec/_exit, undefined behaviour restrictions, BSD origin, SUSv3 obsolete / POSIX.1-2008 removal). <a href="https://man7.org/linux/man-pages/man2/vfork.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/vfork.2.html</a></li>
+      <li id="ref-4">“_exit(2) — Linux manual page” (_exit() terminates the calling process and why it differs from exit()). <a href="https://man7.org/linux/man-pages/man2/_exit.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/_exit.2.html</a></li>
+      <li id="ref-5">Michael Kerrisk, <i>The Linux Programming Interface</i>, free sample Chapter 24 (PDF) — the measured fork-ordering figures (Linux 2.2.19: all but 332 of 1,000,000; 2.6.30: 99.98%) and the sched_child_runs_first default change in kernel 2.6.32. <a href="https://man7.org/tlpi/download/TLPI-24-Process_Creation.pdf" target="_blank" rel="noopener noreferrer">man7.org/tlpi/download/TLPI-24-Process_Creation.pdf</a></li>
+      <li id="ref-6">“posix_spawn(3) — Linux manual page” (the SUSv3 posix_spawn() combining the effect of fork() and exec(), for systems lacking swap/MMU). <a href="https://man7.org/linux/man-pages/man3/posix_spawn.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/posix_spawn.3.html</a></li>
+      <li id="ref-7">“wait(2) — Linux manual page” (wait() suspends the caller until a child changes state and returns the child's termination status). <a href="https://man7.org/linux/man-pages/man2/wait.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/wait.2.html</a></li>
+      <li id="ref-8">“execve(2) — Linux manual page” (execve() loads a new program, replacing the current process image). <a href="https://man7.org/linux/man-pages/man2/execve.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/execve.2.html</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <span class="soon">chapter 21</span>
+      <a href="chapter-25-process-termination.html">chapter 25</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('tlpi-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('tlpi-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('tlpi-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

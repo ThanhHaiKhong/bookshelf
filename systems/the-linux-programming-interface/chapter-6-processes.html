@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 6 · Tiến trình — The Linux Programming Interface</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 6 “Processes” trong The Linux Programming Interface (Michael Kerrisk, No Starch Press, 2010): tiến trình và chương trình, số định danh PID/PPID (getpid, getppid), bản đồ bộ nhớ của tiến trình (segment text/data/BSS/heap/stack), bộ nhớ ảo và khung ngăn xếp, đối số dòng lệnh (argc/argv), danh sách môi trường (environ, getenv/putenv/setenv/clearenv), và nhảy phi cục bộ setjmp/longjmp. Ba mức đọc, mọi khẳng định đều có nguồn.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('tlpi-reading-mode'),
+l=localStorage.getItem('tlpi-lang'),
+t=localStorage.getItem('tlpi-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   THE LINUX PROGRAMMING INTERFACE — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"TLPI · CH.6";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+/* soon = chapter not yet on disk; rendered as a non-link cell. */
+.chapter-path .soon{
+  display:block;padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--tint);border:1px dashed var(--line);opacity:.6;
+}
+.chapter-path .soon .soon-tag{
+  display:inline-block;font-family:var(--sans);font-size:.6rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:.1rem .45rem;margin-top:.4rem;
+}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.series-links .soon{margin-right:.5rem;color:var(--muted);opacity:.55;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+
+/* ---------- whole-book mind map banner ---------- */
+.mindmap-banner{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  gap:clamp(1rem,3vw,2rem);align-items:center;
+  margin:3rem 0 0;padding:1.35rem clamp(1.15rem,3vw,2rem);
+  border:1px solid var(--line);border-left:4px solid var(--teal);
+  border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);
+  color:var(--ink);text-decoration:none;
+  transition:border-color .15s,transform .15s;
+}
+a.mindmap-banner:hover{border-color:var(--teal);transform:translateY(-2px);}
+a.mindmap-banner:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.mindmap-banner.soon{opacity:.5;cursor:default;}
+.mindmap-icon{font-size:1.9rem;line-height:1;}
+.mindmap-banner h3{margin:0 0 .3rem;font-size:1.05rem;}
+.mindmap-banner p{margin:0;max-width:48rem;font-size:.88rem;color:var(--muted);}
+.mindmap-banner .result{margin-top:0;color:var(--teal);font-weight:600;white-space:nowrap;}
+.mindmap-banner.soon .result{color:var(--muted);}
+@media (max-width:860px){
+  .mindmap-banner{grid-template-columns:auto minmax(0,1fr);}
+  .mindmap-banner .result{grid-column:2;white-space:normal;}
+}
+@media (max-width:460px){
+  .mindmap-banner{margin-left:0;margin-right:0;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    The Linux Programming Interface
+    <span>Chương 6 · Processes</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 6 · Tiến trình</span>
+      <span class="en-only" lang="en">Chapter 6 · Processes</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Một tiến trình là gì, và nó nằm ra sao trong bộ nhớ</span>
+      <span class="easy-only">Tiến trình là gì, và nó chiếm chỗ nào trong bộ nhớ</span>
+      <span class="en-only" lang="en">What a process is, and how it is laid out in memory</span>
+    </h1>
+
+    <p class="standard-copy">Kerrisk định nghĩa <b>tiến trình</b> (process) là một <i>phiên bản đang chạy</i> của một chương trình, phân biệt rõ với <b>chương trình</b> (program) — vốn chỉ là một tệp mô tả cách dựng nên tiến trình.<span class="cite"><a href="#ref-1">1</a></span> Chương đi qua: số định danh tiến trình (<code>getpid()</code>) và của tiến trình cha (<code>getppid()</code>); cách bộ nhớ của tiến trình được chia thành các <b>segment</b> (text, data, BSS, heap, stack); cơ chế <b>bộ nhớ ảo</b> và <b>khung ngăn xếp</b> (stack frame); đối số dòng lệnh (<code>argc</code>/<code>argv</code>); danh sách <b>môi trường</b> (<code>environ</code>); và cuối cùng là lối nhảy phi cục bộ <code>setjmp()</code>/<code>longjmp()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Chương trình là một <i>tệp</i> nằm yên trên đĩa, như một công thức nấu ăn. Tiến trình là lúc công thức đó đang được <i>thực sự nấu</i>: có bếp, có nồi, có nguyên liệu. Chương này mổ xẻ cái "lúc đang nấu" ấy — nó tên gì (số định danh), chiếm những ngăn nhớ nào, lấy đối số và biến môi trường từ đâu. <b>Nhớ nhé: chương trình là tệp nằm im, tiến trình là tệp đó lúc đang chạy.</b></p>
+    <p class="en-only" lang="en">Kerrisk defines a <b>process</b> as an <i>instance of an executing program</i>, carefully distinguished from a <b>program</b> — which is merely a file describing how to construct that process.<span class="cite"><a href="#ref-1">1</a></span> The chapter walks through: the process ID (<code>getpid()</code>) and parent process ID (<code>getppid()</code>); how a process's memory is divided into <b>segments</b> (text, data, BSS, heap, stack); the <b>virtual memory</b> scheme and <b>stack frames</b>; command-line arguments (<code>argc</code>/<code>argv</code>); the <b>environment</b> list (<code>environ</code>); and finally the nonlocal goto via <code>setjmp()</code>/<code>longjmp()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only deep-bilingual"><span class="vi-only">Góc nhìn của nhân: một tiến trình gồm <i>bộ nhớ không gian người dùng</i> chứa mã và biến, cộng với một loạt <i>cấu trúc dữ liệu trong nhân</i> lưu trạng thái của nó — các số định danh, bảng bộ nhớ ảo, bảng bộ mô tả tệp đang mở, thông tin tín hiệu, giới hạn tài nguyên, thư mục làm việc hiện tại, v.v. Chính vì vậy một chương trình (tệp) có thể sinh ra nhiều tiến trình, và nhiều tiến trình có thể cùng chạy một chương trình.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">The kernel's view: a process consists of <i>user-space memory</i> holding program code and variables, plus a range of <i>kernel data structures</i> recording its state — identifier numbers, virtual memory tables, the table of open file descriptors, signal information, resource limits, the current working directory, and more. That is why one program (a file) can spawn many processes, and many processes can run the same program.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> một tiến trình là một <i>thực thể trừu tượng do nhân định nghĩa</i> để chạy một chương trình; hiểu được danh tính của nó (PID/PPID), bản đồ bộ nhớ của nó (các segment trên nền bộ nhớ ảo), cách nó nhận đối số và môi trường, cùng những lối điều khiển đặc biệt như <code>longjmp()</code> — là nắm được "giải phẫu" của mọi chương trình đang chạy trên Linux.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> tiến trình là chương trình <i>lúc đang sống</i>. Biết nó tên gì, chiếm những ngăn nhớ nào, nhận đầu vào từ đâu — là hiểu được bộ khung của mọi phần mềm đang chạy. <b>Nhớ nhé: hiểu một tiến trình là hiểu một chương trình lúc nó đang thở.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> a process is an <i>abstract entity defined by the kernel</i> to run a program; grasping its identity (PID/PPID), its memory map (the segments over a virtual-memory substrate), how it receives arguments and an environment, and special control transfers such as <code>longjmp()</code> — is grasping the "anatomy" of every running program on Linux.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: một tiến trình là phiên bản đang chạy của một chương trình, có danh tính PID và PPID, một bản đồ bộ nhớ gồm các segment text, data, BSS, heap và stack, cùng đối số dòng lệnh argv và danh sách môi trường environ. Diagram: a process is a running instance of a program, with a PID and PPID identity, a memory map of text, data, BSS, heap and stack segments, and the argv command-line arguments and environ environment list.">
+    <div class="core">
+      <b>process</b>
+      <small class="standard-copy">Phiên bản đang chạy của một chương trình</small>
+      <small class="easy-only">Chương trình lúc đang thực sự chạy</small>
+      <small class="en-only" lang="en">A running instance of a program</small>
+    </div>
+
+    <div class="node">
+      <b>danh tính · PID / PPID</b>
+      <small class="standard-copy">getpid() cho số của chính nó, getppid() cho số của cha</small>
+      <small class="easy-only">Mỗi tiến trình có một con số riêng và biết cha mình là ai</small>
+      <small class="en-only" lang="en">getpid() gives its own number, getppid() its parent's</small>
+    </div>
+
+    <div class="node">
+      <b>bản đồ bộ nhớ · segments</b>
+      <small class="standard-copy">text · data · BSS · heap · stack, trên nền bộ nhớ ảo</small>
+      <small class="easy-only">Bộ nhớ chia thành các ngăn: mã, dữ liệu, đống, ngăn xếp</small>
+      <small class="en-only" lang="en">text · data · BSS · heap · stack, over virtual memory</small>
+    </div>
+
+    <div class="node">
+      <b>đầu vào · argv + environ</b>
+      <small class="standard-copy">Đối số dòng lệnh (argc/argv) và danh sách môi trường (environ)</small>
+      <small class="easy-only">Những gì truyền vào khi chạy: đối số và biến môi trường</small>
+      <small class="en-only" lang="en">Command-line arguments (argc/argv) and the environment (environ)</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#process-identity">
+    <span>01</span>
+    <b class="standard-copy">Tiến trình, chương trình và danh tính (PID/PPID)</b>
+    <b class="easy-only">Tiến trình là gì và số định danh của nó</b>
+    <b class="en-only" lang="en">Process, program, and identity (PID/PPID)</b>
+  </a>
+  <a href="#memory-layout">
+    <span>02</span>
+    <b class="standard-copy">Bản đồ bộ nhớ: các segment và bộ nhớ ảo</b>
+    <b class="easy-only">Bộ nhớ của tiến trình chia thành những ngăn nào</b>
+    <b class="en-only" lang="en">Memory layout: segments and virtual memory</b>
+  </a>
+  <a href="#args-env">
+    <span>03</span>
+    <b class="standard-copy">Đối số dòng lệnh và danh sách môi trường</b>
+    <b class="easy-only">Đối số dòng lệnh và biến môi trường</b>
+    <b class="en-only" lang="en">Command-line arguments and the environment list</b>
+  </a>
+  <a href="#nonlocal-goto">
+    <span>04</span>
+    <b class="standard-copy">Nhảy phi cục bộ: setjmp() và longjmp()</b>
+    <b class="easy-only">Nhảy vượt hàm với setjmp/longjmp</b>
+    <b class="en-only" lang="en">Nonlocal goto: setjmp() and longjmp()</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="process-identity" aria-labelledby="process-identity-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="process-identity-title">
+      <span class="standard-copy">Chương trình là một tệp, tiến trình là tệp đó lúc chạy — và mỗi tiến trình có một danh tính</span>
+      <span class="easy-only">Chương trình là tệp nằm im; tiến trình là nó lúc đang chạy, có số định danh riêng</span>
+      <span class="en-only" lang="en">A program is a file, a process is that file running — and each process has an identity</span>
+    </h2>
+    <p class="standard-copy">Một <b>chương trình</b> là một tệp chứa thông tin mô tả cách dựng nên một tiến trình lúc chạy: định dạng tệp thực thi, mã máy, địa chỉ điểm vào, dữ liệu khởi tạo, bảng ký hiệu và thông tin liên kết động.<span class="cite"><a href="#ref-1">1</a></span> Hầu hết hệ UNIX ngày nay (gồm Linux) dùng định dạng <b>ELF</b> (Executable and Linking Format), thay cho hai định dạng cũ hơn là <i>a.out</i> và <i>COFF</i>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> Một <b>tiến trình</b> là một <i>phiên bản đang chạy</i> của chương trình đó — nói chặt hơn, là một thực thể trừu tượng do nhân định nghĩa và được cấp tài nguyên để chạy chương trình.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hãy hình dung một bản nhạc viết trên giấy — đó là chương trình. Khi dàn nhạc <i>chơi</i> bản nhạc ấy thì mới thành buổi hòa nhạc — đó là tiến trình. Một bản nhạc có thể được chơi nhiều lần, nhiều nơi cùng lúc; cũng vậy, một chương trình có thể sinh ra nhiều tiến trình. <b>Nhớ nhé: bản nhạc là tệp, buổi diễn là tiến trình.</b></p>
+    <p class="en-only" lang="en">A <b>program</b> is a file containing the information needed to construct a process at run time: the executable file format, machine-language instructions, the entry-point address, initialization data, symbol tables, and dynamic-linking information.<span class="cite"><a href="#ref-1">1</a></span> Most UNIX systems today (including Linux) use the <b>ELF</b> format (Executable and Linking Format), replacing the older <i>a.out</i> and <i>COFF</i> formats.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> A <b>process</b> is a <i>running instance</i> of that program — more precisely, an abstract entity defined by the kernel and allocated resources to run the program.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Mỗi tiến trình có một <b>process ID</b> (PID) — một số nguyên <i>dương</i> định danh duy nhất tiến trình đó trên hệ thống. <code>getpid()</code> trả về PID của tiến trình gọi và <i>luôn thành công</i>. Kiểu trả về là <code>pid_t</code>, một kiểu nguyên do SUSv3 quy định để lưu PID.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Mỗi tiến trình được cấp một con số riêng, như số báo danh. Gọi <code>getpid()</code> là biết số của chính mình. <b>Nhớ nhé: PID là số báo danh của một tiến trình.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Each process has a <b>process ID</b> (PID) — a <i>positive</i> integer that uniquely identifies it on the system. <code>getpid()</code> returns the calling process's PID and <i>always succeeds</i>. Its return type is <code>pid_t</code>, an integer type SUSv3 specifies for storing process IDs.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#include &lt;unistd.h&gt;<br>pid_t getpid(void);&nbsp;&nbsp;/* số của tôi */<br>pid_t getppid(void);&nbsp;/* số của cha tôi */<br>/* cả hai luôn thành công */</p>
+      <p class="easy-only">getpid()&nbsp;&nbsp;--&gt; số của tôi<br>getppid() --&gt; số của cha tôi<br>(không bao giờ hỏng)</p>
+      <p class="en-only" lang="en">#include &lt;unistd.h&gt;<br>pid_t getpid(void);&nbsp;&nbsp;/* my PID */<br>pid_t getppid(void);&nbsp;/* my parent's PID */<br>/* both always succeed */</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">PID limit</span>
+      <h3>
+        <span class="standard-copy">PID không vô hạn — nó quay vòng</span>
+        <span class="easy-only">Số định danh có trần, dùng hết thì quay lại</span>
+        <span class="en-only" lang="en">PIDs are finite — they wrap around</span>
+      </h3>
+      <p class="standard-copy">Nhân Linux giới hạn PID ở mức <b>≤ 32.767</b>. Khi tạo tiến trình mới, nhân cấp PID kế tiếp theo thứ tự; mỗi lần chạm trần, bộ đếm được đặt lại — nhưng quay về <b>300</b> chứ không phải 1, vì nhiều PID thấp đã bị các tiến trình hệ thống và daemon chiếm giữ cố định.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Số định danh không tăng mãi mãi; tới một mức thì bắt đầu đếm lại. Nhưng không quay về 1, mà về khoảng 300, để tránh dẫm lên các số mà tiến trình hệ thống đang giữ. <b>Nhớ nhé: PID có trần, và khi quay vòng nó bỏ qua những số thấp.</b></p>
+      <p class="en-only" lang="en">The Linux kernel limits PIDs to <b>≤ 32,767</b>. When a new process is created, it gets the next sequentially available PID; each time the limit is reached, the counter is reset — but to <b>300</b>, not 1, because many low-numbered PIDs are permanently in use by system processes and daemons.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi dùng PID làm phần của tên tệp tạm "duy nhất" — nhớ rằng theo thời gian PID sẽ được tái sử dụng, nên không duy nhất vĩnh viễn.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi lấy PID ghép vào tên tệp tạm — nhớ rằng con số đó sẽ có ngày bị dùng lại.</span>
+        <span class="en-only" lang="en">When using a PID as part of a "unique" temporary filename — remember PIDs are reused over time, so they are not unique forever.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Chi tiết của tác giả</span><span class="en-only" lang="en">The author's detail</span></h4>
+          <p><span class="vi-only">Trên Linux 2.4 trở về trước, trần 32.767 do hằng nhân <code>PID_MAX</code> định. Với Linux 2.6, trần mặc định vẫn là 32.767 nhưng chỉnh được qua tệp <code>/proc/sys/kernel/pid_max</code> (giá trị trong tệp lớn hơn PID tối đa 1). Trên nền 32-bit tối đa là 32.768; trên nền 64-bit có thể chỉnh tới 2²² (xấp xỉ 4 triệu).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span><span class="en-only" lang="en">On Linux 2.4 and earlier the 32,767 limit was set by the kernel constant <code>PID_MAX</code>. With Linux 2.6 the default stays 32,767 but is adjustable via <code>/proc/sys/kernel/pid_max</code> (whose value is one greater than the maximum PID). On 32-bit platforms the maximum is 32,768; on 64-bit it can be raised to 2²² (about 4 million).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Vì sao điều này quan trọng</span><span class="en-only" lang="en">Why it matters</span></h4>
+          <p><span class="vi-only">Trần PID là lý do không nên giả định PID là định danh duy nhất lâu dài; để an toàn tuyệt đối, các cơ chế hiện đại dùng thêm thông tin (ví dụ thời điểm khởi tạo) chứ không chỉ con số PID.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">The PID limit is why you should not assume a PID is a durable unique identifier; for strict safety, modern mechanisms combine extra information (such as a start time) rather than trusting the PID number alone.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">getppid()</span>
+      <h3>
+        <span class="standard-copy">Mỗi tiến trình có cha — và cây gia phả trỏ về init</span>
+        <span class="easy-only">Mỗi tiến trình có một cha, truy ngược về tiến trình gốc</span>
+        <span class="en-only" lang="en">Every process has a parent — the tree traces back to init</span>
+      </h3>
+      <p class="standard-copy">Mỗi tiến trình có một <b>cha</b> — tiến trình đã tạo ra nó — và biết PID của cha qua <code>getppid()</code>. Thuộc tính PPID này dựng nên quan hệ hình cây của mọi tiến trình: cha của mỗi tiến trình lại có cha của nó, truy ngược tới tiến trình 1, <code>init</code>, tổ tiên của tất cả.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Có thể xem "cây gia phả" này bằng lệnh <code>pstree(1)</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Tiến trình nào cũng do một tiến trình khác sinh ra — đó là cha của nó. Lần theo cha của cha, cuối cùng ta về tới tiến trình đầu tiên tên <code>init</code> (số 1), ông tổ của mọi tiến trình. <b>Nhớ nhé: mọi tiến trình đều có gốc gác, truy ngược về init số 1.</b></p>
+      <p class="en-only" lang="en">Every process has a <b>parent</b> — the process that created it — and learns its parent's PID via <code>getppid()</code>. This PPID attribute forms the tree-like relationship of all processes: each process's parent has its own parent, back to process 1, <code>init</code>, the ancestor of all.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> You can view this "family tree" with <code>pstree(1)</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một tiến trình con "mồ côi" vì cha ruột kết thúc trước — nó được <code>init</code> nhận nuôi, và từ đó <code>getppid()</code> trong con trả về 1.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi cha kết thúc trước con, con được init nhận nuôi và từ đó "cha" của nó là số 1.</span>
+        <span class="en-only" lang="en">When a child is "orphaned" because its real parent ends first — it is adopted by <code>init</code>, and thereafter <code>getppid()</code> in the child returns 1.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Tra ở đâu cho chắc</span><span class="en-only" lang="en">Where to look it up</span></h4>
+          <p><span class="vi-only">Trường <code>PPid</code> trong tệp Linux <code>/proc/PID/status</code> cho biết cha của bất kỳ tiến trình nào — nên khi nghi ngờ quan hệ cha–con, đó là nơi tra.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span><span class="en-only" lang="en">The <code>PPid</code> field in the Linux-specific <code>/proc/PID/status</code> file reveals any process's parent — so when a parent–child relationship is in doubt, that is where to look.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Một ngoại lệ</span><span class="en-only" lang="en">One exception</span></h4>
+          <p><span class="vi-only">Trừ một ít tiến trình hệ thống như <code>init</code> (PID 1), không có quan hệ cố định nào giữa một chương trình và PID của tiến trình được tạo để chạy nó — PID được cấp động lúc chạy.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">With the exception of a few system processes such as <code>init</code> (PID 1), there is no fixed relationship between a program and the PID of the process created to run it — PIDs are assigned dynamically at run time.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">never fails</span>
+      <h3>
+        <span class="standard-copy">Hai lời gọi không bao giờ hỏng</span>
+        <span class="easy-only">Hai hàm này không bao giờ thất bại</span>
+        <span class="en-only" lang="en">Two calls that never fail</span>
+      </h3>
+      <p class="standard-copy">Cả <code>getpid()</code> lẫn <code>getppid()</code> đều <i>luôn thành công</i>: chúng không có trường hợp lỗi và không đặt <code>errno</code>. Đây là một trong số rất ít system call mà không cần kiểm tra giá trị trả về — một ngoại lệ hiếm so với quy tắc "luôn kiểm tra kết quả" đã học ở Chương 3.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Hai hàm hỏi "số của tôi" và "số của cha tôi" thì không thể hỏng — câu trả lời luôn có. Nên với chúng, không cần bọc kiểm tra lỗi. <b>Nhớ nhé: đây là ngoại lệ hiếm — hầu hết lời gọi khác vẫn phải kiểm tra.</b></p>
+      <p class="en-only" lang="en">Both <code>getpid()</code> and <code>getppid()</code> <i>always succeed</i>: they have no error case and set no <code>errno</code>. They are among the very few system calls whose return value need not be checked — a rare exception to the "always check the result" rule from Chapter 3.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi đọc mã thấy <code>getpid()</code> gọi trần không bọc <code>if</code> — đó là đúng, không phải cẩu thả.</span>
+        <span class="easy-only">Thấy ai gọi <code>getpid()</code> mà không kiểm tra lỗi — yên tâm, vậy là đúng.</span>
+        <span class="en-only" lang="en">When you read code that calls <code>getpid()</code> bare, without an <code>if</code> — that is correct, not careless.</span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đã biết tiến trình là gì và nó tên gì, câu hỏi tiếp theo là: nó <i>chiếm chỗ nào</i>? Bộ nhớ của mỗi tiến trình không phải một khối phẳng, mà chia thành các <b>segment</b> có vai trò khác nhau — và tất cả nằm trên nền <b>bộ nhớ ảo</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Giờ ta biết tiến trình là gì và tên nó ra sao. Câu hỏi kế: nó nằm ở đâu trong bộ nhớ? Hóa ra bộ nhớ được chia thành nhiều ngăn gọn gàng.</p>
+    <p class="en-only" lang="en">Having seen what a process is and what it is called, the next question is: <i>where does it live</i>? A process's memory is not one flat block but is divided into <b>segments</b> with distinct roles — all resting on a <b>virtual memory</b> substrate.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="memory-layout" aria-labelledby="memory-layout-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="memory-layout-title">
+      <span class="standard-copy">Bộ nhớ của tiến trình chia thành các segment — trên nền bộ nhớ ảo</span>
+      <span class="easy-only">Bộ nhớ tiến trình chia thành những ngăn có vai trò riêng</span>
+      <span class="en-only" lang="en">A process's memory divides into segments — over a virtual-memory substrate</span>
+    </h2>
+    <p class="standard-copy">Bộ nhớ cấp cho mỗi tiến trình gồm nhiều phần, thường gọi là <b>segment</b>: <b>text</b> (mã máy, để chỉ-đọc và dùng chung), <b>initialized data</b> (biến toàn cục/tĩnh có khởi tạo tường minh), <b>uninitialized data</b> hay <b>BSS</b> (biến toàn cục/tĩnh không khởi tạo, được đặt về 0), <b>stack</b> (ngăn xếp các khung hàm), và <b>heap</b> (vùng cấp phát động lúc chạy, có đỉnh gọi là <i>program break</i>).<span class="cite"><a href="#ref-1">1</a></span> Lệnh <code>size(1)</code> in ra kích thước các segment text, data và bss của một tệp thực thi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    <p class="easy-only">Hãy coi bộ nhớ của một tiến trình như một ngôi nhà nhiều phòng: phòng <i>mã</i> giữ các lệnh (khóa lại, chỉ được đọc), phòng <i>dữ liệu</i> giữ các biến, phòng <i>ngăn xếp</i> cho các việc đang làm dở, và phòng <i>đống</i> (heap) để lấy thêm chỗ khi cần. Mỗi phòng một việc. <b>Nhớ nhé: bộ nhớ tiến trình là ngôi nhà nhiều phòng, mỗi phòng một nhiệm vụ.</b></p>
+    <p class="en-only" lang="en">The memory allocated to each process has several parts, usually called <b>segments</b>: the <b>text</b> segment (machine code, read-only and sharable), the <b>initialized data</b> segment (global/static variables explicitly initialized), the <b>uninitialized data</b> or <b>BSS</b> segment (global/static variables not initialized, set to 0), the <b>stack</b> (a stack of function frames), and the <b>heap</b> (an area for run-time dynamic allocation whose top is the <i>program break</i>).<span class="cite"><a href="#ref-1">1</a></span> The <code>size(1)</code> command prints the sizes of a binary's text, data, and bss segments.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <b>BSS</b> là tên lịch sử của segment dữ liệu không khởi tạo, bắt nguồn từ một ký hiệu assembler cũ nghĩa là "block started by symbol". Đặt biến chưa khởi tạo riêng ra có một lợi ích thiết thực: tệp thực thi <i>không cần</i> dành chỗ trên đĩa cho chúng — chỉ cần ghi lại vị trí và kích thước, rồi bộ nạp cấp phát và đặt về 0 lúc chạy.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Biến chưa gán giá trị không cần lưu gì trên đĩa — chỉ cần ghi "để trống chừng này chỗ". Khi chạy, hệ thống mới dọn chỗ và đặt tất cả về 0. <b>Nhớ nhé: biến chưa khởi tạo không tốn chỗ trên đĩa.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <b>BSS</b> is the historical name for the uninitialized data segment, from an old assembler mnemonic for "block started by symbol." Keeping uninitialized variables separate has a practical payoff: the executable <i>need not</i> store space for them on disk — it merely records their location and size, and the loader allocates and zeroes them at run time.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">cao&nbsp;┌───────────┐ argv, environ<br>&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;stack&nbsp;&nbsp;&nbsp;│ ↓ mọc xuống<br>&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;...&nbsp;&nbsp;&nbsp;│<br>&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;heap&nbsp;&nbsp;&nbsp;│ ↑ break<br>&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;uninit (bss)│<br>&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;init data&nbsp;│<br>thấp └ text (ro) ┘</p>
+      <p class="easy-only">cao&nbsp;│ stack (ngăn xếp) │ ↓<br>&nbsp;&nbsp;&nbsp;&nbsp;│ heap (đống)&nbsp;&nbsp;&nbsp;&nbsp;│ ↑<br>&nbsp;&nbsp;&nbsp;&nbsp;│ dữ liệu&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│<br>thấp│ mã (chỉ đọc)&nbsp;&nbsp;&nbsp;│</p>
+      <p class="en-only" lang="en">high ┌───────────┐ argv, environ<br>&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;stack&nbsp;&nbsp;&nbsp;│ ↓ grows down<br>&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;...&nbsp;&nbsp;&nbsp;│<br>&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;heap&nbsp;&nbsp;&nbsp;│ ↑ break<br>&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;uninit (bss)│<br>&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;init data&nbsp;│<br>low&nbsp;└ text (ro) ┘</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">text / data / bss</span>
+      <h3>
+        <span class="standard-copy">Vì sao biến lại nằm ở ba chỗ khác nhau</span>
+        <span class="easy-only">Ba kiểu biến, ba chỗ ở khác nhau</span>
+        <span class="en-only" lang="en">Why variables live in three different places</span>
+      </h3>
+      <p class="standard-copy">Segment <b>text</b> được đặt chỉ-đọc để một tiến trình không vô tình sửa lệnh của chính nó qua con trỏ hỏng, và được chia sẻ để nhiều tiến trình cùng chạy một chương trình chỉ cần một bản mã trong bộ nhớ.<span class="cite"><a href="#ref-1">1</a></span> Biến toàn cục/tĩnh <i>có</i> khởi tạo nằm ở <b>initialized data</b> (đọc từ tệp lúc nạp); biến toàn cục/tĩnh <i>không</i> khởi tạo nằm ở <b>BSS</b> (đặt về 0 lúc chạy). Listing 6-1 trong sách minh họa từng loại biến C rơi vào segment nào.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mã lệnh được "khóa" lại (chỉ đọc) để không tự phá chính mình, và dùng chung cho nhiều tiến trình. Biến đã có giá trị thì cất ở ngăn dữ liệu; biến chưa có giá trị thì để ở ngăn BSS, hệ thống tự đặt về 0. <b>Nhớ nhé: mã thì khóa và dùng chung, biến thì tùy đã khởi tạo hay chưa mà ở ngăn khác nhau.</b></p>
+      <p class="en-only" lang="en">The <b>text</b> segment is made read-only so a process cannot accidentally modify its own instructions via a bad pointer, and sharable so many processes running the same program need only one copy of the code in memory.<span class="cite"><a href="#ref-1">1</a></span> Global/static variables that <i>are</i> initialized go in <b>initialized data</b> (read from the file at load time); those that are <i>not</i> go in <b>BSS</b> (zeroed at run time). The book's Listing 6-1 shows which segment each kind of C variable falls into.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi chạy <code>size</code> trên một tệp nhị phân và thấy ba cột <i>text</i>, <i>data</i>, <i>bss</i> — đó chính là ba segment này.<span class="cite"><a href="#ref-5">5</a></span></span>
+        <span class="easy-only">Khi gõ <code>size a.out</code> và thấy ba cột text, data, bss — đó là ba ngăn vừa nói.</span>
+        <span class="en-only" lang="en">When you run <code>size</code> on a binary and see the three columns <i>text</i>, <i>data</i>, <i>bss</i> — those are exactly these segments.<span class="cite"><a href="#ref-5">5</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Đừng nhầm thuật ngữ</span><span class="en-only" lang="en">A terminology caveat</span></h4>
+          <p><span class="vi-only">Từ "segment" ở đây là <i>phân chia logic</i> bộ nhớ ảo của tiến trình trên hệ UNIX, không phải cơ chế phân đoạn phần cứng (hardware segmentation) trên x86-32. Trong đặc tả ELF, người ta còn dùng từ <i>section</i>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span><span class="en-only" lang="en">The word "segment" here means a <i>logical division</i> of a process's virtual memory on UNIX, not the hardware segmentation of x86-32. In the ELF specification the term <i>section</i> is also used.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Hệ quả: bộ nhớ tĩnh</span><span class="en-only" lang="en">Consequence: static memory</span></h4>
+          <p><span class="vi-only">Khi sách nói một hàm thư viện "trả về con trỏ tới bộ nhớ cấp phát tĩnh", nghĩa là bộ nhớ nằm ở segment data/BSS; nó tồn tại độc lập với lời gọi và có thể bị lời gọi sau ghi đè — làm hàm trở nên <i>không khả tái nhập</i> (nonreentrant).<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">When the book says a library function "returns a pointer to statically allocated memory," that memory lives in the data/BSS segment; it exists independently of the call and may be overwritten by later calls — rendering the function <i>nonreentrant</i>.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">virtual memory</span>
+      <h3>
+        <span class="standard-copy">Bộ nhớ ảo: chỉ phần đang dùng mới nằm trong RAM</span>
+        <span class="easy-only">Bộ nhớ ảo: không cần cả chương trình ở trong RAM cùng lúc</span>
+        <span class="en-only" lang="en">Virtual memory: only the parts in use sit in RAM</span>
+      </h3>
+      <p class="standard-copy">Các segment này nằm trên một sơ đồ <b>bộ nhớ ảo</b>: bộ nhớ của chương trình được chia thành những đơn vị nhỏ bằng nhau gọi là <b>trang</b> (page). Tại một thời điểm, chỉ một tập con các trang cần có mặt trong các khung trang vật lý — gọi là <b>resident set</b>; các trang không dùng được giữ ở vùng swap. Khi truy cập một trang không có trong RAM, một <b>page fault</b> xảy ra và nhân nạp trang đó vào.<span class="cite"><a href="#ref-1">1</a></span> Chương trình có thể hỏi kích thước trang qua <code>sysconf(_SC_PAGESIZE)</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <p class="easy-only">Máy không cần nhét cả chương trình vào RAM cùng lúc. Nó cắt bộ nhớ thành nhiều "trang" nhỏ, và chỉ giữ trong RAM những trang đang thật sự dùng. Cần tới trang chưa có thì máy đi lấy vào — như thủ thư chỉ bày ra bàn vài cuốn sách đang đọc. <b>Nhớ nhé: chỉ phần đang dùng mới cần nằm trong RAM.</b></p>
+      <p class="en-only" lang="en">These segments sit on a <b>virtual memory</b> scheme: a program's memory is split into small, equal-sized units called <b>pages</b>. At any moment, only a subset of pages need be present in physical page frames — the <b>resident set</b>; unused pages are kept in the swap area. Accessing a page not in RAM causes a <b>page fault</b>, at which point the kernel loads it.<span class="cite"><a href="#ref-1">1</a></span> A program can query the page size via <code>sysconf(_SC_PAGESIZE)</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi khi một tiến trình dùng được không gian địa chỉ lớn hơn RAM vật lý, hay khi nhiều tiến trình cùng chia sẻ một trang mã chỉ-đọc — đó là bộ nhớ ảo đang làm việc.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi chương trình dùng được nhiều bộ nhớ hơn RAM thật có — đó là nhờ bộ nhớ ảo.</span>
+        <span class="en-only" lang="en">Whenever a process uses an address space larger than physical RAM, or several processes share one read-only code page — that is virtual memory at work.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">stack frames</span>
+      <h3>
+        <span class="standard-copy">Ngăn xếp: mỗi lần gọi hàm là một khung</span>
+        <span class="easy-only">Ngăn xếp: mỗi lời gọi hàm thêm một tầng</span>
+        <span class="en-only" lang="en">The stack: one frame per function call</span>
+      </h3>
+      <p class="standard-copy">Segment <b>stack</b> co giãn động, chứa các <b>khung ngăn xếp</b> (stack frame) — mỗi hàm đang được gọi có đúng một khung, lưu biến cục bộ (biến <i>automatic</i>), đối số và giá trị trả về của hàm.<span class="cite"><a href="#ref-1">1</a></span> Trên Linux/x86-32, ngăn xếp người dùng lớn lên theo hướng <i>địa chỉ giảm dần</i>; mỗi lời gọi hàm thêm một khung lên đỉnh, mỗi lần hàm trở về thì gỡ khung đó đi. Sách minh họa bằng Figure 6-3.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Mỗi khi gọi một hàm, máy đặt lên ngăn xếp một "khay" riêng chứa các biến cục bộ và đối số của hàm đó. Hàm xong thì cất khay đi. Gọi hàm lồng nhau thì khay chồng lên khay, như chồng đĩa. <b>Nhớ nhé: mỗi hàm đang chạy có một khay riêng trên ngăn xếp, xong là dọn.</b></p>
+      <p class="en-only" lang="en">The <b>stack</b> segment grows and shrinks dynamically, holding <b>stack frames</b> — each currently-called function has exactly one frame, storing its local (<i>automatic</i>) variables, arguments, and return value.<span class="cite"><a href="#ref-1">1</a></span> On Linux/x86-32, the user stack grows toward <i>decreasing addresses</i>; each call pushes a frame on top, each return pops it. The book illustrates this in Figure 6-3.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi đệ quy quá sâu gây <i>stack overflow</i>, hoặc khi một con trỏ trỏ vào biến cục bộ của một hàm đã trở về trỏ vào vùng rác — đều là hệ quả của cơ chế khung ngăn xếp.</span>
+        <span class="easy-only">Khi đệ quy quá sâu làm "tràn ngăn xếp" — đó là vì các khay chồng cao quá.</span>
+        <span class="en-only" lang="en">When runaway recursion causes a <i>stack overflow</i>, or a pointer to a returned function's local variable points at garbage — both follow from how stack frames work.</span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Một chi tiết đáng chú ý trên bản đồ Figure 6-1: ở <i>đỉnh</i> không gian địa chỉ, ngay trên ngăn xếp, là nơi chứa mảng <code>argv</code> và <code>environ</code> cùng các chuỗi của chúng. Đó chính là cầu nối sang cụm khái niệm tiếp theo — đối số dòng lệnh và danh sách môi trường.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Để ý trên bản đồ bộ nhớ: ngay phía trên ngăn xếp là chỗ chứa đối số dòng lệnh và biến môi trường. Đó là phần ta xem tiếp.</p>
+    <p class="en-only" lang="en">One detail on the Figure 6-1 map: at the <i>top</i> of the address space, just above the stack, live the <code>argv</code> and <code>environ</code> arrays and their strings. That is the bridge to the next cluster — command-line arguments and the environment list.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="args-env" aria-labelledby="args-env-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="args-env-title">
+      <span class="standard-copy">Đầu vào của tiến trình: đối số dòng lệnh và danh sách môi trường</span>
+      <span class="easy-only">Tiến trình nhận gì khi khởi động: đối số và biến môi trường</span>
+      <span class="en-only" lang="en">A process's inputs: command-line arguments and the environment</span>
+    </h2>
+    <p class="standard-copy">Mọi chương trình C vào qua hàm <code>main(int argc, char *argv[])</code>: <code>argc</code> là số đối số dòng lệnh, <code>argv</code> là mảng con trỏ tới các chuỗi kết thúc bằng null. Theo quy ước, <code>argv[0]</code> là tên chương trình, và danh sách kết thúc bằng một con trỏ NULL (tức <code>argv[argc]</code> là NULL).<span class="cite"><a href="#ref-1">1</a></span> Song song, mỗi tiến trình mang một <b>danh sách môi trường</b> (environment list) — mảng các chuỗi dạng <code>name=value</code> — truy cập trong C qua biến toàn cục <code>char **environ</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+    <p class="easy-only">Khi bạn gõ một lệnh kèm theo vài chữ phía sau, những chữ đó được trao cho chương trình qua <code>argc</code> (đếm số) và <code>argv</code> (danh sách). Ngoài ra, mỗi tiến trình còn mang theo một "túi hành lý" gồm các cặp <i>tên=giá_trị</i> gọi là biến môi trường. <b>Nhớ nhé: argv là lời bạn gõ, environ là túi hành lý tiến trình mang theo.</b></p>
+    <p class="en-only" lang="en">Every C program enters through <code>main(int argc, char *argv[])</code>: <code>argc</code> is the number of command-line arguments, <code>argv</code> an array of pointers to null-terminated strings. By convention, <code>argv[0]</code> is the program's name, and the list is terminated by a NULL pointer (so <code>argv[argc]</code> is NULL).<span class="cite"><a href="#ref-1">1</a></span> In parallel, each process carries an <b>environment list</b> — an array of <code>name=value</code> strings — reached in C via the global <code>char **environ</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Khi tạo tiến trình mới, nó <i>thừa kế một bản sao</i> danh sách môi trường của cha. Đây là một cơ chế <b>một chiều</b> để truyền thông tin từ cha sang con: sau khi con đã được tạo, cha và con mỗi bên tự thay đổi môi trường riêng mà không ảnh hưởng bên kia.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Con sinh ra được chép lại túi hành lý của cha. Nhưng từ đó mỗi người sửa túi của mình, không đụng tới túi người kia. <b>Nhớ nhé: con chép túi của cha một lần, rồi ai đi đường nấy.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> When a new process is created, it <i>inherits a copy</i> of its parent's environment. This is a <b>one-way</b> channel for passing information from parent to child: after the child is created, parent and child each change their own environment without affecting the other.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">extern char **environ;<br>char *p = getenv("SHELL");&nbsp;/* đọc */<br>setenv("GREET","Hi",1);&nbsp;&nbsp;&nbsp;/* thêm/ghi đè */<br>putenv("K=V");&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* thêm */<br>unsetenv("GREET");&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* xóa một */<br>clearenv();&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* xóa sạch */</p>
+      <p class="easy-only">getenv("SHELL") --&gt; đọc<br>setenv(...) --&gt; thêm/ghi đè<br>unsetenv(...) --&gt; xóa một<br>clearenv() --&gt; xóa sạch</p>
+      <p class="en-only" lang="en">extern char **environ;<br>char *p = getenv("SHELL");&nbsp;/* read */<br>setenv("GREET","Hi",1);&nbsp;&nbsp;&nbsp;/* add/overwrite */<br>putenv("K=V");&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* add */<br>unsetenv("GREET");&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* remove one */<br>clearenv();&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* wipe all */</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">argc / argv</span>
+      <h3>
+        <span class="standard-copy">argv[0] là tên chương trình, danh sách kết thúc bằng NULL</span>
+        <span class="easy-only">Phần tử đầu là tên lệnh, phần tử cuối là NULL</span>
+        <span class="en-only" lang="en">argv[0] is the program name, the list ends in NULL</span>
+      </h3>
+      <p class="standard-copy">Vì <code>argv[argc]</code> luôn là NULL, ta có thể duyệt đối số bằng con trỏ thay vì chỉ số: <code>for (p = argv; *p != NULL; p++)</code>. Việc <code>argv[0]</code> chứa tên dùng để gọi chương trình cho phép một tệp thực thi hành xử khác nhau tùy tên được gọi (một mẹo được dùng thật trong một số công cụ).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Vì phần tử cuối cùng luôn là NULL, chương trình biết khi nào hết đối số mà không cần đếm. Và vì phần tử đầu là tên lệnh, cùng một tệp có thể cư xử khác nhau tùy bạn gọi nó bằng tên gì. <b>Nhớ nhé: NULL ở cuối là dấu hết, argv[0] là tên gọi.</b></p>
+      <p class="en-only" lang="en">Because <code>argv[argc]</code> is always NULL, you can walk the arguments with a pointer rather than an index: <code>for (p = argv; *p != NULL; p++)</code>. That <code>argv[0]</code> holds the name used to invoke the program lets one executable behave differently depending on the name it is called by (a trick genuinely used by some tools).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Một hạn chế: <code>argc</code>/<code>argv</code> chỉ sẵn có trong <code>main()</code>; muốn dùng ở hàm khác phải truyền chúng đi hoặc đặt một biến toàn cục trỏ tới <code>argv</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Lưu ý: hai biến này chỉ có trong hàm main; muốn dùng chỗ khác phải truyền đi.</span>
+        <span class="en-only" lang="en">A limitation: <code>argc</code>/<code>argv</code> are available only in <code>main()</code>; to use them elsewhere you must pass them along or set a global pointing to <code>argv</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Chúng nằm ở đâu trong bộ nhớ</span><span class="en-only" lang="en">Where they live in memory</span></h4>
+          <p><span class="vi-only">Như Figure 6-1 cho thấy, các mảng <code>argv</code>, <code>environ</code> và các chuỗi chúng trỏ tới nằm ở một vùng gần <i>đỉnh</i> ngăn xếp.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">As Figure 6-1 shows, the <code>argv</code> and <code>environ</code> arrays and the strings they point to sit in a region near the <i>top</i> of the stack.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Có giới hạn kích thước</span><span class="en-only" lang="en">There is a size limit</span></h4>
+          <p><span class="vi-only">Tổng không gian cho <code>argv</code> và <code>environ</code> bị giới hạn; từ nhân 2.6.23, giới hạn này được tính bằng một phần tư giới hạn mềm của kích thước ngăn xếp (<code>RLIMIT_STACK</code>).<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">The total space for <code>argv</code> and <code>environ</code> is limited; since kernel 2.6.23 this limit is computed as one-quarter of the soft stack-size limit (<code>RLIMIT_STACK</code>).<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">getenv / setenv</span>
+      <h3>
+        <span class="standard-copy">Đọc và sửa môi trường — và một bẫy con trỏ</span>
+        <span class="easy-only">Đọc và sửa biến môi trường cho đúng cách</span>
+        <span class="en-only" lang="en">Reading and modifying the environment — and a pointer trap</span>
+      </h3>
+      <p class="standard-copy"><code>getenv(name)</code> trả về con trỏ tới chuỗi giá trị ứng với biến, hoặc NULL nếu không có. SUSv3 cho phép <code>getenv()</code> trả về kết quả trong một vùng đệm <i>tĩnh</i> có thể bị ghi đè bởi lời gọi sau tới <code>getenv()</code>, <code>setenv()</code>, <code>putenv()</code> hay <code>unsetenv()</code> — nên nếu cần giữ chuỗi đó, hãy <b>sao chép</b> nó ra chỗ khác.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> Ngoài ra, chương trình <i>không nên</i> sửa chuỗi mà <code>getenv()</code> trả về, vì (ở phần lớn hiện thực) nó chính là một phần của môi trường.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><code>getenv("TÊN")</code> cho bạn giá trị của một biến môi trường. Nhưng đừng sửa trực tiếp chuỗi nhận được, và nếu muốn giữ nó lâu thì hãy chép ra nơi của riêng mình, vì chỗ gốc có thể bị ghi đè. <b>Nhớ nhé: đọc bằng getenv thì chép ra, đừng sửa tại chỗ.</b></p>
+      <p class="en-only" lang="en"><code>getenv(name)</code> returns a pointer to the value string for a variable, or NULL if none exists. SUSv3 permits <code>getenv()</code> to return its result in a <i>static</i> buffer that may be overwritten by later calls to <code>getenv()</code>, <code>setenv()</code>, <code>putenv()</code>, or <code>unsetenv()</code> — so if you need to keep the string, <b>copy</b> it elsewhere.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> Also, a program should <i>not</i> modify the string <code>getenv()</code> returns, since (in most implementations) it is part of the environment itself.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Shell chính là nơi quen thuộc: đặt một biến rồi <code>export</code> để nó được truyền sang mọi tiến trình con mà shell tạo ra.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Trong shell: đặt biến rồi <code>export</code> là nó theo sang mọi lệnh con bạn chạy sau đó.</span>
+        <span class="en-only" lang="en">The shell is the familiar place: set a variable and <code>export</code> it so it is passed to every child process the shell creates.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">setenv vs putenv</span><span class="en-only" lang="en">setenv vs putenv</span></h4>
+          <p><span class="vi-only"><code>setenv()</code> <i>sao chép</i> đối số của nó vào một vùng đệm mới, nên sửa đổi chuỗi sau khi gọi không gây vấn đề. Ngược lại, <code>putenv()</code> làm chuỗi bạn đưa <i>trở thành</i> một phần của môi trường — sửa nó về sau sẽ sửa luôn môi trường. Lưu ý <code>putenv()</code> trả về giá trị khác 0 khi lỗi, chứ không phải −1.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></span><span class="en-only" lang="en"><code>setenv()</code> <i>copies</i> its arguments into a new buffer, so changing the string afterward is harmless. By contrast, <code>putenv()</code> makes the string you pass <i>become</i> part of the environment — changing it later changes the environment too. Note <code>putenv()</code> returns a nonzero value on error, not −1.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Nguồn gốc và tính khả chuyển</span><span class="en-only" lang="en">Origins and portability</span></h4>
+          <p><span class="vi-only">Cả <code>setenv()</code> và <code>unsetenv()</code> bắt nguồn từ BSD và ít phổ biến hơn <code>putenv()</code>; chúng không có trong POSIX.1 gốc hay SUSv2 (nhưng có trong SUSv3). Trước glibc 2.2.2, <code>unsetenv()</code> được khai báo trả về <code>void</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></span><span class="en-only" lang="en">Both <code>setenv()</code> and <code>unsetenv()</code> derive from BSD and are less widespread than <code>putenv()</code>; they are absent from the original POSIX.1 and SUSv2 (but present in SUSv3). Before glibc 2.2.2, <code>unsetenv()</code> was prototyped as returning <code>void</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">clearenv</span>
+      <h3>
+        <span class="standard-copy">Xóa sạch môi trường — và một rò rỉ bộ nhớ tinh vi</span>
+        <span class="easy-only">Dọn sạch môi trường, nhưng coi chừng rò rỉ</span>
+        <span class="en-only" lang="en">Wiping the environment — and a subtle leak</span>
+      </h3>
+      <p class="standard-copy">Đôi khi cần xóa toàn bộ môi trường rồi dựng lại (ví dụ vì lý do bảo mật trong chương trình <i>set-user-ID</i>). Hàm thư viện <code>clearenv()</code> làm đúng việc đó — về bản chất là gán <code>environ = NULL</code>. Nhưng kết hợp <code>clearenv()</code> với <code>setenv()</code> có thể gây <b>rò rỉ bộ nhớ</b>: <code>setenv()</code> cấp phát một vùng đệm rồi đưa vào môi trường, còn <code>clearenv()</code> không giải phóng vùng đệm ấy.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+      <p class="easy-only">Muốn làm sạch hoàn toàn túi hành lý rồi xếp lại từ đầu, dùng <code>clearenv()</code>. Nhưng cẩn thận: nếu trước đó đã dùng <code>setenv()</code> để thêm đồ, lệnh dọn này không thu hồi chỗ nhớ đã mượn — có thể để lại "rác". <b>Nhớ nhé: clearenv dọn danh sách nhưng không nhất thiết trả lại bộ nhớ.</b></p>
+      <p class="en-only" lang="en">Sometimes you must erase the whole environment and rebuild it (for example, for security in a <i>set-user-ID</i> program). The <code>clearenv()</code> library function does exactly that — essentially setting <code>environ = NULL</code>. But combining <code>clearenv()</code> with <code>setenv()</code> can cause a <b>memory leak</b>: <code>setenv()</code> allocates a buffer and makes it part of the environment, and <code>clearenv()</code> does not free that buffer.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong chương trình đặc quyền cần một môi trường "sạch" đã biết trước — dọn sạch rồi chỉ thêm đúng các biến mình kiểm soát, thay vì tin vào môi trường thừa kế.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Trong chương trình nhạy cảm cần môi trường sạch: dọn hết rồi chỉ thêm đúng thứ mình muốn.</span>
+        <span class="en-only" lang="en">In a privileged program needing a known-clean environment — wipe it, then add only the variables you control, rather than trusting the inherited one.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Một lưu ý về chuẩn</span><span class="en-only" lang="en">A standards note</span></h4>
+          <p><span class="vi-only">Nhiều hệ UNIX có <code>clearenv()</code> nhưng nó <i>không</i> được SUSv3 quy định; trên glibc, cần định nghĩa <code>_GNU_SOURCE</code> hay <code>_BSD_SOURCE</code> để lấy khai báo của nó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span><span class="en-only" lang="en">Many UNIX systems provide <code>clearenv()</code>, but it is <i>not</i> specified by SUSv3; on glibc you must define <code>_GNU_SOURCE</code> or <code>_BSD_SOURCE</code> to get its declaration.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Khi environ bằng NULL</span><span class="en-only" lang="en">When environ is NULL</span></h4>
+          <p><span class="vi-only">Sau <code>clearenv()</code>, <code>environ</code> là NULL; nhưng <code>setenv()</code> và <code>putenv()</code> biết xử lý trường hợp này — chúng tự tạo một mảng môi trường mới khi thấy <code>environ</code> rỗng.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">After <code>clearenv()</code>, <code>environ</code> is NULL; but <code>setenv()</code> and <code>putenv()</code> handle this — they create a fresh environment array when they find <code>environ</code> empty.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đối số và môi trường là cách thông thường để điều khiển luồng chạy từ bên ngoài. Nhưng đôi khi, <i>bên trong</i> chương trình, ta cần một lối nhảy điều khiển khác thường: bỏ qua nhiều tầng hàm để quay thẳng về một điểm đã đánh dấu. Đó là lúc dùng <code>setjmp()</code>/<code>longjmp()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Đối số và môi trường điều khiển chương trình từ ngoài. Phần cuối nói về một kiểu "nhảy" đặc biệt bên trong chương trình: vọt thẳng qua nhiều hàm để về một điểm đã đánh dấu.</p>
+    <p class="en-only" lang="en">Arguments and the environment steer a program from outside. But sometimes, <i>inside</i> a program, we need an unusual control transfer: skipping many function levels to jump straight back to a marked point. That is when you reach for <code>setjmp()</code>/<code>longjmp()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="nonlocal-goto" aria-labelledby="nonlocal-goto-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="nonlocal-goto-title">
+      <span class="standard-copy">Nhảy phi cục bộ: setjmp()/longjmp() và những ràng buộc của nó</span>
+      <span class="easy-only">Nhảy vượt qua nhiều hàm với setjmp và longjmp</span>
+      <span class="en-only" lang="en">The nonlocal goto: setjmp()/longjmp() and its constraints</span>
+    </h2>
+    <p class="standard-copy">Lệnh <code>goto</code> của C không thể nhảy ra khỏi hàm hiện tại. Cặp hàm thư viện <code>setjmp()</code> và <code>longjmp()</code> cho phép một <b>nhảy phi cục bộ</b> (nonlocal goto) — nhảy từ một hàm này về một điểm trong một hàm <i>khác</i> đang bao nó trên ngăn xếp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span> <code>setjmp(env)</code> thiết lập đích cho lần nhảy sau; <code>longjmp(env, val)</code> nhảy về đúng điểm đó. Lần gọi <code>setjmp()</code> đầu tiên trả về <b>0</b>; "lần trở về giả" do <code>longjmp()</code> gây ra trả về giá trị <code>val</code> — nhưng nếu <code>val</code> là 0 thì <code>longjmp()</code> thay bằng 1.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Bình thường chương trình chạy xong hàm nào thì "quay lui" từng bước. Đôi khi, từ sâu bên trong nhiều hàm lồng nhau, ta muốn vọt thẳng một phát về một điểm đã đánh dấu từ trước, bỏ qua mọi tầng ở giữa. Cặp <code>setjmp</code>/<code>longjmp</code> làm được điều đó — như một cầu tuột thoát hiểm. <b>Nhớ nhé: setjmp đặt điểm hẹn, longjmp vọt thẳng về đó.</b></p>
+    <p class="en-only" lang="en">C's <code>goto</code> cannot jump out of the current function. The library pair <code>setjmp()</code> and <code>longjmp()</code> enables a <b>nonlocal goto</b> — a jump from one function back to a point in a <i>different</i> function enclosing it on the stack.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span> <code>setjmp(env)</code> establishes the target for a later jump; <code>longjmp(env, val)</code> jumps back to it. The initial <code>setjmp()</code> returns <b>0</b>; the "faked return" caused by <code>longjmp()</code> supplies <code>val</code> — but if <code>val</code> is 0, <code>longjmp()</code> substitutes 1.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>setjmp()</code> lưu thông tin về môi trường thực thi hiện tại vào <code>env</code> (kiểu <code>jmp_buf</code>) — trong đó có bản sao của <b>con trỏ lệnh</b> (program counter) và <b>con trỏ ngăn xếp</b> (stack pointer). Khi <code>longjmp()</code> được gọi, nó khôi phục các thanh ghi này, nên luồng điều khiển quay về đúng điểm <code>setjmp()</code>, như thể <code>setjmp()</code> vừa trở về lần thứ hai.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> <code>setjmp</code> chụp lại "máy đang ở đâu" rồi cất vào một cái hộp. <code>longjmp</code> mở hộp ra và đưa máy quay lại đúng chỗ đó. <b>Nhớ nhé: setjmp chụp ảnh vị trí, longjmp dán máy về đúng ảnh ấy.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>setjmp()</code> saves information about the current execution environment into <code>env</code> (type <code>jmp_buf</code>) — including a copy of the <b>program counter</b> and the <b>stack pointer</b>. When <code>longjmp()</code> is called, it restores these registers, so control returns to the <code>setjmp()</code> point as though <code>setjmp()</code> had returned a second time.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#include &lt;setjmp.h&gt;<br>jmp_buf env;<br>if (setjmp(env) == 0) {<br>&nbsp;&nbsp;/* lần đầu: đi tiếp... */<br>} else {<br>&nbsp;&nbsp;/* vừa bị longjmp nhảy về */<br>}<br>...&nbsp;longjmp(env, 1);</p>
+      <p class="easy-only">if (setjmp(env) == 0) {<br>&nbsp;&nbsp;/* lần đầu */<br>} else {<br>&nbsp;&nbsp;/* bị nhảy về */<br>}<br>longjmp(env, 1);</p>
+      <p class="en-only" lang="en">#include &lt;setjmp.h&gt;<br>jmp_buf env;<br>if (setjmp(env) == 0) {<br>&nbsp;&nbsp;/* first time: proceed... */<br>} else {<br>&nbsp;&nbsp;/* arrived here via longjmp */<br>}<br>...&nbsp;longjmp(env, 1);</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">two returns</span>
+      <h3>
+        <span class="standard-copy">Một setjmp(), hai lần "trở về"</span>
+        <span class="easy-only">Một lần gọi setjmp nhưng trả về hai lần</span>
+        <span class="en-only" lang="en">One setjmp(), two "returns"</span>
+      </h3>
+      <p class="standard-copy">Điểm lạ lùng nhất: một lời gọi <code>setjmp()</code> dường như trả về <i>hai lần</i>. Lần đầu (lúc thiết lập đích) trả về 0; lần sau (khi có <code>longjmp()</code>) trả về <code>val</code>. Bằng cách dùng các giá trị <code>val</code> khác nhau, ta phân biệt được "đến từ đâu" và xử lý tương ứng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Gọi <code>setjmp</code> một lần, nhưng nó như trả lời hai lần: lần đầu trả 0 (đang đặt điểm hẹn), lần sau trả về một số khác khi có ai đó nhảy về. Nhờ con số đó mà bạn biết mình vừa quay về từ đâu. <b>Nhớ nhé: thấy setjmp trả 0 là lần đầu, khác 0 là vừa bị nhảy về.</b></p>
+      <p class="en-only" lang="en">The strangest point: a single <code>setjmp()</code> call appears to return <i>twice</i>. The first time (establishing the target) it returns 0; later (on a <code>longjmp()</code>) it returns <code>val</code>. By using different <code>val</code> values, you can tell "where you came from" and act accordingly.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi cần thoát khỏi một chuỗi hàm lồng sâu để xử lý một lỗi, thay vì trả mã lỗi ngược từng tầng một.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi cần thoát nhanh khỏi nhiều hàm lồng nhau để báo một lỗi, không phải trả ngược từng tầng.</span>
+        <span class="en-only" lang="en">When you need to escape a deeply nested chain of functions to handle an error, instead of returning an error code up one level at a time.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">volatile</span>
+      <h3>
+        <span class="standard-copy">Bẫy tối ưu hóa: biến trong thanh ghi có thể sai giá trị</span>
+        <span class="easy-only">Trình tối ưu có thể làm biến cục bộ sai sau khi nhảy về</span>
+        <span class="en-only" lang="en">The optimizer trap: register variables may be wrong</span>
+      </h3>
+      <p class="standard-copy">Đây là ràng buộc quan trọng nhất của <code>longjmp()</code>. Trình biên dịch tối ưu có thể giữ một số biến cục bộ trong <b>thanh ghi CPU</b> thay vì RAM. Vì <code>longjmp()</code> khôi phục các thanh ghi về giá trị đã lưu lúc <code>setjmp()</code>, những biến "được tối ưu" này có thể mang <b>giá trị sai</b> sau khi nhảy về. Biến khai báo <code>volatile</code> thì được miễn — trình tối ưu không đụng vào, nên giữ đúng giá trị.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+      <p class="easy-only">Để chạy nhanh, trình biên dịch đôi khi giữ biến trong thanh ghi (chỗ cực nhanh của CPU). Nhưng khi <code>longjmp</code> khôi phục thanh ghi về lúc trước, những biến ấy có thể bị trả về giá trị cũ, sai. Cách tránh: ghi chữ <code>volatile</code> trước biến để trình biên dịch "để yên" nó. <b>Nhớ nhé: biến muốn giữ đúng qua longjmp thì khai volatile.</b></p>
+      <p class="en-only" lang="en">This is <code>longjmp()</code>'s most important constraint. An optimizing compiler may keep some local variables in <b>CPU registers</b> rather than RAM. Because <code>longjmp()</code> restores the registers to their values saved at <code>setjmp()</code>, such "optimized" variables may hold the <b>wrong value</b> after the jump. A variable declared <code>volatile</code> is exempt — the optimizer leaves it alone, so it keeps the correct value.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi cùng một chương trình cho kết quả khác nhau lúc biên dịch có <code>-O</code> và không có — rất thường vì thiếu <code>volatile</code> trên một biến cục bộ bị <code>longjmp()</code> ảnh hưởng.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi bật tối ưu (<code>-O</code>) thì chương trình chạy sai, tắt thì đúng — hãy nghĩ tới chữ volatile còn thiếu.</span>
+        <span class="en-only" lang="en">When the same program gives different results with and without <code>-O</code> — very often because a local affected by <code>longjmp()</code> lacks <code>volatile</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Lời khuyên khả chuyển</span><span class="en-only" lang="en">A portability tip</span></h4>
+          <p><span class="vi-only">Vì mỗi trình biên dịch tối ưu theo cách khác nhau, chương trình khả chuyển nên dùng <code>volatile</code> cho <i>mọi</i> biến cục bộ mà giá trị của nó cần được bảo toàn qua một <code>longjmp()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span><span class="en-only" lang="en">Because different compilers optimize differently, portable programs should use <code>volatile</code> for <i>all</i> local variables whose values must survive a <code>longjmp()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Nơi setjmp() được phép xuất hiện</span><span class="en-only" lang="en">Where setjmp() may appear</span></h4>
+          <p><span class="vi-only">SUSv3 và C99 giới hạn <code>setjmp()</code> chỉ được dùng ở một số ngữ cảnh nhất định (ví dụ làm toàn bộ biểu thức điều kiện của một <code>if</code>/<code>while</code>, hoặc một câu lệnh độc lập) — dùng nó trong biểu thức phức tạp hơn là hành vi không xác định.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span><span class="en-only" lang="en">SUSv3 and C99 restrict <code>setjmp()</code> to certain contexts only (for example, as the entire controlling expression of an <code>if</code>/<code>while</code>, or a standalone statement) — using it in a more complex expression is undefined behavior.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">abusing longjmp</span>
+      <h3>
+        <span class="standard-copy">Dùng cẩn thận — và không nhảy vào hàm đã kết thúc</span>
+        <span class="easy-only">Đừng nhảy về một hàm đã quay lui xong</span>
+        <span class="en-only" lang="en">Use with care — never jump into a finished function</span>
+      </h3>
+      <p class="standard-copy">Tác giả cảnh báo rằng lạm dụng <code>longjmp()</code> làm chương trình khó đọc và khó bảo trì; nên dùng dè sẻn. Một ràng buộc nghiêm ngặt: không được <code>longjmp()</code> về một <code>setjmp()</code> nằm trong hàm đã <i>trở về</i> rồi — khung ngăn xếp của nó không còn, và hành vi là không xác định.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Công cụ này mạnh nhưng dễ làm mã rối; dùng ít thôi. Quan trọng: đừng nhảy về một điểm hẹn nằm trong hàm mà đã chạy xong và quay lui — điểm hẹn đó không còn tồn tại nữa. <b>Nhớ nhé: chỉ nhảy về nơi vẫn còn "sống" trên ngăn xếp.</b></p>
+      <p class="en-only" lang="en">The author warns that abusing <code>longjmp()</code> makes programs hard to read and maintain; use it sparingly. One strict rule: never <code>longjmp()</code> back to a <code>setjmp()</code> in a function that has already <i>returned</i> — its stack frame is gone, and the behavior is undefined.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong trình xử lý tín hiệu: gọi <code>longjmp()</code> từ một handler lồng nhau là hành vi không xác định — đó là lý do có cặp <code>sigsetjmp()</code>/<code>siglongjmp()</code> (Chương 21).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span>
+        <span class="easy-only">Khi dùng trong bộ xử lý tín hiệu — hãy dùng cặp an toàn hơn là sigsetjmp/siglongjmp.</span>
+        <span class="en-only" lang="en">In signal handlers: calling <code>longjmp()</code> from a nested handler is undefined — which is why the <code>sigsetjmp()</code>/<code>siglongjmp()</code> pair exists (Chapter 21).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="section-heading">
+      <h2 id="ngo-nhan-title">
+        <span class="standard-copy">Ba ngộ nhận thường gặp</span>
+        <span class="en-only" lang="en">Three common misconceptions</span>
+      </h2>
+    </div>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Chương trình và tiến trình là một”</span>
+          <span class="en-only" lang="en">“A program and a process are the same thing”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> tệp thực thi chính là tiến trình.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> chương trình là một <i>tệp</i> mô tả cách dựng tiến trình; tiến trình là <i>phiên bản đang chạy</i>. Một chương trình có thể sinh ra nhiều tiến trình cùng lúc.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> the executable file is the process.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> a program is a <i>file</i> describing how to build a process; the process is the <i>running instance</i>. One program can spawn many processes at once.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Biến toàn cục nào cũng nằm chung một chỗ”</span>
+          <span class="en-only" lang="en">“All global variables live together”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> mọi biến toàn cục đều chiếm chỗ như nhau trong tệp và trong bộ nhớ.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> biến <i>có</i> khởi tạo nằm ở segment data (và lưu trong tệp); biến <i>không</i> khởi tạo nằm ở BSS và <b>không</b> chiếm chỗ trên đĩa — chỉ ghi vị trí và kích thước.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> every global takes equal space in the file and in memory.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> initialized globals live in the data segment (and are stored in the file); uninitialized ones live in BSS and take <b>no</b> disk space — only their location and size are recorded.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“longjmp() khôi phục đúng mọi biến cục bộ”</span>
+          <span class="en-only" lang="en">“longjmp() restores all local variables correctly”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> sau <code>longjmp()</code>, mọi biến cục bộ giữ nguyên giá trị như trước khi nhảy.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> biến được tối ưu vào thanh ghi có thể mang giá trị sai; muốn chắc đúng phải khai <code>volatile</code>. Khác biệt chỉ lộ ra khi bật <code>-O</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> after <code>longjmp()</code>, every local keeps the value it had before the jump.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> variables optimized into registers may hold the wrong value; to be sure, declare them <code>volatile</code>. The difference only shows up with <code>-O</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm giải phẫu của một tiến trình</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped a process's anatomy</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã nắm cấu trúc, danh tính và bộ nhớ của một tiến trình — nền cho các chương về tạo và kết thúc tiến trình.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you grasp a process's structure, identity, and memory — the groundwork for the chapters on process creation and termination.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Phân biệt chương trình và tiến trình. Vì sao một chương trình có thể sinh ra nhiều tiến trình?</p>
+        <p class="deep-only">Gợi ý sâu hơn: từ góc nhìn nhân, một tiến trình gồm những thành phần nào ngoài bộ nhớ không gian người dùng?</p>
+      </li>
+      <li>
+        <p>Kể năm segment chính trong bộ nhớ một tiến trình và vai trò của từng cái. Vì sao text để chỉ-đọc và dùng chung?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao biến chưa khởi tạo (BSS) lại không cần chiếm chỗ trên đĩa?</p>
+      </li>
+      <li>
+        <p>Bộ nhớ ảo hoạt động ra sao? Giải thích các khái niệm trang, resident set, và page fault.</p>
+        <p class="deep-only">Gợi ý sâu hơn: điều gì cho phép nhiều tiến trình chạy cùng một chương trình chỉ cần một bản mã trong RAM?</p>
+      </li>
+      <li>
+        <p><code>argv[0]</code> chứa gì, và vì sao <code>argv[argc]</code> luôn là NULL lại hữu ích? Môi trường của một tiến trình đến từ đâu?</p>
+        <p class="deep-only">Gợi ý sâu hơn: khác biệt giữa <code>setenv()</code> và <code>putenv()</code> về việc sao chép đối số là gì?</p>
+      </li>
+      <li>
+        <p>Một lời gọi <code>setjmp()</code> trả về giá trị gì ở lần đầu và sau một <code>longjmp()</code>? Vì sao đôi khi phải khai biến <code>volatile</code>?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao không được <code>longjmp()</code> về một hàm đã trở về?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Chương trình và tiến trình khác nhau chỗ nào?</p></li>
+      <li><p>Bộ nhớ của một tiến trình chia thành những ngăn nào?</p></li>
+      <li><p>Vì sao máy không cần giữ cả chương trình trong RAM cùng lúc?</p></li>
+      <li><p>Khi gõ lệnh kèm vài chữ phía sau, chương trình nhận chúng qua đâu?</p></li>
+      <li><p>Cặp setjmp/longjmp dùng để làm gì?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>Distinguish a program from a process. Why can one program spawn many processes?</p></li>
+      <li><p>Name the five main memory segments of a process and each one's role. Why is text read-only and sharable?</p></li>
+      <li><p>How does virtual memory work? Explain pages, the resident set, and page faults.</p></li>
+      <li><p>What does <code>argv[0]</code> hold, and why is it useful that <code>argv[argc]</code> is always NULL? Where does a process's environment come from?</p></li>
+      <li><p>What does a <code>setjmp()</code> call return on its first call and after a <code>longjmp()</code>? Why must some variables be declared <code>volatile</code>?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Một tiến trình là <span class="closing-accent">chương trình lúc đang sống</span>: có danh tính (PID/PPID), có một <span class="closing-accent">bản đồ bộ nhớ gồm các segment trên nền bộ nhớ ảo</span>, nhận đối số và môi trường từ bên ngoài, và đôi khi điều khiển luồng bằng những lối nhảy đặc biệt như <code>longjmp()</code>. Nắm được giải phẫu này, bạn đã sẵn sàng cho câu hỏi lớn kế tiếp — làm sao một tiến trình được <i>sinh ra</i> và <i>kết thúc</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Tiến trình là <span class="closing-accent">chương trình lúc đang chạy</span>: có tên riêng, có <span class="closing-accent">các ngăn nhớ gọn gàng</span>, nhận đầu vào từ ngoài. Hiểu bộ khung này là đủ để đi tiếp sang chuyện tiến trình ra đời và kết thúc. <b>Nhớ nhé: hiểu một tiến trình là hiểu một chương trình lúc nó đang thở.</b></p>
+    <p class="en-only" lang="en">A process is <span class="closing-accent">a program brought to life</span>: it has an identity (PID/PPID), a <span class="closing-accent">memory map of segments over virtual memory</span>, inputs from the outside, and occasionally special control transfers like <code>longjmp()</code>. Grasp this anatomy and you are ready for the next big question — how a process is <i>born</i> and <i>dies</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-5-file-io-further-details.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 5 · File I/O: chi tiết thêm</span>
+    <span class="nav-title en-only" lang="en">Chapter 5 · File I/O: Further Details</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-7-memory-allocation.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 7 · Cấp phát bộ nhớ</span>
+    <span class="nav-title en-only" lang="en">Chapter 7 · Memory Allocation</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chương 6, “Processes”, trang 113–138.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chapter 6, “Processes”, pp. 113–138.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Michael Kerrisk, <i>The Linux Programming Interface</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3), ch. 6 “Processes”, pp. 113–138. — <a href="https://man7.org/tlpi/" target="_blank" rel="noopener noreferrer">man7.org/tlpi</a></li>
+      <li id="ref-2">“getpid(2) / getppid(2) — Linux manual page” (both return process IDs and always succeed; pid_t). Linux man-pages project, maintained by Michael Kerrisk. <a href="https://man7.org/linux/man-pages/man2/getpid.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/getpid.2.html</a></li>
+      <li id="ref-3">“proc(5) — Linux manual page” (/proc/sys/kernel/pid_max, /proc/PID/status PPid field, /proc/PID/environ). <a href="https://man7.org/linux/man-pages/man5/proc.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/proc.5.html</a></li>
+      <li id="ref-4">“elf(5) — Linux manual page” (the Executable and Linking Format; segments vs sections). <a href="https://man7.org/linux/man-pages/man5/elf.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/elf.5.html</a></li>
+      <li id="ref-5">“size(1) — GNU binutils manual page” (prints the text, data, and bss segment sizes of an object or executable). <a href="https://man7.org/linux/man-pages/man1/size.1.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man1/size.1.html</a></li>
+      <li id="ref-6">“sysconf(3) — Linux manual page” (querying _SC_PAGESIZE and other run-time configuration values). <a href="https://man7.org/linux/man-pages/man3/sysconf.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/sysconf.3.html</a></li>
+      <li id="ref-7">“environ(7) — Linux manual page” (the char **environ array of name=value strings, inherited by child processes). <a href="https://man7.org/linux/man-pages/man7/environ.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/environ.7.html</a></li>
+      <li id="ref-8">“getenv(3) / setenv(3) / putenv(3) / unsetenv(3) — Linux manual pages” (reading and modifying the environment; static-buffer and copy-vs-no-copy semantics). <a href="https://man7.org/linux/man-pages/man3/setenv.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/setenv.3.html</a></li>
+      <li id="ref-9">“clearenv(3) — Linux manual page” (erasing the entire environment; _GNU_SOURCE requirement; interaction with setenv). <a href="https://man7.org/linux/man-pages/man3/clearenv.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/clearenv.3.html</a></li>
+      <li id="ref-10">“setjmp(3) / longjmp(3) — Linux manual page” (nonlocal goto; jmp_buf; the volatile caveat and restrictions on setjmp placement). <a href="https://man7.org/linux/man-pages/man3/setjmp.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/setjmp.3.html</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-5-file-io-further-details.html">chapter 5</a>
+      <a href="chapter-7-memory-allocation.html">chapter 7</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('tlpi-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('tlpi-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('tlpi-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

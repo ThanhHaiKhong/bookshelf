@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 7 · Cấp phát bộ nhớ — The Linux Programming Interface</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 7 “Memory Allocation” trong The Linux Programming Interface (Michael Kerrisk, No Starch Press, 2010): điều chỉnh program break bằng brk() và sbrk(), cấp phát trên heap với malloc()/free(), cách hiện thực malloc (free list, length word, vì sao free() không trả bộ nhớ về nhân), lỗi malloc thường gặp cùng công cụ (mtrace, mcheck, valgrind, Electric Fence), điều khiển gói malloc (mallopt, mallinfo), các bộ cấp phát khác (calloc, realloc, posix_memalign) và cấp phát trên stack bằng alloca(). Ba mức đọc, mọi khẳng định đều có nguồn.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('tlpi-reading-mode'),
+l=localStorage.getItem('tlpi-lang'),
+t=localStorage.getItem('tlpi-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   THE LINUX PROGRAMMING INTERFACE — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"TLPI · CH.7";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+/* soon = chapter not yet on disk; rendered as a non-link cell. */
+.chapter-path .soon{
+  display:block;padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--tint);border:1px dashed var(--line);opacity:.6;
+}
+.chapter-path .soon .soon-tag{
+  display:inline-block;font-family:var(--sans);font-size:.6rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:.1rem .45rem;margin-top:.4rem;
+}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.series-links .soon{margin-right:.5rem;color:var(--muted);opacity:.55;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+
+/* ---------- whole-book mind map banner ---------- */
+.mindmap-banner{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  gap:clamp(1rem,3vw,2rem);align-items:center;
+  margin:3rem 0 0;padding:1.35rem clamp(1.15rem,3vw,2rem);
+  border:1px solid var(--line);border-left:4px solid var(--teal);
+  border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);
+  color:var(--ink);text-decoration:none;
+  transition:border-color .15s,transform .15s;
+}
+a.mindmap-banner:hover{border-color:var(--teal);transform:translateY(-2px);}
+a.mindmap-banner:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.mindmap-banner.soon{opacity:.5;cursor:default;}
+.mindmap-icon{font-size:1.9rem;line-height:1;}
+.mindmap-banner h3{margin:0 0 .3rem;font-size:1.05rem;}
+.mindmap-banner p{margin:0;max-width:48rem;font-size:.88rem;color:var(--muted);}
+.mindmap-banner .result{margin-top:0;color:var(--teal);font-weight:600;white-space:nowrap;}
+.mindmap-banner.soon .result{color:var(--muted);}
+@media (max-width:860px){
+  .mindmap-banner{grid-template-columns:auto minmax(0,1fr);}
+  .mindmap-banner .result{grid-column:2;white-space:normal;}
+}
+@media (max-width:460px){
+  .mindmap-banner{margin-left:0;margin-right:0;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    The Linux Programming Interface
+    <span>Chương 7 · Memory Allocation</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 7 · Cấp phát bộ nhớ</span>
+      <span class="en-only" lang="en">Chapter 7 · Memory Allocation</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Xin thêm bộ nhớ lúc chạy: heap, program break, và lớp malloc đứng giữa</span>
+      <span class="easy-only">Khi chương trình cần thêm chỗ nhớ giữa chừng</span>
+      <span class="en-only" lang="en">Asking for memory at run time: the heap, the program break, and the malloc layer in between</span>
+    </h1>
+
+    <p class="standard-copy">Kerrisk tách rõ hai tầng. Ở dưới, tiến trình xin thêm bộ nhớ bằng cách dời <b>program break</b> — ranh giới trên của vùng heap — qua hai lời gọi hệ thống <code>brk()</code> và <code>sbrk()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Ở trên, thư viện C gói việc đó lại thành bộ đôi quen thuộc <code>malloc()</code>/<code>free()</code>, lo hết phần sổ sách để bạn cấp phát và trả vùng nhớ theo từng mảnh nhỏ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> Chương còn mổ xẻ <i>bên trong</i> malloc (free list, length word), vì sao <code>free()</code> thường không trả bộ nhớ về nhân, những lỗi cấp phát kinh điển cùng công cụ phát hiện, và cuối cùng là <code>alloca()</code> — xin bộ nhớ ngay trên stack.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Chương trình lúc chạy nhiều khi cần thêm chỗ để chứa dữ liệu mà lúc viết chưa biết trước bao nhiêu. Phần nhớ "co giãn" đó gọi là heap. Bạn ít khi tự tay dời ranh giới heap; thay vào đó bạn nhờ <code>malloc()</code> cắt cho một miếng, rồi <code>free()</code> trả lại khi xong. Thư viện C lo hết phần rắc rối bên dưới. <b>Nhớ nhé: cần thêm chỗ nhớ thì gọi malloc, xong việc thì free.</b></p>
+    <p class="en-only" lang="en">Kerrisk separates two layers cleanly. Below, a process asks for more memory by moving the <b>program break</b> — the top boundary of the heap — through two system calls, <code>brk()</code> and <code>sbrk()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Above, the C library wraps that into the familiar <code>malloc()</code>/<code>free()</code> pair, doing all the bookkeeping so you can allocate and release memory in small pieces.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> The chapter also dissects malloc's <i>internals</i> (the free list, the length word), why <code>free()</code> usually does not return memory to the kernel, the classic allocation bugs and the tools that catch them, and finally <code>alloca()</code> — asking for memory right on the stack.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only">Điểm phương pháp: chương 7 nằm đúng trên ranh giới giữa <i>cơ chế hệ thống</i> và <i>tiện ích thư viện</i>. <code>brk()</code>/<code>sbrk()</code> là system call thật sự nói chuyện với nhân để nới vùng địa chỉ của tiến trình; <code>malloc()</code>/<code>free()</code> chỉ là hàm thư viện xây <i>trên</i> chúng. Hiểu được sự phân tầng này giải thích phần lớn các hành vi "khó hiểu" của bộ nhớ động: vì sao bộ nhớ đã <code>free()</code> mà tiến trình vẫn "to" như cũ, vì sao một lần ghi tràn ra ngoài khối lại làm hỏng một khối khác chẳng liên quan, và vì sao <code>alloca()</code> lại nhanh hơn hẳn <code>malloc()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> bộ nhớ động trên heap là một hệ hai tầng — nhân chỉ biết dời <b>program break</b> theo khối lớn, còn thư viện C chia nhỏ vùng đó, ghi sổ bằng <b>length word</b> và <b>free list</b> ngay trong chính bộ nhớ ấy; nắm được tầng dưới (<code>sbrk</code>) và tầng trên (<code>malloc</code>/<code>free</code>) giải thích cả hiệu năng lẫn mọi lỗi bộ nhớ bạn sẽ gặp.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> có hai mức. Mức thấp, chương trình nới ranh giới heap bằng lời gọi hệ thống. Mức cao, thư viện C cắt vùng đó thành từng miếng nhỏ cho bạn dùng qua malloc/free. Hiểu hai mức này là hiểu bộ nhớ động. <b>Nhớ nhé: malloc là người quản kho, nhân chỉ giao đất theo lô lớn.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> dynamic heap memory is a two-tier system — the kernel only knows how to move the <b>program break</b> in large chunks, while the C library subdivides that region, keeping its books with a <b>length word</b> and a <b>free list</b> inside the memory itself; mastering the lower tier (<code>sbrk</code>) and the upper tier (<code>malloc</code>/<code>free</code>) explains both performance and every memory bug you will meet.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: ở dưới cùng là heap, có ranh giới trên gọi là program break mà brk() và sbrk() dời được; ở trên là lớp thư viện C malloc()/free() cắt heap thành từng khối và ghi sổ bằng free list; song song là alloca() xin bộ nhớ trên stack, tự thu hồi khi hàm trả về. Diagram: at the bottom is the heap, whose top boundary is the program break that brk() and sbrk() move; above it the C library malloc()/free() carves the heap into blocks tracked by a free list; alongside, alloca() takes memory on the stack and reclaims it when the function returns.">
+    <div class="core">
+      <b>heap + program break</b>
+      <small class="standard-copy">Vùng nhớ co giãn; ranh giới trên dời bằng brk()/sbrk()</small>
+      <small class="easy-only">Chỗ nhớ co giãn của chương trình</small>
+      <small class="en-only" lang="en">The resizable region; its top edge moves via brk()/sbrk()</small>
+    </div>
+
+    <div class="node">
+      <b>kernel · brk() / sbrk()</b>
+      <small class="standard-copy">System call nới/thu ranh giới heap theo khối lớn</small>
+      <small class="easy-only">Nhân giao "đất" heap theo lô lớn</small>
+      <small class="en-only" lang="en">System calls that grow/shrink the heap boundary in big chunks</small>
+    </div>
+
+    <div class="node">
+      <b>C library · malloc() / free()</b>
+      <small class="standard-copy">Cắt heap thành khối nhỏ; ghi sổ bằng length word và free list</small>
+      <small class="easy-only">Thư viện cắt nhỏ và quản lý từng miếng</small>
+      <small class="en-only" lang="en">Carves the heap into small blocks; books kept by a length word and free list</small>
+    </div>
+
+    <div class="node">
+      <b>stack · alloca()</b>
+      <small class="standard-copy">Xin nhớ trên khung stack; tự thu hồi khi hàm trả về</small>
+      <small class="easy-only">Mượn nhanh trên stack, trả tự động</small>
+      <small class="en-only" lang="en">Takes memory on the stack frame; freed automatically on return</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#program-break">
+    <span>01</span>
+    <b class="standard-copy">Program break: brk() và sbrk()</b>
+    <b class="easy-only">Ranh giới heap: brk/sbrk</b>
+    <b class="en-only" lang="en">The program break: brk() and sbrk()</b>
+  </a>
+  <a href="#malloc-free">
+    <span>02</span>
+    <b class="standard-copy">malloc() và free() — bộ đôi thường dùng</b>
+    <b class="easy-only">malloc() và free()</b>
+    <b class="en-only" lang="en">malloc() and free() — the everyday pair</b>
+  </a>
+  <a href="#implementation">
+    <span>03</span>
+    <b class="standard-copy">Bên trong malloc: free list, length word, lỗi và công cụ</b>
+    <b class="easy-only">Bên trong malloc và các lỗi</b>
+    <b class="en-only" lang="en">Inside malloc: free list, length word, bugs and tools</b>
+  </a>
+  <a href="#other-allocators">
+    <span>04</span>
+    <b class="standard-copy">calloc, realloc, cấp phát canh lề, và alloca()</b>
+    <b class="easy-only">Các cách cấp phát khác và alloca()</b>
+    <b class="en-only" lang="en">calloc, realloc, aligned allocation, and alloca()</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="program-break" aria-labelledby="program-break-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="program-break-title">
+      <span class="standard-copy">Cấp phát trên heap thực chất là dời một ranh giới: program break</span>
+      <span class="easy-only">Nới bộ nhớ heap là dời một ranh giới duy nhất</span>
+      <span class="en-only" lang="en">Allocating on the heap is really moving one boundary: the program break</span>
+    </h2>
+    <p class="standard-copy">Heap là một vùng bộ nhớ co giãn nằm ngay sau đoạn dữ liệu chưa khởi tạo (<i>uninitialized data</i>, tức BSS) của tiến trình. Ranh giới trên hiện thời của heap được gọi là <b>program break</b>. Cấp phát và giải phóng bộ nhớ trên heap, ở mức thấp nhất, chỉ là việc <b>dời program break</b> lên (lấy thêm) hoặc xuống (trả bớt).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Khi tiến trình khởi động, program break nằm ngay quá cuối đoạn BSS.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hãy hình dung heap như một bãi đất nối dài phía sau nhà, và program break là hàng rào cuối bãi. Muốn thêm chỗ chứa đồ thì đẩy hàng rào ra xa; muốn thu lại thì kéo hàng rào vào gần. Chỉ có đúng một hàng rào để dời. <b>Nhớ nhé: thêm bộ nhớ heap nghĩa là đẩy cái hàng rào program break ra xa.</b></p>
+    <p class="en-only" lang="en">The heap is a resizable region of memory that begins just after the uninitialized data segment (the BSS) of a process. The current upper limit of the heap is called the <b>program break</b>. At the lowest level, allocating and freeing heap memory is just <b>moving the program break</b> up (taking more) or down (giving some back).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> When a process starts, the program break lies just past the end of the BSS.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Sau khi program break được nâng lên, chương trình có thể truy cập bất kỳ địa chỉ nào trong vùng mới cấp — nhưng lúc này nhân <i>chưa</i> cấp trang bộ nhớ vật lý thật. Nhân chỉ tự động cấp trang vật lý vào <b>lần đầu</b> các địa chỉ đó được chạm tới.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Đẩy hàng rào ra không có nghĩa là đất đã được san lấp ngay. Chỉ khi bạn thực sự bước chân lên một chỗ, chỗ đó mới được chuẩn bị. <b>Nhớ nhé: nới ranh giới là "đặt gạch", bộ nhớ thật chỉ hiện khi bạn dùng tới.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> After the program break is raised, the program may access any address in the newly allocated region — but at this point the kernel has <i>not</i> yet allocated real physical pages. The kernel allocates physical pages automatically only on the <b>first</b> time those addresses are touched.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#include &lt;unistd.h&gt;<br>int&nbsp;&nbsp;brk(void *end_data_segment);<br>void *sbrk(intptr_t increment);<br><br>top = sbrk(0);&nbsp;/* break hiện thời */<br>sbrk(increment);&nbsp;/* trả về break cũ */</p>
+      <p class="easy-only">sbrk(0)&nbsp;--&gt; hỏi ranh giới hiện thời<br>sbrk(+n) --&gt; đẩy ra n byte<br>brk(addr) --&gt; đặt ranh giới tới addr</p>
+      <p class="en-only" lang="en">#include &lt;unistd.h&gt;<br>int&nbsp;&nbsp;brk(void *end_data_segment);<br>void *sbrk(intptr_t increment);<br><br>top = sbrk(0);&nbsp;/* current break */<br>sbrk(increment);&nbsp;/* returns old break */</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">program break</span>
+      <h3>
+        <span class="standard-copy">Program break — một con số, không phải một kho</span>
+        <span class="easy-only">Program break là cái ranh giới, không phải kho đồ</span>
+        <span class="en-only" lang="en">The program break — a single number, not a warehouse</span>
+      </h3>
+      <p class="standard-copy">Toàn bộ vùng cấp phát động của một tiến trình được tóm gọn bằng <i>một</i> đại lượng: vị trí hiện thời của program break. Nâng nó lên cho chương trình thêm vùng địa chỉ dùng được; hạ nó xuống trả vùng đó về cho hệ thống. Mọi thứ phức tạp hơn — cấp phát từng mảnh nhỏ, tái sử dụng — đều được xây bên trên nguyên thủy đơn giản này.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Tất cả "vùng co giãn" của chương trình chỉ gói trong một con số: hàng rào đang ở đâu. Đẩy ra thì có thêm chỗ, kéo vào thì bớt chỗ. Mọi mẹo cấp phát tinh vi đều dựng trên ý tưởng đơn giản này. <b>Nhớ nhé: cả heap chỉ cần nhớ một mốc — ranh giới đang ở đâu.</b></p>
+      <p class="en-only" lang="en">A process's entire dynamic allocation region is captured by <i>one</i> quantity: the current location of the program break. Raising it gives the program more usable address space; lowering it returns that space to the system. Everything more elaborate — allocating small pieces, reusing them — is built on top of this simple primitive.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bạn xem <code>/proc/PID/maps</code> hoặc dùng <code>strace</code> thấy một chương trình phát lệnh <code>brk()</code> — chính là nó đang xin nhân nới heap.<span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Khi bạn "soi" một chương trình bằng strace và thấy dòng <code>brk(...)</code> — đó là lúc nó đang nới chỗ nhớ.</span>
+        <span class="en-only" lang="en">When you inspect <code>/proc/PID/maps</code> or use <code>strace</code> and see a program issue <code>brk()</code> — that is it asking the kernel to grow the heap.<span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">brk()</span>
+      <h3>
+        <span class="standard-copy">brk() — đặt ranh giới tới một địa chỉ tuyệt đối</span>
+        <span class="easy-only">brk() — đặt hàng rào tới đúng một điểm</span>
+        <span class="en-only" lang="en">brk() — set the boundary to an absolute address</span>
+      </h3>
+      <p class="standard-copy">Lời gọi <code>brk()</code> đặt program break tới địa chỉ đã cho trong <i>end_data_segment</i>. Vì trang bộ nhớ chỉ cấp phát theo đơn vị trang, nên trên thực tế break được làm tròn lên biên trang kế tiếp. <code>brk()</code> trả về <b>0</b> khi thành công và <b>−1</b> khi lỗi (đặt <code>errno</code>, thường là <code>ENOMEM</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"><code>brk()</code> giống như nói "dựng hàng rào ngay tại cột mốc này". Bạn đưa một địa chỉ, nhân cố đặt ranh giới tới đó. Được thì báo 0, không được thì báo −1. <b>Nhớ nhé: brk đặt hàng rào tới đúng một điểm bạn chỉ định.</b></p>
+      <p class="en-only" lang="en">The <code>brk()</code> call sets the program break to the address given in <i>end_data_segment</i>. Because memory is allocated in units of pages, the break is in practice rounded up to the next page boundary. <code>brk()</code> returns <b>0</b> on success and <b>−1</b> on error (setting <code>errno</code>, typically <code>ENOMEM</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Hầu như không bao giờ gọi trực tiếp trong mã ứng dụng — bạn để <code>malloc()</code> gọi hộ. Biết nó tồn tại giúp đọc hiểu đầu ra <code>strace</code> và thông điệp lỗi "cannot allocate memory".</span>
+        <span class="easy-only">Bạn gần như không bao giờ tự gọi brk — để malloc lo. Nhưng biết nó có giúp hiểu khi chương trình báo "hết bộ nhớ".</span>
+        <span class="en-only" lang="en">You almost never call it directly in application code — you let <code>malloc()</code> call it for you. Knowing it exists helps you read <code>strace</code> output and "cannot allocate memory" errors.</span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">sbrk()</span>
+      <h3>
+        <span class="standard-copy">sbrk() — dời tương đối, và trả về ranh giới cũ</span>
+        <span class="easy-only">sbrk() — đẩy thêm một đoạn, cho biết chỗ cũ</span>
+        <span class="en-only" lang="en">sbrk() — move relatively, and return the old boundary</span>
+      </h3>
+      <p class="standard-copy"><code>sbrk()</code> điều chỉnh program break thêm <i>increment</i> byte so với vị trí hiện tại, và trả về <b>địa chỉ của program break trước đó</b> — nghĩa là con trỏ tới byte đầu tiên của vùng vừa cấp. Mẹo thường dùng: gọi <code>sbrk(0)</code> để <i>hỏi</i> vị trí break hiện thời mà không thay đổi nó. Khi lỗi, <code>sbrk()</code> trả về <code>(void&nbsp;*)&nbsp;−1</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"><code>sbrk()</code> nói "đẩy hàng rào thêm chừng này nữa", rồi mách cho bạn hàng rào <i>trước khi đẩy</i> đang ở đâu — đó chính là đầu miếng đất mới. Gọi <code>sbrk(0)</code> là chỉ hỏi "hàng rào đang ở đâu" chứ không dời. <b>Nhớ nhé: sbrk(0) là cách lịch sự để hỏi ranh giới hiện tại.</b></p>
+      <p class="en-only" lang="en"><code>sbrk()</code> adjusts the program break by <i>increment</i> bytes from its current position, and returns the <b>address of the previous program break</b> — that is, a pointer to the first byte of the newly allocated region. A common trick: call <code>sbrk(0)</code> to <i>query</i> the current break without changing it. On error, <code>sbrk()</code> returns <code>(void&nbsp;*)&nbsp;−1</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi muốn đo một chương trình đã nới heap bao nhiêu: so <code>sbrk(0)</code> trước và sau một loạt <code>malloc()</code> cho thấy heap lớn lên thế nào.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi muốn biết heap đã phình to cỡ nào: đo <code>sbrk(0)</code> trước và sau khi gọi malloc nhiều lần.</span>
+        <span class="en-only" lang="en">When you want to measure how much a program has grown the heap: comparing <code>sbrk(0)</code> before and after a run of <code>malloc()</code> calls shows how the heap grew.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Chi tiết của tác giả</h4>
+          <p>Cả <code>brk()</code> và <code>sbrk()</code> đều không có trong SUSv3, nhưng tồn tại trên gần như mọi hệ UNIX. SUSv3 cố ý loại chúng vì chúng gắn chặt với một mô hình bộ nhớ heap tuyến tính không còn phổ quát; tài liệu khuyên dùng <code>malloc()</code> thay cho việc gọi trực tiếp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao điều này quan trọng</h4>
+          <p>Kiểu <code>intptr_t</code> của <i>increment</i> là kiểu nguyên có dấu đủ rộng để chứa một con trỏ — nhờ vậy <code>sbrk()</code> nhận được cả giá trị âm để <i>hạ</i> program break xuống, trả bộ nhớ về. Đây là nền để hiểu phần sau: vì sao <code>free()</code> hiếm khi làm điều đó.<span class="cite"><a href="#ref-2">2</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Gọi <code>sbrk()</code> từng byte một thì vừa bất tiện vừa chậm — mỗi lần là một system call có chi phí. Vì thế gần như không ai dùng chúng trực tiếp; người ta dùng lớp bên trên gói chúng lại thành thứ dễ xài hơn nhiều: <code>malloc()</code> và <code>free()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Tự đẩy hàng rào từng chút một rất mệt và chậm. May là có người làm sẵn lớp tiện lợi phía trên: malloc và free. Ta xem tiếp.</p>
+    <p class="en-only" lang="en">Calling <code>sbrk()</code> one byte at a time is both awkward and slow — each call is a system call with overhead. So almost no one uses them directly; people use the layer above that wraps them into something far easier: <code>malloc()</code> and <code>free()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="malloc-free" aria-labelledby="malloc-free-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="malloc-free-title">
+      <span class="standard-copy">malloc() và free(): cấp phát từng mảnh, với hợp đồng sử dụng rõ ràng</span>
+      <span class="easy-only">malloc() xin một miếng, free() trả lại — theo luật</span>
+      <span class="en-only" lang="en">malloc() and free(): allocating in pieces, under a clear contract</span>
+    </h2>
+    <p class="standard-copy">Trong ứng dụng thực, ta hiếm khi dùng <code>brk()</code>/<code>sbrk()</code>; thay vào đó dùng bộ hàm cấp phát trên heap của thư viện C. <code>malloc()</code> nhận một số byte và trả về con trỏ tới một khối ít nhất bằng chừng ấy byte, đã <b>canh lề</b> phù hợp cho bất kỳ kiểu dữ liệu C nào; nếu không cấp được, nó trả về <code>NULL</code> và đặt <code>errno</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> <code>free()</code> nhận lại con trỏ đó và giải phóng khối.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Trong thực tế bạn gần như luôn dùng <code>malloc()</code> và <code>free()</code> chứ không tự dời hàng rào. Bạn nói "cho tôi 100 byte", malloc trả về địa chỉ miếng nhớ đó; dùng xong bạn <code>free()</code> trả lại. Nếu kho hết chỗ, malloc trả về <code>NULL</code> — con số 0 đặc biệt báo "không có". <b>Nhớ nhé: luôn kiểm tra malloc có trả về NULL không trước khi dùng.</b></p>
+    <p class="en-only" lang="en">In real applications we rarely use <code>brk()</code>/<code>sbrk()</code>; instead we use the C library's heap-allocation functions. <code>malloc()</code> takes a number of bytes and returns a pointer to a block of at least that many bytes, suitably <b>aligned</b> for any C data type; if it cannot allocate, it returns <code>NULL</code> and sets <code>errno</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span> <code>free()</code> takes that pointer back and releases the block.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Hai điều phải nhớ.</b> Thứ nhất: bộ nhớ do <code>malloc()</code> trả về <b>không được khởi tạo</b> — nội dung là rác, bạn phải tự đặt giá trị. Thứ hai: khối được canh lề cho mọi kiểu C; trên nhiều kiến trúc nghĩa là canh theo biên 8 hoặc 16 byte.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only"><b>Hai điều.</b> Một: miếng nhớ malloc đưa cho bạn chứa toàn rác, phải tự dọn trước khi tin dùng. Hai: địa chỉ của nó luôn "chẵn trang" để chứa được mọi loại dữ liệu. <b>Nhớ nhé: malloc không dọn nhà hộ bạn — nhớ tự khởi tạo.</b></p>
+      <p class="en-only" lang="en"><b>Two things to remember.</b> First: the memory returned by <code>malloc()</code> is <b>not initialized</b> — its contents are garbage, and you must set the values yourself. Second: the block is aligned for any C type; on many architectures that means an 8- or 16-byte boundary.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#include &lt;stdlib.h&gt;<br>void *malloc(size_t size);<br>void&nbsp;&nbsp;free(void *ptr);<br><br>p = malloc(n);<br>if (p == NULL) errExit("malloc");<br>/* ... dùng p ... */<br>free(p);</p>
+      <p class="easy-only">p = malloc(n);<br>if (p == NULL) { /* hết nhớ */ }<br>/* dùng p */<br>free(p);</p>
+      <p class="en-only" lang="en">#include &lt;stdlib.h&gt;<br>void *malloc(size_t size);<br>void&nbsp;&nbsp;free(void *ptr);<br><br>p = malloc(n);<br>if (p == NULL) errExit("malloc");<br>/* ... use p ... */<br>free(p);</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">malloc()</span>
+      <h3>
+        <span class="standard-copy">malloc() — một khối byte thô, không hơn</span>
+        <span class="easy-only">malloc() — đưa bạn một miếng byte trống</span>
+        <span class="en-only" lang="en">malloc() — a raw block of bytes, no more</span>
+      </h3>
+      <p class="standard-copy"><code>malloc()</code> không biết gì về kiểu dữ liệu; nó chỉ cấp một dải byte liên tục và trả về <code>void&nbsp;*</code> để bạn ép về con trỏ cần dùng. Vì <code>void&nbsp;*</code> tự động chuyển sang mọi kiểu con trỏ trong C, không cần (và không nên) ép kiểu tường minh. Kích thước truyền vào có kiểu <code>size_t</code> — số nguyên không dấu.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only"><code>malloc()</code> chẳng quan tâm bạn định chứa gì trong miếng nhớ đó — nó chỉ giao đất trống. Bạn tự quyết định dùng để làm gì. <b>Nhớ nhé: malloc chỉ giao đất, còn xây gì là việc của bạn.</b></p>
+      <p class="en-only" lang="en"><code>malloc()</code> knows nothing of data types; it just hands back a contiguous run of bytes as a <code>void&nbsp;*</code> for you to assign to the pointer you need. Since a <code>void&nbsp;*</code> converts automatically to any pointer type in C, no explicit cast is needed (or wanted). The size argument has type <code>size_t</code> — an unsigned integer.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi lần bạn tạo một mảng động, một chuỗi độ dài chưa biết, hay một nút của danh sách liên kết — gần như luôn qua <code>malloc()</code>.</span>
+        <span class="easy-only">Mỗi khi cần một mảng mà chưa biết trước bao nhiêu phần tử — đó là lúc dùng malloc.</span>
+        <span class="en-only" lang="en">Every time you build a dynamic array, a string of unknown length, or a linked-list node — almost always through <code>malloc()</code>.</span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">free()</span>
+      <h3>
+        <span class="standard-copy">free() — trả lại khối, không phải xoá nó</span>
+        <span class="easy-only">free() — trả miếng nhớ về, chứ không xoá</span>
+        <span class="en-only" lang="en">free() — hand the block back, not wipe it</span>
+      </h3>
+      <p class="standard-copy"><code>free()</code> giải phóng khối mà <i>ptr</i> trỏ tới — <i>ptr</i> phải là một con trỏ do một hàm cấp phát trên heap trả về trước đó. Nói chung, <code>free()</code> <b>không</b> hạ program break; thay vào đó nó thêm khối vừa trả vào một danh sách để các lần <code>malloc()</code> sau tái sử dụng.<span class="cite"><a href="#ref-1">1</a></span> Gọi <code>free(NULL)</code> là hợp lệ và không làm gì cả.<span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only"><code>free()</code> không hề xoá dữ liệu trong miếng nhớ; nó chỉ báo "tôi dùng xong rồi, cho mượn lại". Miếng đó được cất vào kho để lần sau malloc lấy ra dùng tiếp. <b>Nhớ nhé: free là trả lại chìa khoá, không phải đốt nhà — dữ liệu cũ vẫn còn đó.</b></p>
+      <p class="en-only" lang="en"><code>free()</code> releases the block pointed to by <i>ptr</i> — which must be a pointer previously returned by one of the heap-allocation functions. In general, <code>free()</code> does <b>not</b> lower the program break; instead it adds the returned block to a list for future <code>malloc()</code> calls to reuse.<span class="cite"><a href="#ref-1">1</a></span> Calling <code>free(NULL)</code> is valid and does nothing.<span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bạn theo dõi một tiến trình bằng <code>top</code> và thấy cột RSS/bộ nhớ không giảm dù chương trình đã <code>free()</code> rất nhiều — đó là hệ quả trực tiếp của hành vi này.</span>
+        <span class="easy-only">Khi bạn thấy chương trình vẫn "to" dù đã free nhiều — chính vì free không trả đất về ngay.</span>
+        <span class="en-only" lang="en">When you watch a process in <code>top</code> and its memory does not shrink even though the program has <code>free()</code>d a lot — that is a direct consequence of this behaviour.</span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">why free at all</span>
+      <h3>
+        <span class="standard-copy">Có cần free() trước khi thoát không?</span>
+        <span class="easy-only">Sắp thoát rồi có cần free() nữa không?</span>
+        <span class="en-only" lang="en">Must you free() before exiting?</span>
+      </h3>
+      <p class="standard-copy">Khi một tiến trình kết thúc, <b>mọi</b> bộ nhớ của nó được nhân tự động thu hồi, nên về nguyên tắc không bắt buộc <code>free()</code> ngay trước khi thoát. Dù vậy, vẫn nên giải phóng tường minh: mã sạch và dễ bảo trì hơn; các công cụ dò lỗi bộ nhớ (như <code>valgrind</code>) chỉ hữu ích khi mọi khối đều được giải phóng đúng; và đoạn mã dễ tái sử dụng trong ngữ cảnh khác.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+      <p class="easy-only">Khi chương trình tắt, hệ điều hành dọn sạch mọi bộ nhớ của nó, nên về lý thuyết không cần free ngay trước khi thoát. Nhưng free đàng hoàng vẫn tốt: mã gọn, dễ kiểm lỗi, dễ dùng lại. <b>Nhớ nhé: hệ điều hành dọn hộ khi thoát, nhưng free gọn gàng vẫn là thói quen tốt.</b></p>
+      <p class="en-only" lang="en">When a process terminates, <b>all</b> of its memory is reclaimed automatically by the kernel, so freeing right before exit is not strictly required. Even so, freeing explicitly is good practice: cleaner, more maintainable code; memory-checking tools (such as <code>valgrind</code>) are only useful when every block is correctly freed; and the code is easier to reuse in another context.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một tiến trình chạy lâu (daemon, máy chủ) mà cứ cấp phát rồi quên <code>free()</code> — bộ nhớ phình mãi không dừng: đó là rò rỉ bộ nhớ (memory leak).<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Với chương trình chạy mãi (như máy chủ), quên free là bộ nhớ cứ phình lên — gọi là rò rỉ bộ nhớ.</span>
+        <span class="en-only" lang="en">When a long-running process (a daemon, a server) keeps allocating and forgetting to <code>free()</code> — memory grows without bound: that is a memory leak.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Để hiểu vì sao <code>free()</code> giữ lại bộ nhớ thay vì trả về nhân, vì sao một lỗi ghi tràn lại hiểm, và vì sao <code>free()</code> cần biết khối to bao nhiêu, ta phải nhìn vào <i>bên trong</i> cách malloc tổ chức heap.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Muốn hiểu mấy chuyện lạ ở trên, ta cần mở nắp xem malloc quản lý heap thế nào bên trong. Phần sau làm điều đó.</p>
+    <p class="en-only" lang="en">To understand why <code>free()</code> keeps memory instead of returning it to the kernel, why an overrun is so dangerous, and why <code>free()</code> must know how big a block is, we have to look <i>inside</i> how malloc organizes the heap.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="implementation" aria-labelledby="implementation-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="implementation-title">
+      <span class="standard-copy">Bên trong malloc: free list, length word, và vì sao lỗi bộ nhớ lại hiểm</span>
+      <span class="easy-only">Malloc ghi sổ ra sao — và vì sao lỗi bộ nhớ khó tìm</span>
+      <span class="en-only" lang="en">Inside malloc: the free list, the length word, and why memory bugs bite</span>
+    </h2>
+    <p class="standard-copy"><code>malloc()</code> quét một <b>danh sách các khối trống</b> (free list) để tìm một khối đủ lớn. Nếu khối lớn hơn mức cần, nó được cắt đôi: phần vừa đủ trả cho người gọi, phần dư trả lại free list. Nếu không khối trống nào đủ, <code>malloc()</code> gọi <code>sbrk()</code> để nới heap — và thường xin nhiều hơn mức cần ngay lúc đó, phần thừa đưa vào free list để giảm số lần gọi <code>sbrk()</code> về sau.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hãy nghĩ malloc như một người quản kho giữ danh sách "những ngăn còn trống". Khi bạn xin chỗ, anh ta tìm một ngăn vừa đủ trong danh sách; nếu ngăn quá to thì cắt bớt cho bạn phần cần. Hết ngăn trống thì mới đi xin thêm đất, mà mỗi lần xin thì xin dư ra để đỡ phải xin lại. <b>Nhớ nhé: malloc giữ sổ "chỗ trống" để tái dùng, chứ không xin nhân mỗi lần.</b></p>
+    <p class="en-only" lang="en"><code>malloc()</code> scans a <b>list of free blocks</b> (the free list) to find one large enough. If the block is larger than needed, it is split: the exact piece goes to the caller, the remainder goes back on the free list. If no free block is large enough, <code>malloc()</code> calls <code>sbrk()</code> to grow the heap — and usually asks for more than is needed right then, putting the surplus on the free list to reduce the number of future <code>sbrk()</code> calls.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Mấu chốt.</b> Khi cấp một khối, <code>malloc()</code> lấy dư vài byte để chứa một số nguyên ghi <b>độ dài</b> của khối (length word), đặt ngay <i>trước</i> vùng trả cho bạn. Nhờ đó <code>free(ptr)</code> chỉ cần nhìn mấy byte ngay trước <i>ptr</i> là biết khối to bao nhiêu — đó là lý do bạn không phải truyền kích thước cho <code>free()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Mấu chốt.</b> Ngay trước miếng nhớ trao cho bạn, malloc giấu một con số nhỏ ghi "miếng này dài bao nhiêu". Nhờ con số đó mà khi free bạn khỏi cần nói lại kích thước. <b>Nhớ nhé: malloc dán sẵn một nhãn ghi kích thước ngay trước miếng nhớ của bạn.</b></p>
+      <p class="en-only" lang="en"><b>The key.</b> When it allocates a block, <code>malloc()</code> takes a few extra bytes to hold an integer recording the block's <b>length</b> (the length word), placed just <i>before</i> the region it returns to you. Thanks to this, <code>free(ptr)</code> only needs to look at the few bytes just before <i>ptr</i> to know how big the block is — which is why you never pass a size to <code>free()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">[ length ][ vùng bạn dùng ....... ]<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^-- ptr do malloc trả về<br><br>free list: khối--&gt;khối--&gt;khối<br>(con trỏ nối nằm trong chính khối trống)</p>
+      <p class="easy-only">[nhãn độ dài][ phần bạn dùng ]<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^ ptr trả về<br>kho trống: khối -&gt; khối -&gt; khối</p>
+      <p class="en-only" lang="en">[ length ][ your usable region ...... ]<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^-- ptr returned by malloc<br><br>free list: block--&gt;block--&gt;block<br>(links live inside the free blocks themselves)</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">free list</span>
+      <h3>
+        <span class="standard-copy">Free list sống ngay trong bộ nhớ trống</span>
+        <span class="easy-only">Danh sách chỗ trống nằm trong chính chỗ trống</span>
+        <span class="en-only" lang="en">The free list lives inside the free memory itself</span>
+      </h3>
+      <p class="standard-copy">Khi một khối được <code>free()</code>, nó được thêm vào free list. Nhưng free list không dùng bộ nhớ riêng để lưu — nó dùng chính không gian của các khối trống: trong mỗi khối trống, <code>free()</code> ghi một cặp con trỏ nối tới khối trống trước và sau, cùng với length word. Chính vì bộ nhớ "sổ sách" này nằm xen kẽ với bộ nhớ của bạn mà một lỗi ghi tràn ra ngoài khối có thể làm hỏng toàn bộ danh sách.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Danh sách "chỗ trống" không được viết vào một cuốn sổ riêng, mà viết lên chính những ngăn đang trống. Nên nếu bạn lỡ viết lan ra ngoài ngăn của mình, bạn có thể bôi bẩn trang sổ của người quản kho — và kho loạn. <b>Nhớ nhé: viết tràn ra ngoài khối là tự phá sổ sách của malloc.</b></p>
+      <p class="en-only" lang="en">When a block is <code>free()</code>d, it is added to the free list. But the free list uses no separate memory to store itself — it uses the space of the free blocks: inside each free block, <code>free()</code> writes a pair of pointers linking the previous and next free block, along with the length word. Because this bookkeeping memory is interleaved with your memory, an overrun past a block's bounds can corrupt the whole list.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một chương trình đổ vỡ <i>bên trong</i> <code>malloc()</code> hay <code>free()</code> với thông điệp kiểu "corrupted" — thủ phạm thường không ở đó, mà là một lần ghi tràn từ rất sớm trước đó.<span class="cite"><a href="#ref-3">3</a></span></span>
+        <span class="easy-only">Khi chương trình chết ngay trong malloc/free với chữ "corrupted" — lỗi thật thường đã xảy ra từ trước đó khá lâu.</span>
+        <span class="en-only" lang="en">When a program crashes <i>inside</i> <code>malloc()</code> or <code>free()</code> with a "corrupted" message — the culprit is usually not there, but an earlier overrun.<span class="cite"><a href="#ref-3">3</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Hệ quả: các lỗi kinh điển</h4>
+          <p>Vì sổ sách nằm trong khối, một loạt lỗi trở nên nguy hiểm: ghi ra ngoài biên khối (buffer overrun/underrun), <code>free()</code> hai lần một con trỏ (double free), <code>free()</code> một con trỏ không do <code>malloc()</code> cấp, hay dùng khối sau khi đã <code>free()</code> (dangling pointer). Tất cả đều có thể âm thầm làm hỏng free list rồi bùng phát ở một chỗ khác hẳn.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Quy tắc vàng</h4>
+          <p>Chỉ <code>free()</code> đúng con trỏ do <code>malloc()</code>/<code>calloc()</code>/<code>realloc()</code> trả về; không bao giờ dùng lại con trỏ sau khi đã giải phóng; và không bao giờ ghi vượt quá số byte đã xin. Đặt con trỏ về <code>NULL</code> ngay sau <code>free()</code> là một thói quen phòng double-free.<span class="cite"><a href="#ref-1">1</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">why free keeps it</span>
+      <h3>
+        <span class="standard-copy">Vì sao free() không trả bộ nhớ về nhân</span>
+        <span class="easy-only">Vì sao free() giữ bộ nhớ lại thay vì trả về</span>
+        <span class="en-only" lang="en">Why free() keeps memory instead of returning it</span>
+      </h3>
+      <p class="standard-copy">Thường <code>free()</code> không hạ program break vì hai lý do. Một: khối được trả thường nằm đâu đó <i>giữa</i> heap chứ không ở trên đỉnh, nên không thể hạ ranh giới qua nó. Hai: dù khối có nằm trên đỉnh, việc giữ lại giúp giảm số lần gọi <code>sbrk()</code> — một system call tốn kém — vì chương trình thường sẽ sớm xin lại bộ nhớ.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Free thường không trả đất về nhân vì: miếng vừa trả hay nằm ở giữa bãi, không phải mép ngoài, nên không kéo hàng rào qua nó được; và kể cả nằm ở mép, giữ lại vẫn lợi hơn vì lát nữa chương trình thường lại xin tiếp — đỡ phải làm phiền nhân nhiều lần. <b>Nhớ nhé: giữ lại để tái dùng thì nhanh hơn trả đi rồi xin lại.</b></p>
+      <p class="en-only" lang="en">Usually <code>free()</code> does not lower the program break, for two reasons. One: the returned block is typically somewhere in the <i>middle</i> of the heap, not at the top, so the boundary cannot be lowered past it. Two: even when the block is at the top, keeping it reduces the number of <code>sbrk()</code> calls — an expensive system call — because the program will often soon ask for memory again.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một khối trống <i>ở trên đỉnh</i> heap đủ lớn, hiện thực glibc có thể dùng <code>sbrk()</code> hạ program break; ngưỡng này điều chỉnh được qua tham số <code>M_TRIM_THRESHOLD</code> (mặc định 128 kB).<span class="cite"><a href="#ref-4">4</a></span></span>
+        <span class="easy-only">Nếu miếng trống nằm ngay mép ngoài và đủ lớn, malloc vẫn có thể trả đất về — có một ngưỡng mặc định khoảng 128 kB.</span>
+        <span class="en-only" lang="en">When a free block <i>at the top</i> of the heap is large enough, the glibc implementation may use <code>sbrk()</code> to lower the break; this threshold is tunable via <code>M_TRIM_THRESHOLD</code> (default 128 kB).<span class="cite"><a href="#ref-4">4</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Khối lớn đi đường khác</h4>
+          <p>Với các yêu cầu cấp phát lớn (mặc định từ 128 kB trở lên, ngưỡng <code>M_MMAP_THRESHOLD</code>), glibc không dùng heap/<code>sbrk()</code> mà cấp hẳn một vùng riêng bằng <code>mmap()</code> — và vùng này được trả thẳng về hệ thống bằng <code>munmap()</code> khi <code>free()</code>. Đó là lý do một số khối lớn <i>có</i> trả bộ nhớ về ngay.<span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Theo dõi và chỉnh gói malloc</h4>
+          <p>Hàm <code>mallopt()</code> cho phép chỉnh các tham số như <code>M_TRIM_THRESHOLD</code>, <code>M_MMAP_THRESHOLD</code>, <code>M_MMAP_MAX</code>; còn <code>mallinfo()</code> trả về một cấu trúc thống kê về bộ nhớ mà gói malloc đang quản lý. Đây là cửa để quan sát và tinh chỉnh hành vi cấp phát khi hiệu năng quan trọng.<span class="cite"><a href="#ref-4">4</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">debugging tools</span>
+      <h3>
+        <span class="standard-copy">Công cụ bắt lỗi malloc: từ trong glibc tới valgrind</span>
+        <span class="easy-only">Công cụ dò lỗi bộ nhớ</span>
+        <span class="en-only" lang="en">Tools for malloc bugs: from inside glibc to valgrind</span>
+      </h3>
+      <p class="standard-copy">glibc có sẵn vài trợ thủ. <code>mtrace()</code>/<code>muntrace()</code> bật/tắt việc ghi lại mọi lời gọi cấp phát vào tệp chỉ bởi biến môi trường <code>MALLOC_TRACE</code>, rồi script <code>mtrace</code> phân tích để tìm khối chưa được giải phóng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> <code>mcheck()</code>/<code>mprobe()</code> (liên kết với <code>-lmcheck</code>) kiểm tra tính nhất quán của heap; biến môi trường <code>MALLOC_CHECK_</code> cho tác dụng tương tự mà không cần sửa và biên dịch lại mã.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+      <p class="easy-only">Có nhiều công cụ giúp bắt lỗi bộ nhớ thay bạn. Một số nằm sẵn trong thư viện C: bật một công tắc là nó ghi nhật ký cấp phát hoặc tự kiểm tra kho. Bạn không phải tự dò bằng mắt. <b>Nhớ nhé: đừng dò lỗi bộ nhớ bằng mắt — hãy để công cụ làm.</b></p>
+      <p class="en-only" lang="en">glibc ships several helpers. <code>mtrace()</code>/<code>muntrace()</code> turn on/off the recording of every allocation call to a file named by the <code>MALLOC_TRACE</code> environment variable, which the <code>mtrace</code> script then analyses to find unreleased blocks.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span> <code>mcheck()</code>/<code>mprobe()</code> (linked with <code>-lmcheck</code>) check heap consistency; the <code>MALLOC_CHECK_</code> environment variable gives similar effect without modifying and recompiling the code.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi cần truy một lỗi bộ nhớ khó, công cụ ngoài mạnh nhất là <b>Valgrind</b>, phát hiện rò rỉ và truy cập sai; ngoài ra còn <b>Electric Fence</b> (Bruce Perens) đặt bẫy đúng biên khối để bắt ghi tràn ngay tức thì.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span>
+        <span class="easy-only">Khi lỗi khó quá, dùng Valgrind — công cụ ngoài rất mạnh, chỉ ra chỗ rò rỉ và truy cập sai.</span>
+        <span class="en-only" lang="en">When you need to hunt a hard memory bug, the strongest external tool is <b>Valgrind</b>, which detects leaks and invalid access; there is also <b>Electric Fence</b> (Bruce Perens), which traps exactly at block boundaries to catch an overrun immediately.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>MALLOC_CHECK_ nhận giá trị nào</h4>
+          <p>Đặt <code>MALLOC_CHECK_</code> thành 0 (bỏ qua lỗi), 1 (in thông báo rồi tiếp tục), 2 (gọi <code>abort()</code>), hoặc 3 (in thông báo chi tiết kèm vết gọi rồi abort). Vì lý do an ninh, biến này bị bỏ qua trong các chương trình set-user-ID/set-group-ID.<span class="cite"><a href="#ref-4">4</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Vì sao cần cả hai hướng</h4>
+          <p>Công cụ trong glibc nhẹ, chạy nhanh, hợp để bật thường trực lúc phát triển; Valgrind nặng hơn nhiều (chương trình chạy chậm đi đáng kể) nhưng soi được những lỗi mà kiểm tra nội bộ bỏ sót, như đọc một biến chưa khởi tạo. Hai hướng bổ sung cho nhau.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy"><code>malloc()</code> và <code>free()</code> là cặp cốt lõi, nhưng thư viện C còn cho vài biến thể tiện lợi cho những nhu cầu riêng — khởi tạo về 0, đổi cỡ một khối đã có, canh lề đặc biệt — và một lối cấp phát hoàn toàn khác: ngay trên stack.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Ngoài malloc/free còn vài "họ hàng" cho các nhu cầu riêng, và một cách xin nhớ khác hẳn: mượn ngay trên stack. Phần cuối xem qua chúng.</p>
+    <p class="en-only" lang="en"><code>malloc()</code> and <code>free()</code> are the core pair, but the C library offers a few convenient variants for special needs — zero-initializing, resizing an existing block, special alignment — and an entirely different way to allocate: right on the stack.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="other-allocators" aria-labelledby="other-allocators-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="other-allocators-title">
+      <span class="standard-copy">calloc, realloc, cấp phát canh lề — và alloca() trên stack</span>
+      <span class="easy-only">Các cách cấp phát khác, và cách mượn nhớ trên stack</span>
+      <span class="en-only" lang="en">calloc, realloc, aligned allocation — and alloca() on the stack</span>
+    </h2>
+    <p class="standard-copy">Quanh <code>malloc()</code> có một họ hàm cho các tình huống riêng: <code>calloc()</code> cấp phát cho một mảng và <b>khởi tạo về 0</b>; <code>realloc()</code> <b>đổi cỡ</b> một khối đã cấp; còn <code>memalign()</code>/<code>posix_memalign()</code> cấp khối <b>canh lề</b> theo biên bạn chỉ định.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-6">6</a></span> Tách hẳn ra là <code>alloca()</code>: xin bộ nhớ không phải trên heap mà trên <b>stack</b>, và được thu hồi tự động.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+    <p class="easy-only">Bên cạnh malloc còn mấy "người anh em": một cái vừa cấp vừa dọn sạch về 0, một cái giúp nới rộng miếng nhớ cũ, một cái cấp miếng có địa chỉ "chẵn" theo yêu cầu. Và một cái rất khác: mượn nhớ ngay trên stack, dùng xong tự biến mất. <b>Nhớ nhé: mỗi nhu cầu có một hàm cấp phát hợp với nó.</b></p>
+    <p class="en-only" lang="en">Around <code>malloc()</code> is a family of functions for special situations: <code>calloc()</code> allocates for an array and <b>zero-initializes</b> it; <code>realloc()</code> <b>resizes</b> an allocated block; and <code>memalign()</code>/<code>posix_memalign()</code> allocate a block <b>aligned</b> to a boundary you specify.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-6">6</a></span> Set apart is <code>alloca()</code>: it takes memory not from the heap but from the <b>stack</b>, and it is reclaimed automatically.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Phân biệt nhanh.</b> <code>calloc(n, size)</code> cấp cho <i>n</i> phần tử mỗi phần <i>size</i> byte và đặt tất cả về 0. <code>realloc(ptr, size)</code> đổi cỡ khối tại <i>ptr</i> — có thể dời khối đi nơi khác, nên phải dùng con trỏ <i>mới</i> nó trả về. <code>posix_memalign(&amp;p, align, size)</code> trả về <b>0</b> khi thành công (không đặt <code>errno</code>) và yêu cầu <i>align</i> là lũy thừa của 2 đồng thời là bội của <code>sizeof(void *)</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <p class="easy-only"><b>Phân biệt nhanh.</b> calloc: cấp cho một mảng và lau sạch về 0. realloc: nới/thu miếng cũ, có thể dời chỗ nên phải nhận con trỏ mới. posix_memalign: cấp miếng có địa chỉ "chẵn" theo yêu cầu. <b>Nhớ nhé: realloc có thể dời đồ của bạn — luôn dùng con trỏ nó trả về.</b></p>
+      <p class="en-only" lang="en"><b>Quick distinctions.</b> <code>calloc(n, size)</code> allocates <i>n</i> items of <i>size</i> bytes each and sets them all to 0. <code>realloc(ptr, size)</code> resizes the block at <i>ptr</i> — it may move the block elsewhere, so you must use the <i>new</i> pointer it returns. <code>posix_memalign(&amp;p, align, size)</code> returns <b>0</b> on success (and does not set <code>errno</code>), and requires <i>align</i> to be a power of two and a multiple of <code>sizeof(void *)</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">p = calloc(n, size);&nbsp;/* về 0 */<br>q = realloc(p, newsize);<br>if (q) p = q;&nbsp;/* có thể đã dời */<br>posix_memalign(&amp;r, 4096, size);<br>buf = alloca(len);&nbsp;/* trên stack */</p>
+      <p class="easy-only">calloc(n, size) -&gt; sạch về 0<br>realloc(p, n) -&gt; đổi cỡ, nhận con trỏ mới<br>alloca(n) -&gt; mượn trên stack</p>
+      <p class="en-only" lang="en">p = calloc(n, size);&nbsp;/* zeroed */<br>q = realloc(p, newsize);<br>if (q) p = q;&nbsp;/* may have moved */<br>posix_memalign(&amp;r, 4096, size);<br>buf = alloca(len);&nbsp;/* on the stack */</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">calloc() / realloc()</span>
+      <h3>
+        <span class="standard-copy">calloc() dọn sạch, realloc() đổi cỡ</span>
+        <span class="easy-only">calloc dọn về 0, realloc nới rộng</span>
+        <span class="en-only" lang="en">calloc() zeroes, realloc() resizes</span>
+      </h3>
+      <p class="standard-copy"><code>calloc()</code> tiện khi cần một mảng khởi đầu toàn 0 — nó còn thay bạn tính <i>n × size</i> và tránh tràn số. <code>realloc()</code> thường dùng để <b>tăng</b> cỡ một khối; khi không nới tại chỗ được, nó cấp khối mới, sao chép dữ liệu cũ sang rồi giải phóng khối cũ. Phần byte tăng thêm (nếu nới rộng) <b>không</b> được khởi tạo.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only">calloc giống malloc nhưng lau sạch miếng nhớ về 0 trước khi đưa. realloc giúp bạn đổi cỡ một miếng cũ: nếu chỗ cũ không đủ, nó tìm chỗ mới, bê đồ sang, rồi trả chỗ cũ. <b>Nhớ nhé: phần mới thêm sau realloc vẫn là rác, phải tự khởi tạo.</b></p>
+      <p class="en-only" lang="en"><code>calloc()</code> is handy when you need an array that starts all zero — it also computes <i>n × size</i> for you and guards against overflow. <code>realloc()</code> is commonly used to <b>grow</b> a block; when it cannot resize in place, it allocates a new block, copies the old data across, and frees the old block. The added bytes (when growing) are <b>not</b> initialized.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Cạm bẫy kinh điển: viết <code>p = realloc(p, n);</code>. Nếu thất bại, <code>realloc()</code> trả <code>NULL</code> mà khối cũ vẫn còn — bạn vừa mất con trỏ tới nó: rò rỉ. Hãy nhận vào một biến tạm trước.<span class="cite"><a href="#ref-3">3</a></span></span>
+        <span class="easy-only">Đừng viết <code>p = realloc(p, n)</code> — nếu hỏng, bạn mất luôn miếng cũ. Hãy dùng một biến tạm để hứng kết quả.</span>
+        <span class="en-only" lang="en">A classic trap: writing <code>p = realloc(p, n);</code>. If it fails, <code>realloc()</code> returns <code>NULL</code> while the old block still exists — and you have just lost the pointer to it: a leak. Receive it into a temporary first.<span class="cite"><a href="#ref-3">3</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">posix_memalign()</span>
+      <h3>
+        <span class="standard-copy">Cấp phát canh lề — khi địa chỉ phải "chẵn"</span>
+        <span class="easy-only">Khi cần miếng nhớ bắt đầu ở địa chỉ "chẵn"</span>
+        <span class="en-only" lang="en">Aligned allocation — when the address must be a multiple</span>
+      </h3>
+      <p class="standard-copy">Đôi khi ta cần một khối bắt đầu đúng tại biên lũy thừa của 2 (ví dụ biên trang). <code>memalign()</code> (có trong <code>&lt;malloc.h&gt;</code>, không thuộc mọi hệ UNIX) và <code>posix_memalign()</code> (chuẩn SUSv3 về sau) làm việc đó. <code>posix_memalign()</code> đặt con trỏ vào tham số đầu, trả về 0 nếu thành công; vùng cấp được giải phóng bằng chính <code>free()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <p class="easy-only">Có lúc địa chỉ miếng nhớ phải "tròn trịa" — ví dụ chia hết cho 4096. Mấy hàm cấp phát canh lề làm đúng việc đó: bạn nói cần tròn theo mức nào, nó cho miếng bắt đầu đúng chỗ. Dùng xong vẫn free như thường. <b>Nhớ nhé: cần địa chỉ chẵn thì dùng posix_memalign, vẫn free bình thường.</b></p>
+      <p class="en-only" lang="en">Sometimes we need a block starting exactly on a power-of-two boundary (a page boundary, say). <code>memalign()</code> (in <code>&lt;malloc.h&gt;</code>, not on every UNIX) and <code>posix_memalign()</code> (later standardized by SUSv3) do this. <code>posix_memalign()</code> stores the pointer in its first argument and returns 0 on success; the region is released with ordinary <code>free()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi làm I/O trực tiếp (mở tệp với <code>O_DIRECT</code>): nhân đòi vùng đệm canh theo biên khối thiết bị, nên bạn cần một bộ cấp phát canh lề thay vì <code>malloc()</code> thường.<span class="cite"><a href="#ref-6">6</a></span></span>
+        <span class="easy-only">Khi đọc/ghi "trực tiếp" xuống đĩa, hệ thống đòi vùng đệm có địa chỉ chẵn — lúc đó cần hàm cấp phát canh lề.</span>
+        <span class="en-only" lang="en">When doing direct I/O (opening a file with <code>O_DIRECT</code>): the kernel requires a buffer aligned to the device block boundary, so you need an aligned allocator rather than plain <code>malloc()</code>.<span class="cite"><a href="#ref-6">6</a></span></span>
+      </div>
+      <div class="mechanics deep-only">
+        <div class="info-block">
+          <h4>Ràng buộc tham số</h4>
+          <p>Với <code>posix_memalign()</code>, giá trị <i>alignment</i> phải vừa là lũy thừa của 2 vừa là bội của <code>sizeof(void *)</code>; nếu không, hàm trả về mã lỗi <code>EINVAL</code>. Khác với hầu hết hàm thư viện, nó <b>không</b> đặt <code>errno</code> mà trả thẳng số lỗi làm giá trị trả về.<span class="cite"><a href="#ref-6">6</a></span></p>
+        </div>
+        <div class="info-block">
+          <h4>Hướng hiện đại</h4>
+          <p>Trang man ngày nay khuyến nghị dùng <code>aligned_alloc()</code> (chuẩn C11) vì giao diện gọn hơn và cũng cho cùng khả năng — một ví dụ cho thấy API canh lề đã tiến hoá sau thời điểm sách ra đời (2010).<span class="cite"><a href="#ref-6">6</a></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">alloca()</span>
+      <h3>
+        <span class="standard-copy">alloca() — nhanh, tự dọn, nhưng nhiều ràng buộc</span>
+        <span class="easy-only">alloca() — mượn trên stack, tự trả, nhưng cẩn thận</span>
+        <span class="en-only" lang="en">alloca() — fast, self-cleaning, but constrained</span>
+      </h3>
+      <p class="standard-copy"><code>alloca()</code> cấp bộ nhớ bằng cách <b>nới khung stack</b> của hàm đang chạy — chỉ việc dời con trỏ stack, nên nhanh hơn <code>malloc()</code>. Bộ nhớ này được <b>tự động giải phóng</b> khi hàm gọi nó trả về; bạn <b>không được</b> gọi <code>free()</code> lên nó. Nó cũng tự thu hồi đúng đắn khi stack bị tháo gỡ bởi <code>longjmp()</code>/<code>siglongjmp()</code> — nơi mà bộ nhớ <code>malloc()</code> sẽ rò rỉ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <p class="easy-only"><code>alloca()</code> mượn chỗ ngay trên stack của hàm hiện tại. Nó nhanh, và khi hàm kết thúc thì chỗ đó biến mất luôn — bạn khỏi phải dọn, và cũng <i>không được</i> gọi free. Rất gọn, nhưng chỉ hợp cho miếng nhỏ. <b>Nhớ nhé: alloca thì không bao giờ free — stack tự dọn khi hàm trả về.</b></p>
+      <p class="en-only" lang="en"><code>alloca()</code> allocates memory by <b>enlarging the stack frame</b> of the running function — just by moving the stack pointer, so it is faster than <code>malloc()</code>. This memory is <b>freed automatically</b> when the function that called it returns; you must <b>not</b> call <code>free()</code> on it. It is also reclaimed correctly when the stack is unwound by <code>longjmp()</code>/<code>siglongjmp()</code> — where <code>malloc()</code> memory would leak.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Hãy dè chừng: xin quá nhiều bằng <code>alloca()</code> làm <b>tràn stack</b> mà không có cách phát hiện — hành vi không xác định. Và đừng gọi <code>alloca()</code> ngay trong danh sách đối số của một lời gọi hàm.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span>
+        <span class="easy-only">Cẩn thận: xin quá nhiều bằng alloca sẽ làm tràn stack mà không báo trước. Chỉ dùng cho miếng nhỏ.</span>
+        <span class="en-only" lang="en">Beware: asking for too much with <code>alloca()</code> overflows the stack with no way to detect it — undefined behaviour. And do not call <code>alloca()</code> inside the argument list of a function call.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="section-heading">
+      <h2 id="ngo-nhan-title">
+        <span class="standard-copy">Ba ngộ nhận thường gặp</span>
+        <span class="en-only" lang="en">Three common misconceptions</span>
+      </h2>
+    </div>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“free() trả bộ nhớ lại cho hệ điều hành ngay”</span>
+          <span class="en-only" lang="en">“free() gives the memory straight back to the OS”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> cứ <code>free()</code> là tiến trình nhỏ lại.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> thường <code>free()</code> chỉ đưa khối vào free list để tái dùng; program break thường đứng yên vì khối nằm giữa heap và để giảm số lần gọi <code>sbrk()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> a <code>free()</code> makes the process shrink.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> usually <code>free()</code> just puts the block on the free list for reuse; the program break typically stays put because the block is mid-heap and to cut the number of <code>sbrk()</code> calls.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“malloc() trả về bộ nhớ đã sạch về 0”</span>
+          <span class="en-only" lang="en">“malloc() returns zeroed memory”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> vùng vừa xin có thể tin là toàn số 0.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> <code>malloc()</code> trả về bộ nhớ <i>chưa khởi tạo</i> — nội dung là rác; chỉ <code>calloc()</code> mới lau sạch về 0.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> the freshly requested region can be trusted to be all zeros.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> <code>malloc()</code> returns <i>uninitialized</i> memory — its contents are garbage; only <code>calloc()</code> zeroes it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“alloca() cũng phải free() như malloc()”</span>
+          <span class="en-only" lang="en">“alloca() memory must be free()d like malloc()”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> cấp phát là phải giải phóng, nên <code>alloca()</code> cũng cần <code>free()</code>.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> <code>alloca()</code> cấp trên khung stack và tự biến mất khi hàm trả về; gọi <code>free()</code> lên nó là lỗi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> what is allocated must be freed, so <code>alloca()</code> needs <code>free()</code> too.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> <code>alloca()</code> allocates on the stack frame and vanishes when the function returns; calling <code>free()</code> on it is a bug.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm cấp phát bộ nhớ</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped memory allocation</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã nắm cả hai tầng của bộ nhớ động: program break bên dưới và lớp malloc bên trên.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you grasp both tiers of dynamic memory: the program break below and the malloc layer above.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Program break là gì, và <code>brk()</code> khác <code>sbrk()</code> ra sao? <code>sbrk(0)</code> làm gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao bộ nhớ vừa nới bằng <code>sbrk()</code> lại chưa có trang vật lý cho tới lần chạm đầu tiên?</p>
+      </li>
+      <li>
+        <p>Sau khi <code>malloc()</code> trả về, nội dung khối nhớ là gì, và bạn phải kiểm tra điều gì trước khi dùng?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao không nên (và không cần) ép kiểu giá trị <code>void *</code> mà <code>malloc()</code> trả về?</p>
+      </li>
+      <li>
+        <p>Nêu hai lý do vì sao <code>free()</code> thường không hạ program break để trả bộ nhớ về nhân.</p>
+        <p class="deep-only">Gợi ý sâu hơn: trường hợp nào thì bộ nhớ <i>có</i> được trả về ngay (gợi ý: ngưỡng và <code>mmap()</code>)?</p>
+      </li>
+      <li>
+        <p><code>free()</code> làm sao biết khối cần giải phóng to bao nhiêu, và vì sao một lần ghi tràn ra ngoài khối lại nguy hiểm đến vậy?</p>
+        <p class="deep-only">Gợi ý sâu hơn: free list được lưu ở đâu, và điều đó liên hệ thế nào với double free?</p>
+      </li>
+      <li>
+        <p>Phân biệt <code>malloc()</code>, <code>calloc()</code>, <code>realloc()</code>; và <code>alloca()</code> khác chúng ở điểm cốt lõi nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao <code>p = realloc(p, n);</code> là một khuôn mẫu nguy hiểm?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Heap là gì, và "nới bộ nhớ heap" nghĩa là làm gì?</p></li>
+      <li><p>Sau khi gọi malloc, bạn phải kiểm tra gì trước khi dùng miếng nhớ?</p></li>
+      <li><p>Vì sao gọi free rồi mà chương trình vẫn không nhỏ lại?</p></li>
+      <li><p>Vì sao viết tràn ra ngoài miếng nhớ đã xin lại nguy hiểm?</p></li>
+      <li><p>alloca khác malloc ở chỗ nào, và vì sao không bao giờ free alloca?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>What is the program break, and how does <code>brk()</code> differ from <code>sbrk()</code>? What does <code>sbrk(0)</code> do?</p></li>
+      <li><p>After <code>malloc()</code> returns, what are the block's contents, and what must you check before using it?</p></li>
+      <li><p>Give two reasons why <code>free()</code> usually does not lower the program break to return memory to the kernel.</p></li>
+      <li><p>How does <code>free()</code> know how big the block is, and why is an overrun past a block so dangerous?</p></li>
+      <li><p>Distinguish <code>malloc()</code>, <code>calloc()</code>, <code>realloc()</code>; and how does <code>alloca()</code> fundamentally differ from them?</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Bộ nhớ động là một hệ hai tầng: nhân chỉ biết <span class="closing-accent">dời program break bằng brk()/sbrk()</span>, còn thư viện C <span class="closing-accent">cắt nhỏ heap và ghi sổ bằng length word và free list</span> ngay trong chính bộ nhớ đó. Hiểu điều ấy, bạn hiểu luôn vì sao <code>free()</code> thường giữ lại bộ nhớ, vì sao một lần ghi tràn lại chí mạng, và vì sao <code>alloca()</code> chẳng bao giờ cần <code>free()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Có hai tầng: <span class="closing-accent">nhân chỉ dời một cái hàng rào</span>, còn <span class="closing-accent">thư viện C cắt bãi đất thành từng miếng cho bạn</span>. Hiểu hai tầng này là hiểu mọi chuyện lạ của bộ nhớ động. <b>Nhớ nhé: malloc là người quản kho, nhân chỉ giao đất theo lô lớn.</b></p>
+    <p class="en-only" lang="en">Dynamic memory is a two-tier system: the kernel only knows how to <span class="closing-accent">move the program break with brk()/sbrk()</span>, while the C library <span class="closing-accent">carves the heap and keeps its books with a length word and free list</span> inside that very memory. Grasp that, and you also grasp why <code>free()</code> usually keeps memory, why one overrun is fatal, and why <code>alloca()</code> never needs <code>free()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-6-processes.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 6 · Tiến trình</span>
+    <span class="nav-title en-only" lang="en">Chapter 6 · Processes</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-13-file-io-buffering.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 13 · Đệm vào/ra tệp</span>
+    <span class="nav-title en-only" lang="en">Chapter 13 · File I/O Buffering</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chương 7, “Memory Allocation”, trang 139–152.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chapter 7, “Memory Allocation”, pp. 139–152.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Michael Kerrisk, <i>The Linux Programming Interface</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3), ch. 7 “Memory Allocation”, pp. 139–152. — <a href="https://man7.org/tlpi/" target="_blank" rel="noopener noreferrer">man7.org/tlpi</a></li>
+      <li id="ref-2">“brk(2) / sbrk(2) — Linux manual page” (adjusting the program break; sbrk returns the previous break, (void *) −1 on error). <a href="https://man7.org/linux/man-pages/man2/brk.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/brk.2.html</a></li>
+      <li id="ref-3">“malloc(3) — Linux manual page” (malloc/free/calloc/realloc, alignment, uninitialized memory, free(NULL)). <a href="https://man7.org/linux/man-pages/man3/malloc.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/malloc.3.html</a></li>
+      <li id="ref-4">“mallopt(3) — Linux manual page” (M_TRIM_THRESHOLD and M_MMAP_THRESHOLD defaults of 128 kB, MALLOC_CHECK_ values). <a href="https://man7.org/linux/man-pages/man3/mallopt.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/mallopt.3.html</a></li>
+      <li id="ref-5">“mallinfo(3) — Linux manual page” (statistics on memory managed by the malloc package). <a href="https://man7.org/linux/man-pages/man3/mallinfo.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/mallinfo.3.html</a></li>
+      <li id="ref-6">“posix_memalign(3) — Linux manual page” (posix_memalign/memalign/aligned_alloc; alignment a power of two and multiple of sizeof(void *); returns 0 or an error number, errno not set). <a href="https://man7.org/linux/man-pages/man3/posix_memalign.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/posix_memalign.3.html</a></li>
+      <li id="ref-7">“alloca(3) — Linux manual page” (allocates on the stack frame, freed automatically on return, undefined behaviour on stack overflow). <a href="https://man7.org/linux/man-pages/man3/alloca.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/alloca.3.html</a></li>
+      <li id="ref-8">“mtrace(3) — Linux manual page” (mtrace()/muntrace() allocation tracing and the MALLOC_TRACE file). <a href="https://man7.org/linux/man-pages/man3/mtrace.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/mtrace.3.html</a></li>
+      <li id="ref-9">“mcheck(3) — Linux manual page” (mcheck()/mprobe() heap consistency checking, -lmcheck). <a href="https://man7.org/linux/man-pages/man3/mcheck.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/mcheck.3.html</a></li>
+      <li id="ref-10">“Valgrind” — the Valgrind memory-error detector (leaks, invalid reads/writes). Valgrind Developers. <a href="https://valgrind.org/" target="_blank" rel="noopener noreferrer">valgrind.org</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-6-processes.html">chapter 6</a>
+      <a href="chapter-13-file-io-buffering.html">chapter 13</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('tlpi-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('tlpi-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('tlpi-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>
