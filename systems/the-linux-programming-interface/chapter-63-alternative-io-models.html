@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 63 · Mô hình I/O thay thế — The Linux Programming Interface</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 63 “Alternative I/O Models” trong The Linux Programming Interface (Michael Kerrisk, No Starch Press, 2010): vì sao I/O chặn với một tiến trình/luồng cho mỗi kết nối không mở rộng được; ba lựa chọn thay thế — ghép kênh I/O (select() và poll()), I/O do tín hiệu điều khiển, và API epoll riêng của Linux; thông báo mức (level-triggered) so với thông báo cạnh (edge-triggered); vấn đề O(n) của select/poll; chi tiết epoll (epoll_create, danh sách quan tâm và danh sách sẵn sàng, epoll_ctl, epoll_wait, EPOLLET); và cách chờ cả tín hiệu lẫn bộ mô tả tệp (self-pipe, signalfd, pselect/ppoll/epoll_pwait). Ba mức đọc, mọi khẳng định đều có nguồn.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('tlpi-reading-mode'),
+l=localStorage.getItem('tlpi-lang'),
+t=localStorage.getItem('tlpi-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   THE LINUX PROGRAMMING INTERFACE — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"TLPI · CH.63";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+/* soon = chapter not yet on disk; rendered as a non-link cell. */
+.chapter-path .soon{
+  display:block;padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--tint);border:1px dashed var(--line);opacity:.6;
+}
+.chapter-path .soon .soon-tag{
+  display:inline-block;font-family:var(--sans);font-size:.6rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:.1rem .45rem;margin-top:.4rem;
+}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.series-links .soon{margin-right:.5rem;color:var(--muted);opacity:.55;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+
+/* ---------- whole-book mind map banner ---------- */
+.mindmap-banner{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  gap:clamp(1rem,3vw,2rem);align-items:center;
+  margin:3rem 0 0;padding:1.35rem clamp(1.15rem,3vw,2rem);
+  border:1px solid var(--line);border-left:4px solid var(--teal);
+  border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);
+  color:var(--ink);text-decoration:none;
+  transition:border-color .15s,transform .15s;
+}
+a.mindmap-banner:hover{border-color:var(--teal);transform:translateY(-2px);}
+a.mindmap-banner:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.mindmap-banner.soon{opacity:.5;cursor:default;}
+.mindmap-icon{font-size:1.9rem;line-height:1;}
+.mindmap-banner h3{margin:0 0 .3rem;font-size:1.05rem;}
+.mindmap-banner p{margin:0;max-width:48rem;font-size:.88rem;color:var(--muted);}
+.mindmap-banner .result{margin-top:0;color:var(--teal);font-weight:600;white-space:nowrap;}
+.mindmap-banner.soon .result{color:var(--muted);}
+@media (max-width:860px){
+  .mindmap-banner{grid-template-columns:auto minmax(0,1fr);}
+  .mindmap-banner .result{grid-column:2;white-space:normal;}
+}
+@media (max-width:460px){
+  .mindmap-banner{margin-left:0;margin-right:0;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    The Linux Programming Interface
+    <span>Chương 63 · Alternative I/O Models</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 63 · Mô hình I/O thay thế</span>
+      <span class="en-only" lang="en">Chapter 63 · Alternative I/O Models</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Khi một tiến trình phải theo dõi hàng nghìn kết nối cùng lúc</span>
+      <span class="easy-only">Khi một chương trình phải trông chừng rất nhiều kết nối một lúc</span>
+      <span class="en-only" lang="en">When one process must watch thousands of connections at once</span>
+    </h1>
+
+    <p class="standard-copy">Mô hình I/O <b>chặn</b> (blocking) mà phần lớn chương trình trong sách dùng — mỗi lời gọi <code>read()</code>/<code>write()</code> nằm chờ cho đến khi xong — là đủ cho nhiều ứng dụng, nhưng không phải tất cả. Khi một tiến trình phải <i>cùng lúc</i> theo dõi nhiều bộ mô tả tệp (file descriptor), hoặc kiểm tra xem I/O có khả thi mà <i>không bị chặn</i>, nó cần cách khác.<span class="cite"><a href="#ref-1">1</a></span> Kerrisk giới thiệu ba lựa chọn thay thế: <b>ghép kênh I/O</b> (I/O multiplexing) qua <code>select()</code> và <code>poll()</code>; <b>I/O do tín hiệu điều khiển</b> (signal-driven I/O); và <b>API epoll</b> riêng của Linux.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hãy tưởng tượng một người gác cổng chỉ biết đứng chờ ở <i>một</i> cánh cửa cho tới khi có người tới. Nếu toà nhà có hàng nghìn cửa, cách đó vô vọng — thuê nghìn người gác cũng tốn kém. Chương này dạy ba cách để <i>một</i> người gác trông được tất cả các cửa cùng lúc: hỏi dồn một lượt (select/poll), nhờ chuông báo (tín hiệu), và danh sách thông minh của Linux (epoll). <b>Nhớ nhé: thay vì chờ từng cửa một, hãy trông tất cả các cửa cùng lúc.</b></p>
+    <p class="en-only" lang="en">The <b>blocking</b> I/O model that most programs in the book use — each <code>read()</code>/<code>write()</code> waits until it completes — is sufficient for many applications, but not all. When a process must <i>simultaneously</i> monitor multiple file descriptors, or check whether I/O is possible <i>without blocking</i>, it needs another approach.<span class="cite"><a href="#ref-1">1</a></span> Kerrisk introduces three alternatives: <b>I/O multiplexing</b> via <code>select()</code> and <code>poll()</code>; <b>signal-driven I/O</b>; and the Linux-specific <b>epoll API</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only deep-bilingual"><span class="vi-only">Trước khi tới ba lựa chọn, sách nhắc hai cách <i>một phần</i> đã gặp: <b>I/O không chặn</b> (bật cờ <code>O_NONBLOCK</code>, rồi "thăm dò" — poll — từng bộ mô tả theo chu kỳ) và dùng <b>nhiều tiến trình hoặc luồng</b> (mỗi kết nối một người xử lý). Cả hai đều hạn chế: thăm dò quá thưa thì chậm phản ứng, thăm dò trong vòng lặp chặt thì ngốn CPU; còn một-luồng-mỗi-kết-nối thì tốn bộ nhớ và chi phí chuyển ngữ cảnh khi số kết nối lên tới hàng nghìn — chính là "bài toán C10K".<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></span><span class="en-only" lang="en">Before the three alternatives, the book recalls two <i>partial</i> techniques already met: <b>nonblocking I/O</b> (set <code>O_NONBLOCK</code>, then periodically "poll" each descriptor) and using <b>multiple processes or threads</b> (one handler per connection). Both have limits: polling too rarely means sluggish response, polling in a tight loop wastes CPU; and one-thread-per-connection costs memory and context-switch overhead once connections reach the thousands — the "C10K problem."<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> không mô hình nào trong số này <i>tự thực hiện</i> I/O — chúng chỉ cho biết bộ mô tả tệp nào đã <b>sẵn sàng</b>, rồi ta mới dùng các lời gọi I/O truyền thống. Chìa khoá để chọn đúng là phân biệt <b>thông báo mức</b> (level-triggered) với <b>thông báo cạnh</b> (edge-triggered), và hiểu vì sao <code>select()</code>/<code>poll()</code> mở rộng kém theo cỡ O(n) trong khi epoll tỉ lệ theo số <i>sự kiện</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> ba công cụ này không tự đọc hay ghi hộ bạn — chúng chỉ mách "cửa này có người rồi!", việc mở cửa vẫn là của bạn. Chọn công cụ nào tuỳ vào số cửa và cách bạn muốn được báo tin. <b>Nhớ nhé: chúng chỉ báo tin, việc I/O vẫn do bạn làm.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> none of these models <i>performs</i> I/O itself — they only tell you which file descriptors are <b>ready</b>, after which you use the traditional I/O calls. The key to choosing well is distinguishing <b>level-triggered</b> from <b>edge-triggered</b> notification, and seeing why <code>select()</code>/<code>poll()</code> scale poorly at O(n) while epoll scales with the number of <i>events</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: ba mô hình I/O thay thế để theo dõi nhiều bộ mô tả tệp cùng lúc — ghép kênh I/O với select() và poll(), I/O do tín hiệu điều khiển với O_ASYNC và SIGIO, và API epoll riêng của Linux. Diagram: three alternative I/O models for monitoring many file descriptors at once — I/O multiplexing with select() and poll(), signal-driven I/O with O_ASYNC and SIGIO, and the Linux-specific epoll API.">
+    <div class="core">
+      <b>alternative I/O</b>
+      <small class="standard-copy">Theo dõi nhiều bộ mô tả tệp cùng lúc, không chặn</small>
+      <small class="easy-only">Trông nhiều kết nối một lúc mà không phải đứng chờ</small>
+      <small class="en-only" lang="en">Monitor many file descriptors at once, without blocking</small>
+    </div>
+
+    <div class="node">
+      <b>ghép kênh · select() / poll()</b>
+      <small class="standard-copy">Chuẩn, khả chuyển; chỉ thông báo mức; mở rộng O(n)</small>
+      <small class="easy-only">Hỏi dồn một lượt: "cửa nào có người?"</small>
+      <small class="en-only" lang="en">Portable; level-triggered only; O(n) scaling</small>
+    </div>
+
+    <div class="node">
+      <b>tín hiệu · signal-driven I/O</b>
+      <small class="standard-copy">O_ASYNC + SIGIO; thông báo cạnh; nhanh hơn select/poll</small>
+      <small class="easy-only">Nhờ chuông báo: khi có việc, nhân gửi tín hiệu</small>
+      <small class="en-only" lang="en">O_ASYNC + SIGIO; edge-triggered; faster than select/poll</small>
+    </div>
+
+    <div class="node">
+      <b>epoll · riêng của Linux</b>
+      <small class="standard-copy">Mới từ Linux 2.6; cả mức lẫn cạnh; tỉ lệ theo số sự kiện</small>
+      <small class="easy-only">Danh sách thông minh: chỉ báo đúng cửa vừa có việc</small>
+      <small class="en-only" lang="en">New in Linux 2.6; level or edge; scales with events</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#why-alternatives">
+    <span>01</span>
+    <b class="standard-copy">Vì sao I/O chặn không mở rộng được</b>
+    <b class="easy-only">Vì sao chờ từng cửa một là vô vọng</b>
+    <b class="en-only" lang="en">Why blocking I/O does not scale</b>
+  </a>
+  <a href="#level-edge">
+    <span>02</span>
+    <b class="standard-copy">Thông báo mức và thông báo cạnh</b>
+    <b class="easy-only">Hai kiểu báo tin: theo trạng thái và theo thay đổi</b>
+    <b class="en-only" lang="en">Level-triggered vs edge-triggered</b>
+  </a>
+  <a href="#select-poll">
+    <span>03</span>
+    <b class="standard-copy">Ghép kênh I/O: select(), poll() và tín hiệu</b>
+    <b class="easy-only">Hỏi dồn một lượt và cách nhờ chuông báo</b>
+    <b class="en-only" lang="en">I/O multiplexing: select(), poll(), signals</b>
+  </a>
+  <a href="#epoll">
+    <span>04</span>
+    <b class="standard-copy">API epoll và chờ cả tín hiệu lẫn bộ mô tả</b>
+    <b class="easy-only">Danh sách thông minh epoll, và chờ cả tín hiệu</b>
+    <b class="en-only" lang="en">The epoll API and waiting on signals too</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="why-alternatives" aria-labelledby="why-alternatives-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="why-alternatives-title">
+      <span class="standard-copy">I/O chặn là đủ cho nhiều việc, nhưng sụp đổ khi phải trông nhiều bộ mô tả</span>
+      <span class="easy-only">Chờ từng cửa một thì ổn, nhưng hỏng khi có hàng nghìn cửa</span>
+      <span class="en-only" lang="en">Blocking I/O is fine for many tasks, but collapses when monitoring many descriptors</span>
+    </h2>
+    <p class="standard-copy">Với I/O trên ống (pipe), FIFO, socket và nhiều loại tệp khác, một lời gọi <code>read()</code> sẽ <b>chặn</b> nếu chưa có dữ liệu, và <code>write()</code> sẽ chặn nếu chưa đủ chỗ.<span class="cite"><a href="#ref-1">1</a></span> Mô hình này đơn giản và đủ dùng cho hầu hết chương trình. Nhưng một số ứng dụng cần làm một trong hai (hoặc cả hai) việc sau: <i>kiểm tra</i> xem I/O có khả thi trên một bộ mô tả mà không bị chặn nếu chưa; và <i>theo dõi nhiều</i> bộ mô tả cùng lúc để biết cái nào sẵn sàng.<span class="cite"><a href="#ref-1">1</a></span> Máy chủ mạng phục vụ hàng nghìn khách là ví dụ kinh điển.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+    <p class="easy-only">Khi bạn gọi "đọc" trên một đường truyền chưa có dữ liệu, chương trình phải <i>đứng chờ</i> — gọi là bị "chặn". Với một việc thì chẳng sao. Nhưng nếu bạn phải trông mười, trăm, nghìn đường truyền cùng lúc, mà đứng chờ ở đường thứ nhất thì các đường khác bị bỏ bê. Cần một cách trông tất cả cùng lúc. <b>Nhớ nhé: một người không thể đứng chờ ở nhiều cửa một lúc.</b></p>
+    <p class="en-only" lang="en">For I/O on pipes, FIFOs, sockets, and many other file types, a <code>read()</code> <b>blocks</b> if no data is available, and a <code>write()</code> blocks if there is not enough room.<span class="cite"><a href="#ref-1">1</a></span> This model is simple and sufficient for most programs. But some applications need to do one or both of the following: <i>check</i> whether I/O is possible on a descriptor without blocking if it is not; and <i>monitor multiple</i> descriptors at once to see which are ready.<span class="cite"><a href="#ref-1">1</a></span> A network server serving thousands of clients is the classic case.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <b>Ghép kênh I/O</b> (I/O multiplexing) cho phép một tiến trình đồng thời theo dõi nhiều bộ mô tả tệp để biết I/O có khả thi trên bất kỳ cái nào không. <code>select()</code> và <code>poll()</code> thực hiện việc này. Điểm mấu chốt: không lời gọi nào <i>tự làm</i> I/O — chúng chỉ chặn cho tới khi có ít nhất một bộ mô tả sẵn sàng, rồi báo lại.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> "Ghép kênh" nghĩa là một người trông nhiều cửa cùng lúc. Người đó không tự mở cửa; chỉ reo lên "cửa số 7 có người!" để bạn ra mở. <b>Nhớ nhé: ghép kênh là một người canh nhiều cửa.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <b>I/O multiplexing</b> lets a process simultaneously monitor multiple file descriptors to learn whether I/O is possible on any of them. <code>select()</code> and <code>poll()</code> perform this. The crux: neither call <i>does</i> the I/O — each blocks until at least one descriptor is ready, then reports back.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">blocking:&nbsp;read(fd) ──► chờ mãi<br>nonblock:&nbsp;O_NONBLOCK ──► EAGAIN<br>multiplex: select/poll(nhiều fd)<br>signal:&nbsp;&nbsp;&nbsp;O_ASYNC ──► SIGIO<br>epoll:&nbsp;&nbsp;&nbsp;&nbsp;epoll_wait(nhiều fd)</p>
+      <p class="easy-only">1 việc&nbsp;&nbsp;--&gt; đứng chờ cũng được<br>nhiều&nbsp;&nbsp;&nbsp;--&gt; cần select / poll / epoll<br>rất nhiều --&gt; epoll là tốt nhất</p>
+      <p class="en-only" lang="en">blocking:&nbsp;read(fd) ──► waits<br>nonblock:&nbsp;O_NONBLOCK ──► EAGAIN<br>multiplex: select/poll(many fds)<br>signal:&nbsp;&nbsp;&nbsp;O_ASYNC ──► SIGIO<br>epoll:&nbsp;&nbsp;&nbsp;&nbsp;epoll_wait(many fds)</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">nonblocking I/O</span>
+      <h3>
+        <span class="standard-copy">I/O không chặn, và vì sao "thăm dò tay" vẫn kém</span>
+        <span class="easy-only">Đặt chế độ không chờ — nhưng tự hỏi vòng vòng vẫn tệ</span>
+        <span class="en-only" lang="en">Nonblocking I/O, and why hand-polling is still poor</span>
+      </h3>
+      <p class="standard-copy">Bật cờ <code>O_NONBLOCK</code> khiến mọi lời gọi I/O không hoàn tất được ngay sẽ trả về lỗi <code>EAGAIN</code> (hoặc <code>EWOULDBLOCK</code>) thay vì chặn.<span class="cite"><a href="#ref-1">1</a></span> Ta có thể đánh dấu tất cả bộ mô tả là không chặn rồi lần lượt "thăm dò" từng cái. Nhưng theo Kerrisk, cách thăm dò tay này thường không ổn: thăm dò thưa thì độ trễ phản ứng dài khó chấp nhận, còn thăm dò trong vòng lặp chặt thì phí thời gian CPU.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Chế độ "không chờ" bảo chương trình: nếu chưa có gì thì báo "chưa có" rồi đi tiếp, đừng đứng ngây ra. Nhưng nếu bạn cứ chạy quanh hỏi từng cửa liên tục, bạn mệt lả mà chẳng hiệu quả. <b>Nhớ nhé: không chờ thì tốt, nhưng hỏi vòng vòng mãi vẫn phí sức.</b></p>
+      <p class="en-only" lang="en">Enabling the <code>O_NONBLOCK</code> flag makes any I/O call that cannot complete immediately return the error <code>EAGAIN</code> (or <code>EWOULDBLOCK</code>) instead of blocking.<span class="cite"><a href="#ref-1">1</a></span> We could mark all descriptors nonblocking and "poll" each in turn. But Kerrisk notes this hand-polling is usually undesirable: polling infrequently gives unacceptably long latency, while polling in a tight loop wastes CPU time.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Trong sách, từ "poll" mang hai nghĩa: tên lời gọi <code>poll()</code>, và hành động "kiểm tra không chặn trạng thái một bộ mô tả" — đừng lẫn hai nghĩa.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Chữ "poll" có hai nghĩa: tên một hàm, và việc "ghé hỏi nhanh xem có gì chưa".</span>
+        <span class="en-only" lang="en">In the book, "poll" has two meanings: the name of the <code>poll()</code> call, and the act of "performing a nonblocking check on a descriptor's status" — don't conflate them.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">thread-per-connection</span>
+      <h3>
+        <span class="standard-copy">Một luồng mỗi kết nối: dễ viết, nhưng không mở rộng</span>
+        <span class="easy-only">Mỗi kết nối một người xử lý: đơn giản mà tốn kém</span>
+        <span class="en-only" lang="en">One thread per connection: easy, but doesn't scale</span>
+      </h3>
+      <p class="standard-copy">Thay vì chặn, ta có thể tạo một tiến trình (hoặc luồng) mới cho mỗi bộ mô tả: cái đó chặn còn cha vẫn làm việc khác.<span class="cite"><a href="#ref-1">1</a></span> Cách này dễ hiểu nhưng tốn kém — tạo và duy trì nhiều tiến trình/luồng ngốn bộ nhớ và chi phí chuyển ngữ cảnh; khi số kết nối lên hàng chục nghìn, mô hình sụp đổ. Đó chính là động cơ của các mô hình trong chương này.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+      <p class="easy-only">Một cách khác: cứ mỗi cửa thuê một người gác riêng. Dễ nghĩ, nhưng nếu toà nhà có mười nghìn cửa thì bạn phá sản vì tiền lương. Máy tính cũng vậy: quá nhiều luồng thì hết bộ nhớ và chậm. <b>Nhớ nhé: thuê nghìn người gác không phải lời giải.</b></p>
+      <p class="en-only" lang="en">Instead of blocking, we can create a new process (or thread) per descriptor: that one blocks while the parent carries on.<span class="cite"><a href="#ref-1">1</a></span> This is intuitive but costly — creating and maintaining many processes/threads consumes memory and context-switch overhead; at tens of thousands of connections the model collapses. That is precisely the motivation for this chapter's models.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">"Bài toán C10K" của Dan Kegel (được sách dẫn ở mục Further information) mô tả đúng thách thức này cho máy chủ web phục vụ hàng chục nghìn khách.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></span>
+        <span class="easy-only">Dân lập trình gọi đây là "bài toán C10K" — làm sao phục vụ mười nghìn khách cùng lúc.</span>
+        <span class="en-only" lang="en">Dan Kegel's "C10K problem" (cited in the book's Further information) describes exactly this challenge for web servers serving tens of thousands of clients.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-11">11</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">no I/O performed</span>
+      <h3>
+        <span class="standard-copy">Các cơ chế này chỉ báo "sẵn sàng" — I/O vẫn do bạn làm</span>
+        <span class="easy-only">Chúng chỉ mách cửa nào có người, không mở cửa hộ</span>
+        <span class="en-only" lang="en">These mechanisms only signal "ready" — you still do the I/O</span>
+      </h3>
+      <p class="standard-copy">Điểm chung quan trọng nhất của cả ba mô hình: <i>không cái nào tự thực hiện I/O</i>. Chúng chỉ giúp xác định bộ mô tả nào đã sẵn sàng; khi biết rồi, ta vẫn dùng các lời gọi <code>read()</code>/<code>write()</code> truyền thống để làm thật.<span class="cite"><a href="#ref-1">1</a></span> Hiểu điều này tránh được ngộ nhận rằng epoll hay select "đọc dữ liệu giúp".<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Cả ba công cụ chỉ là người đưa tin: "cửa số 3 có khách!". Việc ra mở cửa, tiếp khách vẫn là của bạn. <b>Nhớ nhé: công cụ báo tin, bạn mới là người làm I/O.</b></p>
+      <p class="en-only" lang="en">The single most important thing all three models share: <i>none performs I/O itself</i>. They only help determine which descriptor is ready; once you know, you still use the traditional <code>read()</code>/<code>write()</code> calls to do the work.<span class="cite"><a href="#ref-1">1</a></span> Grasping this avoids the myth that epoll or select "reads the data for you."<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mục tóm tắt của chương khẳng định đúng điểm này: các cơ chế cho biết bộ mô tả sẵn sàng, còn I/O thực thì dùng lời gọi hệ thống thông thường.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Trong phần tóm tắt, tác giả nhắc lại: báo "sẵn sàng" là một chuyện, làm I/O là chuyện khác.</span>
+        <span class="en-only" lang="en">The chapter's summary states exactly this: the mechanisms report readiness, while the actual I/O uses the ordinary system calls.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đã rõ vì sao cần một cách trông nhiều bộ mô tả cùng lúc. Nhưng trước khi so từng API, phải nắm một phân biệt chi phối toàn chương: khi nào một bộ mô tả được coi là "sẵn sàng" — theo <i>trạng thái</i> hiện tại, hay theo <i>thay đổi</i> vừa xảy ra?<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Giờ ta hiểu vì sao cần trông nhiều cửa. Nhưng "cửa có người" nghĩa là gì — là <i>đang có</i> người đứng đó, hay là <i>vừa mới</i> có người tới? Hai cách hiểu này dẫn tới hai kiểu báo tin rất khác nhau.</p>
+    <p class="en-only" lang="en">We see why we need to monitor many descriptors at once. But before comparing APIs, we must grasp a distinction that governs the whole chapter: when is a descriptor considered "ready" — by its current <i>state</i>, or by a <i>change</i> that just happened?<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="level-edge" aria-labelledby="level-edge-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="level-edge-title">
+      <span class="standard-copy">Thông báo mức và thông báo cạnh — phân biệt mấu chốt của chương</span>
+      <span class="easy-only">Báo theo "đang có" hay báo theo "vừa thay đổi"</span>
+      <span class="en-only" lang="en">Level-triggered vs edge-triggered — the chapter's key distinction</span>
+    </h2>
+    <p class="standard-copy">Kerrisk tách rõ hai mô hình thông báo sự sẵn sàng của một bộ mô tả. <b>Thông báo mức</b> (level-triggered): một bộ mô tả được coi là sẵn sàng nếu lúc này có thể thực hiện một lời gọi I/O mà <i>không bị chặn</i>. <b>Thông báo cạnh</b> (edge-triggered): thông báo được đưa ra khi <i>có hoạt động I/O</i> (ví dụ dữ liệu mới) trên bộ mô tả kể từ lần theo dõi trước.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hãy tưởng tượng một bình nước. "Theo mức" là: hễ trong bình <i>còn</i> nước thì đèn vẫn sáng, nhắc bạn mãi. "Theo cạnh" là: đèn chỉ chớp <i>một lần</i> đúng lúc có người <i>vừa</i> rót thêm nước vào; sau đó tắt, dù bình vẫn còn nước. <b>Nhớ nhé: "mức" nhắc khi còn, "cạnh" chỉ báo lúc vừa thay đổi.</b></p>
+    <p class="en-only" lang="en">Kerrisk draws a sharp line between two models of readiness notification for a descriptor. <b>Level-triggered</b>: a descriptor is considered ready if it is currently possible to perform an I/O call <i>without blocking</i>. <b>Edge-triggered</b>: notification is provided when there is <i>I/O activity</i> (e.g. new input) on the descriptor since it was last monitored.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa (Bảng 63-1).</b> Mỗi mô hình I/O chỉ hỗ trợ một hoặc cả hai kiểu: <code>select()</code> và <code>poll()</code> <i>chỉ</i> thông báo theo mức; I/O do tín hiệu điều khiển <i>chỉ</i> thông báo theo cạnh; còn epoll hỗ trợ <i>cả hai</i> (mặc định là mức, chuyển sang cạnh bằng cờ <code>EPOLLET</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> select/poll chỉ biết kiểu "còn thì nhắc". Tín hiệu chỉ biết kiểu "vừa có mới báo". Riêng epoll làm được cả hai. <b>Nhớ nhé: epoll linh hoạt nhất, làm được cả hai kiểu báo.</b></p>
+      <p class="en-only" lang="en"><b>Definition (Table 63-1).</b> Each I/O model supports one or both kinds: <code>select()</code> and <code>poll()</code> provide <i>only</i> level-triggered notification; signal-driven I/O provides <i>only</i> edge-triggered; epoll supports <i>both</i> (level-triggered by default, switched to edge-triggered with the <code>EPOLLET</code> flag).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">Bảng 63-1 (kiểu thông báo)<br>select, poll&nbsp;&nbsp;──► mức<br>signal-driven ──► cạnh<br>epoll&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;──► mức + cạnh</p>
+      <p class="easy-only">select/poll --&gt; "còn thì nhắc"<br>tín hiệu&nbsp;&nbsp;&nbsp;--&gt; "vừa có mới báo"<br>epoll&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;--&gt; cả hai</p>
+      <p class="en-only" lang="en">Table 63-1 (notification)<br>select, poll&nbsp;&nbsp;──► level<br>signal-driven ──► edge<br>epoll&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;──► level + edge</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">level-triggered</span>
+      <h3>
+        <span class="standard-copy">Thông báo mức: báo hoài khi còn chưa xử lý</span>
+        <span class="easy-only">Mức: còn việc chưa làm thì còn nhắc</span>
+        <span class="en-only" lang="en">Level-triggered: keeps reporting while work remains</span>
+      </h3>
+      <p class="standard-copy">Với thông báo mức, bạn <i>không</i> bắt buộc phải đọc hết dữ liệu ngay. Nếu lần này chỉ đọc một phần, lần gọi <code>select()</code>/<code>poll()</code> sau vẫn báo bộ mô tả đó sẵn sàng vì phần còn lại vẫn đọc được mà không chặn.<span class="cite"><a href="#ref-1">1</a></span> Nhờ vậy, lập trình với mô hình mức khoan dung hơn, ít rủi ro "bỏ sót" dữ liệu.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Kiểu "mức" rất bao dung: nếu bạn mới dọn một nửa, lần sau nó vẫn nhắc "còn nữa kìa!". Bạn không sợ quên. <b>Nhớ nhé: còn việc thì nó còn nhắc, khỏi lo bỏ sót.</b></p>
+      <p class="en-only" lang="en">With level-triggered notification you are <i>not</i> obliged to consume all the data at once. If you read only part this time, the next <code>select()</code>/<code>poll()</code> still reports that descriptor ready because the remainder can still be read without blocking.<span class="cite"><a href="#ref-1">1</a></span> This makes programming the level-triggered model more forgiving, with less risk of "missing" data.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đây là hành vi mặc định của <code>select()</code>, <code>poll()</code> và của epoll khi <i>không</i> đặt <code>EPOLLET</code> — kiểu an toàn cho người mới.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+        <span class="easy-only">Đây là cách select/poll luôn làm, và cũng là cách epoll làm nếu bạn không đổi gì.</span>
+        <span class="en-only" lang="en">This is the default behavior of <code>select()</code>, <code>poll()</code>, and of epoll when <code>EPOLLET</code> is <i>not</i> set — the beginner-safe mode.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">edge-triggered</span>
+      <h3>
+        <span class="standard-copy">Thông báo cạnh: báo một lần, nên phải vét sạch</span>
+        <span class="easy-only">Cạnh: chỉ báo một lần, nên phải làm cho hết</span>
+        <span class="en-only" lang="en">Edge-triggered: reports once, so you must drain fully</span>
+      </h3>
+      <p class="standard-copy">Với thông báo cạnh, bạn chỉ được báo <i>một lần</i> cho mỗi lần có hoạt động mới. Vì vậy, sau khi được báo, chương trình thường phải thực hiện I/O <i>lặp lại</i> cho đến khi lời gọi liên quan (ví dụ <code>read()</code>) thất bại với <code>EAGAIN</code>/<code>EWOULDBLOCK</code> — tức đã vét sạch.<span class="cite"><a href="#ref-1">1</a></span> Nếu chỉ đọc một phần rồi dừng, phần còn lại sẽ "kẹt" vì sẽ không có thông báo mới cho tới lần có hoạt động kế tiếp.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Kiểu "cạnh" chỉ chớp đèn một lần lúc có người vừa tới. Nếu bạn chỉ tiếp một khách rồi bỏ đi, những khách còn xếp hàng sẽ bị kẹt — vì đèn sẽ không chớp lại. Nên khi đèn chớp, phải tiếp cho tới khi hết sạch người. <b>Nhớ nhé: cạnh báo một lần, nên phải làm cho đến khi hết.</b></p>
+      <p class="en-only" lang="en">With edge-triggered notification you are told <i>once</i> per new activity. So after being notified, the program typically performs I/O <i>repeatedly</i> until the relevant call (e.g. <code>read()</code>) fails with <code>EAGAIN</code>/<code>EWOULDBLOCK</code> — i.e. it has drained fully.<span class="cite"><a href="#ref-1">1</a></span> If you read only part and stop, the rest gets "stuck" because no new notification comes until the next activity.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">I/O do tín hiệu điều khiển luôn là kiểu cạnh; epoll trở thành kiểu cạnh khi đặt cờ <code>EPOLLET</code> lúc đăng ký bộ mô tả.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+        <span class="easy-only">Tín hiệu luôn báo kiểu cạnh; epoll chỉ báo kiểu cạnh khi bạn bật cờ EPOLLET.</span>
+        <span class="en-only" lang="en">Signal-driven I/O is always edge-triggered; epoll becomes edge-triggered when you set the <code>EPOLLET</code> flag at registration time.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">O_NONBLOCK + edge</span>
+      <h3>
+        <span class="standard-copy">Vì sao thông báo cạnh đòi bộ mô tả không chặn</span>
+        <span class="easy-only">Kiểu cạnh buộc phải đặt chế độ không chờ</span>
+        <span class="en-only" lang="en">Why edge-triggered requires nonblocking descriptors</span>
+      </h3>
+      <p class="standard-copy">Mô hình cạnh thường đi kèm I/O không chặn. Lý do: sau khi được báo, ta đọc/ghi lặp lại cho tới khi gặp <code>EAGAIN</code>. Nếu bộ mô tả vẫn ở chế độ chặn, thì lần đọc "dư" cuối cùng — khi đã hết dữ liệu — sẽ <i>chặn vô thời hạn</i>, treo luôn chương trình (và nếu đang trông nhiều bộ mô tả bằng một luồng, cả vòng lặp sự kiện bị đứng).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only">Vì kiểu cạnh buộc bạn làm cho tới khi hết, nên lần "làm thử" cuối cùng phải được phép trả lời "hết rồi" ngay, chứ không được đứng chờ. Muốn vậy phải đặt chế độ không chờ. <b>Nhớ nhé: dùng cạnh thì bắt buộc đặt bộ mô tả sang chế độ không chờ.</b></p>
+      <p class="en-only" lang="en">The edge-triggered model usually goes with nonblocking I/O. Reason: after being notified, we read/write repeatedly until we hit <code>EAGAIN</code>. If the descriptor is still in blocking mode, the final "extra" read — once data is exhausted — would <i>block indefinitely</i>, hanging the program (and if a single thread monitors many descriptors, the whole event loop stalls).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đây là cái bẫy kinh điển khi mới chuyển sang epoll edge-triggered: quên đặt <code>O_NONBLOCK</code> khiến vòng lặp sự kiện treo ở lần đọc cuối.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+        <span class="easy-only">Người mới dùng epoll kiểu cạnh hay quên bước này, rồi chương trình bị treo không hiểu vì sao.</span>
+        <span class="en-only" lang="en">This is the classic trap when first moving to edge-triggered epoll: forgetting <code>O_NONBLOCK</code> hangs the event loop on the final read.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Có khung so sánh rồi, giờ xét từng API theo thứ tự lịch sử: trước hết là bộ đôi khả chuyển và lâu đời <code>select()</code>/<code>poll()</code>, cùng người anh em ít dùng hơn là I/O do tín hiệu điều khiển — cả hai đều lộ ra giới hạn khi số bộ mô tả tăng.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hiểu hai kiểu báo rồi, ta xem từng công cụ. Bắt đầu với cặp cũ và chạy được ở mọi hệ: select và poll, cùng cách nhờ chuông báo bằng tín hiệu.</p>
+    <p class="en-only" lang="en">With the comparison framework in hand, we examine each API in historical order: first the portable, long-standing pair <code>select()</code>/<code>poll()</code>, and their less-used sibling, signal-driven I/O — both of which reveal their limits as the number of descriptors grows.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="select-poll" aria-labelledby="select-poll-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="select-poll-title">
+      <span class="standard-copy">select() và poll(): khả chuyển, lâu đời — nhưng mở rộng theo cỡ O(n)</span>
+      <span class="easy-only">select và poll chạy mọi nơi, nhưng chậm dần khi quá nhiều cửa</span>
+      <span class="en-only" lang="en">select() and poll(): portable, long-standing — but scale at O(n)</span>
+    </h2>
+    <p class="standard-copy"><code>select()</code> làm việc với kiểu <code>fd_set</code> — một tập bit các bộ mô tả — được thao tác qua bốn macro <code>FD_ZERO()</code>, <code>FD_SET()</code>, <code>FD_CLR()</code>, <code>FD_ISSET()</code>; nó nhận ba tập (đọc, ghi, ngoại lệ) và <i>sửa tại chỗ</i> các tập này để khi trả về chúng chứa những bộ mô tả đã sẵn sàng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> <code>poll()</code> dùng mảng cấu trúc <code>pollfd</code> gồm các trường <code>fd</code>, <code>events</code> (quan tâm cái gì) và <code>revents</code> (nhân điền cái gì đã xảy ra).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    <p class="easy-only">Hai công cụ này đều là kiểu "hỏi dồn": bạn đưa cho chúng danh sách các cửa cần trông, chúng đứng chờ hộ, rồi trả lại danh sách "cửa nào đang có người". <code>select</code> đánh dấu bằng một bảng ô vuông, còn <code>poll</code> dùng một danh sách gọn hơn. <b>Nhớ nhé: cả hai nhận danh sách cửa, trả về cửa nào sẵn sàng.</b></p>
+    <p class="en-only" lang="en"><code>select()</code> works with the <code>fd_set</code> type — a bit-set of descriptors — manipulated by four macros <code>FD_ZERO()</code>, <code>FD_SET()</code>, <code>FD_CLR()</code>, <code>FD_ISSET()</code>; it takes three sets (read, write, exception) and <i>modifies them in place</i> so that on return they hold the ready descriptors.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> <code>poll()</code> uses an array of <code>pollfd</code> structures with fields <code>fd</code>, <code>events</code> (what you want) and <code>revents</code> (what the kernel fills in as having happened).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Một <code>fd_set</code> có kích thước tối đa cố định, do hằng <code>FD_SETSIZE</code> quy định — trên Linux giá trị này là <b>1024</b>. Muốn vượt giới hạn phải sửa định nghĩa trong header của glibc rồi biên dịch lại — bất tiện, và là một lý do để chuyển sang epoll khi cần trông nhiều bộ mô tả.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> <code>poll()</code> không có giới hạn nội tại này về phạm vi số hiệu bộ mô tả.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Bảng của <code>select</code> chỉ chứa được 1024 ô — quá số đó là chật. <code>poll</code> thì không bị trần cứng đó. <b>Nhớ nhé: select có trần 1024, poll thì không.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> An <code>fd_set</code> has a fixed maximum size set by the constant <code>FD_SETSIZE</code> — on Linux this value is <b>1024</b>. Going beyond it requires editing the glibc header and recompiling — awkward, and one reason to switch to epoll when many descriptors are needed.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> <code>poll()</code> has no such intrinsic limit on the range of descriptor numbers.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#include &lt;sys/select.h&gt;<br>int select(nfds, &amp;rd, &amp;wr, &amp;ex, &amp;to);<br>&nbsp;&nbsp;/* FD_SETSIZE = 1024 trên Linux */<br>#include &lt;poll.h&gt;<br>int poll(fds[], nfds, timeout);<br>&nbsp;&nbsp;/* pollfd{fd, events, revents} */</p>
+      <p class="easy-only">select(...) --&gt; bảng tối đa 1024 ô<br>poll(...)&nbsp;&nbsp;--&gt; danh sách, không trần<br>trả về: cửa nào sẵn sàng</p>
+      <p class="en-only" lang="en">#include &lt;sys/select.h&gt;<br>int select(nfds, &amp;rd, &amp;wr, &amp;ex, &amp;to);<br>&nbsp;&nbsp;/* FD_SETSIZE = 1024 on Linux */<br>#include &lt;poll.h&gt;<br>int poll(fds[], nfds, timeout);<br>&nbsp;&nbsp;/* pollfd{fd, events, revents} */</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">rebuild every call</span>
+      <h3>
+        <span class="standard-copy">select() sửa tập đầu vào — phải dựng lại mỗi lần gọi</span>
+        <span class="easy-only">select làm hỏng danh sách bạn đưa — phải làm lại mỗi lượt</span>
+        <span class="en-only" lang="en">select() mangles its input — rebuild it every call</span>
+      </h3>
+      <p class="standard-copy">Vì <code>select()</code> sửa ngay trên các <code>fd_set</code> truyền vào để trả kết quả, mỗi lần gọi lại phải khởi tạo lại các tập (bằng <code>FD_ZERO()</code> rồi <code>FD_SET()</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Ngoài ra sau mỗi lời gọi, chương trình phải duyệt <i>mọi</i> phần tử của cấu trúc trả về để biết bộ mô tả nào sẵn sàng — một phần của chi phí O(n).<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Lưu ý nhỏ nhưng hay vấp: <code>select</code> ghi đè lên chính danh sách bạn đưa, nên lần sau bạn phải dựng lại từ đầu. Rồi còn phải đọc lướt cả danh sách để tìm cửa nào sẵn sàng. <b>Nhớ nhé: với select, mỗi lượt phải dựng lại danh sách.</b></p>
+      <p class="en-only" lang="en">Because <code>select()</code> modifies the passed <code>fd_set</code>s in place to return results, each call must reinitialize the sets (via <code>FD_ZERO()</code> then <code>FD_SET()</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Also, after each call the program must inspect <i>every</i> element of the returned structure to learn which descriptors are ready — part of the O(n) cost.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lỗi thường gặp của người mới: quên dựng lại <code>fd_set</code> trước mỗi vòng, khiến từ vòng thứ hai trở đi các tập không còn đúng.<span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Lỗi hay gặp: quên làm lại danh sách, nên từ lần thứ hai là sai hết.</span>
+        <span class="en-only" lang="en">Common beginner bug: forgetting to rebuild the <code>fd_set</code> before each loop, so from the second iteration on the sets are wrong.<span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">O(n) scaling</span>
+      <h3>
+        <span class="standard-copy">Chi phí tỉ lệ với số bộ mô tả, không phải số sự kiện</span>
+        <span class="easy-only">Càng nhiều cửa, càng chậm — dù chỉ một cửa có việc</span>
+        <span class="en-only" lang="en">Cost scales with descriptor count, not event count</span>
+      </h3>
+      <p class="standard-copy">Mỗi lần gọi <code>select()</code> hay <code>poll()</code>, nhân phải kiểm tra <i>tất cả</i> bộ mô tả được nêu, và chương trình phải truyền vào rồi duyệt lại toàn bộ danh sách. Vì vậy, với N lớn, hiệu năng của chúng tỉ lệ <i>tuyến tính</i> với N — đến N = 10000 còn tệ hơn tuyến tính.<span class="cite"><a href="#ref-1">1</a></span> Bảng 63-9 trong sách (100.000 thao tác theo dõi) cho thấy ở N = 10000, <code>poll()</code> mất <b>990 giây</b> CPU và <code>select()</code> mất <b>930 giây</b>, trong khi epoll chỉ mất <b>0,66 giây</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Hai công cụ này có một nhược điểm lớn: mỗi lần hỏi, nhân phải rà <i>toàn bộ</i> danh sách cửa, dù chỉ một cửa có người. Càng nhiều cửa càng chậm. Sách đo được: với 10000 cửa, chúng mất gần 1000 giây, còn epoll chưa tới 1 giây. <b>Nhớ nhé: select/poll càng nhiều cửa càng ì ạch.</b></p>
+      <p class="en-only" lang="en">On each <code>select()</code> or <code>poll()</code> call, the kernel must check <i>all</i> the named descriptors, and the program must pass in and re-scan the whole list. So for large N their performance scales <i>linearly</i> with N — by N = 10000 even worse than linear.<span class="cite"><a href="#ref-1">1</a></span> The book's Table 63-9 (100,000 monitoring operations) shows that at N = 10000, <code>poll()</code> takes <b>990 s</b> of CPU and <code>select()</code> <b>930 s</b>, while epoll takes only <b>0.66 s</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Con số của tác giả</span><span class="en-only" lang="en">The author's numbers</span></h4>
+          <p><span class="vi-only">Bảng 63-9 (thời gian CPU, giây, cho 100.000 thao tác): N=10 → poll 0,61 / select 0,73 / epoll 0,41; N=100 → 2,9 / 3,0 / 0,42; N=1000 → 35 / 35 / 0,53; N=10000 → 990 / 930 / 0,66. Để chạy phép đo, <code>FD_SETSIZE</code> được đổi thành 16.384 trong header glibc.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">Table 63-9 (CPU seconds for 100,000 operations): N=10 → poll 0.61 / select 0.73 / epoll 0.41; N=100 → 2.9 / 3.0 / 0.42; N=1000 → 35 / 35 / 0.53; N=10000 → 990 / 930 / 0.66. To run the test, <code>FD_SETSIZE</code> was changed to 16,384 in the glibc headers.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Vì sao quan trọng</span><span class="en-only" lang="en">Why it matters</span></h4>
+          <p><span class="vi-only">Điểm cốt lõi: chi phí tỉ lệ với <i>số bộ mô tả được theo dõi</i>, bất kể bao nhiêu trong số đó thực sự có sự kiện — rất lãng phí khi theo dõi nghìn kết nối mà mỗi lúc chỉ vài cái hoạt động.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">The crux: cost is proportional to the <i>number of descriptors monitored</i>, regardless of how many actually have events — very wasteful when monitoring thousands of connections of which only a few are active at a time.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">O_ASYNC · SIGIO</span>
+      <h3>
+        <span class="standard-copy">I/O do tín hiệu điều khiển: nhân báo bằng SIGIO</span>
+        <span class="easy-only">Nhờ chuông báo: khi có việc, nhân gửi một tín hiệu</span>
+        <span class="en-only" lang="en">Signal-driven I/O: the kernel signals with SIGIO</span>
+      </h3>
+      <p class="standard-copy">Trong I/O do tín hiệu điều khiển, tiến trình yêu cầu nhân gửi cho nó một tín hiệu (mặc định <code>SIGIO</code>) khi có thể đọc/ghi trên một bộ mô tả. Thiết lập gồm: đặt chủ sở hữu nhận tín hiệu bằng <code>fcntl()</code> với <code>F_SETOWN</code>, rồi bật cờ trạng thái <code>O_ASYNC</code> (thường kèm <code>O_NONBLOCK</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> Khi theo dõi nhiều bộ mô tả, cách này nhanh hơn hẳn <code>select()</code>/<code>poll()</code> vì không phải rà toàn danh sách.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Thay vì đứng hỏi liên tục, bạn gắn một cái chuông: khi cửa nào có người, nhân tự "bấm chuông" (gửi tín hiệu) báo cho bạn. Bạn rảnh tay làm việc khác, nghe chuông mới chạy ra. Cách này nhanh khi có nhiều cửa. <b>Nhớ nhé: đừng hỏi hoài, hãy gắn chuông và chờ nó reo.</b></p>
+      <p class="en-only" lang="en">In signal-driven I/O, the process asks the kernel to send it a signal (by default <code>SIGIO</code>) when I/O is possible on a descriptor. Setup: set the signal owner with <code>fcntl()</code> using <code>F_SETOWN</code>, then enable the <code>O_ASYNC</code> status flag (usually together with <code>O_NONBLOCK</code>).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span> When monitoring many descriptors, this is far faster than <code>select()</code>/<code>poll()</code> because it avoids scanning the whole list.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Tên gọi lịch sử</span><span class="en-only" lang="en">A historical name</span></h4>
+          <p><span class="vi-only">Trước đây I/O do tín hiệu điều khiển đôi khi bị gọi là "asynchronous I/O" — phản ánh trong tên cờ <code>O_ASYNC</code>. Cờ này có trong POSIX.1g nhưng <i>không</i> được đưa vào SUSv3 vì đặc tả hành vi bị coi là chưa đủ rõ; vài hệ UNIX cũ dùng tên <code>FASYNC</code> và glibc định nghĩa nó như từ đồng nghĩa của <code>O_ASYNC</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span><span class="en-only" lang="en">Signal-driven I/O was historically sometimes called "asynchronous I/O" — reflected in the <code>O_ASYNC</code> flag name. The flag was in POSIX.1g but was <i>not</i> included in SUSv3 because its required behavior was deemed insufficiently specified; some older UNIX systems use the name <code>FASYNC</code>, and glibc defines it as a synonym for <code>O_ASYNC</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-9">9</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Khi nào nó không ổn</span><span class="en-only" lang="en">When it does not scale</span></h4>
+          <p><span class="vi-only">I/O do tín hiệu điều khiển là thuần kiểu cạnh và dựa trên hàng đợi tín hiệu; nếu tín hiệu đến quá nhanh, hàng đợi có thể tràn và tín hiệu "thực-thời" bị mất, buộc phải dự phòng về <code>select()</code>/<code>poll()</code>. Nó cũng khó dùng đúng hơn epoll, nên trên Linux epoll thường được ưa chuộng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span><span class="en-only" lang="en">Signal-driven I/O is purely edge-triggered and relies on a signal queue; if signals arrive too fast the queue can overflow and realtime signals be lost, forcing a fallback to <code>select()</code>/<code>poll()</code>. It is also harder to use correctly than epoll, so on Linux epoll is usually preferred.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Cả <code>select()</code>/<code>poll()</code> (chậm theo O(n)) lẫn I/O do tín hiệu (khó dùng, dễ tràn hàng đợi) đều có nhược điểm rõ. Linux đưa ra lời giải riêng, gộp ưu điểm của cả hai: API <b>epoll</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+    <p class="easy-only">Cặp select/poll thì chậm khi nhiều cửa; cách dùng tín hiệu thì rắc rối. Linux có một lời giải gọn gàng hơn, nhanh và dễ hơn: epoll.</p>
+    <p class="en-only" lang="en">Both <code>select()</code>/<code>poll()</code> (O(n) slow) and signal-driven I/O (tricky, queue can overflow) have clear drawbacks. Linux offers its own answer, combining the strengths of both: the <b>epoll</b> API.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="epoll" aria-labelledby="epoll-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="epoll-title">
+      <span class="standard-copy">API epoll: danh sách quan tâm, danh sách sẵn sàng, và chờ cả tín hiệu lẫn bộ mô tả</span>
+      <span class="easy-only">epoll — danh sách thông minh của Linux, và cách chờ cả tín hiệu</span>
+      <span class="en-only" lang="en">The epoll API: interest list, ready list, and waiting on signals too</span>
+    </h2>
+    <p class="standard-copy">epoll là tính năng riêng của Linux, mới từ nhân 2.6. Cấu trúc dữ liệu trung tâm là một <b>phiên bản epoll</b> (epoll instance), gắn với hai danh sách trong nhân: <b>danh sách quan tâm</b> (interest list) — các bộ mô tả ta muốn theo dõi — và <b>danh sách sẵn sàng</b> (ready list) — các bộ mô tả đang có I/O khả thi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> API gồm ba lời gọi: <code>epoll_create()</code> tạo phiên bản và trả về một bộ mô tả trỏ tới nó; <code>epoll_ctl()</code> sửa danh sách quan tâm; <code>epoll_wait()</code> trả về các mục từ danh sách sẵn sàng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span><span class="cite"><a href="#ref-6">6</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+    <p class="easy-only">epoll là "danh sách thông minh" của riêng Linux. Bạn khai báo một lần danh sách các cửa cần trông (danh sách quan tâm). Khi cửa nào có việc, nhân tự bỏ nó vào một danh sách khác (danh sách sẵn sàng). Bạn chỉ cần hỏi "có gì trong danh sách sẵn sàng?" là xong — khỏi rà lại toàn bộ. <b>Nhớ nhé: khai một lần, rồi chỉ hỏi những cửa vừa có việc.</b></p>
+    <p class="en-only" lang="en">epoll is a Linux-specific feature, new in kernel 2.6. Its central data structure is an <b>epoll instance</b>, associated with two in-kernel lists: the <b>interest list</b> — the descriptors we want to monitor — and the <b>ready list</b> — the descriptors on which I/O is currently possible.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> The API has three calls: <code>epoll_create()</code> creates an instance and returns a descriptor referring to it; <code>epoll_ctl()</code> modifies the interest list; <code>epoll_wait()</code> returns items from the ready list.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span><span class="cite"><a href="#ref-6">6</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>epoll_ctl(epfd, op, fd, ev)</code> thao tác danh sách quan tâm: <code>EPOLL_CTL_ADD</code> thêm một bộ mô tả, <code>EPOLL_CTL_MOD</code> đổi tập sự kiện quan tâm, <code>EPOLL_CTL_DEL</code> gỡ bỏ. Trường <code>ev.events</code> là mặt nạ bit (ví dụ <code>EPOLLIN</code>, <code>EPOLLOUT</code>) tương tự các bit của <code>poll()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> Một lời gọi <code>epoll_wait()</code> trả về thông tin về các bộ mô tả sẵn sàng — số lượng tỉ lệ với số <i>sự kiện</i>, không phải tổng số bộ mô tả theo dõi.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> <code>epoll_ctl</code> là nút "thêm / sửa / xoá" cửa trong danh sách trông. <code>epoll_wait</code> là câu hỏi "cửa nào vừa có việc?" — và nó chỉ trả về đúng những cửa đó. <b>Nhớ nhé: ctl để sửa danh sách, wait để lấy cửa đang có việc.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>epoll_ctl(epfd, op, fd, ev)</code> manipulates the interest list: <code>EPOLL_CTL_ADD</code> adds a descriptor, <code>EPOLL_CTL_MOD</code> changes the events of interest, <code>EPOLL_CTL_DEL</code> removes one. The <code>ev.events</code> field is a bit mask (e.g. <code>EPOLLIN</code>, <code>EPOLLOUT</code>) like the bits of <code>poll()</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span> One <code>epoll_wait()</code> call returns information about the ready descriptors — their count scales with the number of <i>events</i>, not the total monitored.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#include &lt;sys/epoll.h&gt;<br>epfd = epoll_create(size);<br>epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &amp;ev);<br>&nbsp;&nbsp;/* ev.events = EPOLLIN | EPOLLET; */<br>n = epoll_wait(epfd, evlist, max, to);</p>
+      <p class="easy-only">tạo:&nbsp;&nbsp;epoll_create()<br>thêm: epoll_ctl(... ADD ...)<br>chờ:&nbsp;&nbsp;epoll_wait()<br>cạnh: thêm cờ EPOLLET</p>
+      <p class="en-only" lang="en">#include &lt;sys/epoll.h&gt;<br>epfd = epoll_create(size);<br>epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &amp;ev);<br>&nbsp;&nbsp;/* ev.events = EPOLLIN | EPOLLET; */<br>n = epoll_wait(epfd, evlist, max, to);</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">why epoll is fast</span>
+      <h3>
+        <span class="standard-copy">epoll nhanh vì danh sách quan tâm sống lâu trong nhân</span>
+        <span class="easy-only">epoll nhanh vì khai một lần, nhân nhớ giúp</span>
+        <span class="en-only" lang="en">epoll is fast because the interest list lives in the kernel</span>
+      </h3>
+      <p class="standard-copy">Khác với <code>select()</code>/<code>poll()</code> — mỗi lần gọi phải truyền lại toàn bộ danh sách và nhân phải rà hết — với epoll, ta đăng ký các bộ mô tả quan tâm <i>một lần</i> qua <code>epoll_ctl()</code>; danh sách đó được giữ trong nhân. Mỗi <code>epoll_wait()</code> chỉ trả về những bộ mô tả thực sự sẵn sàng. Nhờ vậy hiệu năng epoll tỉ lệ (tuyến tính) theo số <i>sự kiện I/O xảy ra</i>, chứ không theo tổng số bộ mô tả.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only">select/poll bắt bạn đưa lại cả danh sách cửa mỗi lần hỏi; epoll chỉ cần bạn khai một lần, rồi nó tự nhớ. Khi hỏi, nó chỉ đưa những cửa vừa có việc. Ít việc hơn hẳn. <b>Nhớ nhé: epoll khai một lần, trả lời gọn, nên nhanh.</b></p>
+      <p class="en-only" lang="en">Unlike <code>select()</code>/<code>poll()</code> — which re-pass the whole list each call and make the kernel scan it all — with epoll you register the descriptors of interest <i>once</i> via <code>epoll_ctl()</code>; that list is kept in the kernel. Each <code>epoll_wait()</code> returns only the descriptors actually ready. So epoll's performance scales (linearly) with the number of <i>I/O events that occur</i>, not with the total number of descriptors.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Đây là lý do mọi vòng lặp sự kiện hiệu năng cao trên Linux (máy chủ web, thư viện async) đều dựng trên epoll thay vì select/poll.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+        <span class="easy-only">Vì thế các máy chủ web và thư viện tốc độ cao trên Linux đều dùng epoll.</span>
+        <span class="en-only" lang="en">This is why every high-performance event loop on Linux (web servers, async libraries) is built on epoll rather than select/poll.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">EPOLLET</span>
+      <h3>
+        <span class="standard-copy">EPOLLET bật kiểu cạnh — và đòi bộ mô tả không chặn</span>
+        <span class="easy-only">Cờ EPOLLET chuyển epoll sang kiểu "chỉ báo lúc vừa có"</span>
+        <span class="en-only" lang="en">EPOLLET turns on edge-triggered — and needs nonblocking fds</span>
+      </h3>
+      <p class="standard-copy">Mặc định epoll là thông báo mức. Đặt cờ <code>EPOLLET</code> trong <code>ev.events</code> khi đăng ký sẽ chuyển bộ mô tả đó sang thông báo cạnh.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> Vì là kiểu cạnh, bộ mô tả thường phải đặt <code>O_NONBLOCK</code>, và sau mỗi thông báo ta đọc/ghi lặp cho tới khi gặp <code>EAGAIN</code> — nếu không, dữ liệu chưa đọc hết sẽ kẹt tới lần có hoạt động sau.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <p class="easy-only">Thêm cờ EPOLLET là bảo epoll: "chỉ báo lúc vừa có việc thôi". Khi đó phải đặt cửa ở chế độ không chờ và tiếp khách cho tới khi hết sạch người, vì đèn chỉ chớp một lần. <b>Nhớ nhé: bật EPOLLET thì nhớ đặt không chặn và vét cho hết.</b></p>
+      <p class="en-only" lang="en">By default epoll is level-triggered. Setting the <code>EPOLLET</code> flag in <code>ev.events</code> at registration switches that descriptor to edge-triggered.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> Being edge-triggered, the descriptor usually must be <code>O_NONBLOCK</code>, and after each notification we read/write repeatedly until we hit <code>EAGAIN</code> — otherwise unread data stalls until the next activity.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Kiểu cạnh giảm số lần <code>epoll_wait()</code> trả về cùng một bộ mô tả, hữu ích khi tối ưu sâu — nhưng khó viết đúng hơn kiểu mức.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+        <span class="easy-only">Kiểu cạnh gọn hơn nhưng khó viết đúng, nên người mới thường dùng kiểu mức trước.</span>
+        <span class="en-only" lang="en">Edge-triggered reduces how often <code>epoll_wait()</code> returns the same descriptor, useful for deep tuning — but harder to write correctly than level-triggered.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">signalfd · self-pipe</span>
+      <h3>
+        <span class="standard-copy">Chờ cả tín hiệu lẫn bộ mô tả: self-pipe, signalfd, pselect</span>
+        <span class="easy-only">Trông cả "chuông tín hiệu" lẫn các cửa cùng một chỗ</span>
+        <span class="en-only" lang="en">Waiting on signals and descriptors: self-pipe, signalfd, pselect</span>
+      </h3>
+      <p class="standard-copy">Một bài toán hóc búa: làm sao chờ <i>đồng thời</i> tín hiệu và sự sẵn sàng của bộ mô tả, không bỏ sót cái nào? Kỹ thuật cổ điển là <b>self-pipe trick</b>: trình xử lý tín hiệu ghi một byte vào đầu ghi của một ống, còn đầu đọc được đưa vào tập theo dõi của <code>select()</code>/<code>poll()</code>/<code>epoll_wait()</code> — nhờ đó tín hiệu "biến" thành một sự kiện I/O bình thường.<span class="cite"><a href="#ref-1">1</a></span> Linux còn cung cấp <code>signalfd()</code>: một bộ mô tả tệp để <i>đọc</i> tín hiệu đến, cũng theo dõi được bằng các API trên.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <p class="easy-only">Khó ở chỗ: bạn vừa muốn nghe "chuông tín hiệu", vừa muốn trông các cửa — mà hai thứ báo theo kiểu khác nhau. Mẹo cũ: cho chuông reo bằng cách thả một viên bi vào một cái ống, rồi trông cái ống đó như một cửa bình thường. Linux còn có <code>signalfd</code> biến tín hiệu thành một "cửa" để đọc. <b>Nhớ nhé: biến tín hiệu thành một cửa, thế là trông chung một chỗ được.</b></p>
+      <p class="en-only" lang="en">A thorny problem: how to wait <i>simultaneously</i> on signals and descriptor readiness without missing either? The classic technique is the <b>self-pipe trick</b>: the signal handler writes a byte to the write end of a pipe, and the read end is placed in the watch set of <code>select()</code>/<code>poll()</code>/<code>epoll_wait()</code> — turning a signal into an ordinary I/O event.<span class="cite"><a href="#ref-1">1</a></span> Linux also provides <code>signalfd()</code>: a file descriptor from which to <i>read</i> incoming signals, also monitorable by those APIs.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Bộ ba có mặt nạ tín hiệu</span><span class="en-only" lang="en">The signal-mask trio</span></h4>
+          <p><span class="vi-only">Ngoài self-pipe, có các biến thể "nguyên tử" gỡ bỏ mặt nạ tín hiệu trong lúc chờ: <code>pselect()</code> (chuẩn), cùng <code>ppoll()</code> và <code>epoll_pwait()</code> (riêng Linux). Chúng tránh được điều kiện tranh đua giữa việc kiểm tra tín hiệu và việc gọi chờ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span><span class="en-only" lang="en">Beyond the self-pipe, there are "atomic" variants that unmask signals while waiting: <code>pselect()</code> (standard), plus <code>ppoll()</code> and <code>epoll_pwait()</code> (Linux-specific). They avoid the race between checking for a signal and entering the wait call.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Mốc phiên bản</span><span class="en-only" lang="en">Version milestones</span></h4>
+          <p><span class="vi-only">Sách ghi: <code>ppoll()</code> được thêm ở Linux 2.6.16 (quan hệ với <code>poll()</code> giống như <code>pselect()</code> với <code>select()</code>), và <code>epoll_pwait()</code> có từ nhân 2.6.19 — xem trang man ppoll(2) và epoll_pwait(2).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span><span class="en-only" lang="en">The book notes: <code>ppoll()</code> was added in Linux 2.6.16 (its relation to <code>poll()</code> mirrors <code>pselect()</code> to <code>select()</code>), and <code>epoll_pwait()</code> dates from kernel 2.6.19 — see the ppoll(2) and epoll_pwait(2) manual pages.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span></p>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="section-heading">
+      <h2 id="ngo-nhan-title">
+        <span class="standard-copy">Ba ngộ nhận thường gặp</span>
+        <span class="en-only" lang="en">Three common misconceptions</span>
+      </h2>
+    </div>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“select/poll/epoll tự đọc dữ liệu giúp tôi”</span>
+          <span class="en-only" lang="en">“select/poll/epoll read the data for me”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> gọi epoll xong là đã có dữ liệu trong tay.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> không cơ chế nào tự thực hiện I/O — chúng chỉ cho biết bộ mô tả nào sẵn sàng; sau đó ta vẫn phải tự <code>read()</code>/<code>write()</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> once epoll returns, the data is in hand.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> none of these mechanisms performs I/O — they only report which descriptors are ready; you still <code>read()</code>/<code>write()</code> yourself.<span class="cite"><a href="#ref-1">1</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Kiểu cạnh chỉ là kiểu mức nhanh hơn, thay thẳng được”</span>
+          <span class="en-only" lang="en">“Edge-triggered is just faster level-triggered, a drop-in”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> cứ thêm <code>EPOLLET</code> là xong, không đổi gì khác.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> kiểu cạnh đòi bộ mô tả <code>O_NONBLOCK</code> và phải đọc/ghi tới khi <code>EAGAIN</code>; thiếu điều đó sẽ mất sự kiện hoặc treo vòng lặp.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> just add <code>EPOLLET</code> and nothing else changes.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> edge-triggered requires <code>O_NONBLOCK</code> descriptors and draining until <code>EAGAIN</code>; without that you lose events or hang the loop.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“epoll luôn tốt hơn, select đã lỗi thời”</span>
+          <span class="en-only" lang="en">“epoll is always better, select is obsolete”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> không bao giờ còn lý do dùng <code>select()</code>.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> <code>select()</code>/<code>poll()</code> là chuẩn POSIX, khả chuyển; epoll chỉ có trên Linux. Với N nhỏ, hiệu năng gần như nhau — chọn theo tính khả chuyển và quy mô.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> there is never a reason to use <code>select()</code> anymore.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> <code>select()</code>/<code>poll()</code> are POSIX-standard and portable; epoll is Linux-only. For small N performance is similar — choose by portability and scale.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span><span class="cite"><a href="#ref-10">10</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm các mô hình I/O thay thế</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped the alternative I/O models</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã nắm vì sao I/O chặn không mở rộng được, ba mô hình thay thế, và phân biệt mức–cạnh — nền cho việc viết máy chủ mạng hiệu năng cao.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you grasp why blocking I/O does not scale, the three alternative models, and the level/edge distinction — the groundwork for writing high-performance network servers.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Vì sao mô hình I/O chặn với một tiến trình/luồng cho mỗi kết nối không mở rộng được? Hai nhu cầu nào thúc đẩy các mô hình thay thế?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao "thăm dò tay" với <code>O_NONBLOCK</code> vẫn kém — hai cực đoan thưa và dày đều có vấn đề gì?</p>
+      </li>
+      <li>
+        <p>Phân biệt thông báo mức (level-triggered) và thông báo cạnh (edge-triggered). Mô hình nào hỗ trợ kiểu nào (Bảng 63-1)?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao thông báo cạnh gần như luôn đòi bộ mô tả ở chế độ không chặn?</p>
+      </li>
+      <li>
+        <p><code>select()</code> và <code>poll()</code> nhận và trả về gì? Vì sao chúng mở rộng theo cỡ O(n), và <code>FD_SETSIZE</code> trên Linux bằng bao nhiêu?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao sau mỗi <code>select()</code> ta phải dựng lại các <code>fd_set</code>?</p>
+      </li>
+      <li>
+        <p>Mô tả ba lời gọi của API epoll và vai trò của danh sách quan tâm so với danh sách sẵn sàng. Vì sao epoll nhanh hơn select/poll khi N lớn?</p>
+        <p class="deep-only">Gợi ý sâu hơn: cờ <code>EPOLLET</code> làm gì, và ba thao tác của <code>epoll_ctl()</code> là gì?</p>
+      </li>
+      <li>
+        <p>Làm sao chờ đồng thời tín hiệu và sự sẵn sàng của bộ mô tả? Mô tả self-pipe trick và vai trò của <code>signalfd()</code>, <code>pselect()</code>/<code>ppoll()</code>/<code>epoll_pwait()</code>.</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao các biến thể "p" (pselect/ppoll/epoll_pwait) tránh được điều kiện tranh đua mà self-pipe phải xử lý thủ công?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Vì sao một người không thể đứng chờ ở nhiều cửa cùng lúc?</p></li>
+      <li><p>"Báo khi còn" và "báo khi vừa có" khác nhau chỗ nào?</p></li>
+      <li><p>select và poll làm gì, và vì sao chúng chậm khi quá nhiều cửa?</p></li>
+      <li><p>epoll giúp nhanh hơn bằng cách nào?</p></li>
+      <li><p>Làm sao trông cả "chuông tín hiệu" lẫn các cửa ở cùng một chỗ?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>Why does the blocking I/O model with one process/thread per connection fail to scale? What two needs motivate the alternatives?</p></li>
+      <li><p>Distinguish level-triggered from edge-triggered notification. Which model supports which (Table 63-1)?</p></li>
+      <li><p>What do <code>select()</code> and <code>poll()</code> take and return? Why do they scale at O(n), and what is <code>FD_SETSIZE</code> on Linux?</p></li>
+      <li><p>Describe epoll's three calls and the role of the interest list vs the ready list. Why is epoll faster than select/poll at large N?</p></li>
+      <li><p>How do you wait on signals and descriptor readiness at once? Describe the self-pipe trick and the role of <code>signalfd()</code>, <code>pselect()</code>/<code>ppoll()</code>/<code>epoll_pwait()</code>.</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Khi một tiến trình phải trông nhiều bộ mô tả cùng lúc, I/O chặn và một-luồng-mỗi-kết-nối không còn đủ. Ba lời giải — <span class="closing-accent">ghép kênh (select/poll), tín hiệu, và epoll</span> — đều chỉ báo "sẵn sàng" chứ không tự làm I/O. Nắm được <span class="closing-accent">mức so với cạnh</span> và vì sao epoll <span class="closing-accent">tỉ lệ theo số sự kiện</span> là chìa khoá để viết phần mềm mạng mở rộng được tới hàng nghìn kết nối.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Khi phải trông nhiều cửa, đứng chờ từng cửa là vô vọng. Ba công cụ — <span class="closing-accent">hỏi dồn, chuông tín hiệu, và danh sách thông minh epoll</span> — chỉ mách cửa nào có việc, việc mở cửa vẫn là của bạn. <b>Nhớ nhé: trông tất cả cùng lúc, rồi chỉ xử lý cửa nào vừa có việc.</b></p>
+    <p class="en-only" lang="en">When a process must watch many descriptors at once, blocking I/O and one-thread-per-connection no longer suffice. The three answers — <span class="closing-accent">multiplexing (select/poll), signals, and epoll</span> — all report "ready" without performing I/O themselves. Grasping <span class="closing-accent">level vs edge</span> and why epoll <span class="closing-accent">scales with events</span> is the key to writing network software that scales to thousands of connections.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. This is the final
+     core chapter of the companion, so the next cell is intentionally disabled. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-59-sockets-internet-domains.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 59 · Sockets: miền Internet</span>
+    <span class="nav-title en-only" lang="en">Chapter 59 · Sockets: Internet Domains</span>
+  </a>
+  <div class="nav-cell nav-next disabled" aria-disabled="true">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Hết · chương cuối 26/26</span>
+    <span class="nav-title en-only" lang="en">The end · final chapter 26/26</span>
+  </div>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chương 63, “Alternative I/O Models”, trang 1325–1374.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chapter 63, “Alternative I/O Models”, pp. 1325–1374.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Michael Kerrisk, <i>The Linux Programming Interface</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3), ch. 63 “Alternative I/O Models”, pp. 1325–1374 (overview, level/edge notification, select/poll, signal-driven I/O, epoll, Table 63-1 and Table 63-9, self-pipe trick). — <a href="https://man7.org/tlpi/" target="_blank" rel="noopener noreferrer">man7.org/tlpi</a></li>
+      <li id="ref-2">“select(2) — Linux manual page” (fd_set, FD_ZERO/FD_SET/FD_CLR/FD_ISSET, FD_SETSIZE, sets modified in place). Linux man-pages project, maintained by Michael Kerrisk. <a href="https://man7.org/linux/man-pages/man2/select.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/select.2.html</a></li>
+      <li id="ref-3">“poll(2) — Linux manual page” (struct pollfd with fd/events/revents; no FD_SETSIZE limit). <a href="https://man7.org/linux/man-pages/man2/poll.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/poll.2.html</a></li>
+      <li id="ref-4">“epoll(7) — Linux manual page” (interest list and ready list; level-triggered vs edge-triggered; EPOLLET requires nonblocking fds; scaling with events; new in Linux 2.6). <a href="https://man7.org/linux/man-pages/man7/epoll.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/epoll.7.html</a></li>
+      <li id="ref-5">“epoll_create(2) — Linux manual page” (creates an epoll instance and returns a file descriptor referring to it). <a href="https://man7.org/linux/man-pages/man2/epoll_create.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/epoll_create.2.html</a></li>
+      <li id="ref-6">“epoll_ctl(2) — Linux manual page” (EPOLL_CTL_ADD / EPOLL_CTL_MOD / EPOLL_CTL_DEL; struct epoll_event and the events bit mask). <a href="https://man7.org/linux/man-pages/man2/epoll_ctl.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/epoll_ctl.2.html</a></li>
+      <li id="ref-7">“epoll_wait(2) — Linux manual page” (returns ready descriptors from the ready list; epoll_pwait() atomic signal-mask variant). <a href="https://man7.org/linux/man-pages/man2/epoll_wait.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/epoll_wait.2.html</a></li>
+      <li id="ref-8">“signalfd(2) — Linux manual page” (a file descriptor for reading incoming signals, monitorable with select/poll/epoll). <a href="https://man7.org/linux/man-pages/man2/signalfd.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/signalfd.2.html</a></li>
+      <li id="ref-9">“fcntl(2) — Linux manual page” (O_ASYNC open file status flag, F_SETOWN, F_SETSIG for signal-driven I/O; FASYNC synonym). <a href="https://man7.org/linux/man-pages/man2/fcntl.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/fcntl.2.html</a></li>
+      <li id="ref-10">“select — POSIX.1-2017 (The Open Group Base Specifications)” (select() and pselect() are part of the portable POSIX standard). <a href="https://pubs.opengroup.org/onlinepubs/9699919799/functions/select.html" target="_blank" rel="noopener noreferrer">pubs.opengroup.org/onlinepubs/9699919799/functions/select.html</a></li>
+      <li id="ref-11">Dan Kegel, “The C10K problem” (serving tens of thousands of simultaneous clients; cited in the book's Further information). <a href="http://www.kegel.com/c10k.html" target="_blank" rel="noopener noreferrer">kegel.com/c10k.html</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-59-sockets-internet-domains.html">chapter 59</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('tlpi-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('tlpi-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('tlpi-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>

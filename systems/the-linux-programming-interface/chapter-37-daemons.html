@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi" data-mode="standard" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chương 37 · Daemon — The Linux Programming Interface</title>
+<meta name="description" content="Bạn đồng hành song ngữ Việt–Anh cho Chương 37 “Daemons” trong The Linux Programming Interface (Michael Kerrisk, No Starch Press, 2010): đặc điểm của daemon (sống lâu, chạy nền, không có terminal điều khiển); chuỗi bước tạo daemon (fork + setsid(), fork lần hai tuỳ chọn, umask(0), chdir('/'), đóng và mở lại 0/1/2 vào /dev/null); mẫu hàm becomeDaemon() với các cờ BD_*; dùng SIGHUP để nạp lại cấu hình và mở lại tệp log; và ghi log qua tiện ích syslog (syslogd, /dev/log, klogd, API openlog/syslog/closelog, facility và level, /etc/syslog.conf). Ba mức đọc, mọi khẳng định đều có nguồn.">
+<script>
+(function(){try{var d=document.documentElement,
+m=localStorage.getItem('tlpi-reading-mode'),
+l=localStorage.getItem('tlpi-lang'),
+t=localStorage.getItem('tlpi-theme');
+if(m==='easy'||m==='standard'||m==='deep')d.setAttribute('data-mode',m);
+if(l==='vi'||l==='en'){d.setAttribute('data-lang',l);d.setAttribute('lang',l);}
+if(t==='light'||t==='dark'){d.setAttribute('data-theme',t);}
+else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){d.setAttribute('data-theme','dark');}
+}catch(e){}})();
+</script>
+<style>
+/* ===========================================================
+   THE LINUX PROGRAMMING INTERFACE — bilingual companion scaffold
+   Self-contained: no external CSS, no webfont fetch, no CDN.
+   Sibling chapters copy this <style> block VERBATIM; only the
+   .hero::after content string changes (FLOW-style chapter stamp).
+   =========================================================== */
+:root{
+  --teal:#0f766e;
+  --blue:#1d4ed8;
+  --amber:#b45309;
+  --leaf:#3f6212;
+  --ink:#16202b;
+  --muted:#5a6b7b;
+  --line:#dde4ea;
+  --surface:#ffffff;
+  --bg:#f4f2ec;
+  --tint:#edf3f3;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 10px 28px rgba(22,32,43,.05);
+  --radius:14px;
+  --maxw:74rem;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+html[data-theme="dark"]{
+  --teal:#5eead4;
+  --blue:#a5bcff;
+  --amber:#fbbf24;
+  --leaf:#bef264;
+  --ink:#e7eef4;
+  --muted:#9aabbc;
+  --line:#26323f;
+  --surface:#141d26;
+  --bg:#0c131a;
+  --tint:#16222c;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:5.5rem;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:17px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+main{max-width:var(--maxw);margin:0 auto;padding:0 1.5rem 3rem;}
+p{margin:0 0 1rem;}
+a{color:var(--blue);}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--tint);padding:.1em .38em;border-radius:5px;}
+hr{border:0;border-top:1px solid var(--line);margin:2.5rem 0;}
+
+/* ---------- reading levels + language layers ---------- */
+/* Nothing is hidden by default; <html> always carries data-mode
+   and data-lang, so only the conditional hide rules ever fire. */
+html[data-mode="standard"] .easy-only,
+html[data-mode="standard"] .deep-only{display:none;}
+html[data-mode="easy"] .standard-copy,
+html[data-mode="easy"] .deep-only{display:none;}
+html[data-mode="deep"] .easy-only{display:none;}
+html[data-lang="vi"] .en-only{display:none;}
+html[data-lang="en"] .vi-only,
+html[data-lang="en"] .standard-copy,
+html[data-lang="en"] .easy-only,
+html[data-lang="en"] .deep-only{display:none;}
+/* a deep block that carries its own EN twin inside stays visible in
+   EN + Đầy đủ; its VI children are hidden by the lang rules above. */
+html[data-mode="deep"][data-lang="en"] .deep-only.deep-bilingual{display:block;}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:center;
+  padding:.7rem 1.5rem;
+  background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.book-label{
+  font-family:var(--sans);font-size:.74rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+  margin-right:auto;line-height:1.35;
+}
+.book-label span{display:block;color:var(--muted);font-weight:600;letter-spacing:.1em;}
+.switch{display:flex;gap:.25rem;background:var(--tint);border:1px solid var(--line);border-radius:999px;padding:.2rem;}
+.switch button{
+  font-family:var(--sans);font-size:.72rem;font-weight:600;letter-spacing:.03em;
+  border:0;background:transparent;color:var(--muted);
+  padding:.34rem .7rem;border-radius:999px;cursor:pointer;line-height:1.2;
+}
+.switch button:hover{color:var(--ink);}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--teal);box-shadow:var(--shadow);}
+.switch button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+/* ---------- hero ---------- */
+.hero{
+  position:relative;
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:2.5rem;align-items:start;
+  padding:3.25rem 0 2.5rem;
+  border-bottom:1px solid var(--line);
+}
+.hero::after{
+  content:"TLPI · CH.37";
+  position:absolute;top:1.1rem;right:0;
+  font-family:var(--sans);font-size:.68rem;font-weight:700;
+  letter-spacing:.24em;color:var(--muted);opacity:.6;
+}
+.eyebrow{
+  font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--amber);
+  margin:0 0 .85rem;
+}
+.hero h1{
+  font-size:clamp(2rem,4.4vw,3.05rem);
+  line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 1.15rem;font-weight:700;
+}
+.hero p{font-size:1.06rem;color:var(--ink);max-width:36em;}
+.thesis{
+  position:relative;
+  margin-top:1.5rem;padding:1.1rem 1.25rem 1.1rem 3.1rem;
+  background:var(--tint);border-left:3px solid var(--teal);border-radius:0 var(--radius) var(--radius) 0;
+}
+.thesis::before{
+  content:"∴";position:absolute;left:1.05rem;top:.95rem;
+  font-size:1.5rem;line-height:1;color:var(--teal);
+}
+.thesis p{margin:0 0 .6rem;font-size:1rem;}
+.thesis p:last-child{margin-bottom:0;}
+
+/* ---------- CSS diagrams ---------- */
+.system-map{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  padding:1.25rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+}
+.system-map .core{
+  grid-column:1/-1;text-align:center;
+  padding:.9rem .75rem;border-radius:10px;
+  background:var(--teal);color:var(--surface);
+}
+html[data-theme="dark"] .system-map .core{color:#0c131a;}
+.system-map .core b{display:block;font-family:var(--sans);font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;}
+.system-map .core small{display:block;font-size:.8rem;opacity:.92;line-height:1.45;}
+.system-map .node{
+  padding:.75rem .8rem;border-radius:10px;
+  background:var(--tint);border:1px solid var(--line);
+}
+.system-map .node:first-of-type{grid-column:1/-1;}
+.system-map .node b{display:block;font-family:var(--sans);font-size:.78rem;font-weight:700;letter-spacing:.05em;color:var(--blue);}
+.system-map .node small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;}
+.loop-diagram{
+  display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;
+  padding:1rem;margin:1.25rem 0;
+  background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+}
+.loop-diagram span{
+  font-family:var(--sans);font-size:.78rem;font-weight:600;
+  padding:.4rem .7rem;border-radius:999px;background:var(--tint);color:var(--ink);
+}
+.loop-diagram em{color:var(--amber);font-style:normal;font-weight:700;}
+
+/* ---------- chapter path ---------- */
+.chapter-path{
+  display:grid;gap:.75rem;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  margin:2.25rem 0 1rem;
+}
+.chapter-path a{
+  display:block;text-decoration:none;color:inherit;
+  padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+.chapter-path a:hover{transform:translateY(-2px);border-color:var(--teal);}
+.chapter-path a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.chapter-path span{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.25rem;
+}
+.chapter-path b{font-size:.98rem;line-height:1.4;}
+/* soon = chapter not yet on disk; rendered as a non-link cell. */
+.chapter-path .soon{
+  display:block;padding:.85rem .95rem;border-radius:var(--radius);
+  background:var(--tint);border:1px dashed var(--line);opacity:.6;
+}
+.chapter-path .soon .soon-tag{
+  display:inline-block;font-family:var(--sans);font-size:.6rem;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:999px;padding:.1rem .45rem;margin-top:.4rem;
+}
+
+/* ---------- sections ---------- */
+.section{padding:3rem 0;border-bottom:1px solid var(--line);}
+.section-heading{max-width:44em;margin-bottom:1.75rem;}
+.section-heading h2{
+  font-size:clamp(1.5rem,2.8vw,2.05rem);line-height:1.22;
+  letter-spacing:-.01em;margin:0 0 .85rem;font-weight:700;
+}
+.section-heading p{color:var(--muted);font-size:1.02rem;}
+.surprise-lead{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  margin-bottom:1.75rem;
+}
+.definition,.equation{
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.definition{border-top:3px solid var(--blue);}
+.equation{border-top:3px solid var(--amber);font-family:var(--mono);font-size:.86rem;line-height:1.65;}
+.definition p,.equation p{margin:0;}
+.definition p+p,.equation p+p{margin-top:.6rem;}
+
+/* ---------- concept cards ---------- */
+.surprise-grid{
+  list-style:none;margin:0;padding:0;
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+}
+.surprise-grid>li{
+  padding:1.2rem 1.25rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.trap-grid>li{border-left:3px solid var(--teal);}
+.english-term{
+  display:inline-block;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);
+  background:var(--tint);padding:.2rem .5rem;border-radius:5px;margin-bottom:.6rem;
+}
+.surprise-grid h3{font-size:1.1rem;line-height:1.35;margin:0 0 .7rem;font-weight:700;}
+.surprise-grid p{font-size:.96rem;}
+.opportunity{
+  margin-top:.9rem;padding:.7rem .85rem;border-radius:10px;
+  background:var(--tint);font-size:.9rem;color:var(--ink);
+}
+.opportunity b{font-family:var(--sans);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:.2rem;}
+.mechanics{margin-top:.9rem;display:grid;gap:.7rem;}
+.info-block{padding:.75rem .85rem;border-radius:10px;border:1px dashed var(--line);}
+.info-block h4{
+  margin:0 0 .35rem;font-family:var(--sans);font-size:.72rem;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--amber);
+}
+.info-block p{margin:0;font-size:.9rem;color:var(--muted);}
+.result{margin-top:.6rem;font-size:.9rem;color:var(--muted);}
+
+/* ---------- bridging aside ---------- */
+.signal{
+  margin-top:1.75rem;padding:1.1rem 1.25rem;
+  border-radius:var(--radius);background:var(--tint);
+  border-left:3px solid var(--amber);
+}
+.signal p{margin:0 0 .6rem;font-size:.98rem;}
+.signal p:last-child{margin-bottom:0;}
+.surprise-connection{font-style:normal;}
+
+/* ---------- misconceptions ---------- */
+.trap-comparison{margin-top:2rem;}
+.comparison-grid{
+  display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));
+  margin-top:1.1rem;
+}
+.comparison-card{
+  padding:1.1rem 1.15rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  border-top:3px solid var(--amber);box-shadow:var(--shadow);
+}
+.comparison-card h3{font-size:1rem;margin:0 0 .6rem;line-height:1.4;}
+.comparison-card p{font-size:.94rem;margin:0 0 .6rem;}
+.comparison-card p:last-child{margin-bottom:0;}
+.comparison-card .myth{color:var(--amber);font-weight:700;}
+.comparison-card .truth{color:var(--teal);font-weight:700;}
+
+/* ---------- diagnostic ---------- */
+.diagnostic{
+  padding:1.5rem 1.6rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);
+}
+.diagnostic-intro{max-width:42em;color:var(--muted);}
+.question-list{list-style:none;counter-reset:q;margin:1.1rem 0 0;padding:0;}
+.question-list>li{
+  counter-increment:q;position:relative;
+  padding:.65rem 0 .65rem 2.6rem;border-top:1px solid var(--line);
+}
+.question-list>li::before{
+  content:counter(q,decimal-leading-zero);
+  position:absolute;left:0;top:.7rem;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;color:var(--teal);
+}
+.question-list>li>p{margin:0;font-size:.98rem;}
+.question-list>li>p+p{margin-top:.4rem;}
+
+/* ---------- closing ---------- */
+.closing{padding:3rem 0;}
+.closing blockquote{
+  margin:0;font-size:clamp(1.15rem,2.4vw,1.55rem);
+  line-height:1.5;font-weight:600;max-width:34em;
+}
+.closing-accent{color:var(--teal);}
+
+/* ---------- chapter nav ---------- */
+.chapter-nav{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem;
+  display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr));
+  border-top:1px solid var(--line);
+}
+.nav-cell{
+  display:block;text-decoration:none;color:inherit;
+  padding:1rem 1.1rem;border-radius:var(--radius);
+  background:var(--surface);border:1px solid var(--line);
+  transition:transform .15s ease,border-color .15s ease;
+}
+a.nav-cell:hover{transform:translateY(-2px);border-color:var(--teal);}
+a.nav-cell:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.nav-cell.disabled{opacity:.55;background:var(--tint);}
+.nav-next{text-align:right;}
+.nav-label{
+  display:block;font-family:var(--sans);font-size:.66rem;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:.3rem;
+}
+.nav-title{display:block;font-size:.98rem;line-height:1.4;}
+
+/* ---------- footer ---------- */
+footer{
+  max-width:var(--maxw);margin:0 auto;padding:2rem 1.5rem 3.5rem;
+  display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:start;
+  border-top:1px solid var(--line);
+  font-family:var(--sans);font-size:.84rem;color:var(--muted);line-height:1.65;
+}
+.footer-main{min-width:0;}
+.footer-main p{margin:0 0 .75rem;max-width:60em;}
+.ref-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--teal);margin-top:1.25rem;
+}
+.ref-list{margin:.5rem 0 1.25rem;padding-left:1.35rem;font-size:.82rem;}
+.ref-list li{margin-bottom:.4rem;}
+.ref-list li:target{background:var(--tint);border-radius:5px;}
+.cite{font-family:var(--mono);font-size:.68em;vertical-align:super;line-height:0;margin-left:.12em;}
+.cite a{text-decoration:none;padding:0 .12em;}
+.series-links a{margin-right:.5rem;}
+.series-links .soon{margin-right:.5rem;color:var(--muted);opacity:.55;}
+.edition{
+  font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);border-radius:999px;
+  padding:.4rem .8rem;white-space:nowrap;
+}
+
+/* SECTION-RAIL:START
+   Fixed left-edge scroll-spy. Built at runtime from THIS page's own
+   section[id] + aria-labelledby headings — there is NO per-page markup.
+   Never strip this block or its bottom-<script> IIFE. */
+.section-rail{
+  position:fixed;left:0;top:50%;transform:translateY(-50%);
+  z-index:35;padding:.6rem .5rem;
+  display:flex;align-items:center;
+}
+.section-rail__list{
+  list-style:none;margin:0;padding:.55rem .6rem;
+  display:flex;flex-direction:column;gap:.55rem;
+  background:transparent;border-radius:0 var(--radius) var(--radius) 0;
+  border:1px solid transparent;
+  transition:background .18s ease,border-color .18s ease,padding .18s ease;
+}
+.section-rail:hover .section-rail__list,
+.section-rail:focus-within .section-rail__list{
+  background:var(--surface);border-color:var(--line);box-shadow:var(--shadow);
+}
+.section-rail__list a{
+  display:flex;align-items:center;gap:.55rem;
+  text-decoration:none;color:var(--muted);
+  font-family:var(--sans);font-size:.74rem;line-height:1.2;
+}
+.section-rail__list a::before{
+  content:"";flex:0 0 auto;width:18px;height:2px;border-radius:2px;
+  background:var(--line);transition:width .18s ease,background .18s ease;
+}
+.section-rail__list .rail-text{
+  max-width:0;overflow:hidden;white-space:nowrap;opacity:0;
+  transition:max-width .18s ease,opacity .18s ease;
+}
+.section-rail:hover .rail-text,
+.section-rail:focus-within .rail-text{max-width:15rem;opacity:1;}
+.section-rail__list a:hover,
+.section-rail__list a:focus-visible{color:var(--ink);}
+.section-rail__list a:hover::before{background:var(--teal);}
+.section-rail__list li.is-current a{color:var(--teal);font-weight:700;}
+.section-rail__list li.is-current a::before{width:28px;background:var(--teal);}
+@media (max-width:1180px){.section-rail{display:none;}}
+/* SECTION-RAIL:END */
+
+/* ---------- responsive ---------- */
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:1.75rem;padding-top:2.5rem;}
+  .hero::after{position:static;display:block;margin-bottom:.75rem;}
+  .chapter-nav{grid-template-columns:1fr;}
+  .nav-next{text-align:left;}
+  footer{grid-template-columns:1fr;}
+}
+@media (max-width:460px){
+  body{font-size:16px;line-height:1.68;}
+  main{padding:0 1rem 2.5rem;}
+  .topbar{padding:.6rem 1rem;gap:.55rem .75rem;}
+  .book-label{font-size:.66rem;margin-right:0;flex:1 0 100%;}
+  .switch button{padding:.3rem .55rem;font-size:.68rem;}
+  .section{padding:2.25rem 0;}
+  .surprise-grid{grid-template-columns:1fr;}
+  .surprise-grid>li,.comparison-card,.diagnostic{padding:1rem;}
+  .diagnostic{padding:1.1rem;}
+  .chapter-nav,footer{padding-left:1rem;padding-right:1rem;}
+  .system-map{padding:1rem;}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  *{transition:none!important;}
+}
+
+/* ---------- whole-book mind map banner ---------- */
+.mindmap-banner{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  gap:clamp(1rem,3vw,2rem);align-items:center;
+  margin:3rem 0 0;padding:1.35rem clamp(1.15rem,3vw,2rem);
+  border:1px solid var(--line);border-left:4px solid var(--teal);
+  border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);
+  color:var(--ink);text-decoration:none;
+  transition:border-color .15s,transform .15s;
+}
+a.mindmap-banner:hover{border-color:var(--teal);transform:translateY(-2px);}
+a.mindmap-banner:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+.mindmap-banner.soon{opacity:.5;cursor:default;}
+.mindmap-icon{font-size:1.9rem;line-height:1;}
+.mindmap-banner h3{margin:0 0 .3rem;font-size:1.05rem;}
+.mindmap-banner p{margin:0;max-width:48rem;font-size:.88rem;color:var(--muted);}
+.mindmap-banner .result{margin-top:0;color:var(--teal);font-weight:600;white-space:nowrap;}
+.mindmap-banner.soon .result{color:var(--muted);}
+@media (max-width:860px){
+  .mindmap-banner{grid-template-columns:auto minmax(0,1fr);}
+  .mindmap-banner .result{grid-column:2;white-space:normal;}
+}
+@media (max-width:460px){
+  .mindmap-banner{margin-left:0;margin-right:0;}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="book-label">
+    The Linux Programming Interface
+    <span>Chương 37 · Daemons</span>
+  </div>
+
+  <div class="switch" role="group" aria-label="Mức độ đọc / Reading level">
+    <button type="button" data-mode-btn="easy" aria-pressed="false">Dễ hiểu</button>
+    <button type="button" data-mode-btn="standard" aria-pressed="true">Chuẩn</button>
+    <button type="button" data-mode-btn="deep" aria-pressed="false">Đầy đủ</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Ngôn ngữ / Language">
+    <button type="button" data-lang-btn="vi" aria-pressed="true">VI</button>
+    <button type="button" data-lang-btn="en" aria-pressed="false">EN</button>
+  </div>
+
+  <div class="switch" role="group" aria-label="Giao diện / Theme">
+    <button type="button" data-theme-btn aria-pressed="false">☾ / ☀</button>
+  </div>
+</header>
+
+<main>
+<!-- ========================= HERO ========================= -->
+<section class="hero" id="mo-dau" aria-labelledby="mo-dau-title">
+  <div>
+    <p class="eyebrow">
+      <span class="vi-only">Chương 37 · Daemon</span>
+      <span class="en-only" lang="en">Chapter 37 · Daemons</span>
+    </p>
+
+    <h1 id="mo-dau-title">
+      <span class="standard-copy">Daemon: tiến trình sống lâu, chạy nền, không có terminal điều khiển</span>
+      <span class="easy-only">Daemon: chương trình chạy ngầm, âm thầm, sống rất lâu</span>
+      <span class="en-only" lang="en">Daemons: long-lived background processes with no controlling terminal</span>
+    </h1>
+
+    <p class="standard-copy">Kerrisk định nghĩa <b>daemon</b> là một tiến trình có hai đặc điểm: nó <i>sống lâu</i> (thường được tạo lúc hệ thống khởi động và chạy tới khi tắt máy), và nó <i>chạy nền, không có terminal điều khiển</i> — nhờ đó nhân không bao giờ tự sinh ra các tín hiệu điều khiển công việc hay liên quan terminal (như <code>SIGINT</code>, <code>SIGTSTP</code>, <code>SIGHUP</code>) cho nó.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> Chương đi qua: các bước biến một tiến trình thành daemon, mẫu hàm trợ giúp <code>becomeDaemon()</code>, cách dùng <code>SIGHUP</code> để nạp lại cấu hình, và cách ghi log qua tiện ích <b>syslog</b>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Hãy hình dung một người gác đêm trong tòa nhà: không ngồi ở quầy tiếp khách, không ai thấy mặt, nhưng lúc nào cũng có mặt làm việc suốt đêm. Daemon là chương trình như vậy — nó chạy ngầm phía sau, sống rất lâu, và không gắn với cửa sổ dòng lệnh nào cả. <b>Nhớ nhé: daemon là chương trình chạy ngầm, âm thầm, sống dai.</b></p>
+    <p class="en-only" lang="en">Kerrisk defines a <b>daemon</b> as a process with two characteristics: it is <i>long-lived</i> (often created at system startup and running until shutdown), and it <i>runs in the background with no controlling terminal</i> — so that the kernel never automatically generates job-control or terminal-related signals (such as <code>SIGINT</code>, <code>SIGTSTP</code>, <code>SIGHUP</code>) for it.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span> The chapter covers: the steps to turn a process into a daemon, the <code>becomeDaemon()</code> helper pattern, using <code>SIGHUP</code> to reinitialize, and logging through the <b>syslog</b> facility.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="deep-only deep-bilingual"><span class="vi-only">Vì sao phải cắt bỏ terminal điều khiển? Một tiến trình gắn với terminal sẽ nhận được các tín hiệu khi người dùng gõ Ctrl-C (<code>SIGINT</code>), Ctrl-Z (<code>SIGTSTP</code>), hay khi terminal bị ngắt kết nối (<code>SIGHUP</code>). Một chương trình nền phải sống độc lập với mọi phiên đăng nhập, nên nó cố ý tự tách khỏi terminal; khi đó <code>SIGHUP</code> được giải phóng để daemon tái sử dụng cho mục đích riêng (xem phần 03).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span><span class="en-only" lang="en">Why shed the controlling terminal? A terminal-attached process receives signals when the user types Ctrl-C (<code>SIGINT</code>), Ctrl-Z (<code>SIGTSTP</code>), or when the terminal disconnects (<code>SIGHUP</code>). A background program must outlive any login session, so it deliberately detaches from the terminal; that frees up <code>SIGHUP</code> for the daemon to repurpose (see section 03).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></span></p>
+
+    <div class="thesis">
+      <p class="standard-copy"><b>Luận đề của chương:</b> biến một chương trình thành daemon là một <i>chuỗi bước định hình môi trường</i> — tách khỏi terminal bằng <code>setsid()</code>, dọn <code>umask</code>, đổi thư mục làm việc, đóng và mở lại các bộ mô tả tệp — để tiến trình chạy ngầm, bền bỉ và không lệ thuộc vào phiên đăng nhập; và một khi đã chạy nền, nó liên lạc với thế giới qua <b>syslog</b> thay vì màn hình.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Ý chính:</b> muốn một chương trình chạy ngầm đúng cách, ta làm theo một danh sách bước chuẩn để cắt nó khỏi terminal và dọn dẹp môi trường. Vì không còn màn hình để in ra, nó gửi thông báo vào một hệ thống ghi log chung tên là syslog. <b>Nhớ nhé: thành daemon là làm đúng một danh sách bước, rồi ghi log qua syslog.</b></p>
+      <p class="en-only" lang="en"><b>The chapter's thesis:</b> turning a program into a daemon is a <i>sequence of environment-shaping steps</i> — detaching from the terminal with <code>setsid()</code>, clearing the <code>umask</code>, changing the working directory, closing and reopening file descriptors — so the process runs in the background, durably and independent of any login; and once backgrounded, it talks to the world through <b>syslog</b> rather than a screen.<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+  </div>
+
+  <div class="system-map" role="img" aria-label="Sơ đồ: một daemon là tiến trình sống lâu chạy nền không có terminal điều khiển; để tạo nó ta gọi setsid để lập phiên mới, dọn umask, đổi thư mục và mở lại 0/1/2 vào /dev/null; nó dùng SIGHUP để nạp lại cấu hình và ghi log qua syslog. Diagram: a daemon is a long-lived background process with no controlling terminal; to create one you call setsid to start a new session, clear the umask, change directory and reopen 0/1/2 to /dev/null; it uses SIGHUP to reinitialize and logs through syslog.">
+    <div class="core">
+      <b>daemon</b>
+      <small class="standard-copy">Tiến trình sống lâu, chạy nền, không có terminal điều khiển</small>
+      <small class="easy-only">Chương trình chạy ngầm, âm thầm, sống dai</small>
+      <small class="en-only" lang="en">A long-lived background process, no controlling terminal</small>
+    </div>
+
+    <div class="node">
+      <b>cách tạo · setsid()</b>
+      <small class="standard-copy">fork + cha thoát → setsid() → umask(0) → chdir("/") → đóng fd → mở lại /dev/null</small>
+      <small class="easy-only">Làm theo một danh sách bước để cắt khỏi terminal và dọn môi trường</small>
+      <small class="en-only" lang="en">fork + parent exits → setsid() → umask(0) → chdir("/") → close fds → reopen /dev/null</small>
+    </div>
+
+    <div class="node">
+      <b>nạp lại · SIGHUP</b>
+      <small class="standard-copy">Đọc lại tệp cấu hình và mở lại tệp log khi nhận SIGHUP</small>
+      <small class="easy-only">Nhận tín hiệu SIGHUP thì đọc lại cấu hình, mở lại log</small>
+      <small class="en-only" lang="en">Re-read config and reopen the log file on SIGHUP</small>
+    </div>
+
+    <div class="node">
+      <b>ghi log · syslog</b>
+      <small class="standard-copy">openlog() / syslog() / closelog() → daemon syslogd qua /dev/log</small>
+      <small class="easy-only">Gửi thông báo vào hệ thống ghi log chung của hệ thống</small>
+      <small class="en-only" lang="en">openlog() / syslog() / closelog() → the syslogd daemon via /dev/log</small>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= PATH ========================= -->
+<nav class="chapter-path" aria-label="Lộ trình chương / Chapter path">
+  <a href="#daemon-characteristics">
+    <span>01</span>
+    <b class="standard-copy">Daemon là gì: đặc điểm và ví dụ</b>
+    <b class="easy-only">Daemon là gì và trông ra sao</b>
+    <b class="en-only" lang="en">What a daemon is: traits and examples</b>
+  </a>
+  <a href="#creating-daemon">
+    <span>02</span>
+    <b class="standard-copy">Các bước biến tiến trình thành daemon</b>
+    <b class="easy-only">Các bước để thành daemon</b>
+    <b class="en-only" lang="en">The steps to create a daemon</b>
+  </a>
+  <a href="#sighup-reinit">
+    <span>03</span>
+    <b class="standard-copy">Dùng SIGHUP để nạp lại một daemon</b>
+    <b class="easy-only">Dùng SIGHUP để làm mới daemon</b>
+    <b class="en-only" lang="en">Using SIGHUP to reinitialize a daemon</b>
+  </a>
+  <a href="#syslog">
+    <span>04</span>
+    <b class="standard-copy">Ghi thông báo và lỗi qua syslog</b>
+    <b class="easy-only">Ghi log bằng syslog</b>
+    <b class="en-only" lang="en">Logging messages with syslog</b>
+  </a>
+</nav>
+
+<!-- ===================== SECTION 1 ===================== -->
+<section class="section" id="daemon-characteristics" aria-labelledby="daemon-characteristics-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 01</span>
+      <span class="en-only" lang="en">Concept cluster 01</span>
+    </p>
+    <h2 id="daemon-characteristics-title">
+      <span class="standard-copy">Daemon sống lâu và chạy nền — và điều quan trọng nhất là nó không có terminal điều khiển</span>
+      <span class="easy-only">Daemon sống rất lâu, chạy ngầm, và không gắn với cửa sổ dòng lệnh nào</span>
+      <span class="en-only" lang="en">A daemon is long-lived and backgrounded — and above all has no controlling terminal</span>
+    </h2>
+    <p class="standard-copy">Một <b>daemon</b> được viết để làm một nhiệm vụ cụ thể và chạy liên tục. Kerrisk nêu các ví dụ quen thuộc: <code>cron</code> thực thi lệnh theo lịch; <code>sshd</code> (secure shell daemon) cho phép đăng nhập từ xa qua giao thức bảo mật; <code>httpd</code> (máy chủ HTTP Apache) phục vụ trang web; và <code>inetd</code> (Internet superserver) lắng nghe kết nối mạng trên các cổng TCP/IP rồi khởi chạy chương trình máy chủ phù hợp.<span class="cite"><a href="#ref-1">1</a></span> Nhiều daemon chuẩn chạy với quyền đặc biệt (effective user ID bằng 0), nên cần được viết theo các hướng dẫn an toàn ở Chương 38.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Daemon là những "nhân viên hậu trường" của hệ điều hành, mỗi đứa lo một việc. <code>cron</code> là anh hẹn giờ, cứ tới giờ là chạy việc đã đặt. <code>sshd</code> là anh gác cổng cho người ở xa đăng nhập vào. <code>httpd</code> là anh bồi bàn mang trang web ra cho trình duyệt. Chúng làm việc âm thầm, bạn gần như không bao giờ thấy mặt. <b>Nhớ nhé: mỗi daemon là một nhân viên hậu trường lo đúng một việc.</b></p>
+    <p class="en-only" lang="en">A <b>daemon</b> is written to carry out a specific task and runs continuously. Kerrisk gives the familiar examples: <code>cron</code> executes commands at scheduled times; <code>sshd</code> (the secure shell daemon) permits remote logins over a secure protocol; <code>httpd</code> (the Apache HTTP server) serves web pages; and <code>inetd</code> (the Internet superserver) listens for network connections on TCP/IP ports and launches the appropriate server program.<span class="cite"><a href="#ref-1">1</a></span> Many standard daemons run as privileged processes (effective user ID 0), so they should be coded following the security guidelines of Chapter 38.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <b>Terminal điều khiển</b> (controlling terminal) là terminal gắn với một phiên (session) mà qua đó nhân gửi tín hiệu bàn phím cho tiến trình. Daemon cố tình <i>không có</i> terminal điều khiển; nhờ đó nhân không bao giờ tự sinh các tín hiệu như <code>SIGINT</code> (Ctrl-C) hay <code>SIGHUP</code> (ngắt kết nối) cho nó, và nó sống độc lập với mọi phiên đăng nhập.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> "Terminal điều khiển" là cửa sổ dòng lệnh mà từ đó bạn gõ Ctrl-C để dừng một chương trình. Daemon tự ngắt khỏi cửa sổ đó, nên không ai gõ Ctrl-C mà tắt được nó, và nó sống tiếp kể cả khi bạn đăng xuất. <b>Nhớ nhé: daemon tự cắt dây với cửa sổ dòng lệnh để không bị tắt ngang.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> A <b>controlling terminal</b> is the terminal attached to a session through which the kernel delivers keyboard-generated signals to processes. A daemon deliberately has <i>no</i> controlling terminal; so the kernel never automatically generates signals such as <code>SIGINT</code> (Ctrl-C) or <code>SIGHUP</code> (disconnection) for it, and it lives independently of any login session.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">Đặc điểm của daemon:<br>• long-lived&nbsp;&nbsp;&nbsp;→ tạo lúc boot, chạy tới shutdown<br>• background&nbsp;&nbsp;→ không có controlling terminal<br>• ví dụ&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;→ cron, sshd, httpd, inetd<br>• quy ước&nbsp;&nbsp;&nbsp;→ tên thường kết thúc bằng 'd'</p>
+      <p class="easy-only">daemon = sống lâu + chạy ngầm<br>ví dụ: cron, sshd, httpd<br>tên thường tận cùng bằng chữ 'd'</p>
+      <p class="en-only" lang="en">Daemon traits:<br>• long-lived → created at boot, runs to shutdown<br>• background → no controlling terminal<br>• examples&nbsp;&nbsp;→ cron, sshd, httpd, inetd<br>• convention → names often end in 'd'</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">long-lived</span>
+      <h3>
+        <span class="standard-copy">Sống lâu: sinh ra lúc boot, mất đi lúc tắt máy</span>
+        <span class="easy-only">Sống suốt: bật từ lúc khởi động tới lúc tắt máy</span>
+        <span class="en-only" lang="en">Long-lived: born at boot, gone at shutdown</span>
+      </h3>
+      <p class="standard-copy">Đặc điểm đầu tiên là <b>sống lâu</b>: một daemon thường được tạo lúc hệ thống khởi động và chạy cho tới khi tắt máy.<span class="cite"><a href="#ref-1">1</a></span> Chính vì tuổi thọ dài, Kerrisk lưu ý rằng daemon phải đặc biệt cẩn thận với rò rỉ bộ nhớ và rò rỉ bộ mô tả tệp — những lỗi mà một chương trình ngắn hạn có thể bỏ qua nhưng sẽ tích tụ chí mạng trong một tiến trình chạy hàng tháng.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Daemon không chạy một lúc rồi tắt như lệnh thường; nó bật lên cùng máy và chỉ nghỉ khi máy tắt. Vì sống lâu như thế, một lỗi nhỏ "quên dọn dẹp" sẽ dồn lại thành vấn đề lớn theo năm tháng. <b>Nhớ nhé: sống càng lâu thì càng phải dọn dẹp sạch sẽ.</b></p>
+      <p class="en-only" lang="en">The first trait is being <b>long-lived</b>: a daemon is often created at system startup and runs until shutdown.<span class="cite"><a href="#ref-1">1</a></span> Because of this longevity, Kerrisk notes that a daemon must be especially wary of memory leaks and file-descriptor leaks — bugs a short-lived program can ignore but that accumulate fatally in a process running for months.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một dịch vụ chạy nhiều ngày rồi "phình" bộ nhớ dần — thường là rò rỉ tích tụ, và cách chữa duy nhất là khởi động lại daemon.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi một dịch vụ chạy lâu ngày tự ngốn thêm bộ nhớ — đó là rò rỉ dồn lại, phải khởi động lại mới hết.</span>
+        <span class="en-only" lang="en">When a service running for days slowly "bloats" — usually an accumulating leak, and the only cure is to restart the daemon.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">no controlling terminal</span>
+      <h3>
+        <span class="standard-copy">Không terminal điều khiển: nhân không gửi tín hiệu bàn phím</span>
+        <span class="easy-only">Không gắn cửa sổ dòng lệnh: Ctrl-C không tới được nó</span>
+        <span class="en-only" lang="en">No controlling terminal: no keyboard signals reach it</span>
+      </h3>
+      <p class="standard-copy">Đặc điểm thứ hai là <b>chạy nền và không có terminal điều khiển</b>. Việc thiếu terminal điều khiển bảo đảm nhân <i>không bao giờ tự sinh</i> các tín hiệu điều khiển công việc hay liên quan terminal — như <code>SIGINT</code>, <code>SIGTSTP</code>, <code>SIGHUP</code> — cho daemon.<span class="cite"><a href="#ref-1">1</a></span> Đây là điểm cốt lõi phân biệt daemon với một chương trình chỉ đơn thuần chạy "ở nền" (background job) nhưng vẫn gắn với terminal.<span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Một lệnh chạy "ở nền" bình thường vẫn dính với cửa sổ dòng lệnh: đóng cửa sổ là nó cũng chết theo. Daemon thì cắt hẳn sợi dây đó, nên đóng cửa sổ hay đăng xuất cũng không ảnh hưởng. <b>Nhớ nhé: cắt dây với terminal là bước khác biệt lớn nhất của daemon.</b></p>
+      <p class="en-only" lang="en">The second trait is <b>running in the background with no controlling terminal</b>. The lack of a controlling terminal ensures the kernel <i>never automatically generates</i> job-control or terminal-related signals — such as <code>SIGINT</code>, <code>SIGTSTP</code>, <code>SIGHUP</code> — for the daemon.<span class="cite"><a href="#ref-1">1</a></span> This is the core point distinguishing a daemon from a program that merely runs as a background job but remains attached to a terminal.<span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một dịch vụ tiếp tục chạy sau khi bạn đăng xuất SSH — vì nó không còn gắn với terminal của phiên đó nữa.<span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Khi một dịch vụ vẫn chạy dù bạn đã đăng xuất — đó là nhờ nó không còn dính với cửa sổ nào.</span>
+        <span class="en-only" lang="en">When a service keeps running after you log out of SSH — because it is no longer tied to that session's terminal.<span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Daemon trong nhân</span><span class="en-only" lang="en">Kernel-thread daemons</span></h4>
+          <p><span class="vi-only">Trên Linux, một số daemon chạy như <i>luồng nhân</i> (kernel thread): mã của chúng là một phần của nhân và thường được tạo lúc khởi động. Khi liệt kê bằng <code>ps(1)</code>, tên chúng được đặt trong dấu ngoặc vuông <code>[]</code>. Ví dụ Kerrisk nêu là <code>pdflush</code>, định kỳ đẩy các trang "bẩn" (ví dụ từ buffer cache) xuống đĩa.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">On Linux, some daemons run as <i>kernel threads</i>: their code is part of the kernel and they are typically created at startup. When listed with <code>ps(1)</code>, their names are shown in square brackets <code>[]</code>. Kerrisk's example is <code>pdflush</code>, which periodically flushes dirty pages (e.g. from the buffer cache) to disk.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Dọn dẹp khi tắt máy</span><span class="en-only" lang="en">Shutdown cleanup</span></h4>
+          <p><span class="vi-only">Lúc tắt máy, <code>init</code> gửi <code>SIGTERM</code> tới các tiến trình con; theo mặc định tín hiệu này kết thúc tiến trình. Nếu daemon cần dọn dẹp trước khi chết, nó đặt handler cho <code>SIGTERM</code> — nhưng phải nhanh, vì <code>init</code> gửi tiếp <code>SIGKILL</code> sau 5 giây.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">At shutdown, <code>init</code> sends <code>SIGTERM</code> to its children; by default that signal terminates the process. If a daemon needs to clean up before dying, it installs a <code>SIGTERM</code> handler — but must be quick, since <code>init</code> follows up with <code>SIGKILL</code> after 5 seconds.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">naming · 'd'</span>
+      <h3>
+        <span class="standard-copy">Quy ước đặt tên: thường kết thúc bằng chữ 'd'</span>
+        <span class="easy-only">Tên daemon hay tận cùng bằng chữ 'd'</span>
+        <span class="en-only" lang="en">Naming convention: names often end in 'd'</span>
+      </h3>
+      <p class="standard-copy">Theo một quy ước (không phải ai cũng tuân thủ), tên các daemon thường kết thúc bằng chữ <b>d</b>: <code>cron</code> có phần giao tiếp qua <code>crond</code>, còn <code>sshd</code>, <code>httpd</code>, <code>inetd</code>, <code>syslogd</code> đều mang đuôi ấy.<span class="cite"><a href="#ref-1">1</a></span> Đây chỉ là quy ước đặt tên giúp người quản trị nhận ra một tiến trình là dịch vụ nền, không phải một đặc tính kỹ thuật bắt buộc.<span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Nếu thấy một chương trình có tên tận cùng bằng chữ "d" — như <code>sshd</code>, <code>httpd</code> — khả năng cao đó là một daemon. Đây chỉ là thói quen đặt tên để dễ nhận ra, không bắt buộc. <b>Nhớ nhé: đuôi 'd' là dấu hiệu quen thuộc của một daemon.</b></p>
+      <p class="en-only" lang="en">By convention (not universally observed), daemon names often end in the letter <b>d</b>: <code>sshd</code>, <code>httpd</code>, <code>inetd</code>, and <code>syslogd</code> all carry it.<span class="cite"><a href="#ref-1">1</a></span> This is merely a naming convention that helps administrators recognize a background service, not a required technical property.<span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi đọc đầu ra <code>ps</code> hay <code>systemctl</code> và lướt nhanh tìm các dịch vụ nền — đuôi 'd' là gợi ý trực quan đầu tiên.<span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Khi dò danh sách tiến trình tìm dịch vụ nền — cứ để ý những tên kết thúc bằng 'd'.</span>
+        <span class="en-only" lang="en">When scanning <code>ps</code> or <code>systemctl</code> output for background services — the trailing 'd' is the first visual hint.<span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Đã rõ daemon <i>là gì</i>, câu hỏi thực hành là: làm thế nào <i>biến</i> một chương trình thông thường thành một daemon đúng nghĩa? Kerrisk trình bày một chuỗi bước chuẩn — và quan trọng nhất trong đó là <code>setsid()</code>, lời gọi cắt tiến trình khỏi terminal điều khiển.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    <p class="easy-only">Giờ ta đã biết daemon là gì. Câu hỏi kế: làm sao để tự tay biến một chương trình thường thành daemon? Có một danh sách bước chuẩn, mà bước then chốt là <code>setsid()</code>.</p>
+    <p class="en-only" lang="en">Having seen what a daemon <i>is</i>, the practical question is: how do you <i>turn</i> an ordinary program into a proper daemon? Kerrisk lays out a standard sequence — and the pivotal step is <code>setsid()</code>, the call that cuts the process free of its controlling terminal.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 2 ===================== -->
+<section class="section" id="creating-daemon" aria-labelledby="creating-daemon-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 02</span>
+      <span class="en-only" lang="en">Concept cluster 02</span>
+    </p>
+    <h2 id="creating-daemon-title">
+      <span class="standard-copy">Các bước biến một tiến trình thành daemon — và hàm trợ giúp becomeDaemon()</span>
+      <span class="easy-only">Danh sách bước để biến một chương trình thành daemon</span>
+      <span class="en-only" lang="en">The steps to turn a process into a daemon — and the becomeDaemon() helper</span>
+    </h2>
+    <p class="standard-copy">Để trở thành daemon, một chương trình thực hiện một chuỗi bước chuẩn: (1) gọi <code>fork()</code> rồi cho cha thoát, con tiếp tục — nhờ đó con được <code>init</code> nhận nuôi và <i>chắc chắn không</i> là trưởng nhóm tiến trình; (2) con gọi <code>setsid()</code> để lập một phiên mới và tự giải phóng khỏi mọi terminal điều khiển; (3) tùy chọn <code>fork()</code> lần hai để con cháu không còn là trưởng phiên (session leader); (4) đặt lại <code>umask(0)</code>; (5) <code>chdir("/")</code> về một thư mục biết chắc; (6) đóng mọi bộ mô tả tệp thừa kế không dùng; (7) mở lại 0, 1, 2 vào <code>/dev/null</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+    <p class="easy-only">Biến một chương trình thành daemon giống như chuẩn bị cho một người làm ca đêm độc lập: cho người cũ rời đi (fork + cha thoát), mở một "ca trực" mới tách khỏi phòng điều khiển (setsid), dọn bàn làm việc (umask, đổi thư mục), và rút hết các "đường dây" cũ nối tới màn hình (đóng và mở lại 0/1/2 vào /dev/null — tức "thùng rác"). <b>Nhớ nhé: cắt dây với terminal, dọn môi trường, rồi mới chạy ngầm.</b></p>
+    <p class="en-only" lang="en">To become a daemon, a program performs a standard sequence of steps: (1) call <code>fork()</code>, then let the parent exit while the child continues — so the child is adopted by <code>init</code> and is <i>guaranteed not</i> to be a process group leader; (2) the child calls <code>setsid()</code> to start a new session and free itself of any controlling terminal; (3) optionally <code>fork()</code> a second time so the grandchild is no longer a session leader; (4) reset <code>umask(0)</code>; (5) <code>chdir("/")</code> to a known directory; (6) close all unneeded inherited file descriptors; (7) reopen 0, 1, 2 to <code>/dev/null</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>setsid()</code> tạo một <b>phiên (session)</b> mới nếu tiến trình gọi <i>không</i> là trưởng nhóm tiến trình. Tiến trình gọi trở thành trưởng phiên của phiên mới, trưởng nhóm của một nhóm tiến trình mới, và <i>không có terminal điều khiển</i>. Đây chính là lý do bước <code>fork()</code> đầu tiên tồn tại: để bảo đảm con <i>không</i> là trưởng nhóm, nhờ đó <code>setsid()</code> mới thành công.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> <code>setsid()</code> là lời gọi "mở một ca trực hoàn toàn mới" — tách tiến trình khỏi mọi terminal cũ. Nhưng nó chỉ chạy được nếu tiến trình chưa phải là "trưởng nhóm"; vì vậy ta fork trước để chắc chắn điều đó. <b>Nhớ nhé: fork trước để setsid sau mới chạy được.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>setsid()</code> creates a new <b>session</b> if the calling process is <i>not</i> a process group leader. The caller becomes the session leader of the new session, the group leader of a new process group, and has <i>no controlling terminal</i>. This is exactly why the first <code>fork()</code> exists: to guarantee the child is <i>not</i> a group leader, so that <code>setsid()</code> can succeed.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">1. fork(); cha exit, con tiếp<br>2. setsid();&nbsp;&nbsp;/* phiên mới, bỏ terminal */<br>3. fork() lần 2 (tùy chọn)<br>4. umask(0);<br>5. chdir("/");<br>6. đóng fd thừa kế không dùng<br>7. mở lại 0,1,2 → /dev/null</p>
+      <p class="easy-only">fork → cha thoát<br>setsid() → cắt terminal<br>umask(0), chdir("/")<br>đóng fd cũ<br>mở lại 0,1,2 vào /dev/null</p>
+      <p class="en-only" lang="en">1. fork(); parent exits, child continues<br>2. setsid();&nbsp;&nbsp;/* new session, drop terminal */<br>3. fork() again (optional)<br>4. umask(0);<br>5. chdir("/");<br>6. close unneeded inherited fds<br>7. reopen 0,1,2 → /dev/null</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">fork + setsid</span>
+      <h3>
+        <span class="standard-copy">fork rồi cho cha thoát — để setsid() lập phiên mới thành công</span>
+        <span class="easy-only">Cho cha rời đi, rồi mở ca trực mới</span>
+        <span class="en-only" lang="en">fork, then the parent exits — so setsid() can start a new session</span>
+      </h3>
+      <p class="standard-copy">Bước <code>fork()</code> đầu tiên phục vụ hai mục đích. Thứ nhất, nếu daemon được chạy từ dòng lệnh, việc cha kết thúc được shell nhận ra: shell in dấu nhắc mới và để con chạy tiếp ở nền. Thứ hai, con <i>chắc chắn không</i> là trưởng nhóm tiến trình — nó thừa kế process group ID từ cha nhưng mang một PID riêng khác — và đây là điều kiện bắt buộc để <code>setsid()</code> ở bước sau chạy được.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <p class="easy-only">Ta fork ra một con, rồi cho cha thoát. Nhờ cha thoát, nếu bạn chạy từ dòng lệnh thì shell trả lại dấu nhắc ngay, còn con lặng lẽ chạy tiếp. Và con này chưa phải "trưởng nhóm", nên lát nữa nó mới mở được ca trực mới. <b>Nhớ nhé: cha thoát để shell rảnh tay và để con đủ điều kiện gọi setsid.</b></p>
+      <p class="en-only" lang="en">The first <code>fork()</code> serves two purposes. First, if the daemon is started from the command line, the parent's termination is noticed by the shell, which prints a fresh prompt and leaves the child to continue in the background. Second, the child is <i>guaranteed not</i> to be a process group leader — it inherits its parent's process group ID but has its own distinct PID — which is the precondition for the later <code>setsid()</code> to succeed.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi khởi chạy một daemon từ terminal và lập tức lấy lại được dấu nhắc shell — đó là vì tiến trình cha vừa thoát.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi chạy một dịch vụ mà màn hình trả lại ngay dấu nhắc — đó là lúc "cha" vừa thoát.</span>
+        <span class="en-only" lang="en">When launching a daemon from a terminal and immediately getting the shell prompt back — that is the parent having just exited.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Vì sao đôi khi fork lần hai</span><span class="en-only" lang="en">Why the optional second fork</span></h4>
+          <p><span class="vi-only">Sau <code>setsid()</code>, tiến trình là trưởng phiên và <i>có thể</i> vô tình giành lại một terminal điều khiển nếu sau này nó mở một thiết bị terminal. Cách phòng đơn giản là <code>fork()</code> lần hai và cho cha thoát: con cháu không còn là trưởng phiên, nên theo quy ước System V về việc giành terminal điều khiển, nó không thể vô tình có lại terminal. Cách khác là luôn dùng cờ <code>O_NOCTTY</code> khi <code>open()</code> một thiết bị terminal.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">After <code>setsid()</code>, the process is a session leader and <i>could</i> accidentally reacquire a controlling terminal if it later opens a terminal device. The simple guard is a second <code>fork()</code> with the parent exiting: the grandchild is no longer a session leader, so under the System V conventions for controlling-terminal acquisition it cannot accidentally regain one. The alternative is to always use the <code>O_NOCTTY</code> flag when <code>open()</code>-ing a terminal device.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">setsid và nhóm tiến trình</span><span class="en-only" lang="en">setsid and process groups</span></h4>
+          <p><span class="vi-only">Nếu tiến trình gọi <code>setsid()</code> đang là trưởng nhóm tiến trình thì lời gọi thất bại với lỗi <code>EPERM</code>. Đó là lý do kỹ thuật khiến bước fork đầu không thể bỏ: fork tạo ra một con mang PID mới khác process group ID thừa kế, nên con chắc chắn không phải trưởng nhóm.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span><span class="en-only" lang="en">If the process calling <code>setsid()</code> is already a process group leader, the call fails with <code>EPERM</code>. That is the technical reason the first fork is indispensable: fork yields a child with a new PID different from the inherited process group ID, so the child is certainly not a group leader.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">umask · chdir · /dev/null</span>
+      <h3>
+        <span class="standard-copy">Dọn môi trường: umask, thư mục làm việc, và các fd chuẩn</span>
+        <span class="easy-only">Dọn bàn làm việc và rút các đường dây cũ</span>
+        <span class="en-only" lang="en">Clean the environment: umask, working directory, standard fds</span>
+      </h3>
+      <p class="standard-copy">Sau khi tách phiên, daemon dọn dẹp môi trường. Nó gọi <code>umask(0)</code> để xoá mặt nạ tạo tệp, bảo đảm các tệp nó tạo ra có đúng quyền mong muốn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> Nó <code>chdir("/")</code> (hoặc một thư mục biết chắc) để không giữ khoá một hệ thống tệp khiến hệ thống đó không thể unmount. Nó đóng mọi bộ mô tả tệp thừa kế không dùng — vì fd là tài nguyên hữu hạn và daemon đã mất terminal. Cuối cùng, sau khi đóng 0, 1, 2, nó mở lại chúng vào <code>/dev/null</code> — thiết bị ảo luôn vứt bỏ mọi dữ liệu ghi vào.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Trước khi vào ca, người làm đêm dọn bàn và rút các dây nối cũ. Daemon cũng vậy: xoá "mặt nạ quyền tệp" để tệp mới có đúng quyền, chuyển về thư mục gốc "/" cho chắc chắn, đóng mọi "đường dây" thừa, rồi nối ba đường dây chuẩn (vào/ra/lỗi) vào "/dev/null" — một cái thùng rác nuốt sạch mọi thứ. <b>Nhớ nhé: dọn umask, về thư mục chắc chắn, và đổ ra/vào/lỗi vào /dev/null.</b></p>
+      <p class="en-only" lang="en">After detaching the session, the daemon cleans its environment. It calls <code>umask(0)</code> to clear the file-mode creation mask, ensuring files it creates get the exact permissions intended.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-4">4</a></span> It <code>chdir("/")</code> (or to a known directory) so it does not keep a filesystem busy and prevent it from being unmounted. It closes all unneeded inherited file descriptors — since fds are a finite resource and the daemon has lost its terminal. Finally, after closing 0, 1, 2, it reopens them to <code>/dev/null</code> — the virtual device that always discards data written to it.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một dịch vụ ghi <code>printf</code> ra stdout mà "biến mất không dấu vết" — vì fd 1 của nó đã trỏ vào <code>/dev/null</code>; muốn thấy, phải ghi qua syslog.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi một dịch vụ in ra màn hình mà chẳng thấy đâu — vì đầu ra của nó đã bị đổ vào thùng rác /dev/null.</span>
+        <span class="en-only" lang="en">When a service's <code>printf</code> to stdout "vanishes" — because its fd 1 points at <code>/dev/null</code>; to see it, log via syslog.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Vì sao mở lại 0/1/2</span><span class="en-only" lang="en">Why reopen 0/1/2</span></h4>
+          <p><span class="vi-only">Daemon mở lại ba fd chuẩn vào <code>/dev/null</code> để tránh một lỗi tinh vi: nếu để fd 0, 1, 2 đóng, một tệp mở sau này có thể vô tình nhận số 0, 1 hoặc 2, rồi một thư viện gọi <code>printf</code> (ghi vào fd 1) sẽ làm hỏng tệp đó. Trỏ sẵn chúng vào thùng rác khiến ghi vào stdout/stderr trở nên vô hại.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">The daemon reopens the three standard fds to <code>/dev/null</code> to avoid a subtle bug: if 0, 1, 2 were left closed, a later-opened file could accidentally get descriptor 0, 1, or 2, and a library call to <code>printf</code> (which writes fd 1) would corrupt that file. Pointing them at the bit-bucket makes writes to stdout/stderr harmless.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Bao nhiêu fd để đóng</span><span class="en-only" lang="en">How many fds to close</span></h4>
+          <p><span class="vi-only">Khi không biết fd lớn nhất đang mở, hàm trợ giúp của sách đoán một trần <code>BD_MAX_CLOSE</code> bằng 8192 và đóng lần lượt từ 0 tới trần đó. Một số hệ thống cung cấp <code>closefrom()</code> để đóng tất cả fd từ một số trở lên một cách gọn hơn.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">When the highest open fd is unknown, the book's helper guesses a ceiling <code>BD_MAX_CLOSE</code> of 8192 and closes each from 0 up to it. Some systems provide <code>closefrom()</code> to close all fds from a given number upward more cleanly.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">becomeDaemon() · BD_*</span>
+      <h3>
+        <span class="standard-copy">becomeDaemon(): gói toàn bộ chuỗi bước sau một tham số cờ</span>
+        <span class="easy-only">Một hàm làm sẵn mọi bước, điều khiển bằng cờ</span>
+        <span class="en-only" lang="en">becomeDaemon(): the whole sequence behind one flags argument</span>
+      </h3>
+      <p class="standard-copy">Kerrisk đóng gói toàn bộ chuỗi bước vào một hàm trợ giúp: <code>int becomeDaemon(int flags);</code>. Tham số <code>flags</code> là một bit-mask cho phép bỏ qua từng bước khi cần: <code>BD_NO_CHDIR</code> (không <code>chdir("/")</code>), <code>BD_NO_CLOSE_FILES</code> (không đóng các fd đang mở), <code>BD_NO_REOPEN_STD_FDS</code> (không mở lại 0/1/2 vào <code>/dev/null</code>), và <code>BD_NO_UMASK0</code> (không gọi <code>umask(0)</code>).<span class="cite"><a href="#ref-1">1</a></span> Gọi <code>becomeDaemon(0)</code> là thực hiện đầy đủ mọi bước mặc định.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Thay vì tự gõ lại từng bước mỗi lần, ta viết một hàm làm sẵn tất cả tên là <code>becomeDaemon()</code>. Muốn bỏ bớt bước nào thì bật một "công tắc" (cờ) tương ứng. Gọi với số 0 nghĩa là "làm hết mọi bước". <b>Nhớ nhé: một hàm gói sẵn mọi bước, bật tắt từng bước bằng cờ.</b></p>
+      <p class="en-only" lang="en">Kerrisk packages the whole sequence into a helper: <code>int becomeDaemon(int flags);</code>. The <code>flags</code> argument is a bit-mask that lets you skip individual steps as needed: <code>BD_NO_CHDIR</code> (don't <code>chdir("/")</code>), <code>BD_NO_CLOSE_FILES</code> (don't close open fds), <code>BD_NO_REOPEN_STD_FDS</code> (don't reopen 0/1/2 to <code>/dev/null</code>), and <code>BD_NO_UMASK0</code> (don't call <code>umask(0)</code>).<span class="cite"><a href="#ref-1">1</a></span> Calling <code>becomeDaemon(0)</code> performs the full default sequence.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi một daemon cần giữ lại thư mục làm việc hiện tại (ví dụ để ghi tệp cạnh dữ liệu) — nó gọi <code>becomeDaemon(BD_NO_CHDIR)</code> thay vì về "/".<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi muốn daemon ở lại đúng thư mục hiện tại — bật cờ BD_NO_CHDIR để bỏ bước đổi thư mục.</span>
+        <span class="en-only" lang="en">When a daemon must keep its current directory (say, to write files beside its data) — it calls <code>becomeDaemon(BD_NO_CHDIR)</code> instead of moving to "/".<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Daemon giờ đã chạy nền đúng cách. Nhưng vì nó sống rất lâu, hai nhu cầu nảy sinh: làm sao bảo nó đọc lại tệp cấu hình mới mà không phải dừng rồi khởi động lại, và làm sao bảo nó mở lại tệp log sau khi log cũ bị xoay vòng? Lời giải chung là tín hiệu <code>SIGHUP</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Daemon đã chạy ngầm ổn. Nhưng nó sống lâu quá, nên ta cần cách bảo nó "đọc lại cấu hình" hoặc "mở lại tệp log" mà không phải tắt đi bật lại. Cách làm là gửi cho nó tín hiệu SIGHUP.</p>
+    <p class="en-only" lang="en">The daemon now runs properly in the background. But because it is so long-lived, two needs arise: how to tell it to re-read a new config file without stopping and restarting, and how to tell it to reopen its log file after the old one is rotated away? The common solution is the <code>SIGHUP</code> signal.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 3 ===================== -->
+<section class="section" id="sighup-reinit" aria-labelledby="sighup-reinit-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 03</span>
+      <span class="en-only" lang="en">Concept cluster 03</span>
+    </p>
+    <h2 id="sighup-reinit-title">
+      <span class="standard-copy">SIGHUP: tín hiệu "làm mới" mà daemon tự do tái dụng</span>
+      <span class="easy-only">Gửi SIGHUP để bảo daemon làm mới chính nó</span>
+      <span class="en-only" lang="en">SIGHUP: the "refresh" signal a daemon is free to repurpose</span>
+    </h2>
+    <p class="standard-copy">Vì nhiều daemon phải chạy liên tục, hai vấn đề xuất hiện: (1) một daemon thường đọc tham số vận hành từ một tệp cấu hình, và đôi khi ta muốn đổi tham số "ngay lúc chạy" mà không dừng rồi khởi động lại; (2) một số daemon tạo tệp log, và nếu nó không bao giờ đóng tệp log thì tệp cũ không thể bị dọn gọn (một tệp vẫn tồn tại chừng nào còn tiến trình mở nó). Giải pháp cho cả hai là để daemon đặt một handler cho <code>SIGHUP</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Daemon chạy mãi, nên có hai việc hay cần: bảo nó đọc lại tệp cấu hình vừa sửa, và bảo nó mở một tệp log mới (sau khi tệp log cũ đã được cất đi). Cả hai đều làm được bằng cách gửi cho nó một tín hiệu đặc biệt tên SIGHUP, và dặn trước nó phải làm gì khi nhận. <b>Nhớ nhé: SIGHUP là tiếng gõ cửa bảo daemon "đọc lại cấu hình, mở lại log".</b></p>
+    <p class="en-only" lang="en">Because many daemons must run continuously, two problems arise: (1) a daemon typically reads operational parameters from a configuration file, and sometimes we want to change parameters "on the fly" without stopping and restarting; (2) some daemons produce log files, and if a daemon never closes its log file, the old file cannot be tidied away (a file persists as long as any process holds it open). The solution to both is for the daemon to establish a handler for <code>SIGHUP</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> <code>SIGHUP</code> bình thường được sinh ra cho tiến trình điều khiển khi terminal điều khiển bị ngắt kết nối. Nhưng vì daemon đã <i>không còn</i> terminal điều khiển, nhân không bao giờ tự sinh <code>SIGHUP</code> cho nó — nên daemon được tự do <i>tái sử dụng</i> tín hiệu này cho mục đích riêng: ra hiệu "hãy khởi tạo lại".<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Với chương trình thường, SIGHUP nghĩa là "cửa sổ terminal vừa bị đóng". Nhưng daemon đã bỏ terminal rồi, nên không bao giờ nhận SIGHUP một cách tự nhiên — thế là nó mượn luôn tín hiệu rảnh rỗi này để làm mã lệnh "làm mới". <b>Nhớ nhé: SIGHUP với daemon là tín hiệu rảnh, dùng làm lệnh làm mới.</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> <code>SIGHUP</code> is normally generated for the controlling process when its controlling terminal is disconnected. But since a daemon has <i>no</i> controlling terminal, the kernel never generates <code>SIGHUP</code> for it — so the daemon is free to <i>repurpose</i> this signal for its own ends: to signal "reinitialize yourself."<span class="cite"><a href="#ref-1">1</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">/* handler chỉ đặt một cờ */<br>void h(int s){ hupReceived = 1; }<br>sigaction(SIGHUP, &amp;sa, NULL);<br>...<br>if (hupReceived){ /* đọc lại config, */<br>&nbsp;&nbsp;/* mở lại log */ hupReceived = 0; }</p>
+      <p class="easy-only">nhận SIGHUP → bật một lá cờ<br>vòng lặp chính thấy cờ →<br>đọc lại cấu hình, mở lại log</p>
+      <p class="en-only" lang="en">/* handler just sets a flag */<br>void h(int s){ hupReceived = 1; }<br>sigaction(SIGHUP, &amp;sa, NULL);<br>...<br>if (hupReceived){ /* re-read config, */<br>&nbsp;&nbsp;/* reopen log */ hupReceived = 0; }</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">reread config</span>
+      <h3>
+        <span class="standard-copy">Đọc lại cấu hình mà không phải khởi động lại</span>
+        <span class="easy-only">Đổi cấu hình ngay lúc đang chạy</span>
+        <span class="en-only" lang="en">Re-read config without a restart</span>
+      </h3>
+      <p class="standard-copy">Nhu cầu đầu tiên: daemon đọc tham số từ một tệp cấu hình lúc khởi động. Khi quản trị viên sửa tệp ấy, gửi <code>SIGHUP</code> để daemon đọc lại và áp dụng tham số mới "ngay lúc chạy", không cần dừng rồi bật lại — tránh gián đoạn dịch vụ.<span class="cite"><a href="#ref-1">1</a></span> Đây là lý do nhiều dịch vụ có lệnh kiểu <code>reload</code> thực chất chỉ gửi <code>SIGHUP</code>.<span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Sửa xong tệp cấu hình, bạn không muốn tắt hẳn dịch vụ (gây gián đoạn) chỉ để nó đọc cái mới. Gửi SIGHUP là nó tự đọc lại và áp dụng ngay. <b>Nhớ nhé: sửa cấu hình xong, gửi SIGHUP là xong, khỏi tắt máy chủ.</b></p>
+      <p class="en-only" lang="en">The first need: a daemon reads parameters from a config file at startup. When an administrator edits that file, sending <code>SIGHUP</code> makes the daemon re-read and apply the new parameters "on the fly," with no stop-and-restart — avoiding service disruption.<span class="cite"><a href="#ref-1">1</a></span> This is why many services' <code>reload</code> command really just sends <code>SIGHUP</code>.<span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Lệnh kinh điển <code>killall -HUP syslogd</code> buộc chính <code>syslogd</code> đọc lại <code>/etc/syslog.conf</code> sau khi ta sửa quy tắc.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Như <code>killall -HUP syslogd</code> — bảo syslogd đọc lại tệp cấu hình của nó.</span>
+        <span class="en-only" lang="en">The classic <code>killall -HUP syslogd</code> forces <code>syslogd</code> itself to re-read <code>/etc/syslog.conf</code> after you edit its rules.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">reopen log · logrotate</span>
+      <h3>
+        <span class="standard-copy">Mở lại tệp log — chìa khoá cho việc xoay vòng log</span>
+        <span class="easy-only">Mở tệp log mới sau khi tệp cũ bị cất đi</span>
+        <span class="en-only" lang="en">Reopen the log file — the key to log rotation</span>
+      </h3>
+      <p class="standard-copy">Nhu cầu thứ hai: nếu daemon giữ tệp log mở mãi, tệp đó không thể bị dọn gọn vì nó vẫn tồn tại chừng nào còn tiến trình mở. Khi nhận <code>SIGHUP</code>, daemon đóng tệp log hiện tại và mở lại — cho phép công cụ xoay vòng log đổi tên tệp cũ rồi để daemon viết vào tệp mới.<span class="cite"><a href="#ref-1">1</a></span> Kerrisk nhắc rằng chương trình <code>logrotate</code> được dùng để tự động hoá việc xoay vòng tệp log của daemon.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Nếu daemon cứ ghi mãi vào một tệp log, tệp đó phình to không dọn được. Người ta đổi tên tệp cũ đi, rồi gửi SIGHUP để daemon mở một tệp log mới tinh mà ghi tiếp. Công cụ <code>logrotate</code> làm chuyện này tự động. <b>Nhớ nhé: đổi tên log cũ, gửi SIGHUP, daemon mở log mới.</b></p>
+      <p class="en-only" lang="en">The second need: if a daemon keeps its log file open forever, that file cannot be tidied away because it persists as long as a process holds it open. On <code>SIGHUP</code>, the daemon closes the current log file and reopens it — letting a rotation tool rename the old file and have the daemon write to a fresh one.<span class="cite"><a href="#ref-1">1</a></span> Kerrisk notes the <code>logrotate</code> program is used to automate rotation of daemon log files.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Mỗi đêm khi <code>logrotate</code> nén nhật ký hôm qua và tạo tệp mới — nó dựa vào việc daemon mở lại log khi nhận tín hiệu.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Mỗi khi nhật ký được cắt theo ngày và nén lại — đó là nhờ daemon mở lại log khi được báo hiệu.</span>
+        <span class="en-only" lang="en">Each night when <code>logrotate</code> compresses yesterday's log and starts a new file — it relies on the daemon reopening its log on signal.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Handler chỉ nên đặt một cờ</span><span class="en-only" lang="en">The handler should just set a flag</span></h4>
+          <p><span class="vi-only">Trong ví dụ Listing 37-3 của sách, handler <code>SIGHUP</code> chỉ làm đúng một việc: đặt một biến cờ toàn cục khác 0. Vòng lặp chính của daemon kiểm tra cờ đó, và khi thấy nó được bật thì mới thực sự đọc lại cấu hình cùng mở lại tệp log, rồi đặt cờ về 0 để chờ lần sau. Cách này tránh làm những việc phức tạp, không an toàn trong ngữ cảnh async-signal.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">In the book's Listing 37-3, the <code>SIGHUP</code> handler does exactly one thing: set a nonzero global flag. The daemon's main loop checks that flag, and only when it is set does it actually re-read the config and reopen the log file, then clear the flag to wait for next time. This avoids doing complex, async-signal-unsafe work inside the handler.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Một biến thể</span><span class="en-only" lang="en">A variant</span></h4>
+          <p><span class="vi-only">Kerrisk lưu ý một cách tiếp cận khác mà một số daemon dùng khi nhận <code>SIGHUP</code>: đóng mọi tệp rồi tự khởi động lại chính mình bằng một lời gọi <code>exec()</code>. Cách này nạp lại hoàn toàn chương trình thay vì chỉ đọc lại cấu hình.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">Kerrisk notes an alternative some daemons take on <code>SIGHUP</code>: close all files and then restart themselves with an <code>exec()</code> call. This fully reloads the program rather than merely re-reading configuration.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">free signal</span>
+      <h3>
+        <span class="standard-copy">Vì sao SIGHUP lại "rảnh" để tái dụng</span>
+        <span class="easy-only">Vì sao daemon mượn được SIGHUP</span>
+        <span class="en-only" lang="en">Why SIGHUP is "free" to repurpose</span>
+      </h3>
+      <p class="standard-copy">Điều làm <code>SIGHUP</code> trở thành lựa chọn tự nhiên chính là đặc điểm ở phần 01: vì daemon không có terminal điều khiển, nhân <i>không bao giờ</i> tự sinh <code>SIGHUP</code> cho nó. Tín hiệu này do đó "rảnh" và không gây nhập nhằng — gửi nó tới daemon chỉ có thể là một mệnh lệnh cố ý từ quản trị viên.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <p class="easy-only">Nhớ ở phần đầu: daemon đã bỏ terminal, nên nó chẳng bao giờ bị SIGHUP "tự nhiên" bay tới. Chính vì vậy tín hiệu này bỏ không, daemon mượn dùng mà không sợ nhầm với tín hiệu thật. <b>Nhớ nhé: bỏ terminal khiến SIGHUP bỏ trống, thành tín hiệu lệnh an toàn.</b></p>
+      <p class="en-only" lang="en">What makes <code>SIGHUP</code> the natural choice is exactly the trait from section 01: because a daemon has no controlling terminal, the kernel <i>never</i> generates <code>SIGHUP</code> for it. The signal is therefore "free" and unambiguous — sending it to a daemon can only be a deliberate command from an administrator.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-2">2</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi tài liệu một dịch vụ viết "gửi SIGHUP để reload" — giờ bạn hiểu vì sao đúng tín hiệu đó, không phải tín hiệu khác.<span class="cite"><a href="#ref-2">2</a></span></span>
+        <span class="easy-only">Khi thấy hướng dẫn "gửi SIGHUP để nạp lại" — giờ bạn hiểu lý do chọn đúng tín hiệu này.</span>
+        <span class="en-only" lang="en">When a service's docs say "send SIGHUP to reload" — now you know why that exact signal, and not another.<span class="cite"><a href="#ref-2">2</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <aside class="signal surprise-connection">
+    <p class="standard-copy">Còn một mảnh ghép cuối: vì daemon không có màn hình (stdout/stderr đã trỏ vào <code>/dev/null</code>), nó báo cáo tình trạng và lỗi ra sao? Câu trả lời là tiện ích <b>syslog</b> — một hệ thống ghi log tập trung của toàn hệ thống.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    <p class="easy-only">Còn một câu hỏi: daemon không có màn hình thì kể chuyện của nó cho ai nghe? Nó gửi vào một hệ thống ghi log chung tên là syslog.</p>
+    <p class="en-only" lang="en">One last piece: since a daemon has no screen (stdout/stderr point to <code>/dev/null</code>), how does it report status and errors? The answer is the <b>syslog</b> facility — a system-wide, centralized logging system.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+  </aside>
+</section>
+
+<!-- ===================== SECTION 4 ===================== -->
+<section class="section" id="syslog" aria-labelledby="syslog-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Cụm khái niệm 04</span>
+      <span class="en-only" lang="en">Concept cluster 04</span>
+    </p>
+    <h2 id="syslog-title">
+      <span class="standard-copy">syslog: một đường ghi log tập trung cho mọi daemon của hệ thống</span>
+      <span class="easy-only">syslog: nơi ghi log chung của cả hệ thống</span>
+      <span class="en-only" lang="en">syslog: one centralized logging path for every daemon</span>
+    </h2>
+    <p class="standard-copy">Nếu mỗi daemon tự ghi log theo kiểu riêng vào tệp riêng thì người quản trị khó lòng theo dõi. Tiện ích <b>syslog</b> ra đời để giải quyết: nó cho một đường ghi log <i>tập trung, duy nhất</i> mà mọi tiến trình dùng được. Kiến trúc có hai thành phần chính: <b>daemon syslogd</b> và <b>hàm thư viện syslog(3)</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> Tiện ích này xuất hiện lần đầu ở 4.2BSD; SUSv3 đã chuẩn hoá <code>syslog(3)</code> và các hàm liên quan, nhưng để ngỏ phần cài đặt của <code>syslogd</code> và định dạng tệp <code>syslog.conf</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+    <p class="easy-only">Tưởng tượng một toà nhà mà mỗi phòng tự ghi nhật ký riêng một kiểu — quản lý sẽ phát điên. syslog giống như một cuốn sổ ghi chép chung đặt ở sảnh: mọi phòng (mọi chương trình) đều gửi ghi chú vào đó, và có một nhân viên (syslogd) sắp xếp, phân loại các ghi chú ấy. <b>Nhớ nhé: syslog là cuốn sổ nhật ký chung của cả hệ thống.</b></p>
+    <p class="en-only" lang="en">If every daemon logged in its own way to its own file, an administrator could hardly keep track. The <b>syslog</b> facility was devised to solve this: it provides a <i>single, centralized</i> logging path usable by any process. Its architecture has two principal components: the <b>syslogd daemon</b> and the <b>syslog(3) library function</b>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span> The facility first appeared in 4.2BSD; SUSv3 standardized <code>syslog(3)</code> and related functions but leaves the implementation of <code>syslogd</code> and the format of <code>syslog.conf</code> unspecified.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-8">8</a></span></p>
+  </div>
+
+  <div class="surprise-lead">
+    <div class="definition">
+      <p class="standard-copy"><b>Định nghĩa.</b> Mỗi thông báo qua syslog mang hai thuộc tính: một <b>facility</b> (loại chương trình sinh ra thông báo, ví dụ <code>LOG_DAEMON</code>, <code>LOG_USER</code>, <code>LOG_KERN</code>) và một <b>level</b> (mức nghiêm trọng/ưu tiên, từ cao xuống thấp: <code>LOG_EMERG</code>, <code>LOG_ALERT</code>, <code>LOG_CRIT</code>, <code>LOG_ERR</code>, <code>LOG_WARNING</code>, <code>LOG_NOTICE</code>, <code>LOG_INFO</code>, <code>LOG_DEBUG</code>). Tham số <code>priority</code> truyền cho <code>syslog()</code> là <i>OR</i> của một facility với một level.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only"><b>Nói đơn giản.</b> Mỗi ghi chú gửi vào syslog kèm hai nhãn: "của ai" (facility — loại chương trình) và "khẩn cấp cỡ nào" (level — từ "khẩn nguy" tới "gỡ lỗi"). Nhờ hai nhãn này mà người ta lọc và sắp xếp log dễ dàng. <b>Nhớ nhé: mỗi dòng log có nhãn "của ai" và nhãn "khẩn cỡ nào".</b></p>
+      <p class="en-only" lang="en"><b>Definition.</b> Each syslog message carries two attributes: a <b>facility</b> (the kind of program producing it, e.g. <code>LOG_DAEMON</code>, <code>LOG_USER</code>, <code>LOG_KERN</code>) and a <b>level</b> (severity/priority, from highest to lowest: <code>LOG_EMERG</code>, <code>LOG_ALERT</code>, <code>LOG_CRIT</code>, <code>LOG_ERR</code>, <code>LOG_WARNING</code>, <code>LOG_NOTICE</code>, <code>LOG_INFO</code>, <code>LOG_DEBUG</code>). The <code>priority</code> argument to <code>syslog()</code> is a facility <i>ORed</i> with a level.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+    </div>
+    <div class="equation">
+      <p class="standard-copy">#include &lt;syslog.h&gt;<br>openlog(ident, options, facility);<br>syslog(priority, format, ...);<br>&nbsp;&nbsp;/* priority = facility | level */<br>closelog(void);</p>
+      <p class="easy-only">openlog(...) → đặt mặc định<br>syslog(mức, "thông báo...")<br>closelog() → đóng lại</p>
+      <p class="en-only" lang="en">#include &lt;syslog.h&gt;<br>openlog(ident, options, facility);<br>syslog(priority, format, ...);<br>&nbsp;&nbsp;/* priority = facility | level */<br>closelog(void);</p>
+    </div>
+  </div>
+
+  <ol class="surprise-grid trap-grid">
+    <li>
+      <span class="english-term">syslogd · /dev/log · klogd</span>
+      <h3>
+        <span class="standard-copy">Kiến trúc: syslogd nhận qua /dev/log, klogd góp log của nhân</span>
+        <span class="easy-only">Ai nhận log, log đi qua đâu</span>
+        <span class="en-only" lang="en">The architecture: syslogd, /dev/log, and klogd</span>
+      </h3>
+      <p class="standard-copy">Daemon <b>syslogd</b> nhận thông báo từ hai nguồn: một socket miền UNIX tên <code>/dev/log</code> (giữ các thông báo sinh ra cục bộ), và — tuỳ chọn — một socket miền Internet (cổng UDP 514) cho thông báo tới qua mạng TCP/IP. Hàm <code>syslog(3)</code> dựng thông báo theo định dạng chuẩn rồi đặt lên <code>/dev/log</code> cho <code>syslogd</code> đọc. Ngoài ra, daemon <b>klogd</b> (Kernel Log daemon) thu các thông báo của nhân (sinh ra bằng <code>printk()</code>) qua <code>/proc/kmsg</code> và system call <code>syslog(2)</code>, rồi cũng đặt lên <code>/dev/log</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <p class="easy-only">Nhân viên ghi sổ tên <code>syslogd</code> nhận ghi chú qua một "khe thư" tên <code>/dev/log</code>. Chương trình thường bỏ ghi chú vào khe đó bằng hàm <code>syslog()</code>. Còn những ghi chú từ chính nhân hệ điều hành thì có một nhân viên riêng tên <code>klogd</code> thu gom rồi cũng bỏ vào khe ấy. <b>Nhớ nhé: mọi log đổ vào khe /dev/log cho syslogd ghi sổ.</b></p>
+      <p class="en-only" lang="en">The <b>syslogd</b> daemon accepts messages from two sources: a UNIX domain socket, <code>/dev/log</code> (holding locally produced messages), and — optionally — an Internet domain socket (UDP port 514) for messages arriving across a TCP/IP network. The <code>syslog(3)</code> function builds a message in a standard format and places it on <code>/dev/log</code> for <code>syslogd</code> to read. Additionally, the <b>klogd</b> (Kernel Log daemon) collects kernel messages (produced via <code>printk()</code>) through <code>/proc/kmsg</code> and the <code>syslog(2)</code> system call, then also places them on <code>/dev/log</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi gửi log tập trung nhiều máy về một máy chủ log qua cổng UDP 514 — đó chính là socket miền Internet của <code>syslogd</code>.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Khi gom log của nhiều máy về một chỗ qua mạng — đó là cổng mạng của syslogd.</span>
+        <span class="en-only" lang="en">When centralizing many machines' logs to one log server over UDP port 514 — that is exactly <code>syslogd</code>'s Internet domain socket.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">syslog(2) khác syslog(3)</span><span class="en-only" lang="en">syslog(2) is not syslog(3)</span></h4>
+          <p><span class="vi-only">Dù trùng tên, <code>syslog(2)</code> và <code>syslog(3)</code> làm việc hoàn toàn khác nhau. <code>syslog(2)</code> là một system call thao tác với bộ đệm log của nhân; glibc cung cấp giao diện cho nó dưới tên <code>klogctl()</code>. Khi sách nói "syslog()" trong phần này, luôn hiểu là <code>syslog(3)</code> — hàm thư viện ghi log ứng dụng.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span><span class="en-only" lang="en">Despite the shared name, <code>syslog(2)</code> and <code>syslog(3)</code> do quite different things. <code>syslog(2)</code> is a system call operating on the kernel log buffer; glibc provides an interface to it under the name <code>klogctl()</code>. When the book says "syslog()" in this section, it always means <code>syslog(3)</code> — the application-logging library function.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Đích đến của thông báo</span><span class="en-only" lang="en">Where messages end up</span></h4>
+          <p><span class="vi-only">Dựa trên facility và level, <code>syslogd</code> định đoạt mỗi thông báo theo <code>/etc/syslog.conf</code>. Đích đến có thể là một terminal hay console ảo, một tệp trên đĩa, một FIFO, một hay nhiều (hoặc tất cả) người dùng đang đăng nhập, hoặc một tiến trình khác (thường là một <code>syslogd</code> khác trên máy từ xa).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span><span class="en-only" lang="en">Based on facility and level, <code>syslogd</code> disposes of each message per <code>/etc/syslog.conf</code>. Destinations can be a terminal or virtual console, a disk file, a FIFO, one or more (or all) logged-in users, or another process (typically another <code>syslogd</code> on a remote host).<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">openlog / syslog / closelog</span>
+      <h3>
+        <span class="standard-copy">API: mở, ghi, đóng — và ident, options, facility</span>
+        <span class="easy-only">Ba hàm: mở sổ, ghi dòng, đóng sổ</span>
+        <span class="en-only" lang="en">The API: open, log, close — ident, options, facility</span>
+      </h3>
+      <p class="standard-copy">Bất kỳ tiến trình nào cũng dùng được <code>syslog(3)</code>. <code>openlog(ident, log_options, facility)</code> thiết lập mặc định cho các lời gọi <code>syslog()</code> về sau; gọi nó là <i>tuỳ chọn</i>. <code>ident</code> là chuỗi được chèn vào đầu mỗi thông báo (nếu là <code>NULL</code>, glibc tự dùng tên chương trình). <code>log_options</code> là bit-mask gồm các cờ như <code>LOG_PID</code> (ghi kèm PID của tiến trình gọi), <code>LOG_CONS</code>, <code>LOG_NDELAY</code>, <code>LOG_NOWAIT</code>, <code>LOG_ODELAY</code>. Cuối cùng <code>closelog()</code> giải phóng bộ mô tả tệp dùng cho <code>/dev/log</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <p class="easy-only">Ba hàm như mở sổ, ghi dòng, đóng sổ. <code>openlog()</code> đặt sẵn vài thứ mặc định (như cái "tên" gắn vào mỗi dòng và có kèm số PID hay không). <code>syslog()</code> ghi một dòng. <code>closelog()</code> đóng lại. Thường người ta bỏ qua <code>openlog()</code> và <code>closelog()</code> cho gọn. <b>Nhớ nhé: openlog đặt mặc định, syslog ghi, closelog đóng.</b></p>
+      <p class="en-only" lang="en">Any process can use <code>syslog(3)</code>. <code>openlog(ident, log_options, facility)</code> establishes defaults for subsequent <code>syslog()</code> calls; calling it is <i>optional</i>. <code>ident</code> is a string prepended to each message (if <code>NULL</code>, glibc uses the program name). <code>log_options</code> is a bit-mask of flags such as <code>LOG_PID</code> (log the caller's PID), <code>LOG_CONS</code>, <code>LOG_NDELAY</code>, <code>LOG_NOWAIT</code>, <code>LOG_ODELAY</code>. Finally, <code>closelog()</code> frees the file descriptor used for <code>/dev/log</code>.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Ví dụ của sách: <code>openlog(argv[0], LOG_PID | LOG_CONS | LOG_NOWAIT, LOG_LOCAL0)</code>, rồi <code>syslog(LOG_USER | LOG_INFO, "Exiting")</code> — lời gọi sau ghi đè facility mặc định do openlog đặt.<span class="cite"><a href="#ref-1">1</a></span></span>
+        <span class="easy-only">Như trong sách: gọi openlog đặt tên và tuỳ chọn, rồi syslog ghi từng dòng với mức tương ứng.</span>
+        <span class="en-only" lang="en">The book's example: <code>openlog(argv[0], LOG_PID | LOG_CONS | LOG_NOWAIT, LOG_LOCAL0)</code>, then <code>syslog(LOG_USER | LOG_INFO, "Exiting")</code> — the later call overrides the default facility set by openlog.<span class="cite"><a href="#ref-1">1</a></span></span>
+      </div>
+      <div class="mechanics deep-only deep-bilingual">
+        <div class="info-block">
+          <h4><span class="vi-only">Một bẫy bảo mật</span><span class="en-only" lang="en">A security trap</span></h4>
+          <p><span class="vi-only">Không bao giờ truyền chuỗi do người dùng cung cấp làm tham số định dạng: <code>syslog(priority, user_string)</code> là lỗ hổng format-string. Luôn viết <code>syslog(priority, "%s", user_string)</code> để chuỗi được xử lý như dữ liệu, không phải định dạng.<span class="cite"><a href="#ref-1">1</a></span></span><span class="en-only" lang="en">Never pass a user-supplied string as the format argument: <code>syslog(priority, user_string)</code> is a format-string vulnerability. Always write <code>syslog(priority, "%s", user_string)</code> so the string is treated as data, not a format.<span class="cite"><a href="#ref-1">1</a></span></span></p>
+        </div>
+        <div class="info-block">
+          <h4><span class="vi-only">Lọc theo mức</span><span class="en-only" lang="en">Filtering by level</span></h4>
+          <p><span class="vi-only"><code>setlogmask()</code> đặt một mặt nạ quyết định mức nào được ghi; thông báo có mức không nằm trong mặt nạ bị loại bỏ. Macro <code>LOG_MASK()</code> (do SUSv3 quy định) tạo mặt nạ cho một mức, còn <code>LOG_UPTO()</code> (phổ biến nhưng không chuẩn hoá) tạo mặt nạ cho một mức và tất cả mức nghiêm trọng hơn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span><span class="en-only" lang="en"><code>setlogmask()</code> sets a mask deciding which levels are logged; messages whose level is not in the mask are discarded. The <code>LOG_MASK()</code> macro (specified by SUSv3) builds a mask for one level, while <code>LOG_UPTO()</code> (common but unspecified) builds a mask for a level and all more-severe levels.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></span></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <span class="english-term">/etc/syslog.conf</span>
+      <h3>
+        <span class="standard-copy">/etc/syslog.conf: luật "facility.level → action"</span>
+        <span class="easy-only">Tệp cấu hình quyết định log đi đâu</span>
+        <span class="en-only" lang="en">/etc/syslog.conf: the "facility.level → action" rules</span>
+      </h3>
+      <p class="standard-copy">Tệp <code>/etc/syslog.conf</code> điều khiển hoạt động của <code>syslogd</code>. Mỗi luật có dạng <code>facility.level&nbsp;&nbsp;&nbsp;action</code>: cặp <i>facility</i> và <i>level</i> gọi chung là <b>selector</b> (vì nó chọn ra thông báo nào bị tác động), còn <i>action</i> cho biết gửi chúng đi đâu. Ví dụ, một level <code>err</code> nghĩa là "mức <code>LOG_ERR</code> trở lên", còn ký tự đại diện <code>*</code> cho facility nghĩa là "mọi loại chương trình".<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> Sau khi sửa tệp, phải báo <code>syslogd</code> khởi tạo lại — bằng chính <code>killall -HUP syslogd</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <p class="easy-only">Tệp <code>/etc/syslog.conf</code> là bảng nội quy cho anh ghi sổ syslogd: mỗi dòng nói "log loại này, mức này thì ghi vào chỗ kia". Sửa bảng nội quy xong, ta gửi SIGHUP để anh ấy đọc lại. <b>Nhớ nhé: syslog.conf dạy syslogd log nào đi đâu; sửa xong gửi SIGHUP.</b></p>
+      <p class="en-only" lang="en">The <code>/etc/syslog.conf</code> file controls <code>syslogd</code>'s operation. Each rule has the form <code>facility.level&nbsp;&nbsp;&nbsp;action</code>: the <i>facility</i> and <i>level</i> pair is together the <b>selector</b> (since it selects which messages are affected), while the <i>action</i> says where to send them. For instance, a level of <code>err</code> means "<code>LOG_ERR</code> and above," and a <code>*</code> wildcard for facility means "all kinds of program."<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-7">7</a></span> After editing the file, you must ask <code>syslogd</code> to reinitialize — with that same <code>killall -HUP syslogd</code>.<span class="cite"><a href="#ref-1">1</a></span></p>
+      <div class="opportunity">
+        <b><span class="vi-only">Bạn gặp nó ở đâu</span><span class="en-only" lang="en">Where you meet it</span></b>
+        <span class="standard-copy">Khi bạn muốn tách riêng log xác thực vào một tệp — thêm một luật như <code>auth.notice&nbsp;&nbsp;/var/log/auth.log</code> rồi gửi SIGHUP.<span class="cite"><a href="#ref-7">7</a></span></span>
+        <span class="easy-only">Khi muốn một loại log riêng ra một tệp — thêm một dòng luật rồi gửi SIGHUP cho syslogd.</span>
+        <span class="en-only" lang="en">When you want to split authentication logs into their own file — add a rule like <code>auth.notice&nbsp;&nbsp;/var/log/auth.log</code> and send SIGHUP.<span class="cite"><a href="#ref-7">7</a></span></span>
+      </div>
+    </li>
+  </ol>
+
+  <!-- misconceptions -->
+  <div class="trap-comparison deep-only deep-bilingual">
+    <div class="section-heading">
+      <h2 id="ngo-nhan-title">
+        <span class="standard-copy">Ba ngộ nhận thường gặp</span>
+        <span class="en-only" lang="en">Three common misconceptions</span>
+      </h2>
+    </div>
+    <div class="comparison-grid">
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“Chạy nền (&amp;) là đã thành daemon”</span>
+          <span class="en-only" lang="en">“Backgrounding with &amp; makes it a daemon”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> thêm dấu <code>&amp;</code> cuối lệnh là chương trình đã trở thành daemon.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> một job nền vẫn thuộc phiên của shell và vẫn <i>có</i> terminal điều khiển; đóng terminal hay đăng xuất có thể khiến nó nhận <code>SIGHUP</code> và chết. Daemon thật phải gọi <code>setsid()</code> để tách khỏi phiên và bỏ terminal điều khiển.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> appending <code>&amp;</code> to a command makes it a daemon.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> a background job still belongs to the shell's session and still <i>has</i> a controlling terminal; closing the terminal or logging out can deliver it <code>SIGHUP</code> and kill it. A true daemon must call <code>setsid()</code> to leave the session and shed the controlling terminal.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-3">3</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“syslog(2) và syslog(3) là một hàm”</span>
+          <span class="en-only" lang="en">“syslog(2) and syslog(3) are the same call”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> trùng tên nên chắc là cùng một thứ.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> <code>syslog(3)</code> là hàm thư viện để ứng dụng ghi log; <code>syslog(2)</code> là system call thao tác với bộ đệm log của nhân (glibc gọi là <code>klogctl()</code>). Hai thứ khác hẳn nhau về nhiệm vụ.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> same name, so they must be the same.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> <code>syslog(3)</code> is the library function for application logging; <code>syslog(2)</code> is a system call operating on the kernel log buffer (glibc calls it <code>klogctl()</code>). They do quite different jobs.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-6">6</a></span></p>
+      </div>
+      <div class="comparison-card">
+        <h3>
+          <span class="standard-copy">“level cao là số lớn, ưu tiên thấp”</span>
+          <span class="en-only" lang="en">“A higher level number means lower priority”</span>
+        </h3>
+        <p class="standard-copy"><span class="myth">Ngộ nhận:</span> <code>LOG_DEBUG</code> là mức "cao nhất" vì nghe quan trọng.</p>
+        <p class="standard-copy"><span class="truth">Thực tế:</span> thang mức đi từ <i>nghiêm trọng nhất</i> xuống <i>ít nghiêm trọng nhất</i>: <code>LOG_EMERG</code> (hệ thống không dùng được) là cao nhất, <code>LOG_DEBUG</code> (thông báo gỡ lỗi) là thấp nhất. Bộ lọc <code>LOG_UPTO(LOG_ERR)</code> giữ <code>LOG_ERR</code> và mọi mức nghiêm trọng hơn.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+        <p class="en-only" lang="en"><span class="myth">Myth:</span> <code>LOG_DEBUG</code> is the "highest" level because it sounds important.</p>
+        <p class="en-only" lang="en"><span class="truth">Reality:</span> the scale runs from <i>most severe</i> down to <i>least severe</i>: <code>LOG_EMERG</code> (system unusable) is highest, <code>LOG_DEBUG</code> (debug message) is lowest. A filter of <code>LOG_UPTO(LOG_ERR)</code> keeps <code>LOG_ERR</code> and every more-severe level.<span class="cite"><a href="#ref-1">1</a></span><span class="cite"><a href="#ref-5">5</a></span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DIAGNOSTIC ===================== -->
+<section class="section" id="chan-doan" aria-labelledby="chan-doan-title">
+  <div class="section-heading">
+    <p class="eyebrow">
+      <span class="vi-only">Tự kiểm</span>
+      <span class="en-only" lang="en">Self-check</span>
+    </p>
+    <h2 id="chan-doan-title">
+      <span class="standard-copy">Năm câu hỏi để biết bạn đã nắm cách daemon ra đời và ghi log</span>
+      <span class="easy-only">Năm câu hỏi kiểm tra nhanh</span>
+      <span class="en-only" lang="en">Five questions to check you grasped daemons and logging</span>
+    </h2>
+  </div>
+
+  <div class="diagnostic">
+    <p class="diagnostic-intro standard-copy">Trả lời được những câu này nghĩa là bạn đã nắm đặc điểm của daemon, chuỗi bước tạo ra nó, vai trò của SIGHUP, và kiến trúc syslog.</p>
+    <p class="diagnostic-intro easy-only">Nếu trả lời được, nghĩa là bạn đã hiểu chương này.</p>
+    <p class="diagnostic-intro en-only" lang="en">Answering these means you grasp a daemon's characteristics, the sequence that creates one, the role of SIGHUP, and the syslog architecture.</p>
+
+    <ol class="question-list standard-copy">
+      <li>
+        <p>Hai đặc điểm định nghĩa một daemon là gì? Vì sao việc không có terminal điều khiển lại quan trọng?</p>
+        <p class="deep-only">Gợi ý sâu hơn: nhân sẽ không tự sinh những tín hiệu nào cho một tiến trình không có terminal điều khiển?</p>
+      </li>
+      <li>
+        <p>Kể chuỗi bước biến một tiến trình thành daemon. Vì sao phải <code>fork()</code> <i>trước khi</i> gọi <code>setsid()</code>?</p>
+        <p class="deep-only">Gợi ý sâu hơn: lần <code>fork()</code> thứ hai (tuỳ chọn) phòng ngừa điều gì, và cờ <code>O_NOCTTY</code> là lựa chọn thay thế ra sao?</p>
+      </li>
+      <li>
+        <p>Vì sao daemon mở lại 0, 1, 2 vào <code>/dev/null</code> thay vì để chúng đóng? Hàm <code>becomeDaemon()</code> dùng các cờ <code>BD_*</code> để làm gì?</p>
+        <p class="deep-only">Gợi ý sâu hơn: nếu để fd 0/1/2 đóng, lỗi tinh vi nào có thể xảy ra khi một thư viện gọi <code>printf</code>?</p>
+      </li>
+      <li>
+        <p>Vì sao <code>SIGHUP</code> là lựa chọn tự nhiên để ra hiệu cho daemon khởi tạo lại? Nó giải quyết hai vấn đề nào?</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao handler <code>SIGHUP</code> chỉ nên đặt một cờ rồi để vòng lặp chính xử lý?</p>
+      </li>
+      <li>
+        <p>Kiến trúc syslog gồm những thành phần nào? Phân biệt <code>syslog(3)</code> với <code>syslog(2)</code>, và cho biết facility cùng level là gì.</p>
+        <p class="deep-only">Gợi ý sâu hơn: vì sao <code>syslog(priority, user_string)</code> là lỗ hổng, và viết lại thế nào cho an toàn?</p>
+      </li>
+    </ol>
+
+    <ol class="question-list easy-only">
+      <li><p>Daemon khác một chương trình thường ở chỗ nào?</p></li>
+      <li><p>Vì sao daemon phải tự cắt khỏi cửa sổ dòng lệnh?</p></li>
+      <li><p>Vì sao đầu ra của daemon lại được đổ vào /dev/null?</p></li>
+      <li><p>Gửi SIGHUP cho một daemon để làm gì?</p></li>
+      <li><p>syslog dùng để làm gì, và ai là người ghi sổ?</p></li>
+    </ol>
+
+    <ol class="question-list en-only" lang="en">
+      <li><p>What two characteristics define a daemon? Why does having no controlling terminal matter?</p></li>
+      <li><p>List the steps that turn a process into a daemon. Why must you <code>fork()</code> <i>before</i> calling <code>setsid()</code>?</p></li>
+      <li><p>Why does a daemon reopen 0, 1, 2 to <code>/dev/null</code> rather than leave them closed? What are the <code>BD_*</code> flags of <code>becomeDaemon()</code> for?</p></li>
+      <li><p>Why is <code>SIGHUP</code> the natural signal to tell a daemon to reinitialize? Which two problems does it solve?</p></li>
+      <li><p>What are the components of the syslog architecture? Distinguish <code>syslog(3)</code> from <code>syslog(2)</code>, and define facility and level.</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== CLOSING ===================== -->
+<section class="closing" id="khep-lai" aria-labelledby="khep-lai-title">
+  <p class="eyebrow" id="khep-lai-title">
+    <span class="vi-only">Khép lại chương</span>
+    <span class="en-only" lang="en">Closing the chapter</span>
+  </p>
+  <blockquote>
+    <p class="standard-copy">Một daemon là <span class="closing-accent">chương trình được dạy cách tự lui vào hậu trường</span>: cắt khỏi terminal bằng <code>setsid()</code>, dọn môi trường, rồi <span class="closing-accent">sống lâu và lặng lẽ</span>. Vì không còn màn hình, nó kể chuyện qua <b>syslog</b>, và nghe lệnh "làm mới" qua <code>SIGHUP</code>. Nắm được chuỗi bước này, bạn đã sẵn sàng cho câu hỏi kế — làm sao viết các tiến trình đặc quyền ấy một cách <i>an toàn</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="easy-only">Daemon là <span class="closing-accent">chương trình biết tự lui vào hậu trường</span>: cắt dây với cửa sổ dòng lệnh, dọn dẹp, rồi <span class="closing-accent">chạy ngầm bền bỉ</span>. Nó kể chuyện qua syslog và nghe lệnh làm mới qua SIGHUP. <b>Nhớ nhé: thành daemon là lui vào hậu trường đúng cách, rồi nói chuyện qua syslog.</b></p>
+    <p class="en-only" lang="en">A daemon is <span class="closing-accent">a program taught to step into the background</span>: detaching from the terminal with <code>setsid()</code>, cleaning its environment, then <span class="closing-accent">living long and quietly</span>. Having no screen, it speaks through <b>syslog</b>, and hears the "refresh" command through <code>SIGHUP</code>. Grasp this sequence and you are ready for the next question — how to write such privileged processes <i>securely</i>.<span class="cite"><a href="#ref-1">1</a></span></p>
+  </blockquote>
+</section>
+
+</main>
+
+<!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+<!-- Neighbours are linked optimistically; the curator demotes any that are
+     genuinely absent on disk to a disabled "· sắp có" cell. -->
+<nav class="chapter-nav" aria-label="Điều hướng chương">
+  <a class="nav-cell nav-prev" href="chapter-30-threads-thread-synchronization.html">
+    <span class="nav-label">
+      ◀ <span class="vi-only">Chương trước</span><span class="en-only" lang="en">Previous</span>
+    </span>
+    <span class="nav-title vi-only">Chương 30 · Luồng: đồng bộ hoá</span>
+    <span class="nav-title en-only" lang="en">Chapter 30 · Threads: Thread Synchronization</span>
+  </a>
+  <a class="nav-cell nav-next" href="chapter-41-fundamentals-of-shared-libraries.html">
+    <span class="nav-label">
+      <span class="vi-only">Chương sau</span><span class="en-only" lang="en">Next</span> ▶
+    </span>
+    <span class="nav-title vi-only">Chương 41 · Nền tảng thư viện chia sẻ</span>
+    <span class="nav-title en-only" lang="en">Chapter 41 · Fundamentals of Shared Libraries</span>
+  </a>
+</nav>
+<!-- NAV:END -->
+
+<footer>
+  <div class="footer-main">
+    <p class="vi-only"><b>Nguồn chính:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chương 37, “Daemons”, trang 767–782.<span class="cite"><a href="#ref-1">1</a></span></p>
+    <p class="en-only" lang="en"><b>Primary source:</b> Michael Kerrisk, <i>The Linux Programming Interface: A Linux and UNIX System Programming Handbook</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3) — Chapter 37, “Daemons”, pp. 767–782.<span class="cite"><a href="#ref-1">1</a></span></p>
+
+    <p class="vi-only">Trang này là một <b>bạn đồng hành diễn giải</b>, không phải bản dịch và không thay thế nguyên tác. Mọi diễn giải, sắp xếp và nhấn mạnh là của trang này; bản quyền nội dung gốc thuộc về tác giả và nhà xuất bản. Các ví dụ và phép so sánh trong mức đọc <b>Dễ hiểu</b> là minh hoạ được thêm vào để hỗ trợ người mới, không phải lời của tác giả.</p>
+    <p class="en-only" lang="en">This page is an <b>interpretive companion</b>, not a translation, and does not replace the original. All interpretation, arrangement and emphasis are this page's own; copyright in the original text belongs to the author and publisher. The examples and analogies in the <b>Dễ hiểu</b> (easy) reading level are added illustrations for newcomers, not the author's words.</p>
+
+    <p class="ref-label">
+      <span class="vi-only">Tham chiếu</span>
+      <span class="en-only" lang="en">References</span>
+    </p>
+    <ol class="ref-list">
+      <li id="ref-1">Michael Kerrisk, <i>The Linux Programming Interface</i>, No Starch Press, 2010 (ISBN 978-1-59327-220-3), ch. 37 “Daemons”, pp. 767–782. — <a href="https://man7.org/tlpi/" target="_blank" rel="noopener noreferrer">man7.org/tlpi</a></li>
+      <li id="ref-2">“daemon(7) — Linux manual page” (characteristics of daemons and the traditional SysV daemon-creation steps: fork, setsid, second fork, umask, chdir, close and reopen 0/1/2). Linux man-pages project. <a href="https://man7.org/linux/man-pages/man7/daemon.7.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man7/daemon.7.html</a></li>
+      <li id="ref-3">“setsid(2) — Linux manual page” (creates a new session if the caller is not a process group leader; the caller loses its controlling terminal; fails with EPERM for a group leader). <a href="https://man7.org/linux/man-pages/man2/setsid.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/setsid.2.html</a></li>
+      <li id="ref-4">“umask(2) — Linux manual page” (the file-mode creation mask and how umask(0) affects the permissions of newly created files). <a href="https://man7.org/linux/man-pages/man2/umask.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/umask.2.html</a></li>
+      <li id="ref-5">“syslog(3) / openlog(3) / closelog(3) / setlogmask(3) — Linux manual page” (the logging API; ident, log options, facility and level values; LOG_MASK/LOG_UPTO). <a href="https://man7.org/linux/man-pages/man3/syslog.3.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man3/syslog.3.html</a></li>
+      <li id="ref-6">“syslog(2) — Linux manual page” (the kernel-log system call, interfaced in glibc as klogctl(); distinct from the syslog(3) library function). <a href="https://man7.org/linux/man-pages/man2/syslog.2.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man2/syslog.2.html</a></li>
+      <li id="ref-7">“rsyslog.conf(5) — configuration file for rsyslogd” (the facility.level selector and action rule syntax that governs where messages are routed; successor to the classic syslog.conf). <a href="https://man7.org/linux/man-pages/man5/rsyslog.conf.5.html" target="_blank" rel="noopener noreferrer">man7.org/linux/man-pages/man5/rsyslog.conf.5.html</a></li>
+      <li id="ref-8">“syslog, vsyslog — control system log” — POSIX.1-2017 (SUSv3 standardizes syslog(3) and related functions while leaving syslogd and the configuration-file format unspecified). The Open Group. <a href="https://pubs.opengroup.org/onlinepubs/9699919799/functions/syslog.html" target="_blank" rel="noopener noreferrer">pubs.opengroup.org — syslog</a></li>
+    </ol>
+
+    <!-- NAV:START · owned by book-cover-curator · body owned by book-chapter-author -->
+    <!-- Footer neighbour row — absent neighbours get demoted to plain spans. -->
+    <p class="series-links">
+      <span class="vi-only">Trong loạt bài:</span>
+      <span class="en-only" lang="en">In this series:</span>
+      <a href="index.html">index</a>
+      <a href="chapter-30-threads-thread-synchronization.html">chapter 30</a>
+      <a href="chapter-41-fundamentals-of-shared-libraries.html">chapter 41</a>
+    </p>
+    <!-- NAV:END -->
+  </div>
+
+  <div class="edition">
+    <span class="vi-only">Bản đồng hành · VI/EN</span>
+    <span class="en-only" lang="en">Companion · VI/EN</span>
+  </div>
+</footer>
+
+
+
+<script>
+(function(){
+  var doc = document.documentElement;
+
+  function persist(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+  }
+  function sync(group, attr){
+    var current = doc.getAttribute(attr);
+    group.forEach(function(btn){
+      btn.setAttribute('aria-pressed', String(btn.dataset.value === current));
+    });
+  }
+
+  /* ---- reading level ---- */
+  var modeBtns = [].slice.call(document.querySelectorAll('[data-mode-btn]'));
+  modeBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-mode-btn'); });
+  modeBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-mode', b.dataset.value);
+      persist('tlpi-reading-mode', b.dataset.value);
+      sync(modeBtns, 'data-mode');
+    });
+  });
+  sync(modeBtns, 'data-mode');
+
+  /* ---- language ---- */
+  var langBtns = [].slice.call(document.querySelectorAll('[data-lang-btn]'));
+  langBtns.forEach(function(b){ b.dataset.value = b.getAttribute('data-lang-btn'); });
+  langBtns.forEach(function(b){
+    b.addEventListener('click', function(){
+      doc.setAttribute('data-lang', b.dataset.value);
+      doc.setAttribute('lang', b.dataset.value);
+      persist('tlpi-lang', b.dataset.value);
+      sync(langBtns, 'data-lang');
+      syncRail();
+    });
+  });
+  sync(langBtns, 'data-lang');
+
+  /* ---- theme ---- */
+  var themeBtn = document.querySelector('[data-theme-btn]');
+  function syncTheme(){
+    if (themeBtn) themeBtn.setAttribute('aria-pressed', String(doc.getAttribute('data-theme') === 'dark'));
+  }
+  if (themeBtn){
+    themeBtn.addEventListener('click', function(){
+      var next = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      doc.setAttribute('data-theme', next);
+      persist('tlpi-theme', next);
+      syncTheme();
+    });
+  }
+  syncTheme();
+
+  /* ---- SECTION RAIL ----------------------------------------------------
+     Built at runtime from THIS page's section[id] + their aria-labelledby
+     headings, so no chapter carries rail markup of its own. Never strip. */
+  var railLinks = [];
+  function syncRail(){
+    var en = doc.getAttribute('data-lang') === 'en';
+    railLinks.forEach(function(item){
+      item.text.textContent = en ? item.en : item.vi;
+    });
+  }
+
+  (function buildRail(){
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sections = [].slice.call(main.querySelectorAll('section[id]'));
+    if (sections.length < 2) return;
+
+    var rail = document.createElement('nav');
+    rail.className = 'section-rail';
+    rail.setAttribute('aria-label', 'Mục lục chương / Chapter sections');
+    var list = document.createElement('ol');
+    list.className = 'section-rail__list';
+
+    sections.forEach(function(sec, i){
+      var heading = document.getElementById(sec.getAttribute('aria-labelledby') || '');
+      function pick(sel, fallback){
+        var node = heading && heading.querySelector(sel);
+        var txt = node ? node.textContent.trim() : (heading ? heading.textContent.trim() : '');
+        return txt || fallback;
+      }
+      var vi = pick('.standard-copy, .vi-only', 'Phần ' + (i + 1));
+      var en = pick('.en-only', 'Section ' + (i + 1));
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = '#' + sec.id;
+      var text = document.createElement('span');
+      text.className = 'rail-text';
+      a.appendChild(text);
+      li.appendChild(a);
+      list.appendChild(li);
+      railLinks.push({ li: li, text: text, vi: vi, en: en, id: sec.id });
+    });
+
+    rail.appendChild(list);
+    document.body.appendChild(rail);
+    syncRail();
+
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (!entry.isIntersecting) return;
+        railLinks.forEach(function(item){
+          item.li.classList.toggle('is-current', item.id === entry.target.id);
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+    sections.forEach(function(sec){ observer.observe(sec); });
+  })();
+})();
+</script>
+
+</body>
+</html>
