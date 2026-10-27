@@ -5,8 +5,9 @@ Bilingual VI/EN book-companion site · 12 pages · audited by `book-fidelity-aud
 **Source book:** Chip Huyen, *AI Engineering: Building Applications with Foundation Models*,
 O'Reilly Media, 1st edition, December 2024 (ISBN 9781098166304).
 
-**Verdict: PASS** — with the caveats recorded below. Chapter 1 was re-audited on
-2026-10-27 after a citation rework; still PASS. See "Chapter 1 citation re-audit" at the end.
+**Verdict: PASS** — with the caveats recorded below. Re-audited whole-site on 2026-10-27
+after a citation rework across all ten chapters; still PASS. See the two re-audit sections at
+the end (Chapter 1, then the whole-site ch2–10 round).
 
 ## Per-page results
 
@@ -15,15 +16,15 @@ O'Reilly Media, 1st edition, December 2024 (ISBN 9781098166304).
 | `index.html` | PASS (cover) | 35 + 20 = 55 ✓ | 1 / 3 | 11 outbound, all resolve |
 | `mind-map.html` | PASS (synthesis) | 66 + 55 = 121 ✓ | 24 / 3 | 11 outbound, all resolve |
 | `chapter-1-introduction-to-building-ai-applications-with-foundation-models.html` | PASS | 103 + 41 = 144 ✓ | 24 / 26 | index → ch2 |
-| `chapter-2-understanding-foundation-models.html` | PASS | 88 + 79 = 167 ✓ | 16 / 18 | ch1 → ch3 |
-| `chapter-3-evaluation-methodology.html` | PASS | 110 + 33 = 143 ✓ | 13 / 13 | ch2 → ch4 |
-| `chapter-4-evaluate-ai-systems.html` | PASS | 95 + 38 = 133 ✓ | 18 / 20 | ch3 → ch5 |
-| `chapter-5-prompt-engineering.html` | PASS | 95 + 34 = 129 ✓ | 11 / 13 | ch4 → ch6 |
-| `chapter-6-rag-and-agents.html` | PASS | 88 + 36 = 124 ✓ | 10 / 11 | ch5 → ch7 |
-| `chapter-7-finetuning.html` | PASS | 96 + 32 = 128 ✓ | 14 / 16 | ch6 → ch8 |
-| `chapter-8-dataset-engineering.html` | PASS | 85 + 38 = 123 ✓ | 16 / 18 | ch7 → ch9 |
-| `chapter-9-inference-optimization.html` | PASS | 121 + 32 = 153 ✓ | 24 / 24 | ch8 → ch10 |
-| `chapter-10-ai-engineering-architecture-and-user-feedback.html` | PASS | 83 + 52 = 135 ✓ | 6 / 8 | ch9 → end of series |
+| `chapter-2-understanding-foundation-models.html` | PASS | 83 + 79 = 162 ✓ | 21 / 21 | ch1 → ch3 |
+| `chapter-3-evaluation-methodology.html` | PASS | 105 + 33 = 138 ✓ | 17 / 17 | ch2 → ch4 |
+| `chapter-4-evaluate-ai-systems.html` | PASS | 91 + 38 = 129 ✓ | 23 / 25 | ch3 → ch5 |
+| `chapter-5-prompt-engineering.html` | PASS | 91 + 34 = 125 ✓ | 15 / 15 | ch4 → ch6 |
+| `chapter-6-rag-and-agents.html` | PASS | 87 + 37 = 124 ✓ | 14 / 14 | ch5 → ch7 |
+| `chapter-7-finetuning.html` | PASS | 92 + 32 = 124 ✓ | 20 / 20 | ch6 → ch8 |
+| `chapter-8-dataset-engineering.html` | PASS | 81 + 38 = 119 ✓ | 19 / 19 | ch7 → ch9 |
+| `chapter-9-inference-optimization.html` | PASS | 116 + 32 = 148 ✓ | 26 / 26 | ch8 → ch10 |
+| `chapter-10-ai-engineering-architecture-and-user-feedback.html` | PASS | 79 + 52 = 131 ✓ | 13 / 13 | ch9 → end of series |
 
 Layer balance is the identity `standard-copy + vi-only == en-only`. It holds exactly on all
 twelve pages. Every `en-only` element carries `lang="en"` — zero violations site-wide. The
@@ -36,9 +37,11 @@ containers, which have no easy-mode twin by design.
 - **Links:** 51 internal `.html` hrefs, every target present on disk. Zero dead local links.
 - **Anchors:** zero dangling `#id` across all twelve pages.
 - **Citations:** every inline `<span class="cite"><a href="#ref-N">` resolves to an
-  `<li id="ref-N">` carrying an external `https://` link. 18 uncited ref entries (the author's
-  page, the `aie-book` repo) are further-reading by design.
-- **arXiv verification:** 105 arXiv refs site-wide. Verified by fetching
+  `<li id="ref-N">` carrying an external `https://` link. After the 2026-10-27 rework only
+  **4** uncited ref entries remain — the author-page / `aie-book`-repo further-reading pair in
+  ch1 and ch4; every other chapter wired or dropped that pair, so cites == refs there.
+- **arXiv verification:** 105 arXiv refs site-wide at the first audit (the 2026-10-27 rework
+  added ~15 more across ch3–ch8; see the whole-site re-audit section). Verified by fetching
   `<meta name="citation_title">` from `arxiv.org/abs/<id>` and matching it against the
   ref-list text — an HTTP-200 existence check would not catch a citation pointing at the
   wrong real paper. The main session checked ~99; the auditor independently re-checked 15,
@@ -151,3 +154,44 @@ is bot-blocked to WebFetch, mcp-fetch, r.jina.ai, and an archive.org snapshot (r
 figure stays book-attributed and is flagged here rather than silently treated as verified. The
 secondary details on ref-19/20/26 are the book's own framing (greppable in `src/book-text/ch01`),
 carried through faithfully, not auditor-invented.
+
+## Whole-site citation re-audit — chapters 2–10 (2026-10-27)
+
+The same citation rework done for ch1 was applied to ch2–10, one `book-chapter-author` per
+chapter in three waves of three, then verified whole-site by `book-fidelity-auditor`. Each
+chapter split its third-party figures off ref-1 onto their own live `[N]`, wired or dropped the
+author-page/repo orphan pair, and filled a few gaps against its source chapter. Every diff is
+confined to prose + ref-list — `<head>`, `<style>`, both `<script>`s, the `NAV:START…NAV:END`
+fences and the section-rail are byte-identical in all nine chapters (git-diff confirmed). No
+chapters were added or removed, so `book-cover-curator` had nothing to integrate (roster, cover
+cards and nav chain unchanged). The per-page table above carries the new layer-balance and
+cite/ref counts; the identity `standard-copy + vi-only == en-only` holds on all twelve pages.
+
+New external refs added per chapter (all fetched live unless flagged bot-blocked):
+
+| Ch | New refs | Notes |
+|---|---|---|
+| 2 | Yennie Jun (token tax), OpenAssistant/LAION, Sorscher | +wired the 2 previously-orphan refs; SemiAnalysis power + LinkedIn YAML kept book-attributed (unverifiable) |
+| 3 | Chatbot Arena/LMSYS, Balduzzi/DeepMind, Freitag/WMT23, Llama 2, Terence Tao | Tao verified via the book's own oreil.ly link → Mathstodon ActivityPub |
+| 4 | TechRadar/Samsung, CIO Dive/Zoom, a16z, Chen et al., DeBERTa card | TechRadar flagged member-wall; StarCoder 8% and HELM $80k–$100k kept book-attributed/derived |
+| 5 | GoDaddy, HELM, DSPy, Promptbreeder | B5 disclosed (book's 7 best-practices grouped into 4 habits); dropped 2 orphan refs; Microsoft-2023 kept book-attributed |
+| 6 | BM25/Robertson, FAISS, CLIP | +new "RAG beyond text" card (text-to-SQL/CLIP); wired orphan ref-11 |
+| 7 | Apple on-device, InstructGPT, Garimella, Code Llama | +bias-mitigation & long-context deep blocks; wired orphan ref-2/ref-3; Character.AI INT8 kept book-attributed (source removed line) |
+| 8 | Peng (GPT-4 instruct), Sorscher, Kern | re-verified ref-15 arXiv id (2212.09251, once wrong); +data-centric framing; Databricks/LinkedIn kept book-attributed |
+| 9 | NVIDIA H100, EIA | +Table 9-2 (FLOP/s by precision) +Kernels/compilers section; EIA 10,791 kWh vs book's rounded 10,000 noted in place |
+| 10 | TechRadar/Samsung, Voiceflow, Business Insider/Uber, NPR/X, MDPI/Stray | wired orphan ref-2/ref-3; BI (Uber) and MDPI (Stray) bot-blocked → `<em>`-flagged; Liu 2020 paywalled → book-attributed |
+
+**Auditor's independent sweep:** 12/12 `book-qa` PASS (cross-chapter templates — a chapter is
+never its own template, which is what produced the false ch9 "PROBLEMS" earlier); zero dead
+`.html` links, zero dangling `#anchor`s, zero broken cites, zero newly-orphaned refs. 27
+specifics spot-checked across the nine chapters (14 arXiv title/author matches, 13 non-arXiv
+content/reachability checks including the bot-blocked ones); zero invented or mis-cited
+specifics. The bot-blocked refs carry honest `<em>` host/code notes and are not treated as
+independently verified; MDPI/Stray's title+author were additionally confirmed via Crossref
+despite the 403.
+
+**Still carried book-attributed (no live third-party source found, kept on ref-1 rather than a
+borrowed cite):** SemiAnalysis data-center power and LinkedIn YAML (ch2), Microsoft-2023 few-shot
+(ch5), Character.AI INT8 (ch7), Databricks 20/60% and LinkedIn annotation (ch8), Liu 2020 (ch10).
+These are the book's own reported figures, flagged here rather than silently treated as
+externally verified.
