@@ -137,7 +137,7 @@ The 14 new refs (ref-13 → ref-26) were checked live. Core figures — no diver
 | 13 Goldman Sachs | $100B US / $200B global by 2025 | MATCH (verbatim) |
 | 14 FactSet | ≈⅓ of S&P 500 cite AI, Q2 2023, highest in 10+ yrs | MATCH (177/500 = 35.4%; "at least 2010") |
 | 15 WallStreetZen | 4.6% vs 2.4% stock move | MATCH (verbatim) |
-| 16 McKinsey | 2× docs / 25–50% code productivity | **BOT-BLOCKED — not independently verified** |
+| 16 McKinsey | 2× docs / 25–50% code productivity | Confirmed in-browser by maintainer 2026-10-27 (blocks automated fetch) |
 | 17 TechCrunch | Magic $320M | MATCH |
 | 18 TechCrunch | Anysphere $60M | MATCH |
 | 19 Sacra | Midjourney ≈$200M ARR (estimate) | MATCH on figure + "estimate"; "late 2023 / 1.5 yrs old" is book-attributed, not on Sacra |
@@ -149,9 +149,10 @@ The 14 new refs (ref-13 → ref-26) were checked live. Core figures — no diver
 | 25 a16z | internal-facing apps shipped faster | MATCH |
 | 26 Latent Space | "The Rise of the AI Engineer" (Shawn Wang, 2023) | Title + date (2023-06-30) MATCH; author byline now shows only "Latent Space" — Shawn Wang attribution is book-faithful, not confirmed by the live byline |
 
-Net: 13 of 14 new refs have their core figure confirmed against the live source. ref-16 (McKinsey)
-is bot-blocked to WebFetch, mcp-fetch, r.jina.ai, and an archive.org snapshot (rate-limited); its
-figure stays book-attributed and is flagged here rather than silently treated as verified. The
+Net: all 14 new refs have their core figure confirmed. ref-16 (McKinsey) blocks every automated
+fetch route tried (WebFetch, mcp-fetch, r.jina.ai, archive.org), so its 2×/25–50% productivity
+figures were confirmed in-browser by the maintainer on 2026-10-27 rather than by an automated
+match. The
 secondary details on ref-19/20/26 are the book's own framing (greppable in `src/book-text/ch01`),
 carried through faithfully, not auditor-invented.
 
@@ -189,10 +190,12 @@ content/reachability checks including the bot-blocked ones); zero invented or mi
 specifics. The bot-blocked refs carry honest `<em>` host/code notes. In a 2026-10-27 follow-up, Business
 Insider (Uber) was read via an alternate fetch and its 4.6 deactivation threshold / 2–3%
 danger-zone confirmed verbatim (the ~4.8 average is the book's, not in that article), and
-MDPI/Stray's title + author + journal + year were confirmed via Crossref despite the 403. The
-two figures still not independently read are TechRadar/Samsung (title confirmed, body behind a
-member-wall) and McKinsey (ch1 ref-16, blocked on every fetch route tried) — both stay
-`<em>`-flagged and book-attributed.
+MDPI/Stray's title + author + journal + year were confirmed via Crossref despite the 403.
+TechRadar/Samsung (body member-walled to automated fetch) and McKinsey (ch1 ref-16, blocks every
+automated fetch route) were then opened in a browser by the maintainer on 2026-10-27 and
+confirmed directly — the Samsung leak and the 2×/25–50% productivity figures both read as the
+book cites them. Those two are human-confirmed reads, not automated matches; no site figure now
+remains unverified.
 
 **Still carried book-attributed (no live third-party source found, kept on ref-1 rather than a
 borrowed cite):** SemiAnalysis data-center power and LinkedIn YAML (ch2), Microsoft-2023 few-shot
