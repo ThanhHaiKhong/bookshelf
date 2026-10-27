@@ -5,7 +5,8 @@ Bilingual VI/EN book-companion site · 12 pages · audited by `book-fidelity-aud
 **Source book:** Chip Huyen, *AI Engineering: Building Applications with Foundation Models*,
 O'Reilly Media, 1st edition, December 2024 (ISBN 9781098166304).
 
-**Verdict: PASS** — with two caveats recorded below.
+**Verdict: PASS** — with the caveats recorded below. Chapter 1 was re-audited on
+2026-10-27 after a citation rework; still PASS. See "Chapter 1 citation re-audit" at the end.
 
 ## Per-page results
 
@@ -13,7 +14,7 @@ O'Reilly Media, 1st edition, December 2024 (ISBN 9781098166304).
 |---|---|---|---|---|
 | `index.html` | PASS (cover) | 35 + 20 = 55 ✓ | 1 / 3 | 11 outbound, all resolve |
 | `mind-map.html` | PASS (synthesis) | 66 + 55 = 121 ✓ | 24 / 3 | 11 outbound, all resolve |
-| `chapter-1-introduction-to-building-ai-applications-with-foundation-models.html` | PASS | 108 + 41 = 149 ✓ | 10 / 12 | index → ch2 |
+| `chapter-1-introduction-to-building-ai-applications-with-foundation-models.html` | PASS | 103 + 41 = 144 ✓ | 24 / 26 | index → ch2 |
 | `chapter-2-understanding-foundation-models.html` | PASS | 88 + 79 = 167 ✓ | 16 / 18 | ch1 → ch3 |
 | `chapter-3-evaluation-methodology.html` | PASS | 110 + 33 = 143 ✓ | 13 / 13 | ch2 → ch4 |
 | `chapter-4-evaluate-ai-systems.html` | PASS | 95 + 38 = 133 ✓ | 18 / 20 | ch3 → ch5 |
@@ -69,8 +70,11 @@ Contested and derived figures are preserved rather than smoothed: ch2 keeps the 
 2022-vs-2024 caption mismatch and the Schulman/InstructGPT RLHF contradiction as the book has
 them; ch3 records that LangChain's live page does not contain the 58% figure attributed to it;
 ch4 marks the HELM $80k–$100k range as the author's derivation from $38,000 plus 19,500
-GPU-hours at $2.15–$3.18/hr. Sources that could not be reached (McKinsey and Duolingo in ch1,
-the Washington Post C4 interactive in ch2) carry book-attribution with no invented URL.
+GPU-hours at $2.15–$3.18/hr. Sources that could not be reached carry book-attribution with no
+invented URL: as of the ch1 citation rework these are the Washington Post C4 interactive in ch2
+and McKinsey in ch1 — ch1's McKinsey now carries its real URL (ref-16) but is bot-blocked to
+every fetch route tried, so its figure stays book-attributed and flagged below. Duolingo in ch1
+is no longer in this list: it is now cited (ref-22) and verified live.
 
 ## Defect found and fixed
 
@@ -106,3 +110,44 @@ form their own coherent sequence (Vietnamese · 3 modes / English · standard / 
 preferences / Where to start), each with body copy matching its own heading, and the two
 languages are never visible simultaneously. Inherited from the scaffold site's documented
 pattern. Not a mistranslation; does not block PASS.
+
+## Chapter 1 citation re-audit (2026-10-27)
+
+Chapter 1 previously routed 130 of 148 `<span class="cite">` anchors to ref-1 (the book itself).
+The rework split every third-party figure off ref-1 onto its own `[N]`, lifting the chapter from
+12 to 26 ref entries (24 now cited; ref-2 and ref-3 stay as further-reading). Diff touched only
+the prose + ref-list region — `<style>`, `<script>`, and the `NAV:START…NAV:END` fences are
+byte-unchanged, so `book-cover-curator` had nothing to integrate (roster and neighbours are
+unchanged). New prose: masked-vs-autoregressive with the completion-machine metaphor, the
+product-first order in AI-vs-full-stack (ref-26), and the Oct-2023 Executive Order / IP risks
+under Maintenance. Layer identity still holds exactly: `standard-copy` 103 + `vi-only` 41 ==
+`en-only` 144. `book-qa`: PASS.
+
+Three figures lost their hard numbers because no live primary source could be found, rather than
+keep a borrowed cite — now hedged and attributed to the book via ref-1: Salesforce's "74%",
+Gartner's "7% business continuity", and GDPR's "$9B".
+
+The 14 new refs (ref-13 → ref-26) were checked live. Core figures — no divergence found:
+
+| ref | Source | Live check |
+|---|---|---|
+| 13 Goldman Sachs | $100B US / $200B global by 2025 | MATCH (verbatim) |
+| 14 FactSet | ≈⅓ of S&P 500 cite AI, Q2 2023, highest in 10+ yrs | MATCH (177/500 = 35.4%; "at least 2010") |
+| 15 WallStreetZen | 4.6% vs 2.4% stock move | MATCH (verbatim) |
+| 16 McKinsey | 2× docs / 25–50% code productivity | **BOT-BLOCKED — not independently verified** |
+| 17 TechCrunch | Magic $320M | MATCH |
+| 18 TechCrunch | Anysphere $60M | MATCH |
+| 19 Sacra | Midjourney ≈$200M ARR (estimate) | MATCH on figure + "estimate"; "late 2023 / 1.5 yrs old" is book-attributed, not on Sacra |
+| 20 The Information | Copilot >$100M ARR | MATCH on figure (public headline); "two years after launch" behind paywall, book-attributed |
+| 21 CNBC | Chegg stock fell on ChatGPT | MATCH (−48.41%) |
+| 22 Duolingo | 4 course-creation stages, personalisation gains most | MATCH ("This is where AI shines!") |
+| 23 NewsGuard | 393 ads / 141 brands | MATCH (exact) |
+| 24 Fortune Business Insights | IDP $12.81B by 2030, 32.9% CAGR | MATCH (verbatim, via Yahoo syndication) |
+| 25 a16z | internal-facing apps shipped faster | MATCH |
+| 26 Latent Space | "The Rise of the AI Engineer" (Shawn Wang, 2023) | Title + date (2023-06-30) MATCH; author byline now shows only "Latent Space" — Shawn Wang attribution is book-faithful, not confirmed by the live byline |
+
+Net: 13 of 14 new refs have their core figure confirmed against the live source. ref-16 (McKinsey)
+is bot-blocked to WebFetch, mcp-fetch, r.jina.ai, and an archive.org snapshot (rate-limited); its
+figure stays book-attributed and is flagged here rather than silently treated as verified. The
+secondary details on ref-19/20/26 are the book's own framing (greppable in `src/book-text/ch01`),
+carried through faithfully, not auditor-invented.
