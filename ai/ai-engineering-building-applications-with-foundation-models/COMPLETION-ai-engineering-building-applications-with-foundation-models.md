@@ -186,9 +186,13 @@ never its own template, which is what produced the false ch9 "PROBLEMS" earlier)
 `.html` links, zero dangling `#anchor`s, zero broken cites, zero newly-orphaned refs. 27
 specifics spot-checked across the nine chapters (14 arXiv title/author matches, 13 non-arXiv
 content/reachability checks including the bot-blocked ones); zero invented or mis-cited
-specifics. The bot-blocked refs carry honest `<em>` host/code notes and are not treated as
-independently verified; MDPI/Stray's title+author were additionally confirmed via Crossref
-despite the 403.
+specifics. The bot-blocked refs carry honest `<em>` host/code notes. In a 2026-10-27 follow-up, Business
+Insider (Uber) was read via an alternate fetch and its 4.6 deactivation threshold / 2–3%
+danger-zone confirmed verbatim (the ~4.8 average is the book's, not in that article), and
+MDPI/Stray's title + author + journal + year were confirmed via Crossref despite the 403. The
+two figures still not independently read are TechRadar/Samsung (title confirmed, body behind a
+member-wall) and McKinsey (ch1 ref-16, blocked on every fetch route tried) — both stay
+`<em>`-flagged and book-attributed.
 
 **Still carried book-attributed (no live third-party source found, kept on ref-1 rather than a
 borrowed cite):** SemiAnalysis data-center power and LinkedIn YAML (ch2), Microsoft-2023 few-shot
